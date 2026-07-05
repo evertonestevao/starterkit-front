@@ -33,7 +33,7 @@ export default async function AcceptInvitePage({
           ) : (
             <>
               <p className="text-sm text-destructive">Link de convite inválido.</p>
-              <Button variant="outline" render={<Link href="/dashboard" />}>
+              <Button variant="outline" nativeButton={false} render={<Link href="/dashboard" />}>
                 Ir para o dashboard
               </Button>
             </>

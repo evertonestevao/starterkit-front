@@ -97,10 +97,10 @@ export default function LandingPage() {
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
           <span className="font-semibold tracking-tight">{brand.name}</span>
           <nav className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" render={<Link href="/login" />}>
+            <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/login" />}>
               Entrar
             </Button>
-            <Button size="sm" render={<Link href="/signup" />}>
+            <Button size="sm" nativeButton={false} render={<Link href="/signup" />}>
               Criar conta
             </Button>
           </nav>
@@ -120,10 +120,10 @@ export default function LandingPage() {
             resto já está pronto.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button size="lg" render={<Link href="/signup" />}>
+            <Button size="lg" nativeButton={false} render={<Link href="/signup" />}>
               Começar agora
             </Button>
-            <Button size="lg" variant="outline" render={<Link href="/login" />}>
+            <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/login" />}>
               Ver o dashboard
             </Button>
           </div>
