@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
 import type { TenantRepository } from "@/services/tenantService";
 import type { Company, CompanyMember, RoleCode } from "@/types/database";
-import type { CompanyWithRole, MemberWithProfile } from "@/types/tenant";
+import type { MemberWithProfile } from "@/types/tenant";
 
 /**
  * Implementação Supabase do TenantRepository. Sempre com o client do usuário
