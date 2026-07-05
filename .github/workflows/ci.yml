@@ -1,6 +1,5 @@
-# CI básico (plano §12): lint + typecheck + testes unitários em cada PR e
-# push na main/master. Playwright e testes de RLS entram quando os fluxos de
-# UI da Fase 1 existirem.
+# CI (plano §12): lint + typecheck + testes unitários + build em cada PR e
+# push na main/master, mais testes de RLS contra um Supabase local efêmero.
 name: CI
 
 on:
@@ -39,3 +38,18 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
           NEXT_PUBLIC_BACKEND_PROVIDER: supabase
+
+  rls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Subir Supabase local (aplica migrations)
+        run: supabase start
+
+      - name: Testes de RLS
+        run: bash scripts/test-rls.sh
