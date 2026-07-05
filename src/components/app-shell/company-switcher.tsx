@@ -13,6 +13,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -41,16 +42,18 @@ export function CompanySwitcher() {
           <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>Suas empresas</DropdownMenuLabel>
-          {companies.map((company) => (
-            <DropdownMenuItem
-              key={company.id}
-              onClick={() => startTransition(() => switchCompanyAction(company.id))}
-            >
-              <span className="truncate">{company.name}</span>
-              {company.id === active.id ? <Check className="ml-auto size-4" /> : null}
-            </DropdownMenuItem>
-          ))}
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Suas empresas</DropdownMenuLabel>
+            {companies.map((company) => (
+              <DropdownMenuItem
+                key={company.id}
+                onClick={() => startTransition(() => switchCompanyAction(company.id))}
+              >
+                <span className="truncate">{company.name}</span>
+                {company.id === active.id ? <Check className="ml-auto size-4" /> : null}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setCreating(true)}>
             <Plus className="size-4" />

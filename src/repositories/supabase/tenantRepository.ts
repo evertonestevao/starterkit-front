@@ -75,7 +75,8 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
     async listMembers(companyId) {
       const { data, error } = await client
         .from("company_members")
-        .select("*, profile:profiles(full_name, avatar_url)")
+        // FK explícita: há duas relações com profiles (user_id e invited_by)
+        .select("*, profile:profiles!company_members_user_id_fkey(full_name, avatar_url)")
         .eq("company_id", companyId)
         .is("deleted_at", null)
         .order("created_at", { ascending: true });
@@ -88,7 +89,8 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
     async getMember(memberId, companyId) {
       const { data, error } = await client
         .from("company_members")
-        .select("*, profile:profiles(full_name, avatar_url)")
+        // FK explícita: há duas relações com profiles (user_id e invited_by)
+        .select("*, profile:profiles!company_members_user_id_fkey(full_name, avatar_url)")
         .eq("id", memberId)
         .eq("company_id", companyId)
         .is("deleted_at", null)
