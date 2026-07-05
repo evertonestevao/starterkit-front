@@ -6,7 +6,7 @@ import { z } from "zod";
  */
 
 const clientEnvSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
+  NEXT_PUBLIC_SUPABASE_URL: z.url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   NEXT_PUBLIC_BACKEND_PROVIDER: z.enum(["supabase", "api"]).default("supabase"),
 });
@@ -23,7 +23,9 @@ const serverEnvSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   EMAIL_PROVIDER: z.enum(["resend", "console"]).default("console"),
   RESEND_API_KEY: z.string().min(1).optional(),
-  EMAIL_FROM: z.string().email().optional(),
+  EMAIL_FROM: z.email().optional(),
+  /** URL pública da app, usada em links de emails transacionais. */
+  APP_URL: z.url().default("http://localhost:3000"),
 });
 
 export function getClientEnv() {
