@@ -107,11 +107,13 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.673 0.182 276.7 / 55%);
-  --chart-1: oklch(0.673 0.182 276.7);
-  --chart-2: oklch(0.7 0.15 250);
-  --chart-3: oklch(0.75 0.12 200);
-  --chart-4: oklch(0.62 0.16 300);
-  --chart-5: oklch(0.72 0.13 160);
+  /* Paleta categórica dark validada (scripts do skill dataviz):
+     banda L 0.48-0.67, CVD e contraste >= 3:1 sobre a superfície dark. */
+  --chart-1: oklch(0.64 0.182 276.7);
+  --chart-2: oklch(0.63 0.14 225);
+  --chart-3: oklch(0.66 0.12 195);
+  --chart-4: oklch(0.55 0.16 310);
+  --chart-5: oklch(0.63 0.13 160);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

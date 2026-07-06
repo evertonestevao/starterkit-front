@@ -184,6 +184,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | Transferência de ownership | ❌ | Bloqueada de propósito (`changeMemberRole` recusa promover a `owner`). Owner também não pode sair da empresa. |
 | Exclusão de empresa / conta | ❌ | Não implementado (nem soft delete de empresa pela UI). |
 | Permissões granulares | ⚠️ | Estrutura pronta, papéis novos NÃO criados: o banco guarda papel como `text` com FK para `roles.code` (papel novo = INSERT) e o `permissionService` virou registro de capabilities + nível hierárquico (`defineRole` como ponto de extensão; papel desconhecido nega tudo). Comportamento dos 3 papéis fixos preservado e testado. **Atenção:** as policies de RLS (`is_company_admin`) citam `('owner','admin')` — papel customizado que precise de poder de admin no BANCO exige ajustar as policies também. |
+| Componente de gráfico | ⚠️ | `LineChartCard` (`src/components/charts`) sobre Recharts, lendo os tokens `--chart-1..5` — paleta validada por script para light/dark, daltonismo e contraste. Regras embutidas: máx. 5 séries, cor fixa por posição, eixo único, legenda só com 2+ séries, tooltip padrão, descrição sr-only. **Nenhuma tela o usa ainda e não foi renderizado em navegador** — validar visualmente no primeiro uso. |
 | i18n | ❌ | Textos hardcoded em português. |
 
 **Números de teste (última execução local, 2026-07-04):** 49 testes unitários ✅ · testes SQL de RLS ✅ · 4 specs E2E ✅ · build de produção ✅.
