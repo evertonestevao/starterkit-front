@@ -183,7 +183,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | Notificações (WhatsApp/SMS/push) | ⚠️ | Interface `NotificationProvider` + adapter `console` (dev, testado) + factory por `NOTIFICATION_PROVIDER`. **Nenhum provedor real implementado, e nenhum service dispara notificação ainda** — é ponto de extensão documentado (passo a passo em `src/adapters/notification/NotificationProvider.ts`), não funcionalidade. |
 | Transferência de ownership | ❌ | Bloqueada de propósito (`changeMemberRole` recusa promover a `owner`). Owner também não pode sair da empresa. |
 | Exclusão de empresa / conta | ❌ | Não implementado (nem soft delete de empresa pela UI). |
-| Permissões granulares | ❌ | Só os 3 papéis fixos. A estrutura (permissionService centralizado) facilita evoluir. |
+| Permissões granulares | ⚠️ | Estrutura pronta, papéis novos NÃO criados: o banco guarda papel como `text` com FK para `roles.code` (papel novo = INSERT) e o `permissionService` virou registro de capabilities + nível hierárquico (`defineRole` como ponto de extensão; papel desconhecido nega tudo). Comportamento dos 3 papéis fixos preservado e testado. **Atenção:** as policies de RLS (`is_company_admin`) citam `('owner','admin')` — papel customizado que precise de poder de admin no BANCO exige ajustar as policies também. |
 | i18n | ❌ | Textos hardcoded em português. |
 
 **Números de teste (última execução local, 2026-07-04):** 49 testes unitários ✅ · testes SQL de RLS ✅ · 4 specs E2E ✅ · build de produção ✅.

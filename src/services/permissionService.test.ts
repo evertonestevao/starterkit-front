@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { permissionService } from "./permissionService";
+import { defineRole, hasCapability, permissionService } from "./permissionService";
 
 describe("permissionService", () => {
   it("owner e admin gerenciam membros; member não", () => {
@@ -29,5 +29,27 @@ describe("permissionService", () => {
     expect(permissionService.canRemoveMember("admin", "member")).toBe(true);
     expect(permissionService.canRemoveMember("admin", "admin")).toBe(false);
     expect(permissionService.canRemoveMember("member", "member")).toBe(false);
+  });
+
+  it("papel desconhecido nega tudo (default seguro)", () => {
+    expect(permissionService.canManageMembers("papel-fantasma")).toBe(false);
+    expect(permissionService.canManageBilling("papel-fantasma")).toBe(false);
+    expect(permissionService.canChangeRole("papel-fantasma", "member")).toBe(false);
+    // e ninguém age sobre um papel desconhecido com level 0? owner (3) > 0 sim:
+    expect(permissionService.canRemoveMember("owner", "papel-fantasma")).toBe(true);
+  });
+
+  it("papel customizado registrado via defineRole funciona sem tocar nos fixos", () => {
+    defineRole("auditor", { level: 1, capabilities: new Set(["audit.view"]) });
+
+    expect(permissionService.canViewAudit("auditor")).toBe(true);
+    expect(permissionService.canManageMembers("auditor")).toBe(false);
+    expect(hasCapability("auditor", "billing.manage")).toBe(false);
+    // hierarquia: admin (2) gerencia auditor (1); auditor não gerencia ninguém
+    expect(permissionService.canRemoveMember("admin", "auditor")).toBe(true);
+    expect(permissionService.canRemoveMember("auditor", "member")).toBe(false);
+    // papéis originais intactos
+    expect(permissionService.canManageBilling("owner")).toBe(true);
+    expect(permissionService.canManageMembers("member")).toBe(false);
   });
 });
