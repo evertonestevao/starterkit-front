@@ -177,6 +177,77 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Termos e consentimentos (LGPD): aceite só em nome próprio, append-only.
+-- ---------------------------------------------------------------------------
+-- seed: bob aceita a versão vigente (como superuser, para testar visibilidade)
+insert into public.terms_acceptances (user_id, terms_version_id)
+select 'b2b2b2b2-0000-4000-8000-000000000002', id from public.terms_versions where is_current;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+declare v_version uuid;
+begin
+  select id into v_version from public.terms_versions where is_current;
+
+  -- termos vigentes são legíveis
+  if v_version is null then raise exception 'FALHA terms_versions: versão vigente invisível'; end if;
+
+  -- alice não vê o aceite do bob
+  select count(*) into n from public.terms_acceptances;
+  if n <> 0 then raise exception 'FALHA terms_acceptances: aceite alheio visível'; end if;
+
+  -- aceite em nome próprio: permitido
+  insert into public.terms_acceptances (user_id, terms_version_id)
+  values ('a1a1a1a1-0000-4000-8000-000000000001', v_version);
+
+  -- aceite em nome de OUTRO usuário: bloqueado
+  begin
+    insert into public.terms_acceptances (user_id, terms_version_id)
+    values ('b2b2b2b2-0000-4000-8000-000000000002', v_version);
+    raise exception 'FALHA terms_acceptances: aceite forjado em nome de outro usuário';
+  exception when sqlstate '42501' or unique_violation then
+    if sqlerrm like 'FALHA%' then raise; end if;
+    null;
+  end;
+
+  -- append-only: UPDATE/DELETE sem GRANT (42501)
+  begin
+    update public.terms_acceptances set accepted_at = now() where true;
+    raise exception 'FALHA terms_acceptances: UPDATE foi aceito';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    delete from public.terms_acceptances where true;
+    raise exception 'FALHA terms_acceptances: DELETE foi aceito';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- terms_versions: client não publica versão
+  begin
+    insert into public.terms_versions (version, content, is_current)
+    values (99, 'hack', false);
+    raise exception 'FALHA terms_versions: INSERT de client foi aceito';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- user_consents: em nome próprio ok; em nome de outro, bloqueado
+  insert into public.user_consents (user_id, consent_type, granted)
+  values ('a1a1a1a1-0000-4000-8000-000000000001', 'email_communications', true);
+  begin
+    insert into public.user_consents (user_id, consent_type, granted)
+    values ('b2b2b2b2-0000-4000-8000-000000000002', 'email_communications', true);
+    raise exception 'FALHA user_consents: consentimento forjado para outro usuário';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Storage (bucket avatars): cada usuário só escreve na PRÓPRIA pasta.
 -- ---------------------------------------------------------------------------
 set local role authenticated;

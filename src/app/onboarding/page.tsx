@@ -5,18 +5,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { brand } from "@/config/brand";
 import { CreateCompanyForm } from "@/features/companies/components/create-company-form";
 import { getActiveTenant } from "@/server/tenant";
+import { getTermsService } from "@/server/terms";
 
 export const metadata: Metadata = { title: "Criar empresa" };
 
 /**
- * Onboarding: caminho crítico signup → criar empresa → virar owner.
- * Quem já tem empresa não precisa passar por aqui.
+ * Onboarding: caminho crítico signup → aceitar termos → criar empresa →
+ * virar owner. Quem já tem empresa não passa por aqui.
  */
 export default async function OnboardingPage() {
   const { companies } = await getActiveTenant();
   if (companies.length > 0) {
     redirect("/dashboard");
   }
+
+  const terms = await getTermsService();
+  const requireTerms = !(await terms.hasAcceptedCurrent());
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
@@ -31,7 +35,7 @@ export default async function OnboardingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CreateCompanyForm />
+          <CreateCompanyForm requireTerms={requireTerms} />
         </CardContent>
       </Card>
     </div>

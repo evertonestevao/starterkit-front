@@ -16,10 +16,11 @@ export async function signupAndOnboard(
   await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Criar conta" }).click();
 
-  // onboarding: primeira empresa
+  // onboarding: aceite dos termos vigentes + primeira empresa
   await expect(page).toHaveURL(/\/onboarding/);
   await expect(page.getByText("Crie sua empresa")).toBeVisible();
   await page.getByLabel("Nome da empresa").fill(company);
+  await page.getByRole("checkbox", { name: /Li e aceito/ }).check();
   await page.getByRole("button", { name: "Criar empresa" }).click();
 
   await expect(page).toHaveURL(/\/dashboard/);

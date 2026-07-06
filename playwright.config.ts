@@ -15,6 +15,9 @@ const LOCAL_SERVICE_ROLE_KEY =
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
+  // Dev server frio (Turbopack compila rota na 1ª visita) estoura os 5s
+  // default de expect com specs paralelas — 15s dá folga sem mascarar bug.
+  expect: { timeout: 15_000 },
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {

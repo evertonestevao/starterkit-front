@@ -4,14 +4,22 @@ import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell/app-shell";
 import { createSupabaseUserRepository } from "@/repositories/supabase/userRepository";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant } from "@/server/tenant";
+import { getTermsService } from "@/server/terms";
 import { createUserService } from "@/services/userService";
 import { TenantProvider } from "@/providers/tenant-provider";
 
 /**
- * Layout autenticado: valida empresa ativa no servidor a cada request
- * (bloqueio de acesso sem empresa — plano §4) e hidrata o TenantProvider.
+ * Layout autenticado: gate de termos vigentes (LGPD) + empresa ativa,
+ * validados no servidor a cada request.
  */
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Termos primeiro: versão nova publicada força reaceite antes de qualquer
+  // tela do dashboard (inclusive para quem entrou por convite).
+  const terms = await getTermsService();
+  if (!(await terms.hasAcceptedCurrent())) {
+    redirect("/accept-terms");
+  }
+
   const { companies, active } = await getActiveTenant();
   if (!active) {
     redirect("/onboarding");

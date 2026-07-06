@@ -182,6 +182,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | Upload de arquivos genérico | ⚠️ | A interface `StorageProvider` e o adapter Supabase existem (usados pelo avatar); uploads de outros tipos de arquivo (documentos etc.) exigem novo bucket + policies + validações próprias. |
 | Notificações (WhatsApp/SMS/push) | ⚠️ | Interface `NotificationProvider` + adapter `console` (dev, testado) + factory por `NOTIFICATION_PROVIDER`. **Nenhum provedor real implementado, e nenhum service dispara notificação ainda** — é ponto de extensão documentado (passo a passo em `src/adapters/notification/NotificationProvider.ts`), não funcionalidade. |
 | Transferência de ownership | ❌ | Bloqueada de propósito (`changeMemberRole` recusa promover a `owner`). Owner também não pode sair da empresa. |
+| Termos de uso + LGPD | ⚠️ | Versões de termos (`terms_versions`, uma vigente), aceites append-only com IP/user-agent (`terms_acceptances`) e consentimentos por finalidade (`user_consents`, grant/revoke como eventos; email opcional separado do aceite). Gate no onboarding (checkbox + validação no server) e no layout do dashboard (versão nova força reaceite em `/accept-terms`); página pública `/terms`. Coberto por unit tests (incl. reaceite ao publicar versão nova), RLS SQL (aceite forjado bloqueado, append-only) e E2E do gate no onboarding. **Limitações:** o texto da versão 1 é PLACEHOLDER sem valor jurídico (troque por texto revisado juridicamente via migration); o fluxo de reaceite (versão nova → redirect `/accept-terms`) é testado por unit test, não por E2E; não há UI para revogar o consentimento de email depois (só o evento no banco). |
 | Exclusão de empresa / conta | ❌ | Não implementado (nem soft delete de empresa pela UI). |
 | Permissões granulares | ⚠️ | Estrutura pronta, papéis novos NÃO criados: o banco guarda papel como `text` com FK para `roles.code` (papel novo = INSERT) e o `permissionService` virou registro de capabilities + nível hierárquico (`defineRole` como ponto de extensão; papel desconhecido nega tudo). Comportamento dos 3 papéis fixos preservado e testado. **Atenção:** as policies de RLS (`is_company_admin`) citam `('owner','admin')` — papel customizado que precise de poder de admin no BANCO exige ajustar as policies também. |
 | Componente de gráfico | ⚠️ | `LineChartCard` (`src/components/charts`) sobre Recharts, lendo os tokens `--chart-1..5` — paleta validada por script para light/dark, daltonismo e contraste. Regras embutidas: máx. 5 séries, cor fixa por posição, eixo único, legenda só com 2+ séries, tooltip padrão, descrição sr-only. **Nenhuma tela o usa ainda e não foi renderizado em navegador** — validar visualmente no primeiro uso. |
@@ -266,6 +267,12 @@ Todas as tabelas de negócio têm `company_id` (a qual empresa a linha pertence)
 | `metadata` | JSONB extra — **sanitizado**: chaves como password/token/card são removidas antes de gravar |
 
 **`settings`** — chave/valor por empresa (JSONB). Usada pelos feature flags: `feature:<key>` (override da empresa) e `feature:<key>:user:<userId>` (override por usuário).
+
+**`terms_versions`** — versões dos Termos de Uso (globais, como `plans`; escrita só por migration/service_role). Índice único parcial garante uma única `is_current`.
+
+**`terms_acceptances`** — prova de aceite por usuário e versão (`ip_address`, `user_agent`, `accepted_at`). Append-only: sem GRANT de UPDATE/DELETE. Único por (user, versão).
+
+**`user_consents`** — log de eventos de consentimento LGPD por finalidade (`consent_type`, hoje só `email_communications`; `granted` true/false). O estado atual é o evento mais recente. Append-only; revogar = inserir evento negativo. Tabelas de usuário (sem `company_id`), como `profiles`.
 
 ### Storage (arquivos)
 
@@ -430,7 +437,9 @@ Em ordem de importância — **revisar antes de expor a clientes reais**:
 
 11. **Encoding no Windows:** inserir texto acentuado via `curl` no Git Bash corrompe UTF-8 (aconteceu com o usuário demo, já corrigido). Para seeds com acento use migrations/SQL com escapes `U&'\00E1'` ou scripts Node.
 
-12. **Não use o painel do Supabase para mudar schema.** Toda mudança via migration versionada — o isolamento multi-tenant depende de policies+GRANTs que o painel não vai criar para você.
+12. **O texto dos Termos de Uso é PLACEHOLDER.** A versão 1 em `terms_versions` diz isso no próprio corpo: não tem valor jurídico e DEVE ser substituída (via migration: insert de versão nova com `is_current`, desmarcando a anterior) por texto revisado por profissional jurídico antes de qualquer cliente real. Publicar a versão nova força reaceite de todos automaticamente.
+
+13. **Não use o painel do Supabase para mudar schema.** Toda mudança via migration versionada — o isolamento multi-tenant depende de policies+GRANTs que o painel não vai criar para você.
 
 ### O que está sólido (para não mexer sem motivo)
 

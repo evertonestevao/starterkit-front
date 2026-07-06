@@ -8,6 +8,7 @@ import { getEmailProvider } from "@/adapters/email";
 import { AppError } from "@/lib/errors";
 import { recordAudit } from "@/server/audit";
 import { syncCompanySeats } from "@/server/billing";
+import { getRequestEvidence, getTermsService } from "@/server/terms";
 import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
 import { createRateLimiter } from "@/server/rateLimit";
@@ -40,6 +41,25 @@ export async function createCompanyAction(
 ): Promise<ActionState> {
   let companyId: string;
   try {
+    // Gate de termos no onboarding: sem aceite da versão vigente, a empresa
+    // não é criada (o checkbox required do form é só UX; a verdade é aqui).
+    const terms = await getTermsService();
+    if (!(await terms.hasAcceptedCurrent())) {
+      if (formData.get("accept_terms") !== "on") {
+        throw new AppError(
+          "validation_error",
+          "Você precisa aceitar os termos de uso para continuar",
+        );
+      }
+      const evidence = await getRequestEvidence();
+      await terms.acceptCurrentTerms(evidence);
+      await terms.setConsent(
+        "email_communications",
+        formData.get("email_consent") === "on",
+        evidence,
+      );
+    }
+
     const tenant = await getTenantService();
     const company = await tenant.createCompany({ name: formData.get("name") });
     companyId = company.id;

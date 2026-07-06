@@ -104,6 +104,36 @@ export interface Subscription {
   updated_at: string;
 }
 
+export interface TermsVersion {
+  id: string;
+  version: number;
+  content: string;
+  published_at: string;
+  is_current: boolean;
+}
+
+export interface TermsAcceptance {
+  id: string;
+  user_id: string;
+  terms_version_id: string;
+  accepted_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+}
+
+/** Finalidades de consentimento LGPD. Novas finalidades: migration + aqui. */
+export type ConsentType = "email_communications";
+
+export interface UserConsent {
+  id: string;
+  user_id: string;
+  consent_type: ConsentType;
+  granted: boolean;
+  created_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+}
+
 export interface Setting {
   id: string;
   company_id: string;

@@ -10,7 +10,13 @@ import { getClientEnv } from "@/config/env";
  */
 
 /** Rotas que exigem usuário logado. */
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/invites", "/reset-password"];
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/onboarding",
+  "/invites",
+  "/reset-password",
+  "/accept-terms",
+];
 /** Rotas de auth que usuário logado não deve rever. */
 const AUTH_ONLY_ANONYMOUS = ["/login", "/signup", "/forgot-password"];
 
