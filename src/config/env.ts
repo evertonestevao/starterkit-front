@@ -21,6 +21,10 @@ const serverEnvSchema = z.object({
   PAYMENT_GATEWAY: z.enum(["stripe", "fake"]).default("fake"),
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  /** Price IDs criados no painel/CLI do Stripe (modo test ou live). */
+  STRIPE_PRICE_PRO: z.string().min(1).optional(),
+  STRIPE_PRICE_ENTERPRISE: z.string().min(1).optional(),
+  STRIPE_PRICE_EXTRA_SEAT: z.string().min(1).optional(),
   EMAIL_PROVIDER: z.enum(["resend", "console"]).default("console"),
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.email().optional(),

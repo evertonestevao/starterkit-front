@@ -7,6 +7,7 @@ import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
 import { createSupabaseBillingRepository } from "@/repositories/supabase/billingRepository";
 import { recordAudit } from "@/server/audit";
+import { getGatewayPriceIdForPlan } from "@/server/billing";
 import { getSupabaseAdminClient } from "@/server/supabase-admin";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getTenantService } from "@/server/tenant";
@@ -35,12 +36,16 @@ export async function checkoutAction(
     await requireOwner(companyId);
 
     const client = await getSupabaseServerClient();
-    const [{ data: userData }, billing] = await Promise.all([
+    const repo = createSupabaseBillingRepository(client);
+    const [{ data: userData }, plan] = await Promise.all([
       client.auth.getUser(),
-      Promise.resolve(createBillingService(createSupabaseBillingRepository(client))),
+      repo.getPlanById(planId),
     ]);
     if (!userData.user?.email) {
       throw new AppError("unauthorized", "Sessão expirada");
+    }
+    if (!plan) {
+      throw new AppError("not_found", "Plano não encontrado");
     }
 
     const appUrl = getServerEnv().APP_URL;
@@ -48,14 +53,12 @@ export async function checkoutAction(
     const session = await gateway.createCheckout({
       companyId,
       planId,
-      // Mapeie plano -> preço do gateway aqui quando plugar um provedor real
-      // (ex.: env STRIPE_PRICE_PRO). O gateway fake ignora este campo.
-      gatewayPriceId: `price_${planId}`,
+      // Mapeado por env (STRIPE_PRICE_PRO etc.) — ver src/server/billing.ts.
+      gatewayPriceId: getGatewayPriceIdForPlan(plan.code),
       customerEmail: userData.user.email,
       successUrl: `${appUrl}/dashboard/billing?status=success`,
       cancelUrl: `${appUrl}/dashboard/billing?status=canceled`,
     });
-    void billing; // reservado para persistir estado pré-checkout se necessário
     checkoutUrl = session.url;
     await recordAudit({
       companyId,
