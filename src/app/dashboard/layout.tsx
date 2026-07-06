@@ -35,6 +35,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         initialCollapsed={initialCollapsed}
         userName={profile?.full_name ?? "Usuário"}
         userEmail={userData.user.email ?? ""}
+        avatarUrl={profile?.avatar_url ?? null}
       >
         {children}
       </AppShell>

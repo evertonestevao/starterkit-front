@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  AvatarForm,
   CompanyNameForm,
   LeaveCompanyButton,
   ProfileForm,
@@ -37,7 +38,11 @@ export default async function SettingsPage() {
           <CardTitle>Perfil</CardTitle>
           <CardDescription>Como seu nome aparece para colegas de empresa</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-6">
+          <AvatarForm
+            initialAvatarUrl={profile?.avatar_url ?? null}
+            userName={profile?.full_name ?? ""}
+          />
           <ProfileForm initialName={profile?.full_name ?? ""} />
         </CardContent>
       </Card>

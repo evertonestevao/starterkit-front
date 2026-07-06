@@ -175,10 +175,11 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | Feature flags | ⚠️ | `featureFlagService` testado por unit tests, **mas nada na UI usa flags ainda** — está pronto para ser consumido, não consumido. |
 | Rate limiting | ⚠️ | Dois stores atrás da mesma interface, escolhidos por `RATE_LIMIT_STORE`: `memory` (default, janela deslizante, só vale por instância) e `redis` (Upstash via REST, janela fixa, vale entre instâncias). O adapter Upstash tem unit tests com fetch mockado (bloqueio, janela, fail-open), **mas nunca rodou contra uma conta Upstash real**. Decisão consciente: se o Redis cair, o limiter falha ABERTO (permite e loga). |
 | UI responsiva / tema | ✅/⚠️ | Sidebar rail/drawer e tabelas→cards implementados; tema dark/light ok. **Não foi testado em celular físico** (só viewport de navegador). |
-| Perfil do usuário (nome) | ✅ | Editável em `/dashboard/settings`. Avatar tem coluna no banco, **sem upload implementado**. |
+| Perfil do usuário (nome) | ✅ | Editável em `/dashboard/settings`. |
+| Upload de avatar | ⚠️ | Adapter `StorageProvider` (Supabase Storage) + bucket `avatars` com policies por pasta do usuário (testadas no SQL de RLS: escrita cross-usuário bloqueada) + validação de tipo/tamanho no client e no server (unit tests, incl. rejeição de SVG) + UI em settings e avatar no menu. **O upload em si nunca foi exercitado no navegador** — sem E2E; teste manual necessário. |
 | CI (GitHub Actions) | ⚠️ | Workflow completo (lint, typecheck, unit, build, RLS), **mas nunca rodou** — o repositório não tem remote no GitHub. Vai rodar no primeiro push. |
 | Deploy / produção | ❌ | Não existe nada de deploy. Ver seção 6. |
-| Upload de arquivos (storage) | ❌ | Nenhum adapter de storage. Supabase Storage é o caminho natural. |
+| Upload de arquivos genérico | ⚠️ | A interface `StorageProvider` e o adapter Supabase existem (usados pelo avatar); uploads de outros tipos de arquivo (documentos etc.) exigem novo bucket + policies + validações próprias. |
 | Notificações (WhatsApp/SMS/push) | ❌ | Não existe. |
 | Transferência de ownership | ❌ | Bloqueada de propósito (`changeMemberRole` recusa promover a `owner`). Owner também não pode sair da empresa. |
 | Exclusão de empresa / conta | ❌ | Não implementado (nem soft delete de empresa pela UI). |
@@ -264,6 +265,10 @@ Todas as tabelas de negócio têm `company_id` (a qual empresa a linha pertence)
 | `metadata` | JSONB extra — **sanitizado**: chaves como password/token/card são removidas antes de gravar |
 
 **`settings`** — chave/valor por empresa (JSONB). Usada pelos feature flags: `feature:<key>` (override da empresa) e `feature:<key>:user:<userId>` (override por usuário).
+
+### Storage (arquivos)
+
+Bucket `avatars` (público para leitura; 2MB; só JPG/PNG/WebP — limites também no bucket). Path: `<user_id>/avatar.<ext>`. Policies em `storage.objects` garantem que cada usuário só escreve na própria pasta (testado em `rls_test.sql`). A URL pública fica em `profiles.avatar_url` com query de cache-busting.
 
 ### Funções no banco (RPCs, `security definer`)
 

@@ -176,6 +176,38 @@ end $$;
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Storage (bucket avatars): cada usuário só escreve na PRÓPRIA pasta.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  -- na própria pasta: permitido
+  insert into storage.objects (bucket_id, name)
+  values ('avatars', 'a1a1a1a1-0000-4000-8000-000000000001/avatar.png');
+
+  -- na pasta do bob: bloqueado pela policy
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('avatars', 'b2b2b2b2-0000-4000-8000-000000000002/avatar.png');
+    raise exception 'FALHA storage: alice escreveu na pasta de outro usuário';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- em bucket sem policy de insert: bloqueado
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('outro-bucket', 'a1a1a1a1-0000-4000-8000-000000000001/x.png');
+    raise exception 'FALHA storage: insert aceito em bucket sem policy';
+  exception when sqlstate '42501' or foreign_key_violation then null;
+  end;
+end $$;
+
+reset role;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'

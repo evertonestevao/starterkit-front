@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useTheme } from "next-themes";
 import { LogOut, Moon, Sun } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,9 +19,10 @@ import { signOutAction } from "@/server/actions/auth";
 export interface UserMenuProps {
   userName: string;
   userEmail: string;
+  avatarUrl?: string | null;
 }
 
-export function UserMenu({ userName, userEmail }: UserMenuProps) {
+export function UserMenu({ userName, userEmail, avatarUrl }: UserMenuProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [, startTransition] = useTransition();
   const initials = userName
@@ -37,6 +38,7 @@ export function UserMenu({ userName, userEmail }: UserMenuProps) {
         render={<Button variant="ghost" size="icon" aria-label="Menu do usuário" />}
       >
         <Avatar className="size-7">
+          {avatarUrl ? <AvatarImage src={avatarUrl} alt={userName} /> : null}
           <AvatarFallback className="text-xs">{initials || "?"}</AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
