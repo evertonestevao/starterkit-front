@@ -180,7 +180,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | CI (GitHub Actions) | ⚠️ | Workflow completo (lint, typecheck, unit, build, RLS), **mas nunca rodou** — o repositório não tem remote no GitHub. Vai rodar no primeiro push. |
 | Deploy / produção | ❌ | Não existe nada de deploy. Ver seção 6. |
 | Upload de arquivos genérico | ⚠️ | A interface `StorageProvider` e o adapter Supabase existem (usados pelo avatar); uploads de outros tipos de arquivo (documentos etc.) exigem novo bucket + policies + validações próprias. |
-| Notificações (WhatsApp/SMS/push) | ❌ | Não existe. |
+| Notificações (WhatsApp/SMS/push) | ⚠️ | Interface `NotificationProvider` + adapter `console` (dev, testado) + factory por `NOTIFICATION_PROVIDER`. **Nenhum provedor real implementado, e nenhum service dispara notificação ainda** — é ponto de extensão documentado (passo a passo em `src/adapters/notification/NotificationProvider.ts`), não funcionalidade. |
 | Transferência de ownership | ❌ | Bloqueada de propósito (`changeMemberRole` recusa promover a `owner`). Owner também não pode sair da empresa. |
 | Exclusão de empresa / conta | ❌ | Não implementado (nem soft delete de empresa pela UI). |
 | Permissões granulares | ❌ | Só os 3 papéis fixos. A estrutura (permissionService centralizado) facilita evoluir. |
@@ -296,6 +296,7 @@ Ficam em `.env.local` (ignorado pelo git; `.env.example` é o modelo commitado).
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | não | só exigidas se `PAYMENT_GATEWAY=stripe` |
 | `EMAIL_PROVIDER` | não | `console` (default) ou `resend` |
 | `RESEND_API_KEY` / `EMAIL_FROM` | não | só exigidas se `EMAIL_PROVIDER=resend` |
+| `NOTIFICATION_PROVIDER` | não | `console` (único implementado; imprime no terminal) |
 | `RATE_LIMIT_STORE` | não | `memory` (default) ou `redis` (Upstash, para 2+ instâncias/serverless) |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | não | só exigidas se `RATE_LIMIT_STORE=redis` (Console Upstash > REST API) |
 
