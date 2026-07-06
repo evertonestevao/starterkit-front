@@ -9,7 +9,7 @@ import { AppError } from "@/lib/errors";
 import { syncCompanySeats } from "@/server/billing";
 import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
-import { createMemoryRateLimiter } from "@/server/rateLimit";
+import { createRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { ACTIVE_COMPANY_COOKIE, getTenantService } from "@/server/tenant";
 import { createAuditService } from "@/services/auditService";
@@ -21,7 +21,7 @@ import { toActionError, type ActionState } from "./action-state";
 
 /** Server actions de empresas, membros e convites. */
 
-const inviteLimiter = createMemoryRateLimiter({ limit: 20, windowMs: 60 * 60_000 });
+const inviteLimiter = createRateLimiter({ limit: 20, windowMs: 60 * 60_000 });
 
 async function setActiveCompanyCookie(companyId: string) {
   const cookieStore = await cookies();

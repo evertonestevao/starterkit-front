@@ -26,6 +26,10 @@ const serverEnvSchema = z.object({
   EMAIL_FROM: z.email().optional(),
   /** URL pública da app, usada em links de emails transacionais. */
   APP_URL: z.url().default("http://localhost:3000"),
+  /** Store do rate limiter: memory (single-node/dev) ou redis (Upstash). */
+  RATE_LIMIT_STORE: z.enum(["memory", "redis"]).default("memory"),
+  UPSTASH_REDIS_REST_URL: z.url().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
 });
 
 export function getClientEnv() {

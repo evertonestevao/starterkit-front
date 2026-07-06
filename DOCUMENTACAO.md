@@ -173,7 +173,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | Email com **Resend real** | ⚠️ | Adapter completo via REST, mas nunca testado com conta/chave real nem domínio verificado. |
 | Auditoria | ✅ | Sanitização de dados sensíveis com testes unitários; imutabilidade testada no SQL; UI lista eventos. Registra convites/revogações — **outras ações (mudança de papel, billing) ainda não geram evento de auditoria**. |
 | Feature flags | ⚠️ | `featureFlagService` testado por unit tests, **mas nada na UI usa flags ainda** — está pronto para ser consumido, não consumido. |
-| Rate limiting | ⚠️ | Funciona (testes unitários), porém é **in-memory**: só vale para uma instância do servidor. Com 2+ instâncias (ou serverless), cada uma tem seu contador — precisa trocar o store por Redis/Upstash implementando a interface `RateLimiter`. |
+| Rate limiting | ⚠️ | Dois stores atrás da mesma interface, escolhidos por `RATE_LIMIT_STORE`: `memory` (default, janela deslizante, só vale por instância) e `redis` (Upstash via REST, janela fixa, vale entre instâncias). O adapter Upstash tem unit tests com fetch mockado (bloqueio, janela, fail-open), **mas nunca rodou contra uma conta Upstash real**. Decisão consciente: se o Redis cair, o limiter falha ABERTO (permite e loga). |
 | UI responsiva / tema | ✅/⚠️ | Sidebar rail/drawer e tabelas→cards implementados; tema dark/light ok. **Não foi testado em celular físico** (só viewport de navegador). |
 | Perfil do usuário (nome) | ✅ | Editável em `/dashboard/settings`. Avatar tem coluna no banco, **sem upload implementado**. |
 | CI (GitHub Actions) | ⚠️ | Workflow completo (lint, typecheck, unit, build, RLS), **mas nunca rodou** — o repositório não tem remote no GitHub. Vai rodar no primeiro push. |
@@ -291,6 +291,8 @@ Ficam em `.env.local` (ignorado pelo git; `.env.example` é o modelo commitado).
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | não | só exigidas se `PAYMENT_GATEWAY=stripe` |
 | `EMAIL_PROVIDER` | não | `console` (default) ou `resend` |
 | `RESEND_API_KEY` / `EMAIL_FROM` | não | só exigidas se `EMAIL_PROVIDER=resend` |
+| `RATE_LIMIT_STORE` | não | `memory` (default) ou `redis` (Upstash, para 2+ instâncias/serverless) |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | não | só exigidas se `RATE_LIMIT_STORE=redis` (Console Upstash > REST API) |
 
 **Estado atual do `.env.local` desta máquina:** aponta para o Supabase **local** (as chaves são as demo keys públicas do CLI, não são segredo). As chaves do projeto remoto (`fuxihgdjrhrwwqnymlau.supabase.co`) estão comentadas no fim do arquivo. **O projeto remoto ainda NÃO tem as migrations aplicadas** — não funciona até rodar `npx supabase db push`.
 
@@ -403,7 +405,7 @@ Em ordem de importância — **revisar antes de expor a clientes reais**:
 
 2. **Recuperação de senha sem teste ponta a ponta.** O fluxo do link de email → `/auth/confirm` → `/reset-password` nunca foi clicado de verdade. Teste manual obrigatório.
 
-3. **Rate limiter é in-memory.** Em serverless (Vercel), cada invocação pode ser um processo novo — na prática o rate limit de login/convite pode ser **quase inócuo em produção**. Este é possivelmente o maior gap real de segurança para produção. A interface `RateLimiter` existe para plugar Upstash/Redis sem tocar nos services.
+3. **Rate limiter em produção exige `RATE_LIMIT_STORE=redis`.** O default `memory` é quase inócuo em serverless (cada instância tem seu contador). O adapter Upstash está pronto e testado com mock, mas **nunca validado contra uma conta Upstash real** — teste manual obrigatório ao configurar produção. Se o Redis ficar fora, o limiter falha aberto (loga e permite) — decisão deliberada para o login não cair junto; reavalie se seu threat model exigir fail-closed.
 
 4. **CI nunca executou.** O workflow está escrito mas o repo não tem remote. Primeiro push pode revelar ajustes (ex.: versão do supabase CLI na action).
 

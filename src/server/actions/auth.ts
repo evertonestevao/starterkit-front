@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getServerEnv } from "@/config/env";
 import { createSupabaseAuthRepository } from "@/repositories/supabase/authRepository";
-import { createMemoryRateLimiter } from "@/server/rateLimit";
+import { createRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { createAuthService } from "@/services/authService";
 import { toActionError, type ActionState } from "./action-state";
@@ -13,9 +13,9 @@ import { toActionError, type ActionState } from "./action-state";
  * Fluxo: action → authService (Zod + rate limit) → authRepository → Supabase.
  */
 
-// Instâncias por processo: suficiente para single-node; trocar o store do
-// RateLimiter (src/server/rateLimit.ts) ao escalar horizontalmente.
-const loginLimiter = createMemoryRateLimiter({ limit: 10, windowMs: 60_000 });
+// Store escolhido por RATE_LIMIT_STORE (memory em dev, redis/Upstash em prod
+// multi-instância) — ver src/server/rateLimit.ts.
+const loginLimiter = createRateLimiter({ limit: 10, windowMs: 60_000 });
 
 async function getAuthService() {
   const client = await getSupabaseServerClient();
