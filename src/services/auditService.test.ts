@@ -16,7 +16,7 @@ function makeRepo(inserted: NewAuditEntry[]): AuditRepository {
       inserted.push(entry);
     },
     async listByCompany() {
-      return [] as AuditLog[];
+      return { items: [] as AuditLog[], total: 0 };
     },
   };
 }

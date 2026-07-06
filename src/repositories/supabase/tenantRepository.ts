@@ -72,18 +72,24 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       return member?.role ?? null;
     },
 
-    async listMembers(companyId) {
-      const { data, error } = await client
+    async listMembers(companyId, { limit, offset }) {
+      const { data, error, count } = await client
         .from("company_members")
         // FK explícita: há duas relações com profiles (user_id e invited_by)
-        .select("*, profile:profiles!company_members_user_id_fkey(full_name, avatar_url)")
+        .select("*, profile:profiles!company_members_user_id_fkey(full_name, avatar_url)", {
+          count: "exact",
+        })
         .eq("company_id", companyId)
         .is("deleted_at", null)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true })
+        .range(offset, offset + limit - 1);
       if (error) {
         throw new AppError("internal_error", "Falha ao listar membros", error);
       }
-      return (data ?? []) as unknown as MemberWithProfile[];
+      return {
+        items: (data ?? []) as unknown as MemberWithProfile[],
+        total: count ?? 0,
+      };
     },
 
     async getMember(memberId, companyId) {

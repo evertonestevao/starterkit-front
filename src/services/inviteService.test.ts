@@ -120,7 +120,7 @@ describe("inviteService.invite", () => {
           audited.push(entry.action);
         },
         async listRecent() {
-          return [];
+          return { items: [], total: 0, page: 1, pageSize: 20 };
         },
       },
     });

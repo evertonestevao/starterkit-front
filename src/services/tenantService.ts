@@ -9,6 +9,33 @@ import { permissionService } from "./permissionService";
  * Toda operação sensível revalida papel aqui (não confiar só em RLS).
  */
 
+/** Página de resultados (paginação offset em toda listagem grande). */
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface PageParams {
+  page?: number;
+  pageSize?: number;
+}
+
+/** Normaliza page/pageSize vindos de query string (defensivo). */
+export function normalizePageParams(
+  params: PageParams | undefined,
+  defaultPageSize: number,
+  maxPageSize = 100,
+): { page: number; pageSize: number; offset: number } {
+  const rawPage = Math.trunc(params?.page ?? 1);
+  const rawSize = Math.trunc(params?.pageSize ?? defaultPageSize);
+  const page = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
+  const pageSize =
+    Number.isFinite(rawSize) && rawSize >= 1 ? Math.min(rawSize, maxPageSize) : defaultPageSize;
+  return { page, pageSize, offset: (page - 1) * pageSize };
+}
+
 export interface TenantRepository {
   /** Empresas ativas em que o usuário logado é membro, com o papel dele. */
   listMyCompanies(): Promise<CompanyWithRole[]>;
@@ -17,7 +44,10 @@ export interface TenantRepository {
   updateCompany(companyId: string, data: { name: string }): Promise<void>;
   /** Papel do usuário logado na empresa, ou null se não é membro ativo. */
   getMyRole(companyId: string): Promise<RoleCode | null>;
-  listMembers(companyId: string): Promise<MemberWithProfile[]>;
+  listMembers(
+    companyId: string,
+    opts: { limit: number; offset: number },
+  ): Promise<{ items: MemberWithProfile[]; total: number }>;
   getMember(memberId: string, companyId: string): Promise<MemberWithProfile | null>;
   updateMemberRole(memberId: string, companyId: string, role: RoleCode): Promise<void>;
   /** Soft delete da membership. */
@@ -89,9 +119,16 @@ export function createTenantService(repo: TenantRepository) {
     return role;
   }
 
-  async function listMembers(companyId: string): Promise<MemberWithProfile[]> {
+  const MEMBERS_PAGE_SIZE = 20;
+
+  async function listMembers(
+    companyId: string,
+    params?: PageParams,
+  ): Promise<Paginated<MemberWithProfile>> {
     await requireMembership(companyId);
-    return repo.listMembers(companyId);
+    const { page, pageSize, offset } = normalizePageParams(params, MEMBERS_PAGE_SIZE);
+    const { items, total } = await repo.listMembers(companyId, { limit: pageSize, offset });
+    return { items, total, page, pageSize };
   }
 
   async function changeMemberRole(

@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { AppError } from "@/lib/errors";
 import type { RoleCode } from "@/types/database";
 import type { CompanyWithRole, MemberWithProfile } from "@/types/tenant";
-import { createTenantService, slugify, type TenantRepository } from "./tenantService";
+import {
+  createTenantService,
+  normalizePageParams,
+  slugify,
+  type TenantRepository,
+} from "./tenantService";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -34,7 +39,7 @@ function makeRepo(overrides: Partial<TenantRepository> = {}): TenantRepository {
       return "owner" as RoleCode;
     },
     async listMembers() {
-      return [];
+      return { items: [], total: 0 };
     },
     async getMember() {
       return makeMember({});
@@ -79,6 +84,39 @@ describe("tenantService.createCompany", () => {
     expect(slugs[0]).toBe("minha-empresa");
     expect(slugs[1]).toMatch(/^minha-empresa-[a-z0-9]{4}$/);
     expect(company.slug).toBe(slugs[1]);
+  });
+});
+
+describe("normalizePageParams (paginação)", () => {
+  it("aplica defaults e calcula offset", () => {
+    expect(normalizePageParams(undefined, 20)).toEqual({ page: 1, pageSize: 20, offset: 0 });
+    expect(normalizePageParams({ page: 3 }, 20)).toEqual({ page: 3, pageSize: 20, offset: 40 });
+  });
+
+  it("é defensivo com valores de query string inválidos", () => {
+    expect(normalizePageParams({ page: 0 }, 20).page).toBe(1);
+    expect(normalizePageParams({ page: -5 }, 20).page).toBe(1);
+    expect(normalizePageParams({ page: NaN }, 20).page).toBe(1);
+    expect(normalizePageParams({ pageSize: 10_000 }, 20).pageSize).toBe(100); // cap
+    expect(normalizePageParams({ pageSize: 0 }, 20).pageSize).toBe(20);
+  });
+});
+
+describe("tenantService.listMembers paginado", () => {
+  it("repassa limit/offset ao repositório e devolve página com total", async () => {
+    let received: { limit: number; offset: number } | undefined;
+    const service = createTenantService(
+      makeRepo({
+        async listMembers(_companyId, opts) {
+          received = opts;
+          return { items: [makeMember({})], total: 45 };
+        },
+      }),
+    );
+    const result = await service.listMembers(COMPANY_ID, { page: 2 });
+    expect(received).toEqual({ limit: 20, offset: 20 });
+    expect(result).toMatchObject({ total: 45, page: 2, pageSize: 20 });
+    expect(result.items).toHaveLength(1);
   });
 });
 

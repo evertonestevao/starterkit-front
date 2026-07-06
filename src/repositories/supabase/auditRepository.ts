@@ -24,18 +24,18 @@ export function createSupabaseAuditRepository(client: SupabaseClient): AuditRepo
       }
     },
 
-    async listByCompany(companyId, limit) {
-      const { data, error } = await client
+    async listByCompany(companyId, { limit, offset }) {
+      const { data, error, count } = await client
         .from("audit_logs")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("company_id", companyId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
-        .limit(limit);
+        .range(offset, offset + limit - 1);
       if (error) {
         throw new AppError("internal_error", "Falha ao listar auditoria", error);
       }
-      return (data ?? []) as AuditLog[];
+      return { items: (data ?? []) as AuditLog[], total: count ?? 0 };
     },
   };
 }

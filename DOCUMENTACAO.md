@@ -423,7 +423,7 @@ Em ordem de importância — **revisar antes de expor a clientes reais**:
 
 8. **`profiles.avatar_url` e `NEXT_PUBLIC_BACKEND_PROVIDER=api` são estrutura ociosa.** Colunas/opções previstas sem implementação por trás. Não é bug, mas pode confundir: o provider `api` não tem repositório implementado — só `supabase` funciona.
 
-9. **Tabelas grandes sem paginação.** Membros e auditoria listam tudo (auditoria limita a 50). Com centenas de linhas a UI vai pesar; paginação ficou de fora do MVP.
+9. **Paginação implementada em membros e auditoria** (offset via `?page=`, 20 por página, links sem JS, `normalizePageParams` defensivo com unit tests). Convites pendentes seguem sem paginação (volume tende a ser pequeno); listas futuras de domínio devem copiar o padrão `Paginated<T>`.
 
 10. **Testado só em resize de navegador, não em celular físico** (checklist do plano pede aparelho real).
 

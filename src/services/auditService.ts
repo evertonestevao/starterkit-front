@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AppError } from "@/lib/errors";
 import type { AuditLog } from "@/types/database";
+import { normalizePageParams, type Paginated, type PageParams } from "./tenantService";
 
 /**
  * Trilha de auditoria básica (plano §10): quem fez o quê, em qual empresa,
@@ -9,7 +10,10 @@ import type { AuditLog } from "@/types/database";
 
 export interface AuditRepository {
   insert(entry: NewAuditEntry): Promise<void>;
-  listByCompany(companyId: string, limit: number): Promise<AuditLog[]>;
+  listByCompany(
+    companyId: string,
+    opts: { limit: number; offset: number },
+  ): Promise<{ items: AuditLog[]; total: number }>;
 }
 
 const auditEntrySchema = z.object({
@@ -55,9 +59,14 @@ export function createAuditService(repo: AuditRepository) {
     await repo.insert({ ...parsed.data, metadata: sanitizeMetadata(parsed.data.metadata) });
   }
 
-  /** Últimas entradas da empresa (a RLS já restringe a owner/admin). */
-  async function listRecent(companyId: string, limit = 50): Promise<AuditLog[]> {
-    return repo.listByCompany(companyId, Math.min(limit, 200));
+  /** Entradas da empresa, paginadas (a RLS já restringe a owner/admin). */
+  async function listRecent(
+    companyId: string,
+    params?: PageParams,
+  ): Promise<Paginated<AuditLog>> {
+    const { page, pageSize, offset } = normalizePageParams(params, 20, 100);
+    const { items, total } = await repo.listByCompany(companyId, { limit: pageSize, offset });
+    return { items, total, page, pageSize };
   }
 
   return { record, listRecent };

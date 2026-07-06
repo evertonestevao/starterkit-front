@@ -24,7 +24,8 @@ export default async function DashboardPage() {
   const isAdmin = permissionService.canManageMembers(active.role);
 
   const [members, plan, pendingInvites] = await Promise.all([
-    tenant.listMembers(active.id),
+    // pageSize mínimo: aqui só o total interessa (métrica), não as linhas.
+    tenant.listMembers(active.id, { page: 1, pageSize: 1 }),
     billing.getEffectivePlan(active.id),
     isAdmin
       ? createInviteService({
@@ -44,7 +45,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={Users} label="Membros ativos" value={members.length} />
+        <MetricCard icon={Users} label="Membros ativos" value={members.total} />
         {isAdmin ? (
           <MetricCard icon={Mail} label="Convites pendentes" value={pendingInvites.length} />
         ) : null}

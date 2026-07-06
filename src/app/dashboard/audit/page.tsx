@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { ScrollText } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { PaginationControls } from "@/components/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -24,7 +25,12 @@ function formatDate(value: string): string {
   return new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
-export default async function AuditPage() {
+export default async function AuditPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: rawPage } = await searchParams;
   const { active } = await getActiveTenant();
   if (!active) return null;
   if (!permissionService.canViewAudit(active.role)) {
@@ -33,7 +39,8 @@ export default async function AuditPage() {
 
   const client = await getSupabaseServerClient();
   const audit = createAuditService(createSupabaseAuditRepository(client));
-  const entries = await audit.listRecent(active.id, 50);
+  const page = await audit.listRecent(active.id, { page: Number(rawPage) || 1 });
+  const entries = page.items;
 
   return (
     <div className="flex flex-col gap-6">
@@ -98,6 +105,13 @@ export default async function AuditPage() {
               </Card>
             ))}
           </div>
+
+          <PaginationControls
+            page={page.page}
+            pageSize={page.pageSize}
+            total={page.total}
+            basePath="/dashboard/audit"
+          />
         </>
       )}
     </div>

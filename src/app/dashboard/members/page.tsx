@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { UserPlus } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PaginationControls } from "@/components/pagination-controls";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
 import { InviteMemberForm } from "@/features/companies/components/invite-member-form";
 import { MembersList } from "@/features/companies/components/members-list";
@@ -14,7 +15,12 @@ import { permissionService } from "@/services/permissionService";
 
 export const metadata: Metadata = { title: "Membros" };
 
-export default async function MembersPage() {
+export default async function MembersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: rawPage } = await searchParams;
   const { active } = await getActiveTenant();
   if (!active) return null;
   // Autorização no servidor, não só no menu escondido.
@@ -30,7 +36,7 @@ export default async function MembersPage() {
   });
 
   const [members, pendingInvites] = await Promise.all([
-    tenant.listMembers(active.id),
+    tenant.listMembers(active.id, { page: Number(rawPage) || 1 }),
     invites.listPending(active.id),
   ]);
 
@@ -45,7 +51,13 @@ export default async function MembersPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          <MembersList members={members} />
+          <MembersList members={members.items} />
+          <PaginationControls
+            page={members.page}
+            pageSize={members.pageSize}
+            total={members.total}
+            basePath="/dashboard/members"
+          />
           {pendingInvites.length > 0 ? (
             <section className="flex flex-col gap-3">
               <h3 className="text-sm font-medium text-muted-foreground">Convites pendentes</h3>
