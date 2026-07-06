@@ -39,6 +39,25 @@ describe("sanitizeMetadata", () => {
     const meta = { entity: "member", role: "admin", count: 3 };
     expect(sanitizeMetadata(meta)).toEqual(meta);
   });
+
+  it("preserva os metadata dos eventos da auditoria completa (fase 3)", () => {
+    // shapes reais gravados pelas actions — nenhum deve ser mutilado
+    const shapes: Record<string, unknown>[] = [
+      { previous_role: "member", new_role: "admin" }, // member.role_changed
+      { removed_role: "member" }, // member.removed
+      { name: "Empresa Renomeada" }, // company.updated
+      { plan_id: "plan-pro", gateway: "stripe" }, // subscription.*
+    ];
+    for (const shape of shapes) {
+      expect(sanitizeMetadata(shape)).toEqual(shape);
+    }
+  });
+
+  it("segue removendo chave sensível mesmo nos novos eventos", () => {
+    expect(
+      sanitizeMetadata({ plan_id: "p", gateway: "stripe", card_last4: "4242" }),
+    ).toEqual({ plan_id: "p", gateway: "stripe" });
+  });
 });
 
 describe("auditService.record", () => {

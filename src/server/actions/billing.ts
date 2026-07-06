@@ -6,6 +6,7 @@ import { getPaymentGateway } from "@/adapters/payment";
 import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
 import { createSupabaseBillingRepository } from "@/repositories/supabase/billingRepository";
+import { recordAudit } from "@/server/audit";
 import { getSupabaseAdminClient } from "@/server/supabase-admin";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getTenantService } from "@/server/tenant";
@@ -56,6 +57,12 @@ export async function checkoutAction(
     });
     void billing; // reservado para persistir estado pré-checkout se necessário
     checkoutUrl = session.url;
+    await recordAudit({
+      companyId,
+      action: "subscription.checkout_started",
+      entityType: "subscription",
+      metadata: { plan_id: planId, gateway: gateway.name },
+    });
   } catch (err) {
     return toActionError(err);
   }
@@ -95,6 +102,12 @@ export async function activateFakePlanAction(
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       cancelAtPeriodEnd: false,
     });
+    await recordAudit({
+      companyId,
+      action: "subscription.activated",
+      entityType: "subscription",
+      metadata: { plan_id: planId, gateway: "fake" },
+    });
     revalidatePath("/dashboard/billing");
     return { success: "Plano ativado (simulação de webhook do gateway fake)" };
   } catch (err) {
@@ -123,6 +136,13 @@ export async function cancelSubscriptionAction(
     await repo.updateSubscription(subscription.id, {
       status: "canceled",
       cancel_at_period_end: true,
+    });
+    await recordAudit({
+      companyId,
+      action: "subscription.canceled",
+      entityType: "subscription",
+      entityId: subscription.id,
+      metadata: { plan_id: subscription.plan_id },
     });
     revalidatePath("/dashboard/billing");
     return { success: "Assinatura cancelada" };

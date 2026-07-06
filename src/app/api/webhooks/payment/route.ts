@@ -1,7 +1,9 @@
 import { getPaymentGateway } from "@/adapters/payment";
 import { toPublicError, isAppError } from "@/lib/errors";
+import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
 import { createSupabaseBillingRepository } from "@/repositories/supabase/billingRepository";
 import { getSupabaseAdminClient } from "@/server/supabase-admin";
+import { createAuditService } from "@/services/auditService";
 import { createBillingService } from "@/services/billingService";
 
 /**
@@ -19,10 +21,21 @@ export async function POST(request: Request) {
     const gateway = getPaymentGateway();
     const event = await gateway.handleWebhook(payload, signature);
 
-    const billing = createBillingService(
-      createSupabaseBillingRepository(getSupabaseAdminClient()),
-    );
+    const admin = getSupabaseAdminClient();
+    const billing = createBillingService(createSupabaseBillingRepository(admin));
     await billing.applyPaymentEvent(event);
+
+    // Evento de sistema na trilha (user_id null): só quando conseguimos
+    // atribuir a empresa; eventos "ignored" não sujam a auditoria.
+    if (event.type !== "ignored" && event.companyId) {
+      await createAuditService(createSupabaseAuditRepository(admin)).record({
+        companyId: event.companyId,
+        userId: null,
+        action: event.type,
+        entityType: "subscription",
+        metadata: { gateway: event.gateway, plan_id: event.planId },
+      });
+    }
 
     return Response.json({ received: true });
   } catch (err) {

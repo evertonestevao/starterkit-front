@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { getServerEnv } from "@/config/env";
 import { getEmailProvider } from "@/adapters/email";
 import { AppError } from "@/lib/errors";
+import { recordAudit } from "@/server/audit";
 import { syncCompanySeats } from "@/server/billing";
 import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
@@ -66,6 +67,13 @@ export async function updateCompanyAction(
     const companyId = String(formData.get("companyId") ?? "");
     const tenant = await getTenantService();
     await tenant.updateCompany(companyId, { name: formData.get("name") });
+    await recordAudit({
+      companyId,
+      action: "company.updated",
+      entityType: "company",
+      entityId: companyId,
+      metadata: { name: String(formData.get("name") ?? "") },
+    });
     revalidatePath("/dashboard", "layout");
     return { success: "Empresa atualizada" };
   } catch (err) {
@@ -150,19 +158,35 @@ export async function changeMemberRoleAction(
   newRole: RoleCode,
 ): Promise<void> {
   const tenant = await getTenantService();
-  await tenant.changeMemberRole(companyId, memberId, newRole);
+  const { previousRole } = await tenant.changeMemberRole(companyId, memberId, newRole);
+  await recordAudit({
+    companyId,
+    action: "member.role_changed",
+    entityType: "company_member",
+    entityId: memberId,
+    metadata: { previous_role: previousRole, new_role: newRole },
+  });
   revalidatePath("/dashboard/members");
 }
 
 export async function removeMemberAction(companyId: string, memberId: string): Promise<void> {
   const tenant = await getTenantService();
-  await tenant.removeMember(companyId, memberId);
+  const { removedRole } = await tenant.removeMember(companyId, memberId);
+  await recordAudit({
+    companyId,
+    action: "member.removed",
+    entityType: "company_member",
+    entityId: memberId,
+    metadata: { removed_role: removedRole },
+  });
   await syncCompanySeats(companyId);
   revalidatePath("/dashboard/members");
 }
 
 export async function leaveCompanyAction(companyId: string): Promise<void> {
   const tenant = await getTenantService();
+  // Auditar ANTES de sair: depois da saída a RLS já não deixa inserir.
+  await recordAudit({ companyId, action: "member.left", entityType: "company_member" });
   await tenant.leaveCompany(companyId);
   const cookieStore = await cookies();
   cookieStore.delete(ACTIVE_COMPANY_COOKIE);

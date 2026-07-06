@@ -171,7 +171,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | Billing com **Stripe real** | ⚠️ | Adapter completo (checkout, cancelamento, portal, webhook com verificação HMAC testada por unit tests), **mas nunca foi conectado à API real do Stripe**. Falta: criar produtos/preços no Stripe, mapear `gatewayPriceId` (hoje é o placeholder `price_${planId}` em `src/server/actions/billing.ts`), configurar chaves e testar webhook de verdade. |
 | Email com provider **console** | ✅ | Em dev, o email aparece no terminal do `npm run dev`. |
 | Email com **Resend real** | ⚠️ | Adapter completo via REST, mas nunca testado com conta/chave real nem domínio verificado. |
-| Auditoria | ✅ | Sanitização de dados sensíveis com testes unitários; imutabilidade testada no SQL; UI lista eventos. Registra convites/revogações — **outras ações (mudança de papel, billing) ainda não geram evento de auditoria**. |
+| Auditoria | ✅ | Sanitização com testes unitários; imutabilidade testada no SQL; UI lista eventos. Cobre: convite/revogação, mudança de papel (`member.role_changed`, com papel anterior), remoção (`member.removed`), saída (`member.left`), edição da empresa (`company.updated`), billing (`subscription.checkout_started/activated/canceled`) e eventos de webhook (sistema, `user_id` null). Leituras (acesso a dados) não são auditadas — decisão de escopo. |
 | Feature flags | ⚠️ | `featureFlagService` testado por unit tests, **mas nada na UI usa flags ainda** — está pronto para ser consumido, não consumido. |
 | Rate limiting | ⚠️ | Dois stores atrás da mesma interface, escolhidos por `RATE_LIMIT_STORE`: `memory` (default, janela deslizante, só vale por instância) e `redis` (Upstash via REST, janela fixa, vale entre instâncias). O adapter Upstash tem unit tests com fetch mockado (bloqueio, janela, fail-open), **mas nunca rodou contra uma conta Upstash real**. Decisão consciente: se o Redis cair, o limiter falha ABERTO (permite e loga). |
 | UI responsiva / tema | ✅/⚠️ | Sidebar rail/drawer e tabelas→cards implementados; tema dark/light ok. **Não foi testado em celular físico** (só viewport de navegador). |
@@ -409,7 +409,7 @@ Em ordem de importância — **revisar antes de expor a clientes reais**:
 
 4. **CI nunca executou.** O workflow está escrito mas o repo não tem remote. Primeiro push pode revelar ajustes (ex.: versão do supabase CLI na action).
 
-5. **Auditoria incompleta por design.** Só convites geram eventos hoje. Mudança de papel, remoção de membro, alterações de billing e de empresa deveriam registrar também (o `auditService` está pronto; é adicionar chamadas nas actions).
+5. **Auditoria cobre escrita, não leitura.** Todas as ações sensíveis de escrita registram evento (fase 3), mas acesso de leitura a dados não gera trilha — se o produto exigir (ex.: prontuário médico/LGPD), adicionar `recordAudit` nas leituras críticas. Nota: a falha ao gravar auditoria PROPAGA e desfaz a action (postura deliberada: trilha furada é pior que operação recusada).
 
 6. **Sessão do webhook usa service_role.** Correto (webhook não tem usuário), mas significa que um bug no adapter de pagamento escreve no banco sem RLS. A verificação HMAC é a única barreira — mantenha-a intocada e nunca processe evento não verificado.
 

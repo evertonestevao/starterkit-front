@@ -98,7 +98,7 @@ export function createTenantService(repo: TenantRepository) {
     companyId: string,
     memberId: string,
     newRole: RoleCode,
-  ): Promise<void> {
+  ): Promise<{ previousRole: RoleCode; targetUserId: string }> {
     if (newRole === "owner") {
       throw new AppError("validation_error", "Transferência de ownership não é suportada aqui");
     }
@@ -112,9 +112,13 @@ export function createTenantService(repo: TenantRepository) {
       throw new AppError("forbidden", "Sem permissão para alterar este papel");
     }
     await repo.updateMemberRole(memberId, companyId, newRole);
+    return { previousRole: target.role, targetUserId: target.user_id };
   }
 
-  async function removeMember(companyId: string, memberId: string): Promise<void> {
+  async function removeMember(
+    companyId: string,
+    memberId: string,
+  ): Promise<{ removedRole: RoleCode; targetUserId: string }> {
     const actorRole = await requireMembership(companyId);
     const target = await repo.getMember(memberId, companyId);
     if (!target) {
@@ -124,6 +128,7 @@ export function createTenantService(repo: TenantRepository) {
       throw new AppError("forbidden", "Sem permissão para remover este membro");
     }
     await repo.removeMember(memberId, companyId);
+    return { removedRole: target.role, targetUserId: target.user_id };
   }
 
   async function leaveCompany(companyId: string): Promise<void> {
