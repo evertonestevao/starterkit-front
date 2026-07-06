@@ -53,10 +53,11 @@ export default async function BillingPage() {
   const repo = createSupabaseBillingRepository(client);
   const billing = createBillingService(repo);
 
-  const [currentPlan, subscription, plans] = await Promise.all([
+  const [currentPlan, subscription, plans, seats] = await Promise.all([
     billing.getEffectivePlan(active.id),
     repo.getActiveSubscription(active.id),
     listPlans(),
+    billing.getSeatUsage(active.id),
   ]);
 
   async function listPlans(): Promise<Plan[]> {
@@ -90,6 +91,39 @@ export default async function BillingPage() {
           Configure PAYMENT_GATEWAY=stripe e as chaves para usar checkout real.
         </p>
       ) : null}
+
+      {/* Billing por seat: exceder o plano não bloqueia, cobra a mais. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Seats</CardTitle>
+          <CardDescription>
+            Membros ativos e convites pendentes ocupam seat. Exceder o incluso no plano não
+            bloqueia convites — os extras são cobrados por assento.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm">
+          {seats.included === null ? (
+            <p>
+              <span className="font-medium text-foreground">{seats.used}</span> seats em uso ·
+              plano sem limite de membros
+            </p>
+          ) : (
+            <p>
+              <span className="font-medium text-foreground">{seats.included}</span> inclusos no
+              plano + <span className="font-medium text-foreground">{seats.extraSeats}</span>{" "}
+              extras ={" "}
+              <span className="font-medium text-foreground">
+                {(seats.extraCostCents / 100).toLocaleString("pt-BR", {
+                  style: "currency",
+                  currency: currentPlan?.currency ?? "BRL",
+                })}
+                /mês
+              </span>{" "}
+              em seats extras ({seats.used} em uso no total)
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {plans.map((plan) => {

@@ -68,6 +68,31 @@ export function createSupabaseBillingRepository(client: SupabaseClient): Billing
       return row;
     },
 
+    async countActiveMembers(companyId) {
+      const { count, error } = await client
+        .from("company_members")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", companyId)
+        .is("deleted_at", null);
+      if (error) {
+        throw new AppError("internal_error", "Falha ao contar membros", error);
+      }
+      return count ?? 0;
+    },
+
+    async countPendingInvites(companyId) {
+      const { count, error } = await client
+        .from("company_invites")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", companyId)
+        .eq("status", "pending")
+        .is("deleted_at", null);
+      if (error) {
+        throw new AppError("internal_error", "Falha ao contar convites", error);
+      }
+      return count ?? 0;
+    },
+
     async updateSubscription(id, data) {
       const result = await client
         .from("subscriptions")

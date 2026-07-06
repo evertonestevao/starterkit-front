@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { getServerEnv } from "@/config/env";
 import { getEmailProvider } from "@/adapters/email";
 import { AppError } from "@/lib/errors";
+import { syncCompanySeats } from "@/server/billing";
 import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
 import { createMemoryRateLimiter } from "@/server/rateLimit";
@@ -108,6 +109,9 @@ export async function inviteMemberAction(
       role: formData.get("role") === "admin" ? "admin" : "member",
       invitedBy: data.user.id,
     });
+    // Billing por seat: exceder o plano não bloqueia o convite — recalcula
+    // os extras e ajusta a cobrança no gateway.
+    await syncCompanySeats(companyId);
     revalidatePath("/dashboard/members");
     return { success: "Convite enviado" };
   } catch (err) {
@@ -125,6 +129,7 @@ export async function revokeInviteAction(inviteId: string, companyId: string): P
   const { data } = await client.auth.getUser();
   const invites = await getInviteService();
   await invites.revoke(inviteId, companyId, data.user?.id ?? "");
+  await syncCompanySeats(companyId);
   revalidatePath("/dashboard/members");
 }
 
@@ -152,6 +157,7 @@ export async function changeMemberRoleAction(
 export async function removeMemberAction(companyId: string, memberId: string): Promise<void> {
   const tenant = await getTenantService();
   await tenant.removeMember(companyId, memberId);
+  await syncCompanySeats(companyId);
   revalidatePath("/dashboard/members");
 }
 

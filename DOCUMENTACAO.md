@@ -167,6 +167,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | Aceite de convite | ⚠️ | RPC testada no SQL (recusa convite de outro email), página `/invites/accept` existe, mas **o fluxo completo no navegador (2º usuário clicando no link) não tem teste E2E**. |
 | Gestão de membros (papel/remoção) | ⚠️ | Regras de permissão têm testes unitários; a UI funciona manualmente; não há E2E específico de mudar papel/remover. |
 | Billing com gateway **fake** | ✅ | Ciclo completo funciona em dev (ativar plano, cancelar, refletir no dashboard). |
+| Billing por seat | ⚠️ | Regras testadas por unit tests (cálculo de extras, sync condicionado a assinatura ativa, ilimitado); convites/remoções ressincronizam o gateway; UI mostra "inclusos + extras = R$/mês". **Limitações:** `syncExtraSeats` do Stripe (subscription items) nunca rodou contra a API real; `GATEWAY_EXTRA_SEAT_PRICE_ID` é placeholder; falha no sync só loga (sem retry/reconciliação agendada). |
 | Billing com **Stripe real** | ⚠️ | Adapter completo (checkout, cancelamento, portal, webhook com verificação HMAC testada por unit tests), **mas nunca foi conectado à API real do Stripe**. Falta: criar produtos/preços no Stripe, mapear `gatewayPriceId` (hoje é o placeholder `price_${planId}` em `src/server/actions/billing.ts`), configurar chaves e testar webhook de verdade. |
 | Email com provider **console** | ✅ | Em dev, o email aparece no terminal do `npm run dev`. |
 | Email com **Resend real** | ⚠️ | Adapter completo via REST, mas nunca testado com conta/chave real nem domínio verificado. |
@@ -242,7 +243,8 @@ Todas as tabelas de negócio têm `company_id` (a qual empresa a linha pertence)
 |---|---|
 | `code` | `free` \| `pro` \| `enterprise` (único) |
 | `name`, `price_cents`, `currency`, `billing_interval` | exibição/cobrança |
-| `features` | JSONB com limites/flags, ex.: `{"max_members": 15, "api_access": true}` — é daqui que `canAccessFeature` lê |
+| `features` | JSONB com limites/flags, ex.: `{"max_members": 15, "api_access": true}` — é daqui que `canAccessFeature` lê; `max_members` também é a franquia de seats |
+| `extra_seat_price_cents` | preço mensal por membro além de `max_members` (0 = não vende extra; free é 0) |
 | `is_active` | plano ofertável ou não |
 
 **`subscriptions`** — assinatura da empresa (no máx. 1 ativa por empresa)
@@ -397,7 +399,7 @@ npm run test:e2e    # fluxos no navegador (sobe o app sozinho)
 
 Em ordem de importância — **revisar antes de expor a clientes reais**:
 
-1. **Stripe e Resend nunca foram testados contra as APIs reais.** O código está correto no papel (assinatura de webhook tem teste unitário com HMAC real), mas integração de pagamento sempre revela surpresas. Reserve tempo para testar com Stripe CLI antes do primeiro cliente pagante. O `gatewayPriceId = "price_" + planId` é **placeholder** e não funcionará no Stripe real.
+1. **Stripe e Resend nunca foram testados contra as APIs reais.** O código está correto no papel (assinatura de webhook tem teste unitário com HMAC real), mas integração de pagamento sempre revela surpresas. Reserve tempo para testar com Stripe CLI antes do primeiro cliente pagante. Placeholders que **não funcionarão no Stripe real**: `gatewayPriceId = "price_" + planId` (checkout) e `GATEWAY_EXTRA_SEAT_PRICE_ID = "price_extra_seat"` (seat extra, em `src/server/billing.ts`) — ambos precisam ser mapeados para prices criados no painel do Stripe. O sync de seats após convite/remoção é *best-effort*: se falhar, só loga — não há job de reconciliação periódica.
 
 2. **Recuperação de senha sem teste ponta a ponta.** O fluxo do link de email → `/auth/confirm` → `/reset-password` nunca foi clicado de verdade. Teste manual obrigatório.
 

@@ -16,6 +16,7 @@ function makePlan(overrides: Partial<Plan>): Plan {
     currency: "BRL",
     billing_interval: "month",
     features: {},
+    extra_seat_price_cents: 0,
     is_active: true,
     deleted_at: null,
     created_at: "",
@@ -43,8 +44,19 @@ function makeSubscription(overrides: Partial<Subscription>): Subscription {
 }
 
 /** Repositório em memória para testar as regras sem Supabase. */
-function makeRepo(state: { plans: Plan[]; subscriptions: Subscription[] }): BillingRepository {
+function makeRepo(state: {
+  plans: Plan[];
+  subscriptions: Subscription[];
+  members?: number;
+  pendingInvites?: number;
+}): BillingRepository {
   return {
+    async countActiveMembers() {
+      return state.members ?? 0;
+    },
+    async countPendingInvites() {
+      return state.pendingInvites ?? 0;
+    },
     async getPlanById(id) {
       return state.plans.find((p) => p.id === id) ?? null;
     },
@@ -147,6 +159,126 @@ describe("canAccessFeature", () => {
       }),
     );
     expect(await service.canAccessFeature("company-1", "api_access")).toBe(true);
+  });
+});
+
+describe("getSeatUsage / syncSeatsWithGateway (billing por seat)", () => {
+  const threeSeatPlan = makePlan({
+    id: "plan-3seats",
+    code: "pro",
+    features: { max_members: 3 },
+    extra_seat_price_cents: 1990,
+  });
+
+  function makeGatewaySpy() {
+    const calls: Array<{ externalSubscriptionId: string; extraSeatPriceId: string; quantity: number }> = [];
+    return {
+      calls,
+      gateway: {
+        name: "spy",
+        async createCheckout() {
+          throw new Error("não usado");
+        },
+        async cancelSubscription() {},
+        async getPortalUrl() {
+          return "";
+        },
+        async handleWebhook() {
+          throw new Error("não usado");
+        },
+        async syncExtraSeats(params: (typeof calls)[number]) {
+          calls.push(params);
+        },
+      },
+    };
+  }
+
+  it("cenário do spec: plano de 3 seats, 4º membro chegando = 1 seat extra, sem bloqueio", async () => {
+    // 3 membros ativos + 1 convite pendente (o 4º a caminho) = 4 seats usados
+    const service = createBillingService(
+      makeRepo({
+        plans: [threeSeatPlan],
+        subscriptions: [makeSubscription({ plan_id: "plan-3seats" })],
+        members: 3,
+        pendingInvites: 1,
+      }),
+    );
+    const usage = await service.getSeatUsage("company-1");
+    expect(usage).toEqual({
+      included: 3,
+      used: 4,
+      extraSeats: 1,
+      extraCostCents: 1990,
+    });
+  });
+
+  it("dentro do limite: zero extras e custo zero", async () => {
+    const service = createBillingService(
+      makeRepo({
+        plans: [threeSeatPlan],
+        subscriptions: [makeSubscription({ plan_id: "plan-3seats" })],
+        members: 2,
+        pendingInvites: 1,
+      }),
+    );
+    const usage = await service.getSeatUsage("company-1");
+    expect(usage.extraSeats).toBe(0);
+    expect(usage.extraCostCents).toBe(0);
+  });
+
+  it("plano sem max_members numérico = ilimitado, nunca gera extra", async () => {
+    const unlimited = makePlan({ id: "plan-unl", code: "enterprise", features: {} });
+    const service = createBillingService(
+      makeRepo({
+        plans: [unlimited],
+        subscriptions: [makeSubscription({ plan_id: "plan-unl" })],
+        members: 50,
+      }),
+    );
+    const usage = await service.getSeatUsage("company-1");
+    expect(usage.included).toBeNull();
+    expect(usage.extraSeats).toBe(0);
+  });
+
+  it("sincroniza a quantidade de extras no gateway quando há assinatura ativa", async () => {
+    const { gateway, calls } = makeGatewaySpy();
+    const service = createBillingService(
+      makeRepo({
+        plans: [threeSeatPlan],
+        subscriptions: [
+          makeSubscription({ plan_id: "plan-3seats", external_subscription_id: "ext-sub" }),
+        ],
+        members: 5,
+      }),
+    );
+    const usage = await service.syncSeatsWithGateway("company-1", gateway, "price_seat");
+    expect(usage.extraSeats).toBe(2);
+    expect(calls).toEqual([
+      { externalSubscriptionId: "ext-sub", extraSeatPriceId: "price_seat", quantity: 2 },
+    ]);
+  });
+
+  it("não chama o gateway sem assinatura ativa (plano free) nem com assinatura cancelada", async () => {
+    const { gateway, calls } = makeGatewaySpy();
+    const freeState = { plans: [threeSeatPlan], subscriptions: [] as Subscription[], members: 5 };
+    await createBillingService(makeRepo(freeState)).syncSeatsWithGateway(
+      "company-1",
+      gateway,
+      "price_seat",
+    );
+
+    const canceledState = {
+      plans: [threeSeatPlan],
+      subscriptions: [makeSubscription({ plan_id: "plan-3seats", status: "canceled" as const })],
+      members: 5,
+    };
+    await createBillingService(makeRepo(canceledState)).syncSeatsWithGateway(
+      "company-1",
+      gateway,
+      "price_seat",
+    );
+
+    expect(calls).toHaveLength(0);
   });
 });
 

@@ -27,4 +27,16 @@ export interface PaymentGateway {
    * AppError("payment_error") — nunca processar evento não verificado.
    */
   handleWebhook(payload: string, signature: string): Promise<NormalizedPaymentEvent>;
+
+  /**
+   * Sincroniza a quantidade de seats EXTRAS cobrados na assinatura (billing
+   * por assento). `quantity` é o número de assentos além do incluso no plano;
+   * 0 remove a cobrança extra. `extraSeatPriceId` identifica o preço por
+   * assento no provedor (ex.: price_xxx no Stripe).
+   */
+  syncExtraSeats(params: {
+    externalSubscriptionId: string;
+    extraSeatPriceId: string;
+    quantity: number;
+  }): Promise<void>;
 }

@@ -36,5 +36,12 @@ export function createFakeGateway(): PaymentGateway {
       }
       return JSON.parse(payload) as NormalizedPaymentEvent;
     },
+
+    async syncExtraSeats({ externalSubscriptionId, quantity }): Promise<void> {
+      // Gateway fake: nada a cobrar; loga para o dev ver o ciclo funcionando.
+      console.info(
+        `[payment:fake] syncExtraSeats sub=${externalSubscriptionId} extras=${quantity}`,
+      );
+    },
   };
 }

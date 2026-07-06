@@ -25,15 +25,18 @@ interface StripeGatewayConfig {
 export function createStripeGateway(config: StripeGatewayConfig): PaymentGateway {
   async function stripeRequest(
     path: string,
-    body: Record<string, string>,
+    body: Record<string, string> | null,
+    method: "POST" | "GET" | "DELETE" = "POST",
   ): Promise<Record<string, unknown>> {
     const res = await fetch(`${STRIPE_API}${path}`, {
-      method: "POST",
+      method,
       headers: {
         Authorization: `Bearer ${config.secretKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
+        ...(method === "POST"
+          ? { "Content-Type": "application/x-www-form-urlencoded" }
+          : {}),
       },
-      body: new URLSearchParams(body).toString(),
+      body: method === "POST" && body ? new URLSearchParams(body).toString() : undefined,
     });
     const json = (await res.json()) as Record<string, unknown>;
     if (!res.ok) {
@@ -83,6 +86,35 @@ export function createStripeGateway(config: StripeGatewayConfig): PaymentGateway
         throw new AppError("payment_error", "Assinatura de webhook inválida");
       }
       return normalizeStripeEvent(JSON.parse(payload));
+    },
+
+    async syncExtraSeats({ externalSubscriptionId, extraSeatPriceId, quantity }): Promise<void> {
+      // Modelo de 2 itens na assinatura: item do plano base + item do preço
+      // por seat extra. Localiza o item do seat pelo price id e ajusta.
+      const subscription = await stripeRequest(
+        `/subscriptions/${externalSubscriptionId}`,
+        null,
+        "GET",
+      );
+      const items =
+        ((subscription.items as { data?: Array<{ id: string; price?: { id?: string } }> })
+          ?.data) ?? [];
+      const seatItem = items.find((item) => item.price?.id === extraSeatPriceId);
+
+      if (seatItem && quantity > 0) {
+        await stripeRequest(`/subscription_items/${seatItem.id}`, {
+          quantity: String(quantity),
+        });
+      } else if (seatItem && quantity === 0) {
+        await stripeRequest(`/subscription_items/${seatItem.id}`, null, "DELETE");
+      } else if (!seatItem && quantity > 0) {
+        await stripeRequest("/subscription_items", {
+          subscription: externalSubscriptionId,
+          price: extraSeatPriceId,
+          quantity: String(quantity),
+        });
+      }
+      // !seatItem && quantity === 0: nada a fazer.
     },
   };
 }

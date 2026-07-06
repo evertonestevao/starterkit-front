@@ -80,6 +80,8 @@ export interface Plan {
   billing_interval: BillingInterval;
   /** Limites e flags do plano, ex.: { max_members: 5, api_access: true } */
   features: Record<string, unknown>;
+  /** Preço mensal (centavos) por seat além de features.max_members; 0 = não vende extra. */
+  extra_seat_price_cents: number;
   is_active: boolean;
   deleted_at: string | null;
   created_at: string;

@@ -1,4 +1,5 @@
 import { AppError } from "@/lib/errors";
+import type { PaymentGateway } from "@/adapters/payment/PaymentGateway";
 import type { NormalizedPaymentEvent } from "@/types/billing";
 import type { Plan, Subscription } from "@/types/database";
 
@@ -15,6 +16,22 @@ export interface BillingRepository {
   findSubscriptionByExternalId(externalId: string): Promise<Subscription | null>;
   insertSubscription(data: Partial<Subscription>): Promise<Subscription>;
   updateSubscription(id: string, data: Partial<Subscription>): Promise<Subscription>;
+  /** Membros ativos (deleted_at null) — cada um ocupa um seat. */
+  countActiveMembers(companyId: string): Promise<number>;
+  /** Convites pendentes também reservam seat (o convidado vai entrar). */
+  countPendingInvites(companyId: string): Promise<number>;
+}
+
+/** Fotografia do uso de seats de uma empresa. */
+export interface SeatUsage {
+  /** Seats inclusos no plano (features.max_members); null = ilimitado. */
+  included: number | null;
+  /** Seats em uso: membros ativos + convites pendentes. */
+  used: number;
+  /** Seats além do incluso (0 quando ilimitado ou dentro do limite). */
+  extraSeats: number;
+  /** Custo mensal dos extras em centavos (extraSeats * plano). */
+  extraCostCents: number;
 }
 
 /** Plano usado quando a empresa não tem assinatura ativa. */
@@ -111,7 +128,62 @@ export function createBillingService(repo: BillingRepository) {
     }
   }
 
-  return { getEffectivePlan, canAccessFeature, getFeatureLimit, applyPaymentEvent };
+  /**
+   * Uso de seats da empresa (billing por assento). Exceder o incluso NUNCA
+   * bloqueia — vira cobrança extra. Limite ausente/não numérico = ilimitado.
+   */
+  async function getSeatUsage(companyId: string): Promise<SeatUsage> {
+    const [plan, members, invites] = await Promise.all([
+      getEffectivePlan(companyId),
+      repo.countActiveMembers(companyId),
+      repo.countPendingInvites(companyId),
+    ]);
+    const used = members + invites;
+    const rawIncluded = plan?.features["max_members"];
+    const included = typeof rawIncluded === "number" ? rawIncluded : null;
+    const extraSeats = included === null ? 0 : Math.max(0, used - included);
+    return {
+      included,
+      used,
+      extraSeats,
+      extraCostCents: extraSeats * (plan?.extra_seat_price_cents ?? 0),
+    };
+  }
+
+  /**
+   * Recalcula os seats extras e sincroniza a quantidade no gateway.
+   * Sem assinatura ativa (plano free) não há o que cobrar — no-op.
+   * Chamar após convite criado/revogado e membro removido.
+   */
+  async function syncSeatsWithGateway(
+    companyId: string,
+    gateway: PaymentGateway,
+    extraSeatPriceId: string,
+  ): Promise<SeatUsage> {
+    const usage = await getSeatUsage(companyId);
+    const subscription = await repo.getActiveSubscription(companyId);
+    if (
+      subscription &&
+      ACCESS_STATUSES.has(subscription.status) &&
+      subscription.external_subscription_id
+    ) {
+      await gateway.syncExtraSeats({
+        externalSubscriptionId: subscription.external_subscription_id,
+        extraSeatPriceId,
+        quantity: usage.extraSeats,
+      });
+    }
+    return usage;
+  }
+
+  return {
+    getEffectivePlan,
+    canAccessFeature,
+    getFeatureLimit,
+    applyPaymentEvent,
+    getSeatUsage,
+    syncSeatsWithGateway,
+  };
 }
 
 export type BillingService = ReturnType<typeof createBillingService>;
