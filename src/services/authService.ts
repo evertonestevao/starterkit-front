@@ -70,7 +70,11 @@ export function createAuthService({ repo, rateLimiter, appUrl }: AuthServiceDeps
       );
     }
     await rateLimiter.consume(`password-reset:${parsed.data.email.toLowerCase()}`);
-    await repo.resetPasswordForEmail(parsed.data.email, `${base}/auth/confirm`);
+    // next= diz ao /auth/confirm para onde ir após criar a sessão de recovery.
+    await repo.resetPasswordForEmail(
+      parsed.data.email,
+      `${base}/auth/confirm?next=/reset-password`,
+    );
   }
 
   async function resetPassword(input: unknown): Promise<void> {

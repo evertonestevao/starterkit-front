@@ -159,7 +159,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 |---|---|---|
 | Signup / login / logout | ✅ | Coberto por E2E no navegador (Playwright) contra Supabase local. |
 | Proteção de rotas (proxy) | ✅ | E2E confirma redirect de `/dashboard` sem sessão. |
-| Recuperação de senha | ⚠️ | Código completo (rate limit, link por email, `/auth/confirm`, `/reset-password`), mas **o fluxo nunca foi exercitado ponta a ponta** — em dev o email é impresso no terminal e ninguém clicou no link para validar. Testar antes de produção. |
+| Recuperação de senha | ✅ | **Validada ponta a ponta em 2026-07-07** (local, via Mailpit): forgot → email → link → `/reset-password` → senha nova → login. A validação achou e corrigiu 2 bugs: o GoTrue local rejeitava o redirect (allow-list no `config.toml`) e `/auth/confirm` não tratava o fluxo PKCE (`?code=`), só `token_hash`. **Em produção:** configurar Site URL/Redirect URLs no painel do Supabase (mesma allow-list). Obs.: emails de AUTH (recovery/confirmação) saem pelo Supabase/GoTrue — para usar Resend neles, configure SMTP no painel do Supabase; o `EmailProvider` do app cobre só emails transacionais nossos (convites). |
 | Onboarding (1ª empresa) | ✅ | E2E cobre. RPC `create_company` também testada nos testes SQL. |
 | Multi-tenant / RLS | ✅ | O ponto mais forte do projeto: `supabase/tests/rls_test.sql` prova em banco real que leitura e escrita cross-tenant falham. Roda local e no CI. |
 | Troca de empresa ativa | ✅ | E2E cobre, inclusive persistência do cookie após reload. |
