@@ -40,7 +40,11 @@ export async function POST(request: Request) {
     return Response.json({ received: true });
   } catch (err) {
     // Log detalhado só no servidor; nunca o payload cru (regra do CLAUDE.md).
-    console.error("[webhook/payment]", isAppError(err) ? err.message : err);
+    if (isAppError(err)) {
+      console.error("[webhook/payment]", err.message, "internal:", err.internal);
+    } else {
+      console.error("[webhook/payment]", err);
+    }
     const publicError = toPublicError(err);
     return Response.json({ error: publicError }, { status: isAppError(err) ? err.status : 500 });
   }

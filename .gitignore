@@ -47,3 +47,4 @@ next-env.d.ts
 
 # fixtures locais de validacao manual
 /test-fixtures/
+/.stripe-cli/
