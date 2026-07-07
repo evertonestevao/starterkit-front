@@ -1,8 +1,28 @@
 # Documentação Técnica — Starter Kit SaaS Multi-Tenant
 
 > Documento de handover: escrito para um desenvolvedor que nunca viu este código.
-> Última atualização: 2026-07-06. Reflete o código real do repositório neste commit —
+> Última atualização: 2026-07-07. Reflete o código real do repositório neste commit —
 > se você mudar o código, atualize este arquivo.
+
+---
+
+## ⚠️ ANTES DE IR PARA PRODUÇÃO — leia isto primeiro
+
+Três **placeholders deliberados** precisam ser trocados antes de qualquer cliente real:
+
+- [ ] **Texto dos Termos de Uso** — a versão em `terms_versions` é EXEMPLO SEM VALOR JURÍDICO
+      (o próprio texto avisa). Contrate revisão jurídica e publique a versão final via migration
+      (ou `scripts/publish-terms.sh` em dev). Publicar já força reaceite de todos.
+- [ ] **Stripe em modo LIVE** — o fluxo foi validado em modo TEST (2026-07-07). Para produção:
+      criar os produtos/prices live, preencher `STRIPE_PRICE_PRO/ENTERPRISE/EXTRA_SEAT` +
+      `STRIPE_SECRET_KEY/WEBHOOK_SECRET` live, registrar o webhook no painel (não via CLI) e
+      testar cancelamento/portal (não exercitados nem em test).
+- [ ] **Cor de marca e nome** — o indigo e o nome "StarterKit" são identidade neutra do template.
+      Troque em `src/config/brand.ts` (nome/tagline) e `src/app/globals.css` (`--primary` e
+      `--chart-*`; ao mudar os `--chart-*`, revalide com o validador de paleta — daltonismo/contraste).
+
+E ainda: `RATE_LIMIT_STORE=redis` (Upstash) em produção multi-instância, SMTP/Resend para os
+emails, allow-list de redirect no painel do Supabase e as demais pendências da seção 7.
 
 ---
 
@@ -182,7 +202,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | Upload de arquivos genérico | ⚠️ | A interface `StorageProvider` e o adapter Supabase existem (usados pelo avatar); uploads de outros tipos de arquivo (documentos etc.) exigem novo bucket + policies + validações próprias. |
 | Notificações (WhatsApp/SMS/push) | ⚠️ | Interface `NotificationProvider` + adapter `console` (dev, testado) + factory por `NOTIFICATION_PROVIDER`. **Nenhum provedor real implementado, e nenhum service dispara notificação ainda** — é ponto de extensão documentado (passo a passo em `src/adapters/notification/NotificationProvider.ts`), não funcionalidade. |
 | Transferência de ownership | ❌ | Bloqueada de propósito (`changeMemberRole` recusa promover a `owner`). Owner também não pode sair da empresa. |
-| Termos de uso + LGPD | ⚠️ | Versões de termos (`terms_versions`, uma vigente), aceites append-only com IP/user-agent (`terms_acceptances`) e consentimentos por finalidade (`user_consents`, grant/revoke como eventos; email opcional separado do aceite). Gate no onboarding (checkbox + validação no server) e no layout do dashboard (versão nova força reaceite em `/accept-terms`); página pública `/terms`. Coberto por unit tests (incl. reaceite ao publicar versão nova), RLS SQL (aceite forjado bloqueado, append-only) e E2E do gate no onboarding. **Limitações:** o texto da versão 1 é PLACEHOLDER sem valor jurídico (troque por texto revisado juridicamente via migration); o fluxo de reaceite (versão nova → redirect `/accept-terms`) é testado por unit test, não por E2E; não há UI para revogar o consentimento de email depois (só o evento no banco). |
+| Termos de uso + LGPD | ⚠️ | Versões de termos (`terms_versions`, uma vigente), aceites append-only com IP/user-agent (`terms_acceptances`) e consentimentos por finalidade (`user_consents`, grant/revoke como eventos; email opcional separado do aceite). Gate no onboarding (checkbox + validação no server) e no layout do dashboard (versão nova força reaceite em `/accept-terms`); página pública `/terms`. Coberto por unit tests (incl. reaceite ao publicar versão nova), RLS SQL (aceite forjado bloqueado, append-only) e E2E do gate no onboarding. **Limitações:** o texto da versão 1 é PLACEHOLDER sem valor jurídico (troque por texto revisado juridicamente via migration); **reaceite validado manualmente em 2026-07-07** (v2 publicada via `scripts/publish-terms.sh` → gate bloqueou o dashboard até o novo aceite); não há UI para revogar o consentimento de email depois (só o evento no banco). |
 | Exclusão de empresa / conta | ❌ | Não implementado (nem soft delete de empresa pela UI). |
 | Permissões granulares | ⚠️ | Estrutura pronta, papéis novos NÃO criados: o banco guarda papel como `text` com FK para `roles.code` (papel novo = INSERT) e o `permissionService` virou registro de capabilities + nível hierárquico (`defineRole` como ponto de extensão; papel desconhecido nega tudo). Comportamento dos 3 papéis fixos preservado e testado. **Atenção:** as policies de RLS (`is_company_admin`) citam `('owner','admin')` — papel customizado que precise de poder de admin no BANCO exige ajustar as policies também. |
 | Componentes de gráfico | ✅ | `LineChartCard`, `BarChartCard` e `DonutChartCard` (`src/components/charts`, base comum em `chart-base.tsx`) sobre Recharts, lendo os tokens `--chart-1..5` (paleta validada por script para light/dark, daltonismo e contraste). Regras embutidas: máx. 5 séries/fatias (donut agrega excedente em "Outros"), cor fixa por posição, eixo único, legenda só com 2+ séries, tooltip padrão, sr-only. **Validado visualmente em 2026-07-06** (cores, dark/light, hover, responsividade; correções da validação: função não serializável em Server Component → prop `valueFormat`, e eixo Y dinâmico para não cortar "R$"). Exemplos de uso com dados fake: seção "Exemplos de gráficos" no dashboard (`src/app/dashboard/page.tsx`). Barras e donut seguiram o mesmo padrão, mas foram conferidos só pelo dev — vale um olhar visual. |

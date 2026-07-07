@@ -70,12 +70,16 @@ export async function createCompanyAction(
   redirect("/dashboard");
 }
 
-export async function switchCompanyAction(companyId: string): Promise<void> {
-  // Valida membership antes de gravar a preferência.
-  const tenant = await getTenantService();
-  await tenant.requireMembership(companyId);
-  await setActiveCompanyCookie(companyId);
-  revalidatePath("/dashboard", "layout");
+export async function switchCompanyAction(companyId: string): Promise<ActionState | void> {
+  try {
+    // Valida membership antes de gravar a preferência.
+    const tenant = await getTenantService();
+    await tenant.requireMembership(companyId);
+    await setActiveCompanyCookie(companyId);
+    revalidatePath("/dashboard", "layout");
+  } catch (err) {
+    return toActionError(err);
+  }
   redirect("/dashboard");
 }
 
@@ -147,18 +151,27 @@ export async function inviteMemberAction(
   }
 }
 
-export async function revokeInviteAction(inviteId: string, companyId: string): Promise<void> {
-  const tenant = await getTenantService();
-  const role = await tenant.requireMembership(companyId);
-  if (!permissionService.canManageMembers(role)) {
-    throw new AppError("forbidden", "Sem permissão para revogar convites");
+export async function revokeInviteAction(
+  inviteId: string,
+  companyId: string,
+): Promise<ActionState | void> {
+  try {
+    const tenant = await getTenantService();
+    const role = await tenant.requireMembership(companyId);
+    if (!permissionService.canManageMembers(role)) {
+      throw new AppError("forbidden", "Sem permissão para revogar convites");
+    }
+    const client = await getSupabaseServerClient();
+    const { data } = await client.auth.getUser();
+    const invites = await getInviteService();
+    await invites.revoke(inviteId, companyId, data.user?.id ?? "");
+    await syncCompanySeats(companyId);
+    revalidatePath("/dashboard/members");
+  } catch (err) {
+    // Erro (incl. falha de auditoria, que desfaz a action) vira mensagem
+    // segura para o client exibir — nunca falha silenciosa.
+    return toActionError(err);
   }
-  const client = await getSupabaseServerClient();
-  const { data } = await client.auth.getUser();
-  const invites = await getInviteService();
-  await invites.revoke(inviteId, companyId, data.user?.id ?? "");
-  await syncCompanySeats(companyId);
-  revalidatePath("/dashboard/members");
 }
 
 export async function acceptInviteAction(token: string): Promise<{ error?: string }> {
@@ -176,39 +189,54 @@ export async function changeMemberRoleAction(
   companyId: string,
   memberId: string,
   newRole: RoleCode,
-): Promise<void> {
-  const tenant = await getTenantService();
-  const { previousRole } = await tenant.changeMemberRole(companyId, memberId, newRole);
-  await recordAudit({
-    companyId,
-    action: "member.role_changed",
-    entityType: "company_member",
-    entityId: memberId,
-    metadata: { previous_role: previousRole, new_role: newRole },
-  });
-  revalidatePath("/dashboard/members");
+): Promise<ActionState | void> {
+  try {
+    const tenant = await getTenantService();
+    const { previousRole } = await tenant.changeMemberRole(companyId, memberId, newRole);
+    await recordAudit({
+      companyId,
+      action: "member.role_changed",
+      entityType: "company_member",
+      entityId: memberId,
+      metadata: { previous_role: previousRole, new_role: newRole },
+    });
+    revalidatePath("/dashboard/members");
+  } catch (err) {
+    return toActionError(err);
+  }
 }
 
-export async function removeMemberAction(companyId: string, memberId: string): Promise<void> {
-  const tenant = await getTenantService();
-  const { removedRole } = await tenant.removeMember(companyId, memberId);
-  await recordAudit({
-    companyId,
-    action: "member.removed",
-    entityType: "company_member",
-    entityId: memberId,
-    metadata: { removed_role: removedRole },
-  });
-  await syncCompanySeats(companyId);
-  revalidatePath("/dashboard/members");
+export async function removeMemberAction(
+  companyId: string,
+  memberId: string,
+): Promise<ActionState | void> {
+  try {
+    const tenant = await getTenantService();
+    const { removedRole } = await tenant.removeMember(companyId, memberId);
+    await recordAudit({
+      companyId,
+      action: "member.removed",
+      entityType: "company_member",
+      entityId: memberId,
+      metadata: { removed_role: removedRole },
+    });
+    await syncCompanySeats(companyId);
+    revalidatePath("/dashboard/members");
+  } catch (err) {
+    return toActionError(err);
+  }
 }
 
-export async function leaveCompanyAction(companyId: string): Promise<void> {
-  const tenant = await getTenantService();
-  // Auditar ANTES de sair: depois da saída a RLS já não deixa inserir.
-  await recordAudit({ companyId, action: "member.left", entityType: "company_member" });
-  await tenant.leaveCompany(companyId);
-  const cookieStore = await cookies();
-  cookieStore.delete(ACTIVE_COMPANY_COOKIE);
+export async function leaveCompanyAction(companyId: string): Promise<ActionState | void> {
+  try {
+    const tenant = await getTenantService();
+    // Auditar ANTES de sair: depois da saída a RLS já não deixa inserir.
+    await recordAudit({ companyId, action: "member.left", entityType: "company_member" });
+    await tenant.leaveCompany(companyId);
+    const cookieStore = await cookies();
+    cookieStore.delete(ACTIVE_COMPANY_COOKIE);
+  } catch (err) {
+    return toActionError(err);
+  }
   redirect("/onboarding");
 }

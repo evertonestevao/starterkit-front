@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,7 +48,16 @@ export function CompanySwitcher() {
             {companies.map((company) => (
               <DropdownMenuItem
                 key={company.id}
-                onClick={() => startTransition(() => switchCompanyAction(company.id))}
+                onClick={() =>
+                  startTransition(async () => {
+                    try {
+                      const result = await switchCompanyAction(company.id);
+                      if (result?.error) toast.error(result.error);
+                    } catch {
+                      toast.error("Não foi possível trocar de empresa. Tente novamente.");
+                    }
+                  })
+                }
               >
                 <span className="truncate">{company.name}</span>
                 {company.id === active.id ? <Check className="ml-auto size-4" /> : null}

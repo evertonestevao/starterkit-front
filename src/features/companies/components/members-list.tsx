@@ -116,13 +116,21 @@ function MemberActions({ member }: { member: MemberWithProfile }) {
   const canRemove = permissionService.canRemoveMember(active.role, member.role);
   if (!canChange && !canRemove) return null;
 
-  function run(action: () => Promise<void>, successMessage: string) {
+  function run(
+    action: () => Promise<{ error?: string } | void>,
+    successMessage: string,
+  ) {
     startTransition(async () => {
       try {
-        await action();
-        toast.success(successMessage);
+        const result = await action();
+        if (result?.error) {
+          // Mensagem real da action (permissão, auditoria que desfez, etc.)
+          toast.error(result.error);
+        } else {
+          toast.success(successMessage);
+        }
       } catch {
-        toast.error("Operação não permitida");
+        toast.error("Não foi possível completar a ação. Tente novamente.");
       }
     });
   }

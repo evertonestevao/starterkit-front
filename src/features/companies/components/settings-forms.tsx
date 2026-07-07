@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -135,12 +136,20 @@ export function LeaveCompanyButton() {
   const { active } = useTenant();
   const [pending, startTransition] = useTransition();
 
+  function leave() {
+    startTransition(async () => {
+      try {
+        const result = await leaveCompanyAction(active.id);
+        if (result?.error) toast.error(result.error);
+        // sucesso redireciona no servidor — nada a fazer aqui
+      } catch {
+        toast.error("Não foi possível sair da empresa. Tente novamente.");
+      }
+    });
+  }
+
   return (
-    <Button
-      variant="destructive"
-      disabled={pending}
-      onClick={() => startTransition(() => leaveCompanyAction(active.id))}
-    >
+    <Button variant="destructive" disabled={pending} onClick={leave}>
       {pending ? "Saindo..." : `Sair de ${active.name}`}
     </Button>
   );

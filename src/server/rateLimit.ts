@@ -96,7 +96,13 @@ export function createUpstashRateLimiter(config: UpstashConfig): RateLimiter {
           throw new Error("resposta inesperada do Upstash");
         }
       } catch (err) {
-        console.error("[rate-limit] Upstash indisponível, falhando aberto:", err);
+        // WARN explícito e grepável: em produção, uma instabilidade do
+        // Upstash significa rate limit DESLIGADO — precisa aparecer nos
+        // logs/alertas, nunca passar despercebido.
+        console.warn(
+          `[rate-limit] FAIL-OPEN: Upstash indisponível — permitindo "${key}" SEM rate limit.`,
+          err,
+        );
         return; // fail-open
       }
 

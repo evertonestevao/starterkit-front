@@ -76,16 +76,17 @@ describe("createUpstashRateLimiter", () => {
     expect(requests[0].commands[1]).toEqual(["PEXPIRE", "ratelimit:k:0", "1000", "NX"]);
   });
 
-  it("falha ABERTO quando o Upstash está fora (login não pode cair junto)", async () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("falha ABERTO quando o Upstash está fora, com WARN explícito e grepável", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const failingFetch = (async () => {
       throw new Error("rede fora");
     }) as typeof fetch;
     const limiter = createUpstashRateLimiter({ ...baseConfig, fetchFn: failingFetch });
 
     await expect(limiter.consume("k")).resolves.toBeUndefined();
-    expect(consoleSpy).toHaveBeenCalled();
-    consoleSpy.mockRestore();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(String(warnSpy.mock.calls[0][0])).toContain("FAIL-OPEN");
+    warnSpy.mockRestore();
   });
 });
 

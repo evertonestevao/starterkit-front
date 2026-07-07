@@ -19,10 +19,14 @@ export function PendingInvites({ invites }: { invites: CompanyInvite[] }) {
   function revoke(inviteId: string) {
     startTransition(async () => {
       try {
-        await revokeInviteAction(inviteId, active.id);
-        toast.success("Convite revogado");
+        const result = await revokeInviteAction(inviteId, active.id);
+        if (result?.error) {
+          toast.error(result.error);
+        } else {
+          toast.success("Convite revogado");
+        }
       } catch {
-        toast.error("Não foi possível revogar o convite");
+        toast.error("Não foi possível revogar o convite. Tente novamente.");
       }
     });
   }
