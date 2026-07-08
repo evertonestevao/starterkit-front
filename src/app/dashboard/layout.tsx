@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell/app-shell";
+import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
 import { createSupabaseUserRepository } from "@/repositories/supabase/userRepository";
+import { createMemoryRateLimiter } from "@/server/rateLimit";
+import { createInviteService } from "@/services/inviteService";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant } from "@/server/tenant";
 import { getTermsService } from "@/server/terms";
@@ -26,9 +29,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const client = await getSupabaseServerClient();
-  const [{ data: userData }, profile] = await Promise.all([
+  const [{ data: userData }, profile, myInvites] = await Promise.all([
     client.auth.getUser(),
     createUserService(createSupabaseUserRepository(client)).getMyProfile(),
+    createInviteService({
+      repo: createSupabaseInviteRepository(client),
+      rateLimiter: createMemoryRateLimiter({ limit: 1000, windowMs: 60_000 }),
+    }).listMyPending(),
   ]);
   if (!userData.user) {
     redirect("/login");
@@ -44,6 +51,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         userName={profile?.full_name ?? "Usuário"}
         userEmail={userData.user.email ?? ""}
         avatarUrl={profile?.avatar_url ?? null}
+        pendingInvitesCount={myInvites.length}
       >
         {children}
       </AppShell>

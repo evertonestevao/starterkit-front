@@ -153,11 +153,47 @@ end $$;
 
 reset role;
 
+-- my_pending_invites (RPC security definer): só convites do PRÓPRIO email.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- o convite seedado é para convidado@test.local — alice não vê nada
+  select count(*) into n from public.my_pending_invites();
+  if n <> 0 then raise exception 'FALHA my_pending_invites: viu convite de outro email'; end if;
+end $$;
+
+reset role;
+
+-- seed: convite endereçado à alice na empresa do bob
+insert into public.company_invites (company_id, email, role, invited_by) values
+  ('c2c2c2c2-0000-4000-8000-000000000002', 'rls-alice@test.local', 'member', 'b2b2b2b2-0000-4000-8000-000000000002');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_name text;
+begin
+  -- agora alice vê 1 convite, com o nome da empresa (via definer) — e nada mais
+  select company_name into v_name from public.my_pending_invites();
+  if v_name is distinct from 'Bob Co' then
+    raise exception 'FALHA my_pending_invites: esperado convite de Bob Co, veio %', v_name;
+  end if;
+end $$;
+
+reset role;
+
 -- Alice tenta aceitar convite emitido para outro email: deve falhar.
 -- (token copiado para uma GUC como superuser, simulando vazamento do link)
 select set_config('test.bob_invite_token', token::text, true)
 from public.company_invites
-where company_id = 'c2c2c2c2-0000-4000-8000-000000000002';
+where company_id = 'c2c2c2c2-0000-4000-8000-000000000002'
+  and email = 'convidado@test.local'; -- há outro convite (da alice) na mesma empresa
 
 set local role authenticated;
 select set_config('request.jwt.claims',

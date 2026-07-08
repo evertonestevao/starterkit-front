@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
 import type { InviteRepository } from "@/services/inviteService";
 import type { CompanyInvite, CompanyMember } from "@/types/database";
+import type { MyPendingInvite } from "@/types/tenant";
 
 /**
  * Implementação Supabase do InviteRepository. Roda com o client do usuário
@@ -62,6 +63,14 @@ export function createSupabaseInviteRepository(client: SupabaseClient): InviteRe
         throw new AppError("internal_error", "Falha ao listar convites", error);
       }
       return (data ?? []) as CompanyInvite[];
+    },
+
+    async listMyPending() {
+      const { data, error } = await client.rpc("my_pending_invites");
+      if (error) {
+        throw new AppError("internal_error", "Falha ao listar seus convites", error);
+      }
+      return (data ?? []) as MyPendingInvite[];
     },
 
     async acceptInvite(token) {

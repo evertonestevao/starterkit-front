@@ -20,6 +20,8 @@ export const SIDEBAR_COOKIE = "sidebar-collapsed";
 
 interface AppShellProps extends UserMenuProps {
   initialCollapsed: boolean;
+  /** Convites pendentes PARA o usuário — badge de atenção em Configurações. */
+  pendingInvitesCount?: number;
   children: React.ReactNode;
 }
 
@@ -29,7 +31,12 @@ interface AppShellProps extends UserMenuProps {
  * drawer off-canvas (Sheet) aberto pelo hambúrguer. O conteúdo de navegação
  * (SidebarNav) é o mesmo nos dois contêineres.
  */
-export function AppShell({ initialCollapsed, children, ...user }: AppShellProps) {
+export function AppShell({
+  initialCollapsed,
+  pendingInvitesCount = 0,
+  children,
+  ...user
+}: AppShellProps) {
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
@@ -56,7 +63,11 @@ export function AppShell({ initialCollapsed, children, ...user }: AppShellProps)
             {collapsed ? brand.name.slice(0, 1) : brand.name}
           </Link>
         </div>
-        <SidebarNav collapsed={collapsed} pathname={pathname} />
+        <SidebarNav
+          collapsed={collapsed}
+          pathname={pathname}
+          pendingInvitesCount={pendingInvitesCount}
+        />
         <div className="mt-auto border-t p-2">
           <Button
             variant="ghost"
@@ -77,7 +88,12 @@ export function AppShell({ initialCollapsed, children, ...user }: AppShellProps)
           <SheetHeader className="h-14 justify-center border-b px-4">
             <SheetTitle className="text-left font-semibold">{brand.name}</SheetTitle>
           </SheetHeader>
-          <SidebarNav collapsed={false} pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
+          <SidebarNav
+            collapsed={false}
+            pathname={pathname}
+            pendingInvitesCount={pendingInvitesCount}
+            onNavigate={() => setDrawerOpen(false)}
+          />
         </SheetContent>
       </Sheet>
 
@@ -111,10 +127,12 @@ export function AppShell({ initialCollapsed, children, ...user }: AppShellProps)
 function SidebarNav({
   collapsed,
   pathname,
+  pendingInvitesCount = 0,
   onNavigate,
 }: {
   collapsed: boolean;
   pathname: string;
+  pendingInvitesCount?: number;
   onNavigate?: () => void;
 }) {
   const { active } = useTenant();
@@ -124,6 +142,8 @@ function SidebarNav({
     <nav className="flex flex-col gap-1 p-2">
       {visible.map((item) => {
         const isActive = pathname === item.href;
+        // Badge de atenção: convites pendentes para o usuário, em Configurações.
+        const badgeCount = item.href === "/dashboard/settings" ? pendingInvitesCount : 0;
         const link = (
           <Link
             key={item.href}
@@ -131,7 +151,7 @@ function SidebarNav({
             onClick={onNavigate}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+              "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
               collapsed && "justify-center px-2",
               isActive
                 ? "bg-sidebar-primary text-sidebar-primary-foreground"
@@ -140,6 +160,21 @@ function SidebarNav({
           >
             <item.icon className="size-4 shrink-0" />
             {collapsed ? <span className="sr-only">{item.title}</span> : <span>{item.title}</span>}
+            {badgeCount > 0 ? (
+              collapsed ? (
+                <span
+                  className="absolute right-1.5 top-1.5 size-2 rounded-full bg-destructive"
+                  aria-label={`${badgeCount} convite(s) pendente(s)`}
+                />
+              ) : (
+                <span
+                  className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-medium text-white"
+                  aria-label={`${badgeCount} convite(s) pendente(s)`}
+                >
+                  {badgeCount}
+                </span>
+              )
+            ) : null}
           </Link>
         );
         return collapsed ? (

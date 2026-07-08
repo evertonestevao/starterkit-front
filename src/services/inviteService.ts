@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AppError } from "@/lib/errors";
 import type { RateLimiter } from "@/server/rateLimit";
 import type { CompanyInvite, CompanyMember } from "@/types/database";
+import type { MyPendingInvite } from "@/types/tenant";
 import type { AuditService } from "./auditService";
 
 /**
@@ -19,6 +20,8 @@ export interface InviteRepository {
   }): Promise<CompanyInvite>;
   revokeInvite(inviteId: string, companyId: string): Promise<void>;
   listPending(companyId: string): Promise<CompanyInvite[]>;
+  /** Convites pendentes PARA o usuário logado (RPC my_pending_invites). */
+  listMyPending(): Promise<MyPendingInvite[]>;
   /** Chama a RPC accept_company_invite; erros de negócio viram AppError. */
   acceptInvite(token: string): Promise<CompanyMember>;
 }
@@ -102,7 +105,12 @@ export function createInviteService({ repo, rateLimiter, notifier, audit }: Invi
     return repo.listPending(companyId);
   }
 
-  return { invite, revoke, accept, listPending };
+  /** Convites endereçados a mim (para exibir aviso/badge nas configurações). */
+  async function listMyPending(): Promise<MyPendingInvite[]> {
+    return repo.listMyPending();
+  }
+
+  return { invite, revoke, accept, listPending, listMyPending };
 }
 
 export type InviteService = ReturnType<typeof createInviteService>;

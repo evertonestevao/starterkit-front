@@ -193,7 +193,7 @@ Legenda: ✅ pronto e testado · ⚠️ implementado mas não testado de verdade
 | Email com **Resend real** | ⚠️ | Adapter completo via REST, mas nunca testado com conta/chave real nem domínio verificado. |
 | Auditoria | ✅ | Sanitização com testes unitários; imutabilidade testada no SQL; UI lista eventos. Cobre: convite/revogação, mudança de papel (`member.role_changed`, com papel anterior), remoção (`member.removed`), saída (`member.left`), edição da empresa (`company.updated`), billing (`subscription.checkout_started/activated/canceled`) e eventos de webhook (sistema, `user_id` null). Leituras (acesso a dados) não são auditadas — decisão de escopo. |
 | Feature flags | ⚠️ | `featureFlagService` testado por unit tests, **mas nada na UI usa flags ainda** — está pronto para ser consumido, não consumido. |
-| Rate limiting | ⚠️ | Dois stores atrás da mesma interface, escolhidos por `RATE_LIMIT_STORE`: `memory` (default, janela deslizante, só vale por instância) e `redis` (Upstash via REST, janela fixa, vale entre instâncias). O adapter Upstash tem unit tests com fetch mockado (bloqueio, janela, fail-open), **mas nunca rodou contra uma conta Upstash real**. Decisão consciente: se o Redis cair, o limiter falha ABERTO (permite e loga). |
+| Rate limiting | ✅ | Dois stores atrás da mesma interface (`RATE_LIMIT_STORE`): `memory` (default dev) e `redis` (Upstash REST, janela fixa). **Validado contra Upstash real em 2026-07-07**: 12 logins errados → bloqueio exato na 11ª tentativa (limite 10/min), contador conferido no Redis, sem fail-open mascarando. Se o Redis cair, falha ABERTO com `console.warn` grepável (`[rate-limit] FAIL-OPEN`). Limitação da janela fixa confirmada na prática: tentativas na virada do minuto podem passar até 2× o limite antes de bloquear. |
 | UI responsiva / tema | ✅/⚠️ | Sidebar rail/drawer e tabelas→cards implementados; tema dark/light ok. **Não foi testado em celular físico** (só viewport de navegador). |
 | Perfil do usuário (nome) | ✅ | Editável em `/dashboard/settings`. |
 | Upload de avatar | ✅ | Adapter `StorageProvider` (Supabase Storage) + bucket `avatars` com policies por pasta do usuário (testadas no SQL de RLS) + validação de tipo/tamanho no client e no server (unit tests, incl. rejeição de SVG) + UI em settings e avatar no menu. **Validado manualmente em 2026-07-06**: SVG recusado, PNG >2MB recusado, PNG válido aceito e refletido no perfil e no header. |
@@ -405,28 +405,156 @@ npm run test:e2e    # fluxos no navegador (sobe o app sozinho)
 
 ---
 
-## 6. Como rodar em produção / deploy
+## 6. Produção e novos produtos
 
-**Hoje não existe deploy configurado.** O que segue é o caminho recomendado, não o estado atual.
+> **Estado atual:** nenhum deploy existe ainda. Os fluxos de Stripe (test mode), Resend, Upstash,
+> recuperação de senha e termos foram validados manualmente em 2026-07-07 no ambiente local —
+> o roteiro abaixo é o caminho para levar exatamente isso à produção.
 
-### Caminho recomendado (Vercel + Supabase cloud)
+### 6.1 Colocar em produção DO ZERO — passo a passo
 
-1. **Supabase cloud**: criar projeto (ou usar o remoto já existente `fuxihgdjrhrwwqnymlau`), rodar `npx supabase link --project-ref <ref>` e `npx supabase db push` para aplicar as migrations. Conferir no painel que as tabelas e policies existem.
-2. **Auth em produção**: no painel do Supabase, configurar Site URL (= `APP_URL`) e redirect URLs (`https://seu-dominio.com/auth/confirm`). Decidir se exige confirmação de email (local não exige; produção deveria).
-3. **Vercel**: importar o repo, configurar as env vars da seção 4 (com as chaves do projeto cloud e `APP_URL` real). O `npm run build` já passa limpo.
-4. **Stripe** (quando for cobrar de verdade): criar produtos/preços, trocar o placeholder `gatewayPriceId` em `src/server/actions/billing.ts` por um mapeamento real plano→price, configurar `PAYMENT_GATEWAY=stripe` + chaves, registrar o webhook `https://seu-dominio.com/api/webhooks/payment` e testar com o Stripe CLI.
-5. **Resend**: verificar domínio, configurar `EMAIL_PROVIDER=resend` + `RESEND_API_KEY` + `EMAIL_FROM`.
-6. **GitHub**: no primeiro push o CI passa a rodar (lint, typecheck, unit, build, RLS). Proteger a branch `main` exigindo o CI verde.
+Contas necessárias (todas têm tier grátis para começar): GitHub, [Supabase](https://supabase.com),
+[Vercel](https://vercel.com), [Stripe](https://stripe.com), [Resend](https://resend.com),
+[Upstash](https://upstash.com). Reserve ~2h na primeira vez.
 
-### Diferenças dev × produção
+**Passo 1 — GitHub + CI**
+```bash
+git remote add origin git@github.com:SEU_USUARIO/SEU_REPO.git
+git push -u origin master
+```
+O CI (`.github/workflows/ci.yml`) roda sozinho no push: lint, typecheck, 78 unit tests, build e
+testes de RLS num Supabase efêmero. Em Settings → Branches, proteja a branch principal exigindo
+o CI verde. **Não avance com CI vermelho.**
+
+**Passo 2 — Supabase cloud (banco + auth)**
+1. Crie um projeto em https://supabase.com/dashboard (região próxima dos usuários; guarde a senha do banco).
+2. Aplique TODO o schema (tabelas, RLS, GRANTs, RPCs, bucket, seeds) com as migrations versionadas:
+   ```bash
+   npx supabase link --project-ref <ref-do-projeto>   # ref aparece na URL do painel
+   npx supabase db push
+   ```
+3. Confira no painel (Table Editor) que as tabelas existem e que RLS está "enabled" em todas.
+4. **Auth → URL Configuration**: Site URL = `https://seu-dominio.com`; Redirect URLs =
+   `https://seu-dominio.com/**` (sem isso, o link de recuperação de senha volta para a raiz —
+   bug que já pegamos no local).
+5. **Auth → Providers → Email**: ligue "Confirm email" (produção deve exigir confirmação; o local não exige).
+6. **Auth → SMTP**: configure o SMTP do Resend (host `smtp.resend.com`, user `resend`, senha = API key)
+   para os emails de auth (recuperação/confirmação) saírem pelo seu domínio, não pelo remetente default do Supabase.
+7. Anote em Settings → API: `URL do projeto`, `anon key` e `service_role key`.
+
+**Passo 3 — Resend (emails transacionais do app: convites)**
+1. Em Domains, adicione seu domínio e crie os registros DNS (SPF/DKIM) que ele pedir; aguarde verificar.
+2. Crie uma API key com "Sending access".
+3. Envs: `EMAIL_PROVIDER=resend`, `RESEND_API_KEY=re_...`, `EMAIL_FROM=convites@seu-dominio.com`.
+
+**Passo 4 — Stripe em modo LIVE**
+1. Ative a conta (dados bancários) e **desligue o Test mode**.
+2. Crie os produtos com preço recorrente mensal: plano Pro, plano Enterprise e "Usuário Extra"
+   (o seat adicional). Anote os 3 `price_...`.
+3. Developers → Webhooks → Add endpoint: `https://seu-dominio.com/api/webhooks/payment`, eventos
+   `customer.subscription.*` e `invoice.payment_failed`. Anote o `whsec_...` (é POR endpoint —
+   o do Stripe CLI local não vale aqui).
+4. Envs: `PAYMENT_GATEWAY=stripe`, `STRIPE_SECRET_KEY=sk_live_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`,
+   `STRIPE_PRICE_PRO`, `STRIPE_PRICE_ENTERPRISE`, `STRIPE_PRICE_EXTRA_SEAT`.
+5. Alinhe os valores exibidos na UI (seed de `plans` em `supabase/migrations/*seed_plans*` +
+   `*extra_seat_price*`) com os preços live — a UI mostra o que está no banco.
+
+**Passo 5 — Upstash (rate limit que funciona em serverless)**
+1. Crie um database Redis (regional, perto da região da Vercel).
+2. Aba REST API: anote URL e token.
+3. Envs: `RATE_LIMIT_STORE=redis`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`.
+   Sem isso, o rate limit de login/convite é **quase inócuo** na Vercel (cada instância tem seu contador).
+
+**Passo 6 — Termos de Uso reais**
+Substitua o texto placeholder por versão revisada juridicamente, via migration (produção) — modelo
+da lógica em `scripts/publish-terms.sh`: desmarca a `is_current` e insere a nova como vigente.
+Publicar força reaceite automático de todos os usuários.
+
+**Passo 7 — Vercel (deploy)**
+1. Import Project → selecione o repo (framework: Next.js, sem config extra).
+2. Cole TODAS as env vars (tabela completa na seção 4): as `NEXT_PUBLIC_*` + `SUPABASE_SERVICE_ROLE_KEY`
+   + `APP_URL=https://seu-dominio.com` + os blocos Stripe/Resend/Upstash acima.
+3. Deploy. Aponte seu domínio (Settings → Domains) e ajuste `APP_URL` se mudar.
+
+**Passo 8 — Smoke test em produção (não pule)**
+- [ ] Signup com email real → recebe confirmação → confirma → onboarding exige aceite dos termos → cria empresa
+- [ ] "Esqueci minha senha" → email chega → link cai em `/reset-password` → senha nova funciona
+- [ ] Convite → email chega ao convidado → aceite entra na empresa certa
+- [ ] Assinar plano com **cartão real** (pode reembolsar no painel do Stripe depois) → webhook 200
+      (Developers → Webhooks mostra as entregas) → plano ativo no dashboard
+- [ ] Convidar acima da franquia → item "Usuário Extra" aparece na assinatura no painel do Stripe
+- [ ] 11 logins errados seguidos → "Muitas tentativas" (prova que o Upstash está ativo)
+- [ ] Cancelar assinatura e conferir no painel do Stripe (fluxo **nunca testado** — primeira vez será aqui)
+
+### 6.2 Criando um NOVO SaaS a partir deste kit
+
+O kit foi desenhado para isto: **a fundação não se reescreve; você troca identidade e adiciona domínio.**
+
+**Dia 1 — identidade (≈1h)**
+1. Clone com histórico novo:
+   ```bash
+   git clone <repo-do-kit> meu-saas && cd meu-saas
+   rm -rf .git && git init && git add -A && git commit -m "chore: bootstrap a partir do starter kit"
+   npm install && npx supabase start && cp .env.example .env.local  # preencha com as chaves locais
+   ```
+2. `src/config/brand.ts` — nome, tagline, URL do produto.
+3. `src/app/globals.css` — troque `--primary`/`--ring` (e `--sidebar-primary`) pela cor da marca,
+   em `:root` E `.dark`. Se trocar os `--chart-*`, revalide a paleta (daltonismo/contraste — ver
+   comentário no próprio arquivo). `package.json` name e o `project_id` em `supabase/config.toml`.
+4. Landing page (`src/app/page.tsx`): troque textos/seções pela proposta do produto.
+5. Planos: edite as migrations de seed (`*seed_plans*`, `*extra_seat_price*`) com nomes, preços e
+   `features` do seu produto (`max_members`, flags que seu domínio vai checar via `canAccessFeature`).
+
+**Semana 1 — primeiro módulo de domínio (o "molde")**
+Exemplo com "pacientes" (ClinicAI); o mesmo roteiro vale para licitações, membros de igreja, quizzes:
+
+1. **Migration** — `npx supabase migration new patients`. Copie o padrão de uma tabela existente:
+   `company_id` + `deleted_at` + índices + **RLS + policies + GRANTs de client na mesma migration**
+   (service_role já herda via default privileges). `UNIQUE` sempre composto com `company_id`.
+2. **Types** — interface `Patient` em `src/types/database.ts` (fonte única).
+3. **Repository** — `src/repositories/supabase/patientsRepository.ts`: client injetado, todo filtro
+   com `.eq("company_id", ...)` + `.is("deleted_at", null)`; listagens grandes devolvem `{items, total}`
+   com `range` + `count` (padrão `Paginated<T>`).
+4. **Service** — `src/services/patientsService.ts`: port do repositório + regras (Zod, limites por
+   plano via `billingService.canAccessFeature/getFeatureLimit`, permissões via `permissionService`)
+   + **unit tests com repo fake** (copie o estilo de `tenantService.test.ts`).
+5. **Auditoria** — nas actions de escrita, `recordAudit({ action: "patient.created", ... })`.
+6. **UI** — componentes com estado em `src/features/patients/`, página em
+   `src/app/dashboard/patients/page.tsx` (server component busca via service; autorização
+   revalidada no servidor, não só menu escondido). Tabela desktop + cards mobile
+   (copie `members-list.tsx`), `EmptyState`, `PaginationControls`, gráficos de
+   `src/components/charts` com dados reais.
+7. **Navegação** — item em `src/components/app-shell/nav-items.ts` com os papéis que o veem.
+8. **Testes de fechamento** — bloco no `supabase/tests/rls_test.sql` provando o isolamento da tabela
+   nova (copie um bloco existente) + spec E2E do fluxo principal.
+
+Repita o roteiro por módulo. **Não mexa sem motivo em:** `src/lib/errors`, `src/proxy.ts`,
+`src/server/supabase-*`, adapters e o fluxo de auth/tenant — são a fundação testada.
+
+**Se o produto precisar de:**
+- **Papel novo** (ex.: "recepcionista") → INSERT em `roles` (migration) + `defineRole()` no
+  `permissionService`; se o papel precisar de poder de admin em RLS, ajuste as policies (`is_company_admin`).
+- **WhatsApp/SMS** → implemente `NotificationProvider` (passo a passo no próprio arquivo da interface).
+- **Outro gateway** (Mercado Pago, Asaas) → implemente `PaymentGateway` + case na factory; webhooks
+  normalizados para os mesmos eventos internos.
+- **Upload de arquivos do domínio** → novo bucket + policies (copie a migration do `avatars`) +
+  use o `StorageProvider` existente.
+
+Antes do primeiro cliente real: seção "⚠️ ANTES DE IR PARA PRODUÇÃO" (topo) + roteiro 6.1 + smoke test.
+
+### 6.3 Diferenças dev × produção
 
 | Aspecto | Dev (hoje) | Produção (necessário) |
 |---|---|---|
 | Banco | Supabase local (Docker), demo keys públicas | Supabase cloud, chaves reais secretas |
-| Billing | gateway `fake` (botão "Ativar (dev)" simula webhook) | `stripe` — a action fake **se recusa a rodar** se o gateway não for fake |
-| Email | impresso no terminal | Resend com domínio verificado |
-| Confirmação de email | desligada | recomendável ligar |
-| Rate limit | in-memory (ok p/ 1 instância) | trocar store (Redis/Upstash) se houver 2+ instâncias |
+| Billing | `fake` por padrão (validado tb. com Stripe test) | `stripe` live — a action fake **se recusa a rodar** com gateway real |
+| Email de convites | `console` (terminal) ou Resend teste | Resend com domínio verificado |
+| Email de auth (senha/confirmação) | Mailpit local (http://127.0.0.1:54324) | SMTP do Resend configurado no painel do Supabase |
+| Confirmação de email | desligada | ligada |
+| Rate limit | memory (ou Upstash, validado) | `redis` (Upstash) — obrigatório em serverless |
+| Redirect URLs de auth | `config.toml` local | painel do Supabase (Site URL + Redirect URLs) |
+| Webhook Stripe | Stripe CLI (`listen`) | endpoint registrado no painel, `whsec` próprio |
+| Termos de Uso | placeholder + `scripts/publish-terms.sh` | texto jurídico real publicado por migration |
 | HTTPS | não | obrigatório (Vercel dá de graça) |
 
 ---

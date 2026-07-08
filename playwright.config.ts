@@ -37,6 +37,7 @@ export default defineConfig({
       SUPABASE_SERVICE_ROLE_KEY: LOCAL_SERVICE_ROLE_KEY,
       PAYMENT_GATEWAY: "fake",
       EMAIL_PROVIDER: "console",
+      RATE_LIMIT_STORE: "memory",
       APP_URL: "http://localhost:3000",
     },
   },

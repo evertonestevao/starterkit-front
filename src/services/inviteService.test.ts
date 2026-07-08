@@ -36,6 +36,9 @@ function makeRepo(overrides: Partial<InviteRepository> = {}): InviteRepository {
     async listPending() {
       return [];
     },
+    async listMyPending() {
+      return [];
+    },
     async acceptInvite() {
       return { id: "m1" } as CompanyMember;
     },
