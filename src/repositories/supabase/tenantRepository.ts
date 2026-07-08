@@ -20,12 +20,17 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       if (error) {
         throw new AppError("internal_error", "Falha ao listar empresas", error);
       }
-      return (data ?? [])
+      const companies = (data ?? [])
         .filter((row) => row.company && !(row.company as unknown as Company).deleted_at)
         .map((row) => ({
           ...(row.company as unknown as Company),
           role: row.role as RoleCode,
         }));
+      // Dedup defensivo por id: o índice único parcial de company_members já
+      // impede membership dupla, mas a UI usa company.id como React key —
+      // um duplicado aqui quebraria o switcher inteiro.
+      const seen = new Set<string>();
+      return companies.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
     },
 
     async createCompany(name, slug) {

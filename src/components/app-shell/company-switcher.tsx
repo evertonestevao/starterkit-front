@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Building2, Check, ChevronsUpDown, Plus } from "lucide-react";
@@ -29,6 +30,7 @@ export function CompanySwitcher() {
   const { companies, active } = useTenant();
   const [creating, setCreating] = useState(false);
   const [, startTransition] = useTransition();
+  const router = useRouter();
 
   return (
     <>
@@ -52,7 +54,11 @@ export function CompanySwitcher() {
                   startTransition(async () => {
                     try {
                       const result = await switchCompanyAction(company.id);
-                      if (result?.error) toast.error(result.error);
+                      if (result?.error) {
+                        toast.error(result.error);
+                      } else {
+                        router.push("/dashboard"); // navegação no client (sem redirect na action)
+                      }
                     } catch {
                       toast.error("Não foi possível trocar de empresa. Tente novamente.");
                     }

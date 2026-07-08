@@ -52,7 +52,11 @@ export default async function LoginPage({
         </AuthForm>
         <p className="text-center text-sm text-muted-foreground">
           Não tem conta?{" "}
-          <Link href="/signup" className="text-foreground underline underline-offset-4">
+          <Link
+            // preserva o destino (ex.: link de convite) através do cadastro
+            href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}
+            className="text-foreground underline underline-offset-4"
+          >
             Criar conta
           </Link>
         </p>

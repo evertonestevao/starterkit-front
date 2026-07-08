@@ -8,7 +8,12 @@ import { signUpAction } from "@/server/actions/auth";
 
 export const metadata: Metadata = { title: "Criar conta" };
 
-export default function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
   return (
     <Card>
       <CardHeader>
@@ -17,6 +22,7 @@ export default function SignUpPage() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <AuthForm action={signUpAction} submitLabel="Criar conta">
+          {next ? <input type="hidden" name="next" value={next} /> : null}
           <div className="flex flex-col gap-2">
             <Label htmlFor="fullName">Nome completo</Label>
             <Input id="fullName" name="fullName" autoComplete="name" required />

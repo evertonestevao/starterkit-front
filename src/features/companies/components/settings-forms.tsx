@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -135,13 +136,17 @@ export function AvatarForm({
 export function LeaveCompanyButton() {
   const { active } = useTenant();
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   function leave() {
     startTransition(async () => {
       try {
         const result = await leaveCompanyAction(active.id);
-        if (result?.error) toast.error(result.error);
-        // sucesso redireciona no servidor — nada a fazer aqui
+        if (result?.error) {
+          toast.error(result.error);
+        } else {
+          router.push("/onboarding"); // navegação no client (sem redirect na action)
+        }
       } catch {
         toast.error("Não foi possível sair da empresa. Tente novamente.");
       }

@@ -30,6 +30,7 @@ export async function signUpAction(
   _prev: ActionState | undefined,
   formData: FormData,
 ): Promise<ActionState> {
+  const next = formData.get("next");
   try {
     const auth = await getAuthService();
     await auth.signUp({
@@ -40,7 +41,13 @@ export async function signUpAction(
   } catch (err) {
     return toActionError(err);
   }
-  redirect("/onboarding");
+  // Preserva o destino (ex.: convidado voltando para /invites/accept).
+  // Só caminho relativo interno — nunca URL absoluta (open redirect).
+  const safeNext =
+    typeof next === "string" && next.startsWith("/") && !next.startsWith("//")
+      ? next
+      : "/onboarding";
+  redirect(safeNext);
 }
 
 export async function signInAction(

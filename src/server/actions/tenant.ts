@@ -70,6 +70,9 @@ export async function createCompanyAction(
   redirect("/dashboard");
 }
 
+// Nota: actions chamadas imperativamente (fora de <form action>) NÃO usam
+// redirect() aqui — o redirect do Next viaja como exceção e cai no catch do
+// client como se fosse erro. Elas retornam ActionState e o client navega.
 export async function switchCompanyAction(companyId: string): Promise<ActionState | void> {
   try {
     // Valida membership antes de gravar a preferência.
@@ -80,7 +83,6 @@ export async function switchCompanyAction(companyId: string): Promise<ActionStat
   } catch (err) {
     return toActionError(err);
   }
-  redirect("/dashboard");
 }
 
 export async function updateCompanyAction(
@@ -238,5 +240,5 @@ export async function leaveCompanyAction(companyId: string): Promise<ActionState
   } catch (err) {
     return toActionError(err);
   }
-  redirect("/onboarding");
+  // navegação fica no client (ver nota em switchCompanyAction)
 }
