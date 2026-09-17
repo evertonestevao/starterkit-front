@@ -14,13 +14,13 @@ test("onboarding exige aceite dos termos; sem marcar, não avança", async ({ pa
   await expect(checkbox).toBeVisible();
 
   // tenta criar SEM aceitar: a validação nativa (required) segura o submit
-  await page.getByLabel("Nome da empresa").fill("Empresa Sem Termos");
-  await page.getByRole("button", { name: "Criar empresa" }).click();
+  await page.getByLabel("Nome da igreja").fill("Empresa Sem Termos");
+  await page.getByRole("button", { name: "Criar igreja" }).click();
   await expect(page).toHaveURL(/\/onboarding/); // não navegou
 
   // o consentimento de email é OPCIONAL: aceita só os termos e avança
   await checkbox.check();
-  await page.getByRole("button", { name: "Criar empresa" }).click();
+  await page.getByRole("button", { name: "Criar igreja" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
 });
 

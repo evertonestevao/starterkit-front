@@ -10,7 +10,7 @@ test("owner convida membro e vê o convite pendente", async ({ page }) => {
     company: "Empresa Convites E2E",
   });
 
-  await page.getByRole("link", { name: "Membros" }).click();
+  await page.getByRole("link", { name: "Pessoas" }).click();
   await expect(page).toHaveURL(/\/dashboard\/members/);
 
   const invitedEmail = uniqueEmail("convidado");

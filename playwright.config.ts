@@ -1,44 +1,51 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * E2E dos fluxos críticos (plano §12) contra o Supabase LOCAL.
- * Pré-requisito: npx supabase start (as chaves abaixo são as demo keys
- * públicas e fixas do Supabase CLI — não são segredos).
+ * E2E dos fluxos críticos (plano §12).
+ *
+ * O Supabase usado é o do `.env.local` — o Next carrega esse arquivo
+ * sozinho. Antes a URL e as chaves eram injetadas aqui, fixas em 127.0.0.1,
+ * e a suíte inteira quebrou quando o banco saiu da máquina. Pior: o Next NÃO
+ * sobrescreve variável já presente no processo, então o valor injetado vencia
+ * o `.env.local` silenciosamente.
+ *
+ * O bloco `env` abaixo carrega só o que o teste PRECISA forçar — provedores
+ * falsos, para nenhuma execução cobrar cartão nem enviar email de verdade.
+ *
+ * Roda contra BUILD DE PRODUÇÃO, não contra `next dev`, por dois motivos:
+ * o Turbopack compila cada rota na primeira visita (o `POST /signup` levava
+ * 16s no começo da suíte e 363ms no fim — falha intermitente que não é bug do
+ * produto), e é o build de produção que vai para o ar. Porta 3100 para não
+ * disputar o `npm run dev` que costuma estar aberto na 3000.
  */
-
-const LOCAL_SUPABASE_URL = "http://127.0.0.1:54321";
-const LOCAL_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0";
-const LOCAL_SERVICE_ROLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU";
+const PORT = 3100;
+const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
-  // Dev server frio (Turbopack compila rota na 1ª visita) estoura os 5s
-  // default de expect com specs paralelas — 15s dá folga sem mascarar bug.
-  expect: { timeout: 15_000 },
+  expect: { timeout: 10_000 },
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: BASE_URL,
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    command: `npm run build && npm run start -- --port ${PORT}`,
+    url: BASE_URL,
+    // Nunca reaproveitar servidor alheio: o da 3100 só existe se for este.
+    reuseExistingServer: false,
+    // O build entra no tempo: 3 min cobre uma máquina fria.
+    timeout: 180_000,
+    stdout: "pipe",
     env: {
-      NEXT_PUBLIC_SUPABASE_URL: LOCAL_SUPABASE_URL,
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: LOCAL_ANON_KEY,
-      NEXT_PUBLIC_BACKEND_PROVIDER: "supabase",
-      SUPABASE_SERVICE_ROLE_KEY: LOCAL_SERVICE_ROLE_KEY,
       PAYMENT_GATEWAY: "fake",
+      SPONSOR_BILLING_PROVIDER: "fake",
       EMAIL_PROVIDER: "console",
       RATE_LIMIT_STORE: "memory",
-      APP_URL: "http://localhost:3000",
+      APP_URL: BASE_URL,
     },
   },
 });
