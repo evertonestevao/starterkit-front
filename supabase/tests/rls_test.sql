@@ -284,6 +284,499 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Domínio próprio: quem escreve `dominio_customizado` decide para onde vai o
+-- tráfego daquele host. Estes testes provam que só o dono escreve, que o
+-- client não consegue ativar um domínio sozinho e que o anon não lê os campos.
+-- ---------------------------------------------------------------------------
+insert into public.churches (id, company_id, name, slug, public_code) values
+  ('d1d1d1d1-0000-4000-8000-000000000001', 'c1c1c1c1-0000-4000-8000-000000000001', 'Igreja Alice', 'rls-igreja-alice', 'rls-alice'),
+  ('d2d2d2d2-0000-4000-8000-000000000002', 'c2c2c2c2-0000-4000-8000-000000000002', 'Igreja Bob',   'rls-igreja-bob',   'rls-bob');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare
+  v_status text;
+begin
+  -- Alice reivindica o domínio da PRÓPRIA igreja: permitido, entra pendente.
+  perform public.claim_church_domain(
+    'd1d1d1d1-0000-4000-8000-000000000001', 'alice-igreja.com.br');
+
+  select dominio_status::text into v_status
+  from public.churches where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+  if v_status <> 'pendente_dns' then
+    raise exception 'FALHA dominio: claim deveria deixar pendente_dns, veio %', v_status;
+  end if;
+
+  -- Igreja de outro tenant: negado.
+  begin
+    perform public.claim_church_domain(
+      'd2d2d2d2-0000-4000-8000-000000000002', 'roubado.com.br');
+    raise exception 'FALHA dominio: alice reivindicou dominio da igreja do bob';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- Ativação a partir do client: negada mesmo na própria igreja. É o que
+  -- impediria alguém de marcar `ativo` sem nunca provar posse do DNS.
+  begin
+    perform public.set_church_domain_verification(
+      'd1d1d1d1-0000-4000-8000-000000000001', null, 'ativo');
+    raise exception 'FALHA dominio: client conseguiu ativar dominio';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- Estado intermediário pelo client: permitido (é o fluxo normal).
+  perform public.set_church_domain_verification(
+    'd1d1d1d1-0000-4000-8000-000000000001', '[]'::jsonb, 'verificando');
+
+  -- Limpar o próprio domínio: permitido.
+  perform public.clear_church_domain('d1d1d1d1-0000-4000-8000-000000000001');
+  select dominio_status::text into v_status
+  from public.churches where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+  if v_status <> 'nao_configurado' then
+    raise exception 'FALHA dominio: clear deveria voltar a nao_configurado, veio %', v_status;
+  end if;
+
+  -- Limpar o domínio de OUTRO tenant: negado.
+  begin
+    perform public.clear_church_domain('d2d2d2d2-0000-4000-8000-000000000002');
+    raise exception 'FALHA dominio: alice limpou dominio da igreja do bob';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- UPDATE direto nas colunas de domínio: barrado pelo GRANT por coluna, antes
+-- mesmo da RLS. Sem isso, um admin escreveria `ativo` pelo PostgREST.
+do $$
+begin
+  begin
+    update public.churches
+    set dominio_status = 'ativo'
+    where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+    raise exception 'FALHA dominio: UPDATE direto de dominio_status foi aceito';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  begin
+    update public.churches
+    set dominio_customizado = 'sequestro.com.br'
+    where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+    raise exception 'FALHA dominio: UPDATE direto de dominio_customizado foi aceito';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- Coluna liberada segue editável pelo admin da empresa (não quebramos o CRUD).
+  update public.churches
+  set name = 'Igreja Alice Renomeada'
+  where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+
+  -- Mas não na igreja do outro tenant.
+  update public.churches
+  set name = 'invadida'
+  where id = 'd2d2d2d2-0000-4000-8000-000000000002';
+  if found then
+    raise exception 'FALHA dominio: alice renomeou a igreja do bob';
+  end if;
+end $$;
+
+reset role;
+
+-- Dois tenants não podem segurar o mesmo host.
+do $$
+begin
+  update public.churches set dominio_customizado = 'disputado.com.br'
+  where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+  begin
+    update public.churches set dominio_customizado = 'disputado.com.br'
+    where id = 'd2d2d2d2-0000-4000-8000-000000000002';
+    raise exception 'FALHA dominio: dois tenants ficaram com o mesmo dominio';
+  exception when unique_violation then null; -- esperado
+  end;
+end $$;
+
+-- Igreja sem dono (linhas de demonstração) nunca segura domínio.
+do $$
+begin
+  begin
+    insert into public.churches (company_id, name, slug, public_code, dominio_customizado)
+    values (null, 'Sem dono', 'rls-sem-dono', 'rls-sem-dono', 'semdono.com.br');
+    raise exception 'FALHA dominio: igreja sem company_id recebeu dominio';
+  exception when check_violation then null; -- esperado
+  end;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Visitante anônimo: lê a página pública, não lê os campos de domínio.
+-- ---------------------------------------------------------------------------
+update public.churches
+set dominio_customizado = 'alice-igreja.com.br', dominio_status = 'ativo'
+where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+
+update public.churches
+set dominio_customizado = 'bob-igreja.com.br', dominio_status = 'pendente_dns'
+where id = 'd2d2d2d2-0000-4000-8000-000000000002';
+
+set local role anon;
+
+do $$
+declare
+  v_code text;
+  n int;
+begin
+  -- Colunas públicas: visíveis.
+  select public_code into v_code
+  from public.churches where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+  if v_code is null then
+    raise exception 'FALHA dominio: anon nao le a pagina publica da igreja';
+  end if;
+
+  -- Colunas de domínio: barradas pelo GRANT por coluna.
+  begin
+    select count(*) into n from public.churches where dominio_customizado is not null;
+    raise exception 'FALHA dominio: anon leu dominio_customizado';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  begin
+    select count(*) into n from public.churches where dominio_suporte_pago;
+    raise exception 'FALHA dominio: anon leu dominio_suporte_pago';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- A RPC do proxy resolve só domínio ATIVO, e devolve o mínimo.
+  select count(*) into n from public.resolve_church_by_domain('alice-igreja.com.br');
+  if n <> 1 then
+    raise exception 'FALHA dominio: RPC nao resolveu dominio ativo (%)', n;
+  end if;
+
+  select count(*) into n from public.resolve_church_by_domain('bob-igreja.com.br');
+  if n <> 0 then
+    raise exception 'FALHA dominio: RPC resolveu dominio ainda PENDENTE';
+  end if;
+
+  select count(*) into n from public.resolve_church_by_domain('inexistente.com.br');
+  if n <> 0 then
+    raise exception 'FALHA dominio: RPC resolveu dominio inexistente';
+  end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Patrocínio: cada patrocinador só vê e mexe no que é dele; status, valores
+-- e cobranças não são graváveis pelo client; a igreja só lê o próprio.
+-- (Reaproveita as igrejas d1 = Alice Co e d2 = Bob Co da seção de domínio.)
+-- ---------------------------------------------------------------------------
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('e3e3e3e3-0000-4000-8000-000000000003', 'rls-carol@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Carol Patrocinadora"}'),
+  ('f4f4f4f4-0000-4000-8000-000000000004', 'rls-dave@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Dave Patrocinador"}');
+
+-- Dave é montado direto (superuser): conta, patrocínio ativo na d2, cobrança.
+insert into public.sponsor_accounts (id, user_id, kind, display_name, email, document, gateway, gateway_customer_id, gateway_subscription_id, billing_status)
+values ('a0000000-0000-4000-8000-00000000000d', 'f4f4f4f4-0000-4000-8000-000000000004', 'person', 'Dave', 'rls-dave@test.local', '52998224725', 'fake', 'cus_dave', 'sub_dave', 'active');
+
+insert into public.sponsorships (id, sponsor_id, church_id, company_id, status, activated_at)
+values ('b0000000-0000-4000-8000-00000000000d', 'a0000000-0000-4000-8000-00000000000d', 'd2d2d2d2-0000-4000-8000-000000000002', 'c2c2c2c2-0000-4000-8000-000000000002', 'active', now());
+
+insert into public.sponsor_charges (id, sponsor_id, gateway, gateway_payment_id, amount_cents, active_count, due_date, status)
+values ('c0000000-0000-4000-8000-00000000000d', 'a0000000-0000-4000-8000-00000000000d', 'fake', 'pay_dave', 3990, 1, current_date, 'paid');
+
+insert into public.sponsor_charge_items (charge_id, sponsorship_id, church_id, company_id, position, amount_cents)
+values ('c0000000-0000-4000-8000-00000000000d', 'b0000000-0000-4000-8000-00000000000d', 'd2d2d2d2-0000-4000-8000-000000000002', 'c2c2c2c2-0000-4000-8000-000000000002', 1, 3990);
+
+-- Igreja sem dono (demonstração) para provar que não recebe patrocínio pago.
+insert into public.churches (id, company_id, name, slug, public_code)
+values ('d9d9d9d9-0000-4000-8000-000000000009', null, 'Igreja Demo RLS', 'rls-igreja-demo', 'rls-demo');
+
+-- ---------------------------- sessão da CAROL -----------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"e3e3e3e3-0000-4000-8000-000000000003","email":"rls-carol@test.local","role":"authenticated"}', true);
+
+do $$
+declare
+  n int;
+  v_row public.sponsorships;
+begin
+  -- Cria a PRÓPRIA conta: permitido.
+  insert into public.sponsor_accounts (user_id, kind, display_name, email, document)
+  values ('e3e3e3e3-0000-4000-8000-000000000003', 'person', 'Carol', 'rls-carol@test.local', '52998224725');
+
+  -- Conta em nome de outro usuário: barrado pela policy.
+  begin
+    insert into public.sponsor_accounts (user_id, kind, display_name, email, document)
+    values ('b2b2b2b2-0000-4000-8000-000000000002', 'person', 'Falso Bob', 'x@x', '52998224725');
+    raise exception 'FALHA sponsor: carol criou conta em nome de outro usuario';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Só enxerga a própria conta.
+  select count(*) into n from public.sponsor_accounts;
+  if n <> 1 then raise exception 'FALHA sponsor: carol ve % contas (esperado 1)', n; end if;
+
+  -- Campos de cobrança não são graváveis pelo client.
+  begin
+    update public.sponsor_accounts set billing_status = 'active'
+    where user_id = 'e3e3e3e3-0000-4000-8000-000000000003';
+    raise exception 'FALHA sponsor: carol mudou o proprio billing_status';
+  exception when sqlstate '42501' then null;
+  end;
+
+  begin
+    update public.sponsor_accounts set gateway_subscription_id = 'sub_dave'
+    where user_id = 'e3e3e3e3-0000-4000-8000-000000000003';
+    raise exception 'FALHA sponsor: carol gravou id de assinatura';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Perfil (colunas liberadas) segue editável.
+  update public.sponsor_accounts set display_name = 'Carol S.'
+  where user_id = 'e3e3e3e3-0000-4000-8000-000000000003';
+
+  -- Pedido via RPC: sem cobrança ativa, nasce aguardando pagamento.
+  select * into v_row from public.request_sponsorship('d1d1d1d1-0000-4000-8000-000000000001');
+  if v_row.status <> 'pending_payment' then
+    raise exception 'FALHA sponsor: status inicial % (esperado pending_payment)', v_row.status;
+  end if;
+
+  -- Duplicado para a mesma igreja: barrado pelo índice único.
+  begin
+    perform public.request_sponsorship('d1d1d1d1-0000-4000-8000-000000000001');
+    raise exception 'FALHA sponsor: patrocinio duplicado aceito';
+  exception when unique_violation then null;
+  end;
+
+  -- Igreja sem dono não recebe patrocínio pago.
+  begin
+    perform public.request_sponsorship('d9d9d9d9-0000-4000-8000-000000000009');
+    raise exception 'FALHA sponsor: igreja sem dono aceitou patrocinio';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Escrita direta em patrocínio/cobrança: sem GRANT.
+  begin
+    insert into public.sponsorships (sponsor_id, church_id, company_id, status, activated_at)
+    select id, 'd2d2d2d2-0000-4000-8000-000000000002', 'c2c2c2c2-0000-4000-8000-000000000002', 'active', now()
+    from public.sponsor_accounts limit 1;
+    raise exception 'FALHA sponsor: insert direto em sponsorships aceito';
+  exception when sqlstate '42501' then null;
+  end;
+
+  begin
+    update public.sponsorships set status = 'active', activated_at = now();
+    raise exception 'FALHA sponsor: update direto em sponsorships aceito';
+  exception when sqlstate '42501' then null;
+  end;
+
+  begin
+    insert into public.sponsor_charges (sponsor_id, gateway, gateway_payment_id, amount_cents, active_count, due_date, status)
+    select id, 'fake', 'forjado', 0, 0, current_date, 'paid' from public.sponsor_accounts limit 1;
+    raise exception 'FALHA sponsor: carol forjou cobranca paga';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Isolamento de leitura: nada do Dave aparece.
+  select count(*) into n from public.sponsorships;
+  if n <> 1 then raise exception 'FALHA sponsor: carol ve % patrocinios (esperado 1)', n; end if;
+  select count(*) into n from public.sponsor_charges;
+  if n <> 0 then raise exception 'FALHA sponsor: carol ve cobranca alheia'; end if;
+  select count(*) into n from public.sponsor_charge_items;
+  if n <> 0 then raise exception 'FALHA sponsor: carol ve itens de cobranca alheios'; end if;
+
+  -- Cancelar patrocínio do Dave: não encontrado.
+  begin
+    perform public.cancel_sponsorship('b0000000-0000-4000-8000-00000000000d');
+    raise exception 'FALHA sponsor: carol cancelou patrocinio do dave';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Tabela de preços é legível; escrita não.
+  select count(*) into n from public.sponsor_price_tiers;
+  if n < 1 then raise exception 'FALHA sponsor: tabela de precos ilegivel'; end if;
+  begin
+    update public.sponsor_price_tiers set amount_cents = 1;
+    raise exception 'FALHA sponsor: carol alterou tabela de precos';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+reset role;
+
+-- Cobrança da Carol confirmada (como faria o webhook): ativa e com cobrança.
+update public.sponsor_accounts
+set gateway = 'fake', gateway_customer_id = 'cus_carol', gateway_subscription_id = 'sub_carol',
+    billing_status = 'active', next_due_date = current_date + 30
+where user_id = 'e3e3e3e3-0000-4000-8000-000000000003';
+
+update public.sponsorships s
+set status = 'active', activated_at = now()
+from public.sponsor_accounts sa
+where sa.id = s.sponsor_id and sa.user_id = 'e3e3e3e3-0000-4000-8000-000000000003';
+
+-- ------------------------ admin da igreja (ALICE) --------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- Vê quem patrocina a PRÓPRIA igreja (d1), não a do Bob (d2).
+  select count(*) into n from public.sponsorships where company_id = 'c1c1c1c1-0000-4000-8000-000000000001';
+  if n <> 1 then raise exception 'FALHA sponsor: alice ve % patrocinios da propria igreja', n; end if;
+  select count(*) into n from public.sponsorships where company_id = 'c2c2c2c2-0000-4000-8000-000000000002';
+  if n <> 0 then raise exception 'FALHA sponsor: alice ve patrocinio de outra igreja'; end if;
+
+  -- Não vê a conta nem as cobranças do patrocinador (CPF, gateway, valores).
+  select count(*) into n from public.sponsor_accounts;
+  if n <> 0 then raise exception 'FALHA sponsor: alice ve conta de patrocinador'; end if;
+  select count(*) into n from public.sponsor_charges;
+  if n <> 0 then raise exception 'FALHA sponsor: alice ve cobranca de patrocinador'; end if;
+  -- Itens da cobrança do Dave são da igreja do Bob: invisíveis para Alice.
+  select count(*) into n from public.sponsor_charge_items;
+  if n <> 0 then raise exception 'FALHA sponsor: alice ve itens de outra igreja'; end if;
+end $$;
+
+reset role;
+
+-- ------------------------------- anônimo ----------------------------------
+set local role anon;
+
+do $$
+declare
+  n int;
+  v_name text;
+begin
+  select count(*), max(display_name) into n, v_name
+  from public.list_church_sponsors('d1d1d1d1-0000-4000-8000-000000000001');
+  if n <> 1 or v_name <> 'Carol S.' then
+    raise exception 'FALHA sponsor: vitrine publica devolveu % linhas (%)', n, v_name;
+  end if;
+
+  begin
+    select count(*) into n from public.sponsor_accounts;
+    raise exception 'FALHA sponsor: anon leu sponsor_accounts';
+  exception when sqlstate '42501' then null;
+  end;
+
+  begin
+    perform public.request_sponsorship('d1d1d1d1-0000-4000-8000-000000000001');
+    raise exception 'FALHA sponsor: anon pediu patrocinio';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+reset role;
+
+-- ------------------- CAROL: cancelar e pagamento atrasado ------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"e3e3e3e3-0000-4000-8000-000000000003","email":"rls-carol@test.local","role":"authenticated"}', true);
+
+do $$
+declare
+  v_row public.sponsorships;
+  v_id uuid;
+begin
+  select id into v_id from public.sponsorships limit 1;
+  select * into v_row from public.cancel_sponsorship(v_id);
+  if v_row.status <> 'cancel_scheduled' or v_row.ends_at is null then
+    raise exception 'FALHA sponsor: cancelamento de ativo virou % / %', v_row.status, v_row.ends_at;
+  end if;
+end $$;
+
+reset role;
+
+update public.sponsor_accounts set billing_status = 'overdue'
+where user_id = 'e3e3e3e3-0000-4000-8000-000000000003';
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"e3e3e3e3-0000-4000-8000-000000000003","email":"rls-carol@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  begin
+    perform public.request_sponsorship('d2d2d2d2-0000-4000-8000-000000000002');
+    raise exception 'FALHA sponsor: patrocinio novo aceito com pagamento atrasado';
+  exception when check_violation then null;
+  end;
+end $$;
+
+reset role;
+
+-- Cancelamento agendado segue na vitrine até o fim do ciclo.
+set local role anon;
+do $$
+declare n int;
+begin
+  select count(*) into n from public.list_church_sponsors('d1d1d1d1-0000-4000-8000-000000000001');
+  if n <> 1 then raise exception 'FALHA sponsor: cancelamento agendado sumiu da vitrine antes da hora'; end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Onboarding: criar empresa cria a IGREJA junto (senão não há página pública,
+-- QR Code, domínio próprio nem link de patrocínio).
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare
+  v_company public.companies;
+  v_church public.churches;
+  v_second public.companies;
+  v_codes text[];
+begin
+  v_company := public.create_company_with_church('Igreja Nova RLS', 'rls-igreja-nova');
+
+  select * into v_church from public.churches where company_id = v_company.id;
+  if v_church.id is null then
+    raise exception 'FALHA onboarding: empresa criada SEM igreja';
+  end if;
+  if v_church.name <> 'Igreja Nova RLS' then
+    raise exception 'FALHA onboarding: igreja com nome errado (%)', v_church.name;
+  end if;
+  if v_church.public_code is null or v_church.path is null then
+    raise exception 'FALHA onboarding: igreja sem public_code/path';
+  end if;
+
+  -- O criador precisa ser owner, senão não administra a própria igreja.
+  if not public.is_company_owner(v_company.id) then
+    raise exception 'FALHA onboarding: criador nao virou owner';
+  end if;
+
+  -- Mesmo nome duas vezes não pode colidir no endereço público (único global).
+  v_second := public.create_company_with_church('Igreja Nova RLS', 'rls-igreja-nova-2');
+  select array_agg(public_code) into v_codes
+  from public.churches where company_id in (v_company.id, v_second.id);
+  if v_codes[1] = v_codes[2] then
+    raise exception 'FALHA onboarding: duas igrejas com o mesmo public_code (%)', v_codes[1];
+  end if;
+
+  -- E a igreja nova já aceita patrocínio (tem dono).
+  perform 1 from public.churches where id = v_church.id and company_id is not null;
+end $$;
+
+reset role;
+
+-- Anônimo não cria empresa/igreja.
+set local role anon;
+do $$
+begin
+  begin
+    perform public.create_company_with_church('Igreja Anonima', 'rls-anon');
+    raise exception 'FALHA onboarding: anon criou empresa';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Storage (bucket avatars): cada usuário só escreve na PRÓPRIA pasta.
 -- ---------------------------------------------------------------------------
 set local role authenticated;

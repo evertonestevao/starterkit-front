@@ -34,8 +34,11 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
     },
 
     async createCompany(name, slug) {
+      // create_company_with_church: empresa + owner + IGREJA numa transação
+      // só. Empresa sem igreja não tem página pública, QR Code, domínio nem
+      // link de patrocínio — e não há tela que conserte isso depois.
       const { data, error } = await client
-        .rpc("create_company", { p_name: name, p_slug: slug })
+        .rpc("create_company_with_church", { p_name: name, p_slug: slug })
         .single<Company>();
       if (error || !data) {
         if (error?.code === "23505") {
