@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { brand } from "@/config/brand";
 import { AcceptInviteButton } from "@/features/companies/components/accept-invite-button";
@@ -33,9 +33,9 @@ export default async function AcceptInvitePage({
           ) : (
             <>
               <p className="text-sm text-destructive">Link de convite inválido.</p>
-              <Button variant="outline" nativeButton={false} render={<Link href="/dashboard" />}>
+              <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>
                 Ir para o dashboard
-              </Button>
+              </Link>
             </>
           )}
         </CardContent>

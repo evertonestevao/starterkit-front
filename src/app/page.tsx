@@ -13,9 +13,10 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { brand } from "@/config/brand";
 import { ChurchFinderPreview } from "@/features/landing/components/church-finder-preview";
+import { cn } from "@/lib/utils";
 
 const benefits = [
   {
@@ -86,15 +87,15 @@ export default function LandingPage() {
             >
               Recursos
             </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<Link href="/login" />}
-              className="border-[#cfd9cb] bg-transparent text-[#36543d] hover:bg-[#edf1e9]"
+            <Link
+              href="/login"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "border-[#cfd9cb] bg-transparent text-[#36543d] hover:bg-[#edf1e9]",
+              )}
             >
               Entrar
-            </Button>
+            </Link>
           </nav>
         </div>
       </header>
@@ -119,14 +120,15 @@ export default function LandingPage() {
               o apoio de negócios locais.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Button
-                size="lg"
-                nativeButton={false}
-                render={<Link href="/signup" />}
-                className="h-12 rounded-xl bg-[#41694b] px-6 text-[15px] text-white shadow-[0_10px_25px_rgba(65,105,75,0.2)] hover:bg-[#34573d]"
+              <Link
+                href="/signup"
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "h-12 rounded-xl bg-[#41694b] px-6 text-[15px] text-white shadow-[0_10px_25px_rgba(65,105,75,0.2)] hover:bg-[#34573d]",
+                )}
               >
                 Conhecer a plataforma <ArrowRight className="size-4" />
-              </Button>
+              </Link>
               <Link
                 href="#como-funciona"
                 className="group inline-flex h-12 items-center gap-2 px-3 text-[15px] font-medium text-[#4c6653]"
@@ -371,14 +373,15 @@ export default function LandingPage() {
                 locais associados à comunidade sustentam o serviço com
                 patrocínios recorrentes.
               </p>
-              <Button
-                size="lg"
-                nativeButton={false}
-                render={<Link href="/signup" />}
-                className="mt-8 h-12 rounded-xl bg-[#f0d991] px-6 text-[#354b38] hover:bg-[#f7e6ae]"
+              <Link
+                href="/signup"
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "mt-8 h-12 rounded-xl bg-[#f0d991] px-6 text-[#354b38] hover:bg-[#f7e6ae]",
+                )}
               >
                 Conhecer a plataforma <ArrowRight className="size-4" />
-              </Button>
+              </Link>
             </div>
           </div>
         </section>

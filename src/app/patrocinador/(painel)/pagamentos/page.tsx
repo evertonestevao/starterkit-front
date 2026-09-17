@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ExternalLink, Receipt } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -16,6 +16,7 @@ import {
   formatDateTime,
   formatDueDate,
 } from "@/features/sponsor/components/status-badges";
+import { cn } from "@/lib/utils";
 import { getSponsorService } from "@/server/sponsor";
 import { formatCents } from "@/services/sponsorPricing";
 import type { SponsorCharge } from "@/types/sponsorship";
@@ -26,16 +27,15 @@ function InvoiceLink({ charge }: { charge: SponsorCharge }) {
   if (!charge.invoice_url) return <span className="text-muted-foreground">—</span>;
   const open = charge.status === "pending" || charge.status === "overdue";
   return (
-    <Button
-      size="sm"
-      variant={open ? "default" : "ghost"}
-      className="gap-1.5"
-      nativeButton={false}
-      render={<a href={charge.invoice_url} target="_blank" rel="noopener noreferrer" />}
+    <a
+      href={charge.invoice_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(buttonVariants({ size: "sm", variant: open ? "default" : "ghost" }), "gap-1.5")}
     >
       {open ? "Pagar" : "Ver fatura"}
       <ExternalLink className="size-3.5" aria-hidden />
-    </Button>
+    </a>
   );
 }
 

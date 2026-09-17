@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import {
   claimCustomDomainAction,
   removeCustomDomainAction,
@@ -212,12 +213,15 @@ export function CustomDomainSection({
             {view.defaultUrl}
           </span>
           <CopyButton value={view.defaultUrl} label="endereço padrão" />
-          <Button variant="ghost" size="sm" className="gap-1.5" render={
-            <a href={view.defaultUrl} target="_blank" rel="noreferrer" />
-          }>
+          <a
+            href={view.defaultUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}
+          >
             <ExternalLink className="size-3.5" />
             Abrir
-          </Button>
+          </a>
         </CardContent>
       </Card>
 
@@ -239,12 +243,15 @@ export function CustomDomainSection({
             {view.sponsorInviteUrl}
           </span>
           <CopyButton value={view.sponsorInviteUrl} label="link de patrocínio" />
-          <Button variant="ghost" size="sm" className="gap-1.5" render={
-            <a href={view.sponsorInviteUrl} target="_blank" rel="noreferrer" />
-          }>
+          <a
+            href={view.sponsorInviteUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}
+          >
             <ExternalLink className="size-3.5" />
             Abrir
-          </Button>
+          </a>
         </CardContent>
       </Card>
 
@@ -277,12 +284,15 @@ export function CustomDomainSection({
               <span className="min-w-0 flex-1 font-mono text-sm break-all">
                 {view.customUrl}
               </span>
-              <Button variant="ghost" size="sm" className="gap-1.5" render={
-                <a href={view.customUrl} target="_blank" rel="noreferrer" />
-              }>
+              <a
+                href={view.customUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}
+              >
                 <ExternalLink className="size-3.5" />
                 Abrir
-              </Button>
+              </a>
             </div>
           ) : null}
 
@@ -389,11 +399,12 @@ export function CustomDomainSection({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-3">
-          <Button variant="outline" className="gap-2" render={
-            <a href="mailto:suporte@tagigreja.com.br?subject=Configuração%20de%20domínio%20próprio" />
-          }>
+          <a
+            href="mailto:suporte@tagigreja.com.br?subject=Configuração%20de%20domínio%20próprio"
+            className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+          >
             Quero ajuda para configurar
-          </Button>
+          </a>
           {view.supportPaid ? (
             <Badge variant="secondary">Configuração assistida contratada</Badge>
           ) : null}

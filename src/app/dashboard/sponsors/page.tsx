@@ -4,7 +4,7 @@ import { Building2, Church, Landmark, Share2, TimerReset } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getChurchDomainService } from "@/server/churchDomain";
 import { getChurchSponsorsService } from "@/server/churchSponsors";
@@ -120,14 +120,12 @@ export default async function SponsorsPage() {
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
             <span className="min-w-0 flex-1 font-mono text-sm break-all">{inviteUrl}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<Link href="/dashboard/settings/domain" />}
+            <Link
+              href="/dashboard/settings/domain"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               Copiar em Configurações
-            </Button>
+            </Link>
           </CardContent>
         </Card>
       ) : null}

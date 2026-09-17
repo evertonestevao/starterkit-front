@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckCircle2, Mail } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 
 export const metadata: Metadata = { title: "Patrocínio confirmado" };
@@ -34,9 +35,9 @@ export default async function SponsorshipThanksPage({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {auth.user ? (
-          <Button className="w-full" nativeButton={false} render={<Link href="/patrocinador" />}>
+          <Link href="/patrocinador" className={cn(buttonVariants(), "w-full")}>
             Ir para o meu painel
-          </Button>
+          </Link>
         ) : (
           <>
             <div className="flex items-start gap-3 rounded-lg border p-4">
@@ -46,14 +47,12 @@ export default async function SponsorshipThanksPage({
                 igrejas apoiadas e as cobranças. Não precisa criar senha.
               </p>
             </div>
-            <Button
-              variant="outline"
-              className="w-full"
-              nativeButton={false}
-              render={<Link href="/patrocinador/login" />}
+            <Link
+              href="/patrocinador/login"
+              className={cn(buttonVariants({ variant: "outline" }), "w-full")}
             >
               Já tenho acesso, entrar
-            </Button>
+            </Link>
           </>
         )}
       </CardContent>

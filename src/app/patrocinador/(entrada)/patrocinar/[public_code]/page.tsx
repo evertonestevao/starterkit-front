@@ -3,12 +3,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, CheckCircle2, HandHeart, Info, MapPin } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmSponsorshipForm } from "@/features/sponsor/components/confirm-sponsorship-form";
 import { SponsorshipDisclosure } from "@/features/sponsor/components/sponsorship-disclosure";
 import { isAppError } from "@/lib/errors";
 import { sponsorshipPath } from "@/lib/sponsorPaths";
+import { cn } from "@/lib/utils";
 import { getPublicSponsorService, getSponsorService } from "@/server/sponsor";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { formatCents } from "@/services/sponsorPricing";
@@ -62,13 +63,12 @@ export default async function SponsorshipInvitePage({
           <CardDescription>Obrigado por caminhar junto com essa comunidade.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button
-            className="w-full"
-            nativeButton={false}
-            render={<Link href="/patrocinador/patrocinios" />}
+          <Link
+            href="/patrocinador/patrocinios"
+            className={cn(buttonVariants(), "w-full")}
           >
             Ver meus patrocínios
-          </Button>
+          </Link>
         </CardContent>
       </Card>
     );
@@ -166,7 +166,13 @@ async function PublicInvite({ publicCode }: { publicCode: string }) {
             <HandHeart className="size-4 text-primary" aria-hidden />
             Convite para patrocinar
           </CardDescription>
-          <CardTitle className="text-2xl">{church.name}</CardTitle>
+          {/* h1 de verdade: esta página é ponto de entrada de um link
+              compartilhado, sem cabeçalho de app em volta. `CardTitle` é uma
+              `div`, e a página ficava sem título nenhum na árvore de
+              acessibilidade. */}
+          <h1 data-slot="card-title" className="font-heading text-2xl leading-snug font-medium">
+            {church.name}
+          </h1>
           {church.address ? (
             <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
               <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -193,20 +199,16 @@ async function PublicInvite({ publicCode }: { publicCode: string }) {
           {/* Rótulo diz o que o botão FAZ. "Já sou patrocinador" descrevia um
               estado e era lido como recusa ("já sou, obrigado"). */}
           <div className="flex flex-col gap-3">
-            <Button size="lg" nativeButton={false} render={<Link href={`${backHere}/novo`} />}>
+            <Link href={`${backHere}/novo`} className={buttonVariants({ size: "lg" })}>
               Assinar patrocínio
-            </Button>
+            </Link>
             <div className="flex flex-col gap-1.5">
-              <Button
-                size="lg"
-                variant="outline"
-                nativeButton={false}
-                render={
-                  <Link href={`/patrocinador/login?next=${encodeURIComponent(backHere)}`} />
-                }
+              <Link
+                href={`/patrocinador/login?next=${encodeURIComponent(backHere)}`}
+                className={buttonVariants({ size: "lg", variant: "outline" })}
               >
                 Entrar e adicionar esta igreja
-              </Button>
+              </Link>
               <p className="text-center text-xs text-muted-foreground">
                 Já apoia outra igreja? O desconto entra sozinho, na mesma cobrança.
               </p>

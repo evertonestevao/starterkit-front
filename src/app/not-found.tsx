@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, MapPin, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { brand } from "@/config/brand";
+import { cn } from "@/lib/utils";
 
 /**
  * 404 da aplicação inteira.
@@ -80,10 +81,10 @@ export default function NotFound() {
         </figure>
 
         <div className="mt-9 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-          <Button size="lg" className="gap-2" render={<Link href="/" />}>
+          <Link href="/" className={cn(buttonVariants({ size: "lg" }), "gap-2")}>
             Voltar para o início
             <ArrowRight className="size-4" />
-          </Button>
+          </Link>
         </div>
 
         {/* Quem chegou por QR code impresso não tem histórico para voltar nem

@@ -4,7 +4,7 @@ import { AlertTriangle, CalendarClock, CircleDollarSign, Church, HandHeart, Refr
 import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDueDate } from "@/features/sponsor/components/status-badges";
 import { getSponsorService } from "@/server/sponsor";
@@ -42,13 +42,14 @@ export default async function SponsorHomePage() {
                 : "Falta concluir o pagamento para seu apoio aparecer nas igrejas."}
             </span>
             {overview.openInvoiceUrl ? (
-              <Button
-                size="sm"
-                nativeButton={false}
-                render={<a href={overview.openInvoiceUrl} target="_blank" rel="noopener noreferrer" />}
+              <a
+                href={overview.openInvoiceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({ size: "sm" })}
               >
                 Pagar agora
-              </Button>
+              </a>
             ) : null}
           </AlertDescription>
         </Alert>
@@ -98,9 +99,12 @@ export default async function SponsorHomePage() {
         />
       ) : (
         <div className="flex">
-          <Button variant="outline" nativeButton={false} render={<Link href="/patrocinador/patrocinios" />}>
+          <Link
+            href="/patrocinador/patrocinios"
+            className={buttonVariants({ variant: "outline" })}
+          >
             Ver igrejas apoiadas
-          </Button>
+          </Link>
         </div>
       )}
 
