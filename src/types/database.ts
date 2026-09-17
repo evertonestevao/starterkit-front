@@ -210,6 +210,8 @@ export type PublicChurch = Omit<
 export interface PrayerRequest {
   id: string;
   church_id: string;
+  /** Empresa dona da igreja, preenchida por trigger (nunca pelo cliente). */
+  company_id: string | null;
   name: string | null;
   message: string;
   created_at: string;
@@ -218,6 +220,8 @@ export interface PrayerRequest {
 export interface EventSignup {
   id: string;
   church_id: string;
+  /** Empresa dona da igreja, preenchida por trigger (nunca pelo cliente). */
+  company_id: string | null;
   event_name: string;
   person_name: string;
   contact: string;
@@ -227,6 +231,8 @@ export interface EventSignup {
 export interface Visitor {
   id: string;
   church_id: string;
+  /** Empresa dona da igreja, preenchida por trigger (nunca pelo cliente). */
+  company_id: string | null;
   name: string;
   contact: string;
   created_at: string;

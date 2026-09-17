@@ -777,6 +777,77 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Caixa de entrada da comunidade: a igreja LÊ o que chega pela página
+-- pública, e só o que é dela. O company_id vem do trigger, nunca do cliente.
+-- ---------------------------------------------------------------------------
+-- Anônimo envia para a igreja da Alice e para a do Bob.
+set local role anon;
+do $$
+begin
+  -- company_id enviado de propósito ERRADO (empresa do Bob): o trigger tem
+  -- que sobrescrever pela empresa dona da igreja.
+  insert into public.prayer_requests (church_id, company_id, name, message)
+  values ('d1d1d1d1-0000-4000-8000-000000000001', 'c2c2c2c2-0000-4000-8000-000000000002', 'Visitante', 'Orem por mim');
+
+  insert into public.visitors (church_id, name, contact)
+  values ('d1d1d1d1-0000-4000-8000-000000000001', 'Maria', '14999990000');
+
+  insert into public.event_signups (church_id, event_name, person_name, contact)
+  values ('d2d2d2d2-0000-4000-8000-000000000002', 'Retiro', 'Joao', '11988887777');
+
+  -- Anônimo NÃO lê o que a comunidade enviou.
+  begin
+    perform 1 from public.prayer_requests;
+    raise exception 'FALHA inbox: anon leu pedidos de oracao';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+do $$
+declare v_company uuid;
+begin
+  select company_id into v_company from public.prayer_requests
+  where church_id = 'd1d1d1d1-0000-4000-8000-000000000001';
+  if v_company <> 'c1c1c1c1-0000-4000-8000-000000000001' then
+    raise exception 'FALHA inbox: trigger aceitou company_id do cliente (%)', v_company;
+  end if;
+end $$;
+
+-- ALICE (owner da empresa 1) enxerga só o que é da igreja dela.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.prayer_requests;
+  if n <> 1 then raise exception 'FALHA inbox: alice ve % pedidos (esperado 1)', n; end if;
+
+  select count(*) into n from public.visitors;
+  if n <> 1 then raise exception 'FALHA inbox: alice ve % visitantes (esperado 1)', n; end if;
+
+  -- A inscrição foi na igreja do Bob: invisível para a Alice.
+  select count(*) into n from public.event_signups;
+  if n <> 0 then raise exception 'FALHA inbox: alice ve inscricao de outra igreja'; end if;
+
+  -- Registro do que a comunidade enviou não se edita nem se apaga.
+  begin
+    update public.prayer_requests set message = 'alterado';
+    raise exception 'FALHA inbox: UPDATE aceito em pedido de oracao';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    delete from public.visitors;
+    raise exception 'FALHA inbox: DELETE aceito em visitantes';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Storage (bucket avatars): cada usuário só escreve na PRÓPRIA pasta.
 -- ---------------------------------------------------------------------------
 set local role authenticated;
