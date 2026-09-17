@@ -36,13 +36,9 @@ export default async function SettingsPage() {
   const canEditCompany = permissionService.canEditCompany(active.role);
   const isOwner = active.role === "owner";
 
+  // Título e abas vivem no layout: aqui fica só o conteúdo da aba "Geral".
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">Configurações</h2>
-        <p className="text-sm text-muted-foreground">Seu perfil e a empresa ativa</p>
-      </div>
-
+    <div className="flex flex-col gap-6">
       {/* Convites endereçados a MIM (outras empresas me chamando). */}
       {myInvites.length > 0 ? (
         <Card className="border-primary/50">
