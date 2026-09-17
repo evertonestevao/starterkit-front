@@ -777,6 +777,54 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Patrocinadores vistos PELA IGREJA: só os dela, e sem dado pessoal.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare
+  n int;
+  v_nome text;
+begin
+  -- Carol patrocina a igreja da Alice (ativo, vindo da secao anterior).
+  select count(*), max(sponsor_name) into n, v_nome
+  from public.list_company_sponsors('c1c1c1c1-0000-4000-8000-000000000001');
+  if n <> 1 then
+    raise exception 'FALHA patrocinadores: alice ve % patrocinadores (esperado 1)', n;
+  end if;
+  if v_nome is null then
+    raise exception 'FALHA patrocinadores: nome do patrocinador nao veio';
+  end if;
+
+  -- A empresa do Bob tem o patrocinio do Dave: Alice nao pode consultar.
+  begin
+    perform public.list_company_sponsors('c2c2c2c2-0000-4000-8000-000000000002');
+    raise exception 'FALHA patrocinadores: alice consultou patrocinadores de outra empresa';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- E segue sem acesso a tabela de contas (CPF, email, ids do gateway).
+  select count(*) into n from public.sponsor_accounts;
+  if n <> 0 then raise exception 'FALHA patrocinadores: alice le sponsor_accounts'; end if;
+end $$;
+
+reset role;
+
+-- Anonimo nao consulta patrocinadores de empresa nenhuma.
+set local role anon;
+do $$
+begin
+  begin
+    perform public.list_company_sponsors('c1c1c1c1-0000-4000-8000-000000000001');
+    raise exception 'FALHA patrocinadores: anon consultou a lista';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Caixa de entrada da comunidade: a igreja LÊ o que chega pela página
 -- pública, e só o que é dela. O company_id vem do trigger, nunca do cliente.
 -- ---------------------------------------------------------------------------
