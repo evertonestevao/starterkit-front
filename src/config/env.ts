@@ -36,6 +36,30 @@ const serverEnvSchema = z.object({
   RATE_LIMIT_STORE: z.enum(["memory", "redis"]).default("memory"),
   UPSTASH_REDIS_REST_URL: z.url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
+  /** Provedor de domínio próprio das igrejas. "fake" não toca a rede. */
+  DOMAIN_PROVIDER: z.enum(["vercel", "fake"]).default("fake"),
+  VERCEL_API_TOKEN: z.string().min(1).optional(),
+  VERCEL_PROJECT_ID: z.string().min(1).optional(),
+  /** Só quando o projeto pertence a um time da Vercel. */
+  VERCEL_TEAM_ID: z.string().min(1).optional(),
+  /**
+   * Valores de DNS anunciados para as igrejas. Configuráveis porque são da
+   * Vercel e já mudaram antes — hardcoded viraria domínio de cliente quebrado.
+   */
+  VERCEL_DNS_A_RECORD: z.string().min(1).optional(),
+  VERCEL_DNS_CNAME: z.string().min(1).optional(),
+  /** Segredo do Vercel Cron; sem ele os endpoints de job ficam fechados. */
+  CRON_SECRET: z.string().min(1).optional(),
+  /**
+   * Provedor que atende as NOVAS assinaturas de patrocínio. Contas existentes
+   * seguem no provedor gravado nelas. "fake" não toca a rede.
+   */
+  SPONSOR_BILLING_PROVIDER: z.enum(["asaas", "fake"]).default("fake"),
+  ASAAS_API_KEY: z.string().min(1).optional(),
+  /** Sandbox por padrão; produção: https://api.asaas.com/v3 */
+  ASAAS_API_URL: z.url().default("https://api-sandbox.asaas.com/v3"),
+  /** Token que o Asaas envia no header asaas-access-token do webhook. */
+  ASAAS_WEBHOOK_TOKEN: z.string().min(16).optional(),
 });
 
 export function getClientEnv() {

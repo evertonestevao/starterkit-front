@@ -16,6 +16,7 @@ export type AppErrorCode =
   | "rate_limited"
   | "payment_error"
   | "email_error"
+  | "domain_error"
   | "internal_error";
 
 const HTTP_STATUS: Record<AppErrorCode, number> = {
@@ -27,6 +28,7 @@ const HTTP_STATUS: Record<AppErrorCode, number> = {
   rate_limited: 429,
   payment_error: 502,
   email_error: 502,
+  domain_error: 502,
   internal_error: 500,
 };
 

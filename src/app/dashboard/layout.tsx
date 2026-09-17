@@ -6,6 +6,7 @@ import { createSupabaseUserRepository } from "@/repositories/supabase/userReposi
 import { createMemoryRateLimiter } from "@/server/rateLimit";
 import { createInviteService } from "@/services/inviteService";
 import { getSupabaseServerClient } from "@/server/supabase-server";
+import { getSponsorService } from "@/server/sponsor";
 import { getActiveTenant } from "@/server/tenant";
 import { getTermsService } from "@/server/terms";
 import { createUserService } from "@/services/userService";
@@ -25,6 +26,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const { companies, active } = await getActiveTenant();
   if (!active) {
+    // Patrocinador não tem empresa. Mandá-lo para o onboarding ("crie sua
+    // empresa") é um beco sem saída — acontece quando ele entra por /login
+    // ou volta de uma redefinição de senha.
+    if (await (await getSponsorService()).getMyAccount()) {
+      redirect("/patrocinador");
+    }
     redirect("/onboarding");
   }
 

@@ -17,7 +17,7 @@ interface EmailServiceDeps {
 export function createEmailService({ provider, appUrl }: EmailServiceDeps) {
   const base = appUrl.replace(/\/+$/, "");
 
-  const notifier: InviteNotifier = {
+  const service = {
     async sendInviteEmail(invite: CompanyInvite): Promise<void> {
       const acceptUrl = `${base}/invites/accept?token=${invite.token}`;
       await provider.send({
@@ -32,9 +32,46 @@ export function createEmailService({ provider, appUrl }: EmailServiceDeps) {
         ].join("\n"),
       });
     },
+
+    /**
+     * Link de acesso do patrocinador (conta sem senha). Dois textos: quem
+     * acabou de assinar e quem já tinha conta — este último NÃO confirma que
+     * a conta existe para quem não é o dono do email; quem recebe já sabe.
+     */
+    async sendSponsorAccessLink(input: {
+      to: string;
+      url: string;
+      churchName: string;
+      isNewSponsor: boolean;
+    }): Promise<void> {
+      const subject = input.isNewSponsor
+        ? `Seu patrocínio a ${input.churchName}`
+        : `Confirme seu patrocínio a ${input.churchName}`;
+      const intro = input.isNewSponsor
+        ? `Obrigado por apoiar a ${input.churchName}! Use o link abaixo para entrar no seu painel e acompanhar o patrocínio.`
+        : `Para adicionar a ${input.churchName} ao seu patrocínio, entre pelo link abaixo — lá você confirma e vê o valor já com desconto.`;
+
+      await provider.send({
+        to: input.to,
+        subject,
+        text: `${intro}
+
+${input.url}
+
+O link vale por uma única entrada. Se não foi você, ignore este email.`,
+        html: [
+          `<p>${intro}</p>`,
+          `<p><a href="${input.url}">Entrar no painel do patrocinador</a></p>`,
+          "<p>O link vale por uma única entrada. Se não foi você que pediu, ignore este email.</p>",
+        ].join("\n"),
+      });
+    },
   };
 
-  return notifier;
+  // O objeto atende InviteNotifier (e ainda expõe o email do patrocinador).
+  const notifier: InviteNotifier = service;
+  void notifier;
+  return service;
 }
 
 export type EmailService = ReturnType<typeof createEmailService>;
