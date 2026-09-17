@@ -64,7 +64,8 @@ Ao criar um arquivo novo, pergunte: "isso é lógica de negócio (service), esta
 - Erros retornados ao usuário nunca incluem stack trace ou detalhes internos; log detalhado fica só no servidor
 - Nunca logar senha, token, payload de pagamento cru ou dados de cartão
 - Rate limit obrigatório em: login, recuperação de senha, envio de convite
-- Ao implementar gateway de pagamento, sempre atrás da interface `PaymentGateway` (`src/adapters/payment`) — nunca chamar SDK do provedor direto de um service ou componente
+- Pagamento sempre atrás das interfaces de `src/adapters/payment` — `PaymentGateway` (assinatura SaaS da empresa, plano fixo) ou `RecurringBillingProvider` (patrocínio, valor variável). A escolha do provedor acontece SÓ em `src/adapters/payment/index.ts`; nunca chamar SDK/API de provedor (Stripe, Asaas...) direto de um service ou componente. O provedor de cada conta de patrocinador fica gravado nela, para que trocar o padrão não quebre assinaturas em andamento
+- No Supabase, tabela nova em `public` nasce com ALL para `anon`/`authenticated` (default privileges da plataforma) e função nasce executável por todos. Segurança por coluna ou por operação exige `REVOKE ALL` antes dos `GRANT`s explícitos, na mesma migration — "não conceder" não basta
 
 ## Padrões de código
 
@@ -102,5 +103,5 @@ npx supabase migration up   # aplicar migrations locais
 
 - Não adicionar dependência nova sem justificar por que é necessária
 - Não criar tabela sem `company_id` e sem policy de RLS na mesma migration
-- Não implementar integração de pagamento fora da interface `PaymentGateway`
+- Não implementar integração de pagamento fora das interfaces de `src/adapters/payment`
 - Não remover ou enfraquecer uma policy de RLS existente para "resolver" um bug de acesso — investigar a causa raiz primeiro
