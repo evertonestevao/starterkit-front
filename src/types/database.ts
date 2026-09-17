@@ -3,6 +3,8 @@
  * Fonte única — não redeclarar essas interfaces em outros arquivos.
  */
 
+import type { DomainVerificationChallenge } from "./domain";
+
 export type RoleCode = "owner" | "admin" | "member";
 
 export type InviteStatus = "pending" | "accepted" | "revoked" | "expired";
@@ -143,3 +145,90 @@ export interface Setting {
   created_at: string;
   updated_at: string;
 }
+
+export interface Template {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  created_at: string;
+}
+
+export type ChurchTemplateMode = "inherit" | "custom";
+
+/** Estados do domínio próprio (enum church_domain_status no banco). */
+export type ChurchDomainStatus =
+  | "nao_configurado"
+  | "pendente_dns"
+  | "verificando"
+  | "ativo"
+  | "erro";
+
+export interface Church {
+  id: string;
+  /** Empresa dona. Null só nas igrejas de demonstração semeadas no core. */
+  company_id: string | null;
+  parent_id: string | null;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  address: string | null;
+  service_times: Record<string, string> | null;
+  social_links: Record<string, string> | null;
+  path: string;
+  template_mode: ChurchTemplateMode;
+  template_id: string | null;
+  public_code: string;
+  /** Host próprio da igreja, minúsculo e sem protocolo. Null = só o padrão. */
+  dominio_customizado: string | null;
+  dominio_status: ChurchDomainStatus;
+  /** Só histórico comercial: não muda nada no fluxo de DNS. */
+  dominio_suporte_pago: boolean;
+  dominio_verificacao: DomainVerificationChallenge[] | null;
+  dominio_verificado_em: string | null;
+  dominio_ultimo_erro: string | null;
+  dominio_solicitado_em: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Colunas de `churches` legíveis pelo anon (GRANT por coluna na migration). */
+export type PublicChurch = Omit<
+  Church,
+  | "company_id"
+  | "dominio_customizado"
+  | "dominio_status"
+  | "dominio_suporte_pago"
+  | "dominio_verificacao"
+  | "dominio_verificado_em"
+  | "dominio_ultimo_erro"
+  | "dominio_solicitado_em"
+  | "deleted_at"
+>;
+
+export interface PrayerRequest {
+  id: string;
+  church_id: string;
+  name: string | null;
+  message: string;
+  created_at: string;
+}
+
+export interface EventSignup {
+  id: string;
+  church_id: string;
+  event_name: string;
+  person_name: string;
+  contact: string;
+  created_at: string;
+}
+
+export interface Visitor {
+  id: string;
+  church_id: string;
+  name: string;
+  contact: string;
+  created_at: string;
+}
+

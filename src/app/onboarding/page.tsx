@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { brand } from "@/config/brand";
 import { CreateCompanyForm } from "@/features/companies/components/create-company-form";
 import { getActiveTenant } from "@/server/tenant";
 import { getTermsService } from "@/server/terms";
 
-export const metadata: Metadata = { title: "Criar empresa" };
+export const metadata: Metadata = { title: "Criar igreja" };
 
 /**
  * Onboarding: caminho crítico signup → aceitar termos → criar empresa →
@@ -29,9 +35,10 @@ export default async function OnboardingPage() {
       </Link>
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Crie sua empresa</CardTitle>
+          <CardTitle>Cadastre sua igreja</CardTitle>
           <CardDescription>
-            Todo dado do {brand.name} pertence a uma empresa. Você será o owner desta.
+            Organize a presença digital da sua igreja. Você será o responsável
+            por este espaço.
           </CardDescription>
         </CardHeader>
         <CardContent>

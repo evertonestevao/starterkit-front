@@ -1,6 +1,13 @@
 import {
+  CalendarDays,
   CreditCard,
+  HandCoins,
+  HandHeart,
+  HeartHandshake,
+  Landmark,
   LayoutDashboard,
+  Megaphone,
+  MonitorSmartphone,
   ScrollText,
   Settings,
   Users,
@@ -25,9 +32,66 @@ export const navItems: NavItem[] = [
     icon: LayoutDashboard,
     roles: ["owner", "admin", "member"],
   },
-  { title: "Membros", href: "/dashboard/members", icon: Users, roles: ["owner", "admin"] },
-  { title: "Billing", href: "/dashboard/billing", icon: CreditCard, roles: ["owner"] },
-  { title: "Auditoria", href: "/dashboard/audit", icon: ScrollText, roles: ["owner", "admin"] },
+  {
+    title: "Pessoas",
+    href: "/dashboard/members",
+    icon: Users,
+    roles: ["owner", "admin"],
+  },
+  {
+    title: "Pedidos de oração",
+    href: "/dashboard/prayers",
+    icon: HandHeart,
+    roles: ["owner", "admin", "member"],
+  },
+  {
+    title: "Eventos",
+    href: "/dashboard/events",
+    icon: CalendarDays,
+    roles: ["owner", "admin", "member"],
+  },
+  {
+    title: "Campanhas",
+    href: "/dashboard/campaigns",
+    icon: Megaphone,
+    roles: ["owner", "admin", "member"],
+  },
+  {
+    title: "Financeiro",
+    href: "/dashboard/finance",
+    icon: HandCoins,
+    roles: ["owner", "admin"],
+  },
+  {
+    title: "Presença digital",
+    href: "/dashboard/presence",
+    icon: MonitorSmartphone,
+    roles: ["owner", "admin", "member"],
+  },
+  {
+    title: "Patrocinadores",
+    href: "/dashboard/sponsors",
+    icon: Landmark,
+    roles: ["owner", "admin"],
+  },
+  {
+    title: "Relacionamentos",
+    href: "/dashboard/relationships",
+    icon: HeartHandshake,
+    roles: ["owner", "admin", "member"],
+  },
+  {
+    title: "Billing",
+    href: "/dashboard/billing",
+    icon: CreditCard,
+    roles: ["owner"],
+  },
+  {
+    title: "Auditoria",
+    href: "/dashboard/audit",
+    icon: ScrollText,
+    roles: ["owner", "admin"],
+  },
   {
     title: "Configurações",
     href: "/dashboard/settings",
@@ -40,6 +104,8 @@ export const navItems: NavItem[] = [
 export function titleForPath(pathname: string): string {
   const match = [...navItems]
     .sort((a, b) => b.href.length - a.href.length)
-    .find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+    .find(
+      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+    );
   return match?.title ?? "Dashboard";
 }

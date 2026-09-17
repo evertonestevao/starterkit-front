@@ -1,17 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CreditCard, Mail, ShieldCheck, Users } from "lucide-react";
-import { BarChartCard } from "@/components/charts/bar-chart-card";
-import { DonutChartCard } from "@/components/charts/donut-chart-card";
-import { LineChartCard } from "@/components/charts/line-chart-card";
+import {
+  ArrowRight,
+  CalendarDays,
+  ChartNoAxesCombined,
+  HeartHandshake,
+  Landmark,
+  Megaphone,
+  MessageCircleHeart,
+  QrCode,
+  Users,
+} from "lucide-react";
 import { MetricCard } from "@/components/metric-card";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { createSupabaseBillingRepository } from "@/repositories/supabase/billingRepository";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
 import { createMemoryRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant, getTenantService } from "@/server/tenant";
-import { createBillingService } from "@/services/billingService";
 import { createInviteService } from "@/services/inviteService";
 import { permissionService } from "@/services/permissionService";
 
@@ -23,140 +35,231 @@ export default async function DashboardPage() {
 
   const client = await getSupabaseServerClient();
   const tenant = await getTenantService();
-  const billing = createBillingService(createSupabaseBillingRepository(client));
   const isAdmin = permissionService.canManageMembers(active.role);
 
-  const [members, plan, pendingInvites] = await Promise.all([
+  const [members, pendingInvites] = await Promise.all([
     // pageSize mínimo: aqui só o total interessa (métrica), não as linhas.
     tenant.listMembers(active.id, { page: 1, pageSize: 1 }),
-    billing.getEffectivePlan(active.id),
     isAdmin
       ? createInviteService({
           repo: createSupabaseInviteRepository(client),
-          rateLimiter: createMemoryRateLimiter({ limit: 1000, windowMs: 60_000 }),
+          rateLimiter: createMemoryRateLimiter({
+            limit: 1000,
+            windowMs: 60_000,
+          }),
         }).listPending(active.id)
       : Promise.resolve([]),
   ]);
 
-  const roleLabel = { owner: "Owner", admin: "Admin", member: "Member" }[active.role];
+  const roleLabel = { owner: "Owner", admin: "Admin", member: "Member" }[
+    active.role
+  ];
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">{active.name}</h2>
-        <p className="text-sm text-muted-foreground">Visão geral da sua empresa</p>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-sm font-medium text-primary">Bom ter você aqui</p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight">
+            {active.name}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Acompanhe os relacionamentos e os próximos passos da sua igreja.
+          </p>
+        </div>
+        <Link
+          href="#acoes"
+          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+        >
+          Ver ações importantes <ArrowRight className="size-4" />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={Users} label="Membros ativos" value={members.total} />
+        <MetricCard
+          icon={Users}
+          label="Membros da igreja"
+          value={members.total}
+          hint="cadastros ativos"
+        />
         {isAdmin ? (
-          <MetricCard icon={Mail} label="Convites pendentes" value={pendingInvites.length} />
+          <MetricCard
+            icon={MessageCircleHeart}
+            label="Convites pendentes"
+            value={pendingInvites.length}
+            hint="aguardando resposta"
+          />
         ) : null}
         <MetricCard
-          icon={CreditCard}
-          label="Plano atual"
-          value={plan?.name ?? "—"}
-          hint={plan ? `até ${String(plan.features.max_members ?? "?")} membros` : undefined}
+          icon={Megaphone}
+          label="Campanhas"
+          value="Em breve"
+          hint="crie e acompanhe metas"
         />
-        <MetricCard icon={ShieldCheck} label="Seu papel" value={roleLabel} />
+        <MetricCard
+          icon={ChartNoAxesCombined}
+          label="Seu papel"
+          value={roleLabel}
+          hint="permissão no espaço"
+        />
       </div>
 
-      {/* ------------------------------------------------------------------
-          EXEMPLOS DE GRÁFICOS DO TEMPLATE — dados fake.
-          Os 3 tipos mais usados (linha, barras, donut) já estilizados pelos
-          tokens do tema (--chart-1..5, validados p/ dark/light e daltonismo).
-          Ao criar seu produto: troque os dados fake pelas métricas do seu
-          domínio ou remova esta seção. Componentes: src/components/charts.
-         ------------------------------------------------------------------ */}
-      <section className="flex flex-col gap-4">
-        <div>
-          <h3 className="font-medium">Exemplos de gráficos do template</h3>
-          <p className="text-sm text-muted-foreground">
-            Dados fake — troque pelas métricas do seu produto (componentes em{" "}
-            <code className="rounded bg-muted px-1 py-0.5">src/components/charts</code>).
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <LineChartCard
-            title="Linha: receita mensal"
-            description="Evolução no tempo, 2 séries"
-            data={[
-              { mes: "Jan", assinaturas: 1200, seats: 300 },
-              { mes: "Fev", assinaturas: 1900, seats: 420 },
-              { mes: "Mar", assinaturas: 1700, seats: 380 },
-              { mes: "Abr", assinaturas: 2600, seats: 540 },
-              { mes: "Mai", assinaturas: 3100, seats: 720 },
-              { mes: "Jun", assinaturas: 2900, seats: 680 },
-              { mes: "Jul", assinaturas: 3800, seats: 890 },
-            ]}
-            xKey="mes"
-            series={[
-              { key: "assinaturas", label: "Assinaturas" },
-              { key: "seats", label: "Seats extras" },
-            ]}
-            valueFormat={{ style: "currency", currency: "BRL", maximumFractionDigits: 0 }}
-          />
-          <BarChartCard
-            title="Barras: novos cadastros por semana"
-            description="Magnitude por categoria, 1 série"
-            data={[
-              { semana: "S1", cadastros: 32 },
-              { semana: "S2", cadastros: 41 },
-              { semana: "S3", cadastros: 28 },
-              { semana: "S4", cadastros: 56 },
-              { semana: "S5", cadastros: 49 },
-              { semana: "S6", cadastros: 63 },
-            ]}
-            xKey="semana"
-            yKey="cadastros"
-          />
-          <DonutChartCard
-            title="Donut: distribuição por plano"
-            description="Composição do todo (máx. 5 fatias; excedente vira 'Outros')"
-            data={[
-              { label: "Free", value: 210 },
-              { label: "Pro", value: 96 },
-              { label: "Enterprise", value: 14 },
-            ]}
-          />
-        </div>
+      <section id="acoes" className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/35">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle>O que está acontecendo na sua igreja</CardTitle>
+                <CardDescription className="mt-1">
+                  Os principais espaços para cuidar da comunidade.
+                </CardDescription>
+              </div>
+              <HeartHandshake className="size-5 text-primary" />
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3 p-4 sm:grid-cols-2">
+            <DashboardAction
+              icon={HeartHandshake}
+              title="Pedidos de oração"
+              description="Acompanhe quem pediu cuidado e retorno da equipe."
+            />
+            <DashboardAction
+              icon={CalendarDays}
+              title="Eventos e inscrições"
+              description="Organize encontros e veja quem confirmou presença."
+            />
+            <DashboardAction
+              icon={Users}
+              title="Visitantes e membresia"
+              description="Transforme o primeiro contato em relacionamento."
+            />
+            <DashboardAction
+              icon={Megaphone}
+              title="Campanhas"
+              description="Crie metas para obras, missões e ações sociais."
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="border-primary/15 bg-primary text-primary-foreground">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <QrCode className="size-5" /> Sua presença está pronta
+            </CardTitle>
+            <CardDescription className="text-primary-foreground/75">
+              Compartilhe um único espaço para a comunidade encontrar a igreja.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-xl bg-white/10 p-4 text-sm leading-6 text-primary-foreground/90">
+              Link público, QR Code ou NFC: cada pessoa escolhe como se
+              aproximar.
+            </div>
+            <Link
+              href="/dashboard/settings"
+              className="mt-5 inline-flex items-center gap-2 text-sm font-semibold hover:underline"
+            >
+              Configurar presença <ArrowRight className="size-4" />
+            </Link>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <InfoCard
+          icon={Landmark}
+          title="Patrocinadores locais"
+          description="Conecte negócios que acreditam na comunidade e ajudam a sustentar a plataforma."
+        />
+        <InfoCard
+          icon={ChartNoAxesCombined}
+          title="Visão para a liderança"
+          description="Em breve, acompanhe os relacionamentos e o impacto das ações em um só painel."
+        />
+        <InfoCard
+          icon={CalendarDays}
+          title="Próximo passo"
+          description="Complete as informações públicas da igreja para começar a receber visitas."
+          href="/dashboard/settings"
+        />
       </section>
 
       <Card>
         <CardHeader>
-          <CardTitle>Primeiros passos com o template</CardTitle>
+          <CardTitle>Comece a cuidar da sua presença</CardTitle>
           <CardDescription>
-            Este dashboard é o ponto de partida do seu SaaS — troque estas etapas pelas métricas
-            do seu domínio.
+            Uma base organizada para a equipe construir relacionamentos
+            duradouros.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-            <li>
-              <Link href="/dashboard/members" className="text-foreground underline underline-offset-4">
-                Convide sua equipe
-              </Link>{" "}
-              — convites expiram em 7 dias e podem ser revogados.
-            </li>
-            <li>
-              <Link href="/dashboard/billing" className="text-foreground underline underline-offset-4">
-                Explore o billing
-              </Link>{" "}
-              — o gateway fake simula o ciclo completo de assinatura em dev.
-            </li>
-            <li>
-              Edite <code className="rounded bg-muted px-1 py-0.5">src/config/brand.ts</code> e os
-              tokens em <code className="rounded bg-muted px-1 py-0.5">globals.css</code> para dar a
-              identidade do seu produto.
-            </li>
-            <li>
-              Crie seu domínio em{" "}
-              <code className="rounded bg-muted px-1 py-0.5">src/features/</code> seguindo o fluxo
-              componentes → hooks → services → repositories.
-            </li>
-          </ol>
+          <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Convide a equipe que ajuda a cuidar dos relacionamentos da igreja.
+            </span>
+            <Link
+              href="/dashboard/members"
+              className="inline-flex items-center gap-2 font-medium text-foreground hover:underline"
+            >
+              Gerenciar equipe <ArrowRight className="size-4" />
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function DashboardAction({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof HeartHandshake;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-xl border bg-background p-4 transition-colors hover:border-primary/35 hover:bg-muted/30">
+      <Icon className="size-5 text-primary" />
+      <h3 className="mt-4 text-sm font-semibold">{title}</h3>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function InfoCard({
+  icon: Icon,
+  title,
+  description,
+  href,
+}: {
+  icon: typeof HeartHandshake;
+  title: string;
+  description: string;
+  href?: string;
+}) {
+  const content = (
+    <CardContent className="flex gap-3 p-5">
+      <Icon className="mt-0.5 size-5 shrink-0 text-primary" />
+      <div>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          {description}
+        </p>
+      </div>
+    </CardContent>
+  );
+  return href ? (
+    <Link
+      href={href}
+      className="block rounded-xl transition-transform hover:-translate-y-0.5"
+    >
+      <Card>{content}</Card>
+    </Link>
+  ) : (
+    <Card>{content}</Card>
   );
 }

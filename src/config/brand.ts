@@ -4,9 +4,9 @@
  */
 export const brand = {
   /** Nome exibido na LP, título das páginas e sidebar. */
-  name: "StarterKit",
+  name: "Conecta Igreja",
   /** Descrição curta usada em metadata e na LP. */
-  tagline: "Base multi-tenant pronta para lançar seu próximo SaaS",
+  tagline: "Página pública para igrejas com QR/NFC, dízimos, oração e eventos",
   /** Domínio público (links de email usam APP_URL do servidor). */
-  url: "https://example.com",
+  url: "https://tagigreja.com",
 } as const;
