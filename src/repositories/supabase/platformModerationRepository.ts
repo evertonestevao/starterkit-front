@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
 import type { PlatformModerationRepository } from "@/services/platformModerationService";
-import type { PendingProfileChange } from "@/types/sponsorship";
+import type { AbuseReport, HiddenSignal, PendingProfileChange } from "@/types/sponsorship";
 
 interface PendingRow {
   id: string;
@@ -58,6 +58,63 @@ export function createSupabasePlatformModerationRepository(
         throw new AppError("internal_error", "Falha ao registrar a decisão", error);
       }
       return Boolean(data);
+    },
+
+    async listAbuseReports(): Promise<AbuseReport[]> {
+      const { data, error } = await client.rpc("list_abuse_reports");
+      if (error) {
+        throw new AppError("internal_error", "Falha ao listar as denúncias", error);
+      }
+      return ((data ?? []) as Array<{
+        id: string;
+        sponsorship_id: string;
+        church_name: string;
+        sponsor_name: string;
+        sponsor_email: string;
+        logo_url: string | null;
+        motivo: string;
+        created_at: string;
+      }>).map((row) => ({
+        id: row.id,
+        sponsorshipId: row.sponsorship_id,
+        churchName: row.church_name,
+        sponsorName: row.sponsor_name,
+        sponsorEmail: row.sponsor_email,
+        logoUrl: row.logo_url,
+        motivo: row.motivo,
+        createdAt: row.created_at,
+      }));
+    },
+
+    async reviewAbuseReport({ reportId, procedente, nota, via }) {
+      const { data, error } = await client.rpc("review_abuse_report", {
+        p_report_id: reportId,
+        p_procedente: procedente,
+        p_nota: nota,
+        p_via: via,
+      });
+      if (error) {
+        throw new AppError("internal_error", "Falha ao registrar a decisão", error);
+      }
+      return Boolean(data);
+    },
+
+    async listHiddenSignals(): Promise<HiddenSignal[]> {
+      const { data, error } = await client.rpc("list_hidden_signals");
+      if (error) {
+        throw new AppError("internal_error", "Falha ao carregar os sinais", error);
+      }
+      return ((data ?? []) as Array<{
+        sponsor_account_id: string;
+        sponsor_name: string;
+        sponsor_email: string;
+        igrejas_que_esconderam: number;
+      }>).map((row) => ({
+        sponsorAccountId: row.sponsor_account_id,
+        sponsorName: row.sponsor_name,
+        sponsorEmail: row.sponsor_email,
+        igrejasQueEsconderam: row.igrejas_que_esconderam,
+      }));
     },
 
     async listStaffEmails(): Promise<string[]> {

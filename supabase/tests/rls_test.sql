@@ -1087,6 +1087,135 @@ end $$;
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Esconder patrocinador e denunciar (migration 20260918140000).
+--
+-- Esconder é decisão SÓ da igreja e tira a marca da vitrine pública sem tocar
+-- na cobrança. Denunciar é o contrário: manda o caso para a plataforma.
+-- ---------------------------------------------------------------------------
+reset role;
+
+-- Bob é owner da empresa que tem a Igreja Bob, patrocinada pelo Dave.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int; ok boolean; v_id uuid;
+begin
+  -- Antes: Dave aparece na vitrine da igreja do Bob.
+  select count(*) into n
+  from public.list_church_sponsors('d2d2d2d2-0000-4000-8000-000000000002');
+  if n <> 1 then raise exception 'FALHA vitrine: esperado 1 patrocinador, veio %', n; end if;
+
+  select public.set_sponsorship_hidden(
+    'b0000000-0000-4000-8000-00000000000d', true, 'nao combina com a igreja') into ok;
+
+  select count(*) into n
+  from public.list_church_sponsors('d2d2d2d2-0000-4000-8000-000000000002');
+  if n <> 0 then raise exception 'FALHA esconder: patrocinador seguiu na vitrine (%)', n; end if;
+
+  -- Esconder não cancela nada: a cobrança do patrocinador continua.
+  select count(*) into n from public.sponsorships
+  where id = 'b0000000-0000-4000-8000-00000000000d' and status = 'active';
+  if n <> 1 then raise exception 'FALHA esconder: mexeu no status do patrocinio'; end if;
+
+  -- Volta a aparecer.
+  select public.set_sponsorship_hidden('b0000000-0000-4000-8000-00000000000d', false) into ok;
+  select count(*) into n
+  from public.list_church_sponsors('d2d2d2d2-0000-4000-8000-000000000002');
+  if n <> 1 then raise exception 'FALHA reexibir: patrocinador nao voltou'; end if;
+
+  -- Denúncia: insistir não gera fila dupla.
+  select public.report_sponsor_abuse(
+    'b0000000-0000-4000-8000-00000000000d', 'logo com conteudo impróprio') into v_id;
+  if v_id is null then raise exception 'FALHA denuncia: nao registrou'; end if;
+
+  select count(*) into n from public.sponsor_abuse_reports where status = 'aberta';
+  if n <> 1 then raise exception 'FALHA denuncia: esperado 1 aberta, veio %', n; end if;
+
+  perform public.report_sponsor_abuse('b0000000-0000-4000-8000-00000000000d', 'de novo');
+  select count(*) into n from public.sponsor_abuse_reports where status = 'aberta';
+  if n <> 1 then raise exception 'FALHA denuncia: duplicou (% abertas)', n; end if;
+
+  -- Bob não é da moderação: não vê a fila nem decide.
+  select count(*) into n from public.list_abuse_reports();
+  if n <> 0 then raise exception 'FALHA list_abuse_reports: vazou % para nao-staff', n; end if;
+
+  begin
+    select public.review_abuse_report(v_id, true) into ok;
+    raise exception 'FALHA review_abuse_report: nao-staff decidiu denuncia';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  select count(*) into n from public.list_hidden_signals();
+  if n <> 0 then raise exception 'FALHA list_hidden_signals: vazou sinal para nao-staff'; end if;
+end $$;
+
+-- O id da denúncia vai para uma temp table: a moderadora não enxerga a LINHA
+-- (a policy é da empresa dona), só a fila pela RPC.
+reset role;
+create temp table t_denuncia as
+  select id from public.sponsor_abuse_reports where status = 'aberta';
+-- A temp table nasce sem GRANT: quem roda como `authenticated` precisa ler.
+grant select on t_denuncia to authenticated;
+
+-- Alice é de outra empresa: não mexe no patrocínio da igreja do Bob.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare ok boolean; v_id uuid;
+begin
+  begin
+    select public.set_sponsorship_hidden('b0000000-0000-4000-8000-00000000000d', true) into ok;
+    raise exception 'FALHA esconder: outra empresa escondeu patrocinador alheio';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  begin
+    select public.report_sponsor_abuse('b0000000-0000-4000-8000-00000000000d', 'nao e minha igreja') into v_id;
+    raise exception 'FALHA denuncia: outra empresa denunciou patrocinio alheio';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- Alice virou staff mais acima nesta suíte: pela moderação, a fila abre.
+do $$
+declare n int; ok boolean;
+begin
+  select count(*) into n from public.list_abuse_reports();
+  if n <> 1 then raise exception 'FALHA list_abuse_reports: staff viu % denuncias', n; end if;
+
+  select public.review_abuse_report((select id from t_denuncia), true, 'confirmado') into ok;
+  if not ok then raise exception 'FALHA review_abuse_report: decisao nao aplicou'; end if;
+
+  select count(*) into n from public.list_abuse_reports();
+  if n <> 0 then raise exception 'FALHA review_abuse_report: denuncia seguiu aberta'; end if;
+end $$;
+
+reset role;
+
+do $$
+declare n int;
+begin
+  -- Decidir a denúncia NÃO esconde ninguém: isso é decisão de cada igreja.
+  select count(*) into n from public.sponsorships
+  where id = 'b0000000-0000-4000-8000-00000000000d' and hidden_at is null;
+  if n <> 1 then
+    raise exception 'FALHA review_abuse_report: fechar o chamado escondeu o patrocinador';
+  end if;
+
+  select count(*) into n from public.platform_staff_actions
+  where action = 'abuse.procedente';
+  if n <> 1 then
+    raise exception 'FALHA platform_staff_actions: denuncia nao foi auditada (% linhas)', n;
+  end if;
+end $$;
+
+reset role;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'

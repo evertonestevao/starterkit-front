@@ -23,6 +23,9 @@ function build(pendente: PendingProfileChange = PENDENTE) {
     listPendingProfileChanges: vi.fn(async () => [pendente]),
     reviewProfileChange: vi.fn(async () => true),
     listStaffEmails: vi.fn(async () => ["moderacao@exemplo.com"]),
+    listAbuseReports: vi.fn(async () => []),
+    reviewAbuseReport: vi.fn(async () => true),
+    listHiddenSignals: vi.fn(async () => []),
   };
   const notifier = { sendProfileDecision: vi.fn(async () => {}) };
   const publishLogo = vi.fn(async () => "https://cdn.exemplo.com/publico/conta-1/logo.png");
@@ -97,5 +100,30 @@ describe("reviewProfileChange", () => {
       displayName: "Padaria São João",
       reason: "O nome não corresponde ao negócio.",
     });
+  });
+});
+
+describe("reviewAbuseReport", () => {
+  it("decidir denúncia NÃO esconde ninguém: isso é decisão de cada igreja", async () => {
+    const { repo, service } = build();
+
+    await service.reviewAbuseReport({ reportId: "den-1", procedente: true });
+
+    expect(repo.reviewAbuseReport).toHaveBeenCalledWith(
+      expect.objectContaining({ reportId: "den-1", procedente: true, via: "painel" }),
+    );
+    // Nenhuma chamada de exibição: fechar o chamado não mexe em página.
+    expect(repo.reviewProfileChange).not.toHaveBeenCalled();
+  });
+
+  it("denúncia já decidida devolve erro claro em vez de sumir em silêncio", async () => {
+    const { repo, service } = build();
+    vi.mocked(repo.reviewAbuseReport).mockResolvedValueOnce(false);
+
+    const err = await service
+      .reviewAbuseReport({ reportId: "den-1", procedente: true })
+      .catch((e) => e);
+
+    expect(isAppError(err) && err.code).toBe("not_found");
   });
 });

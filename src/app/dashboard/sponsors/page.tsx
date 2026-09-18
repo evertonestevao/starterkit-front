@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Building2, Church, Landmark, Share2, TimerReset } from "lucide-react";
+import { Building2, Church, EyeOff, Landmark, Share2, TimerReset } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SponsorCardActions } from "@/features/church/components/sponsor-card-actions";
 import { getChurchDomainService } from "@/server/churchDomain";
 import { getChurchSponsorsService } from "@/server/churchSponsors";
 import { getActiveTenant } from "@/server/tenant";
@@ -32,7 +33,7 @@ function SponsorCard({ sponsor, showChurch }: { sponsor: CompanySponsor; showChu
   const leaving = sponsor.status === "cancel_scheduled";
 
   return (
-    <Card>
+    <Card className={sponsor.hiddenAt ? "opacity-70" : undefined}>
       <CardContent className="flex items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-sm font-semibold text-primary">
           {sponsor.logoUrl ? (
@@ -50,11 +51,24 @@ function SponsorCard({ sponsor, showChurch }: { sponsor: CompanySponsor; showChu
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate font-medium">{sponsor.sponsorName}</p>
             {leaving ? <Badge variant="outline">Sai em {formatDate(sponsor.endsAt)}</Badge> : null}
+            {sponsor.hiddenAt ? (
+              <Badge variant="secondary" className="gap-1">
+                <EyeOff className="size-3" aria-hidden />
+                Escondido
+              </Badge>
+            ) : null}
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Apoia desde {formatDate(sponsor.activatedAt)}
             {showChurch ? ` · ${sponsor.churchName}` : ""}
           </p>
+          <div className="mt-3">
+            <SponsorCardActions
+              sponsorshipId={sponsor.sponsorshipId}
+              hidden={Boolean(sponsor.hiddenAt)}
+              denunciaAberta={sponsor.denunciaAberta}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -82,6 +96,7 @@ export default async function SponsorsPage() {
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
           Negócios e pessoas que sustentam a presença digital da sua igreja. O nome deles aparece
           na página pública, e o apoio é pago diretamente à plataforma — a igreja não paga nada.
+          Se não quiser alguém na sua página, esconda: o apoio continua, a marca sai.
         </p>
       </div>
 
@@ -104,6 +119,14 @@ export default async function SponsorsPage() {
           value={summary.churchesWithSponsors}
           hint={`de ${domains.length}`}
         />
+        {summary.hiddenCount > 0 ? (
+          <MetricCard
+            icon={EyeOff}
+            label="Escondidos"
+            value={summary.hiddenCount}
+            hint="fora da página; a cobrança deles segue"
+          />
+        ) : null}
       </div>
 
       {inviteUrl ? (

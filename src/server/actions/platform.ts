@@ -8,6 +8,7 @@ import { toActionError, type ActionState } from "./action-state";
 /** Server actions da moderação da plataforma. */
 
 const FILA = "/plataforma/alteracoes";
+const DENUNCIAS = "/plataforma/denuncias";
 
 export async function reviewProfileChangeAction(
   _prev: ActionState | undefined,
@@ -52,6 +53,33 @@ export async function undoProfileChangeAction(
             "Alteração desfeita e conta bloqueada para novas alterações. Fale com o suporte para liberar.",
         }
       : { error: "Este link não vale mais. Se a alteração já foi decidida, fale com o suporte." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export async function reviewAbuseReportAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await requirePlatformStaff();
+
+    const service = await getPlatformModerationService();
+    const procedente = formData.get("decisao") === "procedente";
+    await service.reviewAbuseReport({
+      reportId: String(formData.get("reportId") ?? ""),
+      procedente,
+      nota: String(formData.get("nota") ?? ""),
+      via: "painel",
+    });
+
+    revalidatePath(DENUNCIAS);
+    return {
+      success: procedente
+        ? "Denúncia marcada como procedente."
+        : "Denúncia marcada como improcedente.",
+    };
   } catch (err) {
     return toActionError(err);
   }

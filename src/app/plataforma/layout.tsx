@@ -5,7 +5,10 @@ import { RouteTabs } from "@/components/route-tabs";
 import { brand } from "@/config/brand";
 import { isPlatformStaff } from "@/server/platform";
 
-const TABS = [{ href: "/plataforma/alteracoes", label: "Alterações" }];
+const TABS = [
+  { href: "/plataforma/alteracoes", label: "Alterações" },
+  { href: "/plataforma/denuncias", label: "Denúncias" },
+];
 
 /**
  * Área da moderação da plataforma.

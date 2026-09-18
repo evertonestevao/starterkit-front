@@ -74,6 +74,26 @@ export interface PendingProfileChange {
   createdAt: string;
 }
 
+/** Denúncia de uma igreja sobre um patrocinador, na fila da moderação. */
+export interface AbuseReport {
+  id: string;
+  sponsorshipId: string;
+  churchName: string;
+  sponsorName: string;
+  sponsorEmail: string;
+  logoUrl: string | null;
+  motivo: string;
+  createdAt: string;
+}
+
+/** Mesmo patrocinador escondido por mais de uma igreja. */
+export interface HiddenSignal {
+  sponsorAccountId: string;
+  sponsorName: string;
+  sponsorEmail: string;
+  igrejasQueEsconderam: number;
+}
+
 export interface Sponsorship {
   id: string;
   sponsor_id: string;

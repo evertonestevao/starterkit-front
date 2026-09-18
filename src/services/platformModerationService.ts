@@ -1,5 +1,5 @@
 import { AppError } from "@/lib/errors";
-import type { PendingProfileChange } from "@/types/sponsorship";
+import type { AbuseReport, HiddenSignal, PendingProfileChange } from "@/types/sponsorship";
 
 /**
  * Moderação da plataforma.
@@ -23,6 +23,14 @@ export interface PlatformModerationRepository {
     via: ModerationChannel;
     logoUrl: string | null;
   }): Promise<boolean>;
+  listAbuseReports(): Promise<AbuseReport[]>;
+  reviewAbuseReport(input: {
+    reportId: string;
+    procedente: boolean;
+    nota: string | null;
+    via: ModerationChannel;
+  }): Promise<boolean>;
+  listHiddenSignals(): Promise<HiddenSignal[]>;
   /** Para onde vão os avisos de fila. */
   listStaffEmails(): Promise<string[]>;
 }
@@ -109,6 +117,43 @@ export function createPlatformModerationService({ repo, notifier, publishLogo }:
         displayName: alvo.novoDisplayName ?? alvo.atualDisplayName,
         reason,
       });
+    },
+
+    listAbuseReports(): Promise<AbuseReport[]> {
+      return repo.listAbuseReports();
+    },
+
+    /**
+     * Decide uma denúncia. Decidir aqui NÃO esconde o patrocinador de página
+     * nenhuma: quem faz isso é cada igreja, por conta própria. O que a
+     * moderação resolve é o caso — se a marca precisa sair de todo lugar, o
+     * caminho é agir sobre a conta, e isso é decisão consciente, não efeito
+     * colateral de fechar um chamado.
+     */
+    async reviewAbuseReport(input: {
+      reportId: string;
+      procedente: boolean;
+      nota?: string | null;
+      via?: ModerationChannel;
+    }): Promise<void> {
+      const reportId = typeof input.reportId === "string" ? input.reportId.trim() : "";
+      if (!reportId) {
+        throw new AppError("validation_error", "Denúncia inválida");
+      }
+
+      const ok = await repo.reviewAbuseReport({
+        reportId,
+        procedente: input.procedente,
+        nota: input.nota?.trim() || null,
+        via: input.via ?? "painel",
+      });
+      if (!ok) {
+        throw new AppError("not_found", "Esta denúncia já foi decidida ou não existe.");
+      }
+    },
+
+    listHiddenSignals(): Promise<HiddenSignal[]> {
+      return repo.listHiddenSignals();
     },
   };
 }
