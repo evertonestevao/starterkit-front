@@ -21,6 +21,11 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
         .from("churches")
         .select(PUBLIC_CHURCH_COLUMNS)
         .eq("public_code", publicCode)
+        // Igreja excluída fica fora pela policy `churches_public_select`, que
+        // vale para qualquer consulta. Filtrar `deleted_at` aqui NÃO funciona:
+        // o anon só tem SELECT em colunas específicas, e essa não é uma delas
+        // — a consulta falharia com permission denied e derrubaria a página
+        // de toda igreja. A policy enxerga a coluna; o client não precisa.
         .maybeSingle<PublicChurch>();
       if (error) {
         throw new AppError("internal_error", "Falha ao carregar a igreja", error);

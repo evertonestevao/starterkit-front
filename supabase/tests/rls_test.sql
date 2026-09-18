@@ -1323,6 +1323,36 @@ end $$;
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Igreja excluída sai do ar (migration 20260919140000).
+-- ---------------------------------------------------------------------------
+reset role;
+
+update public.churches set deleted_at = now()
+where id = 'd2d2d2d2-0000-4000-8000-000000000002';
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.churches
+  where id = 'd2d2d2d2-0000-4000-8000-000000000002';
+  if n <> 0 then
+    raise exception 'FALHA churches: igreja excluida segue visivel na pagina publica';
+  end if;
+
+  -- A ativa continua pública: o filtro não pode derrubar quem está no ar.
+  select count(*) into n from public.churches
+  where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+  if n <> 1 then
+    raise exception 'FALHA churches: igreja ativa sumiu da pagina publica';
+  end if;
+end $$;
+
+reset role;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'
