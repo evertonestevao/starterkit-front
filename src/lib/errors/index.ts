@@ -67,3 +67,11 @@ export function toPublicError(err: unknown): PublicError {
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }
+
+/**
+ * Primeira mensagem de um erro de validação do Zod, no formato público. O
+ * usuário lê uma frase por vez; a lista inteira só serve para o log.
+ */
+export function toValidationError(issues: { message: string }[]): AppError {
+  return new AppError("validation_error", issues[0]?.message ?? "Dados inválidos");
+}

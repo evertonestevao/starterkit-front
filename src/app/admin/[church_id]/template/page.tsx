@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { templatePreviewOptions } from "@/features/church/church-page-templates";
 import { getSupabaseServerClient } from "@/server/supabase-server";
+import { getActiveTenant } from "@/server/tenant";
 import { updateChurchTemplateAction } from "@/server/actions/church";
 
 export default async function ChurchTemplateAdminPage({
@@ -10,12 +11,20 @@ export default async function ChurchTemplateAdminPage({
   params: Promise<{ church_id: string }>;
 }) {
   const { church_id } = await params;
-  const supabase = await getSupabaseServerClient();
 
+  // Página herdada do começo do projeto: não está linkada em lugar nenhum e
+  // ainda fala com o Supabase daqui, contra a regra de camadas do projeto. O
+  // lugar dela é dentro de /dashboard/settings. Até lá, ao menos não abre a
+  // igreja de outra empresa para quem estiver logado.
+  const { active } = await getActiveTenant();
+  if (!active || (active.role !== "owner" && active.role !== "admin")) notFound();
+
+  const supabase = await getSupabaseServerClient();
   const { data: church } = await supabase
     .from("churches")
     .select("*")
     .eq("id", church_id)
+    .eq("company_id", active.id)
     .maybeSingle();
   if (!church) notFound();
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppError } from "@/lib/errors";
 import { getSupabaseServerClient } from "@/server/supabase-server";
+import { getActiveTenant } from "@/server/tenant";
 
 async function getChurchClient() {
   const supabase = await getSupabaseServerClient();
@@ -112,6 +113,18 @@ export async function updateChurchTemplateAction(
     redirect("/login");
   }
 
+  // Estar logado não basta: sem isto, qualquer usuário autenticado que
+  // soubesse o id trocava o template de uma igreja de OUTRA empresa (a action
+  // é endereçável por quem conhece o id). A RLS é a barreira final, não a
+  // única — mesma regra do resto do projeto.
+  const { active } = await getActiveTenant();
+  if (!active) {
+    throw new AppError("unauthorized", "Selecione uma empresa para continuar.");
+  }
+  if (active.role !== "owner" && active.role !== "admin") {
+    throw new AppError("forbidden", "Só quem administra a igreja pode trocar o template.");
+  }
+
   const payload: { template_mode: string; template_id?: string | null } = {
     template_mode: mode === "custom" ? "custom" : "inherit",
   };
@@ -124,7 +137,8 @@ export async function updateChurchTemplateAction(
   const { error } = await supabase
     .from("churches")
     .update(payload)
-    .eq("id", churchId);
+    .eq("id", churchId)
+    .eq("company_id", active.id);
 
   if (error) {
     throw new AppError(

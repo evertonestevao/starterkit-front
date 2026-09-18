@@ -12,6 +12,7 @@ const TABS = [
   { href: "/patrocinador/metricas", label: "Métricas" },
   { href: "/patrocinador/patrocinios", label: "Patrocínios" },
   { href: "/patrocinador/pagamentos", label: "Pagamentos" },
+  { href: "/patrocinador/perfil", label: "Meu perfil" },
 ];
 
 /**

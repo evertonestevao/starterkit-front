@@ -10,7 +10,7 @@ export const sponsorKindSchema = z.enum(["person", "business"], {
   error: "Escolha pessoa ou empresa",
 });
 
-const phoneSchema = z
+export const phoneSchema = z
   .string()
   .trim()
   .transform(onlyDigits)
@@ -39,6 +39,22 @@ export const sponsorSignupSchema = z
 export const sponsorProfileUpdateSchema = z.object({
   displayName: z.string().trim().min(2, "Informe o nome").max(120),
   phone: phoneSchema,
+});
+
+/**
+ * Pedido de alteração do que aparece na página pública da igreja. Os dois
+ * campos são opcionais porque a pessoa pode mexer só no nome, só no logo, ou
+ * em nada — quem decide se há mudança de verdade é o service, comparando com
+ * o que já está valendo.
+ */
+export const sponsorProfileChangeSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .min(2, "Informe o nome")
+    .max(120)
+    .optional(),
+  logoPath: z.string().trim().min(1).max(400).optional(),
 });
 
 /**

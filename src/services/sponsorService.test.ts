@@ -150,6 +150,7 @@ function makeWorld(
         billing_sync_status: "synced",
         billing_synced_at: null,
         next_due_date: null,
+        security_hold_at: null,
         deleted_at: null,
         created_at: clock.toISOString(),
         updated_at: clock.toISOString(),
@@ -330,6 +331,7 @@ function makeWorld(
         billing_sync_status: "synced",
         billing_synced_at: null,
         next_due_date: null,
+        security_hold_at: null,
         deleted_at: null,
         created_at: clock.toISOString(),
         updated_at: clock.toISOString(),
@@ -472,6 +474,7 @@ describe("primeiro patrocínio", () => {
       billing_status: "active",
       billed_amount_cents: 3990,
       next_due_date: "2026-10-17",
+      security_hold_at: null,
     });
     expect(world.charges).toHaveLength(1);
     expect(world.items).toEqual([

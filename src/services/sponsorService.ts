@@ -9,7 +9,7 @@ import {
 } from "@/features/sponsor/schemas";
 import { brand } from "@/config/brand";
 import { addMonths, todayInBillingZone } from "@/lib/billingDates";
-import { AppError } from "@/lib/errors";
+import { AppError, toValidationError } from "@/lib/errors";
 import type { RateLimiter } from "@/server/rateLimit";
 import type {
   BillingWebhookEvent,
@@ -230,10 +230,6 @@ export interface StartSponsorshipResult {
   invoiceUrl: string | null;
   /** O valor novo ainda não chegou ao provedor (o job reenvia). */
   billingSyncPending: boolean;
-}
-
-function toValidationError(issues: { message: string }[]): AppError {
-  return new AppError("validation_error", issues[0]?.message ?? "Dados inválidos");
 }
 
 export function createSponsorService(deps: SponsorServiceDeps) {

@@ -30,9 +30,48 @@ export interface SponsorAccount {
   billing_sync_status: SponsorBillingSyncStatus;
   billing_synced_at: string | null;
   next_due_date: string | null;
+  /** Marcada pelo "não fui eu" do email; trava novas alterações de perfil. */
+  security_hold_at: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Pedido de alteração de nome/logo à espera da moderação da plataforma.
+ * Enquanto está pendente, a conta segue exibindo o valor antigo.
+ */
+export type SponsorProfileChangeStatus =
+  | "pendente"
+  | "aprovada"
+  | "recusada"
+  | "substituida"
+  | "revertida";
+
+export interface SponsorProfileChange {
+  id: string;
+  novo_display_name: string | null;
+  novo_logo_path: string | null;
+  anterior_display_name: string;
+  anterior_logo_url: string | null;
+  status: SponsorProfileChangeStatus;
+  motivo_recusa: string | null;
+  created_at: string;
+  decided_at: string | null;
+}
+
+/** A mesma alteração, do ponto de vista de quem modera. */
+export interface PendingProfileChange {
+  id: string;
+  sponsorAccountId: string;
+  sponsorEmail: string;
+  novoDisplayName: string | null;
+  novoLogoPath: string | null;
+  atualDisplayName: string;
+  atualLogoUrl: string | null;
+  /** Quantas igrejas veriam a mudança se ela for aprovada. */
+  igrejas: number;
+  createdAt: string;
 }
 
 export interface Sponsorship {

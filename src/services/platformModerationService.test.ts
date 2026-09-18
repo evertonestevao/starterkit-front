@@ -1,0 +1,101 @@
+import { describe, expect, it, vi } from "vitest";
+import { isAppError } from "@/lib/errors";
+import {
+  createPlatformModerationService,
+  type PlatformModerationRepository,
+} from "./platformModerationService";
+import type { PendingProfileChange } from "@/types/sponsorship";
+
+const PENDENTE: PendingProfileChange = {
+  id: "mudanca-1",
+  sponsorAccountId: "conta-1",
+  sponsorEmail: "padaria@exemplo.com",
+  novoDisplayName: "Padaria São João",
+  novoLogoPath: null,
+  atualDisplayName: "Padaria do João",
+  atualLogoUrl: null,
+  igrejas: 3,
+  createdAt: "2026-09-18T10:00:00Z",
+};
+
+function build(pendente: PendingProfileChange = PENDENTE) {
+  const repo: PlatformModerationRepository = {
+    listPendingProfileChanges: vi.fn(async () => [pendente]),
+    reviewProfileChange: vi.fn(async () => true),
+    listStaffEmails: vi.fn(async () => ["moderacao@exemplo.com"]),
+  };
+  const notifier = { sendProfileDecision: vi.fn(async () => {}) };
+  const publishLogo = vi.fn(async () => "https://cdn.exemplo.com/publico/conta-1/logo.png");
+  const service = createPlatformModerationService({ repo, notifier, publishLogo });
+  return { repo, notifier, publishLogo, service };
+}
+
+describe("reviewProfileChange", () => {
+  it("recusa sem motivo é barrada — o patrocinador precisa saber o que corrigir", async () => {
+    const { repo, service } = build();
+
+    const err = await service
+      .reviewProfileChange({ changeId: "mudanca-1", approved: false })
+      .catch((e) => e);
+
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(repo.reviewProfileChange).not.toHaveBeenCalled();
+  });
+
+  it("aprova sem logo novo sem chamar o storage", async () => {
+    const { repo, publishLogo, service } = build();
+
+    await service.reviewProfileChange({ changeId: "mudanca-1", approved: true });
+
+    expect(publishLogo).not.toHaveBeenCalled();
+    expect(repo.reviewProfileChange).toHaveBeenCalledWith(
+      expect.objectContaining({ approved: true, logoUrl: null, via: "painel" }),
+    );
+  });
+
+  it("publica o arquivo pendente e grava a URL final quando o logo mudou", async () => {
+    const { repo, publishLogo, service } = build({
+      ...PENDENTE,
+      novoLogoPath: "pendente/user-1/abc.png",
+    });
+
+    await service.reviewProfileChange({ changeId: "mudanca-1", approved: true });
+
+    expect(publishLogo).toHaveBeenCalledWith({
+      pendingPath: "pendente/user-1/abc.png",
+      sponsorAccountId: "conta-1",
+    });
+    expect(repo.reviewProfileChange).toHaveBeenCalledWith(
+      expect.objectContaining({ logoUrl: "https://cdn.exemplo.com/publico/conta-1/logo.png" }),
+    );
+  });
+
+  it("não decide alteração que já saiu da fila", async () => {
+    const { repo, service } = build();
+    vi.mocked(repo.listPendingProfileChanges).mockResolvedValueOnce([]);
+
+    const err = await service
+      .reviewProfileChange({ changeId: "mudanca-1", approved: true })
+      .catch((e) => e);
+
+    expect(isAppError(err) && err.code).toBe("not_found");
+    expect(repo.reviewProfileChange).not.toHaveBeenCalled();
+  });
+
+  it("avisa o patrocinador do resultado, com o motivo quando recusa", async () => {
+    const { notifier, service } = build();
+
+    await service.reviewProfileChange({
+      changeId: "mudanca-1",
+      approved: false,
+      reason: "O nome não corresponde ao negócio.",
+    });
+
+    expect(notifier.sendProfileDecision).toHaveBeenCalledWith({
+      to: "padaria@exemplo.com",
+      approved: false,
+      displayName: "Padaria São João",
+      reason: "O nome não corresponde ao negócio.",
+    });
+  });
+});

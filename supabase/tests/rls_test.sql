@@ -531,8 +531,17 @@ begin
   exception when sqlstate '42501' then null;
   end;
 
-  -- Perfil (colunas liberadas) segue editável.
-  update public.sponsor_accounts set display_name = 'Carol S.'
+  -- Nome exibido deixou de ser editável pelo dono (migration 20260918120000):
+  -- ele aparece na página pública da igreja e agora passa pela moderação.
+  begin
+    update public.sponsor_accounts set display_name = 'Carol S.'
+    where user_id = 'e3e3e3e3-0000-4000-8000-000000000003';
+    raise exception 'FALHA sponsor: carol escreveu display_name direto';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Telefone, que não aparece em página nenhuma, segue editável.
+  update public.sponsor_accounts set phone = '11988887777'
   where user_id = 'e3e3e3e3-0000-4000-8000-000000000003';
 
   -- Pedido via RPC: sem cobrança ativa, nasce aguardando pagamento.
@@ -651,7 +660,9 @@ declare
 begin
   select count(*), max(display_name) into n, v_name
   from public.list_church_sponsors('d1d1d1d1-0000-4000-8000-000000000001');
-  if n <> 1 or v_name <> 'Carol S.' then
+  -- 'Carol' e o nome do cadastro: trocar o nome exibido agora depende da
+  -- moderacao, entao a vitrine segue mostrando o que foi aprovado.
+  if n <> 1 or v_name <> 'Carol' then
     raise exception 'FALHA sponsor: vitrine publica devolveu % linhas (%)', n, v_name;
   end if;
 
@@ -922,6 +933,155 @@ begin
     values ('outro-bucket', 'a1a1a1a1-0000-4000-8000-000000000001/x.png');
     raise exception 'FALHA storage: insert aceito em bucket sem policy';
   exception when sqlstate '42501' or foreign_key_violation then null;
+  end;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Moderação do perfil do patrocinador (migration 20260918120000).
+--
+-- O que está sendo provado: o dono da conta NÃO escreve mais direto nas duas
+-- colunas que aparecem na página pública da igreja, e a fila da moderação só
+-- existe para quem é staff da plataforma.
+-- ---------------------------------------------------------------------------
+reset role;
+
+insert into public.sponsor_accounts (id, user_id, kind, display_name, email, document) values
+  ('5a5a5a5a-0000-4000-8000-000000000001', 'a1a1a1a1-0000-4000-8000-000000000001',
+   'business', 'Padaria da Alice', 'rls-alice@test.local', '52998224725'),
+  ('5b5b5b5b-0000-4000-8000-000000000002', 'b2b2b2b2-0000-4000-8000-000000000002',
+   'business', 'Mercado do Bob', 'rls-bob@test.local', '11144477735');
+
+-- Ids fixos: a consulta que buscaria o id do pedido do Bob rodaria sob RLS,
+-- e a moderadora nao enxerga a LINHA dele (so a fila, pela RPC).
+insert into public.sponsor_profile_changes
+  (id, sponsor_account_id, novo_display_name, anterior_display_name, cancel_token_hash, token_expira_em)
+values
+  ('c0c0c0c0-0000-4000-8000-00000000000a', '5a5a5a5a-0000-4000-8000-000000000001',
+   'Padaria Nova', 'Padaria da Alice', 'hash-alice', now() + interval '30 days'),
+  ('c0c0c0c0-0000-4000-8000-00000000000b', '5b5b5b5b-0000-4000-8000-000000000002',
+   'Mercado Novo', 'Mercado do Bob', 'hash-bob', now() + interval '30 days');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int; ok boolean;
+begin
+  -- Vê o próprio pedido, não o do outro patrocinador.
+  select count(*) into n from public.sponsor_profile_changes;
+  if n <> 1 then
+    raise exception 'FALHA sponsor_profile_changes: esperado 1 pedido (o proprio), veio %', n;
+  end if;
+
+  -- O buraco que a migration fechou: nome exibido é escrita de moderação.
+  begin
+    update public.sponsor_accounts set display_name = 'Invadido'
+    where id = '5a5a5a5a-0000-4000-8000-000000000001';
+    raise exception 'FALHA sponsor_accounts: dono ainda escreve display_name direto';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  begin
+    update public.sponsor_accounts set logo_url = 'https://malicioso.example/x.png'
+    where id = '5a5a5a5a-0000-4000-8000-000000000001';
+    raise exception 'FALHA sponsor_accounts: dono ainda escreve logo_url direto';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- Telefone não aparece em página nenhuma: segue editável pelo dono.
+  update public.sponsor_accounts set phone = '11999999999'
+  where id = '5a5a5a5a-0000-4000-8000-000000000001';
+
+  -- Não é staff: não enxerga a fila nem decide nada.
+  if public.is_platform_staff() then
+    raise exception 'FALHA is_platform_staff: usuario comum apareceu como staff';
+  end if;
+
+  select count(*) into n from public.list_pending_profile_changes();
+  if n <> 0 then
+    raise exception 'FALHA list_pending_profile_changes: vazou % linha(s) para nao-staff', n;
+  end if;
+
+  begin
+    select public.review_profile_change('c0c0c0c0-0000-4000-8000-00000000000a', true) into ok;
+    raise exception 'FALHA review_profile_change: nao-staff aprovou alteracao';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- platform_staff não é legível por quem não é staff.
+  begin
+    select count(*) into n from public.platform_staff;
+    raise exception 'FALHA platform_staff: tabela legivel por authenticated';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- A MESMA usuária, agora como moderação: a fila abre e a decisão aplica.
+-- ---------------------------------------------------------------------------
+reset role;
+
+insert into public.platform_staff (user_id, email)
+values ('a1a1a1a1-0000-4000-8000-000000000001', 'rls-alice@test.local');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int; ok boolean;
+begin
+  if not public.is_platform_staff() then
+    raise exception 'FALHA is_platform_staff: staff cadastrado nao foi reconhecido';
+  end if;
+
+  -- A fila atravessa tenants de propósito: é o trabalho da moderação.
+  select count(*) into n from public.list_pending_profile_changes();
+  if n <> 2 then
+    raise exception 'FALHA list_pending_profile_changes: esperado 2, veio %', n;
+  end if;
+
+  -- Aprovar é o ÚNICO caminho que muda o nome público.
+  select public.review_profile_change('c0c0c0c0-0000-4000-8000-00000000000b', true) into ok;
+  if not ok then raise exception 'FALHA review_profile_change: aprovacao nao aplicou'; end if;
+end $$;
+
+-- O efeito é conferido FORA do bloco, como superuser. Dentro dele a leitura
+-- cairia na RLS e voltaria NULL — e `NULL <> 'x'` é NULL, ou seja, o teste
+-- passaria sem ter verificado nada.
+reset role;
+
+do $$
+declare n int; nome text;
+begin
+  select display_name into nome from public.sponsor_accounts
+  where id = '5b5b5b5b-0000-4000-8000-000000000002';
+  if nome is distinct from 'Mercado Novo' then
+    raise exception 'FALHA review_profile_change: nome publico ficou %', coalesce(nome, '<null>');
+  end if;
+
+  select count(*) into n from public.platform_staff_actions
+  where action = 'sponsor_profile.aprovada';
+  if n <> 1 then
+    raise exception 'FALHA platform_staff_actions: decisao nao foi auditada (% linhas)', n;
+  end if;
+end $$;
+
+-- Recusa sem motivo é barrada no banco, não só na tela.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare ok boolean;
+begin
+  begin
+    select public.review_profile_change('c0c0c0c0-0000-4000-8000-00000000000a', false, null) into ok;
+    raise exception 'FALHA review_profile_change: recusa sem motivo foi aceita';
+  exception when sqlstate 'P0001' then null; -- esperado
   end;
 end $$;
 
