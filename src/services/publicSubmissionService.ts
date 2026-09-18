@@ -19,12 +19,8 @@ import { toValidationError } from "@/lib/errors";
 export interface PublicSubmissionRepository {
   insertPrayerRequest(input: { churchId: string; name: string | null; message: string }): Promise<void>;
   insertVisitor(input: { churchId: string; name: string; contact: string }): Promise<void>;
-  insertEventSignup(input: {
-    churchId: string;
-    eventName: string;
-    personName: string;
-    contact: string;
-  }): Promise<void>;
+  /** Pela RPC sign_up_for_event, que confere se o evento aceita inscrição. */
+  signUpForEvent(input: { eventId: string; personName: string; contact: string }): Promise<void>;
 }
 
 export function createPublicSubmissionService(repo: PublicSubmissionRepository) {
@@ -48,7 +44,7 @@ export function createPublicSubmissionService(repo: PublicSubmissionRepository) 
     async submitEventSignup(input: unknown): Promise<void> {
       const parsed = publicEventSignupSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
-      await repo.insertEventSignup(parsed.data);
+      await repo.signUpForEvent(parsed.data);
     },
   };
 }

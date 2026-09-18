@@ -11,7 +11,7 @@ function build() {
   const repo: PublicSubmissionRepository = {
     insertPrayerRequest: vi.fn(async () => {}),
     insertVisitor: vi.fn(async () => {}),
-    insertEventSignup: vi.fn(async () => {}),
+    signUpForEvent: vi.fn(async () => {}),
   };
   return { repo, service: createPublicSubmissionService(repo) };
 }
@@ -69,21 +69,31 @@ describe("submitVisitor e submitEventSignup", () => {
     expect(repo.insertVisitor).not.toHaveBeenCalled();
   });
 
-  it("inscrição limpa espaços antes de gravar", async () => {
+  it("inscrição aponta para o evento e limpa espaços antes de gravar", async () => {
     const { repo, service } = build();
+    const EVENTO = "22222222-2222-4222-8222-222222222222";
 
     await service.submitEventSignup({
-      churchId: IGREJA,
-      eventName: "  Retiro de jovens ",
+      eventId: EVENTO,
       personName: " Ana Lima ",
       contact: " 11 98888-7777 ",
     });
 
-    expect(repo.insertEventSignup).toHaveBeenCalledWith({
-      churchId: IGREJA,
-      eventName: "Retiro de jovens",
+    expect(repo.signUpForEvent).toHaveBeenCalledWith({
+      eventId: EVENTO,
       personName: "Ana Lima",
       contact: "11 98888-7777",
     });
+  });
+
+  it("não aceita mais evento digitado: sem id de evento, não grava", async () => {
+    const { repo, service } = build();
+
+    const err = await service
+      .submitEventSignup({ eventName: "retirro", personName: "Ana", contact: "11988887777" })
+      .catch((e) => e);
+
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(repo.signUpForEvent).not.toHaveBeenCalled();
   });
 });

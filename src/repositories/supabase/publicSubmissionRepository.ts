@@ -29,16 +29,18 @@ export function createSupabasePublicSubmissionRepository(
       }
     },
 
-    async insertEventSignup({ churchId, eventName, personName, contact }) {
-      const { error } = await client.from("event_signups").insert({
-        church_id: churchId,
-        event_name: eventName,
-        person_name: personName,
-        contact,
+    async signUpForEvent({ eventId, personName, contact }) {
+      const { error } = await client.rpc("sign_up_for_event", {
+        p_event_id: eventId,
+        p_person_name: personName,
+        p_contact: contact,
       });
-      if (error) {
-        throw new AppError("internal_error", "Não foi possível registrar a inscrição.", error);
-      }
+      if (!error) return;
+      // A função do banco escreve as recusas para o visitante ler ("inscrições
+      // encerradas", "já começou"); o resto vira mensagem genérica.
+      if (error.code === "P0001") throw new AppError("validation_error", error.message, error);
+      if (error.code === "P0002") throw new AppError("not_found", "Evento não encontrado.", error);
+      throw new AppError("internal_error", "Não foi possível registrar a inscrição.", error);
     },
   };
 }

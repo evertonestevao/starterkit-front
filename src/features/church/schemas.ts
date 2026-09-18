@@ -61,9 +61,12 @@ export const publicVisitorSchema = z.object({
   contact: contatoSchema,
 });
 
+/**
+ * Inscrição aponta para um evento publicado — não existe mais o campo livre
+ * "qual evento?". O nome do evento sai do banco, não do visitante.
+ */
 export const publicEventSignupSchema = z.object({
-  churchId: churchIdSchema,
-  eventName: z.string().trim().min(2, "Qual é o evento?").max(120, "Nome do evento muito longo"),
+  eventId: z.uuid("Evento inválido"),
   personName: nomeObrigatorio,
   contact: contatoSchema,
 });

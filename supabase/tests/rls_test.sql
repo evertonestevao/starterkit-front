@@ -839,7 +839,13 @@ reset role;
 -- Caixa de entrada da comunidade: a igreja LÊ o que chega pela página
 -- pública, e só o que é dela. O company_id vem do trigger, nunca do cliente.
 -- ---------------------------------------------------------------------------
--- Anônimo envia para a igreja da Alice e para a do Bob.
+-- Anônimo envia para a igreja da Alice e para a do Bob. A inscrição em
+-- evento só existe pela função sign_up_for_event (migration 20260919220000),
+-- então a igreja do Bob precisa de um evento publicado.
+insert into public.church_events (id, church_id, titulo, inicio)
+values ('e1e1e1e1-0000-4000-8000-000000000001', 'd2d2d2d2-0000-4000-8000-000000000002',
+        'Retiro', now() + interval '20 days');
+
 set local role anon;
 do $$
 begin
@@ -851,8 +857,7 @@ begin
   insert into public.visitors (church_id, name, contact)
   values ('d1d1d1d1-0000-4000-8000-000000000001', 'Maria', '14999990000');
 
-  insert into public.event_signups (church_id, event_name, person_name, contact)
-  values ('d2d2d2d2-0000-4000-8000-000000000002', 'Retiro', 'Joao', '11988887777');
+  perform public.sign_up_for_event('e1e1e1e1-0000-4000-8000-000000000001', 'Joao', '11988887777');
 
   -- Anônimo NÃO lê o que a comunidade enviou.
   begin
@@ -1418,6 +1423,99 @@ begin
     raise exception 'FALHA resolve_template: anon nao recebeu o tema escolhido (%)', coalesce(v::text, '<null>');
   end if;
 end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Eventos da igreja e inscrição (migration 20260919220000).
+-- ---------------------------------------------------------------------------
+reset role;
+
+insert into public.church_events (id, church_id, titulo, inicio, preco_cents, inscricoes_abertas, deleted_at) values
+  ('e0e0e0e0-0000-4000-8000-000000000001', 'd1d1d1d1-0000-4000-8000-000000000001', 'Retiro RLS', now() + interval '10 days', 18000, true,  null),
+  ('e0e0e0e0-0000-4000-8000-000000000002', 'd1d1d1d1-0000-4000-8000-000000000001', 'Passado RLS', now() - interval '1 day', 0, true, null),
+  ('e0e0e0e0-0000-4000-8000-000000000003', 'd1d1d1d1-0000-4000-8000-000000000001', 'Fechado RLS', now() + interval '10 days', 0, false, null),
+  ('e0e0e0e0-0000-4000-8000-000000000004', 'd1d1d1d1-0000-4000-8000-000000000001', 'Apagado RLS', now() + interval '10 days', 0, true, now());
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+declare n int; v uuid;
+begin
+  -- Evento publicado é público; apagado não.
+  select count(*) into n from public.church_events
+  where id in ('e0e0e0e0-0000-4000-8000-000000000001', 'e0e0e0e0-0000-4000-8000-000000000004');
+  if n <> 1 then raise exception 'FALHA church_events: anon viu % (esperado so o nao apagado)', n; end if;
+
+  -- O caminho antigo — gravar direto com qualquer nome de evento — acabou.
+  begin
+    insert into public.event_signups (church_id, event_name, person_name, contact)
+    values ('d1d1d1d1-0000-4000-8000-000000000001', 'evento inventado', 'Fulano', '11999999999');
+    raise exception 'FALHA event_signups: anon gravou inscricao direto, sem evento';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- Inscrição válida: o nome do evento sai do banco, não do visitante.
+  select public.sign_up_for_event('e0e0e0e0-0000-4000-8000-000000000001', 'Ana Visitante', '11988887777') into v;
+  if v is null then raise exception 'FALHA sign_up_for_event: inscricao valida nao gravou'; end if;
+
+  begin
+    perform public.sign_up_for_event('e0e0e0e0-0000-4000-8000-000000000002', 'Ana', '11988887777');
+    raise exception 'FALHA sign_up_for_event: aceitou evento que ja comecou';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  begin
+    perform public.sign_up_for_event('e0e0e0e0-0000-4000-8000-000000000003', 'Ana', '11988887777');
+    raise exception 'FALHA sign_up_for_event: aceitou evento com inscricoes encerradas';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  begin
+    perform public.sign_up_for_event('e0e0e0e0-0000-4000-8000-000000000004', 'Ana', '11988887777');
+    raise exception 'FALHA sign_up_for_event: aceitou evento apagado';
+  exception when sqlstate 'P0002' then null; -- esperado
+  end;
+end $$;
+
+reset role;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.event_signups
+  where event_id = 'e0e0e0e0-0000-4000-8000-000000000001'
+    and event_name = 'Retiro RLS'
+    and church_id = 'd1d1d1d1-0000-4000-8000-000000000001'
+    and company_id = 'c1c1c1c1-0000-4000-8000-000000000001';
+  if n <> 1 then
+    raise exception 'FALHA sign_up_for_event: inscricao nao ficou amarrada ao evento/igreja/empresa (%)', n;
+  end if;
+end $$;
+
+-- Bob é de outra empresa: não publica evento na página da igreja da Alice.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  begin
+    insert into public.church_events (church_id, titulo, inicio)
+    values ('d1d1d1d1-0000-4000-8000-000000000001', 'Evento intruso', now() + interval '5 days');
+    raise exception 'FALHA church_events: outra empresa publicou evento na igreja alheia';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- A dona da igreja publica normalmente.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+insert into public.church_events (church_id, titulo, inicio)
+values ('d1d1d1d1-0000-4000-8000-000000000001', 'Evento da Alice', now() + interval '5 days');
 
 reset role;
 

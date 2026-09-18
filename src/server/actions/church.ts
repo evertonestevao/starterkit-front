@@ -55,14 +55,13 @@ export async function submitVisitorAction(
 }
 
 export async function submitEventSignupAction(
-  churchId: string,
+  eventId: string,
   _prev: ActionState | undefined,
   formData: FormData,
 ): Promise<ActionState> {
   try {
     await (await getPublicSubmissionService()).submitEventSignup({
-      churchId,
-      eventName: formData.get("event_name") ?? "",
+      eventId,
       personName: formData.get("person_name") ?? "",
       contact: formData.get("contact") ?? "",
     });

@@ -43,10 +43,13 @@ function FormularioComRetorno({
   action,
   children,
   botao,
+  aposSucesso,
 }: {
   action: BoundAction;
   children: ReactNode;
   botao: string;
+  /** O que mostrar junto da confirmação (ex.: como pagar um evento pago). */
+  aposSucesso?: ReactNode;
 }) {
   const [versao, setVersao] = useState(0);
   return (
@@ -54,6 +57,7 @@ function FormularioComRetorno({
       key={versao}
       action={action}
       botao={botao}
+      aposSucesso={aposSucesso}
       onOutro={() => setVersao((v) => v + 1)}
     >
       {children}
@@ -65,11 +69,13 @@ function Formulario({
   action,
   children,
   botao,
+  aposSucesso,
   onOutro,
 }: {
   action: BoundAction;
   children: ReactNode;
   botao: string;
+  aposSucesso?: ReactNode;
   onOutro: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -81,6 +87,7 @@ function Formulario({
           <Check className="mt-0.5 size-4 shrink-0 text-[var(--pg-accent)]" aria-hidden />
           {state.success}
         </p>
+        {aposSucesso}
         <button
           type="button"
           onClick={onOutro}
@@ -150,12 +157,28 @@ export function VisitorForm({ churchId }: { churchId: string }) {
   );
 }
 
-export function EventSignupForm({ churchId }: { churchId: string }) {
+/**
+ * Inscrição num evento publicado. Não existe mais "qual evento?": o evento é
+ * o da tela, e o nome dele vem do banco. Evento pago é pago direto à igreja —
+ * a plataforma não cobra —, então a confirmação já diz como.
+ */
+export function EventSignupForm({
+  eventId,
+  preco,
+  pagamento,
+}: {
+  eventId: string;
+  /** Texto do preço já formatado, ou null se for gratuito. */
+  preco: string | null;
+  /** Instrução de pagamento para mostrar depois da inscrição (evento pago). */
+  pagamento?: ReactNode;
+}) {
   return (
-    <FormularioComRetorno action={submitEventSignupAction.bind(null, churchId)} botao="Fazer inscrição">
-      <Campo rotulo="Qual evento?">
-        <input name="event_name" required maxLength={120} placeholder="Ex.: Retiro de jovens" className={campo} />
-      </Campo>
+    <FormularioComRetorno
+      action={submitEventSignupAction.bind(null, eventId)}
+      botao={preco ? `Inscrever-me · ${preco}` : "Inscrever-me"}
+      aposSucesso={pagamento}
+    >
       <Campo rotulo="Seu nome">
         <input name="person_name" required autoComplete="name" maxLength={120} className={campo} />
       </Campo>

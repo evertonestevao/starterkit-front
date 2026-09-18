@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
-import type { PublicChurch } from "@/types/database";
+import type { ChurchEvent, PublicChurch } from "@/types/database";
 import type { PublicSponsor } from "@/types/sponsorship";
 
 /**
@@ -51,5 +51,54 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
         logo_url: row.logo_url,
       }));
     },
+
+    /**
+     * Tema escolhido pela igreja (ou herdado da sede). Null = padrão. A RPC
+     * resolve a herança; a tabela de templates dá o slug.
+     */
+    async resolveTemplateSlug(churchId: string): Promise<string | null> {
+      const { data: templateId, error } = await client.rpc("resolve_template", {
+        p_church_id: churchId,
+      });
+      if (error || !templateId) return null;
+      const { data } = await client
+        .from("templates")
+        .select("slug")
+        .eq("id", templateId as string)
+        .maybeSingle<{ slug: string }>();
+      return data?.slug ?? null;
+    },
+
+    /** Próximos eventos (a partir de agora), do mais perto para o mais longe. */
+    async listUpcomingEvents(churchId: string, limit = 50): Promise<ChurchEvent[]> {
+      const { data, error } = await client
+        .from("church_events")
+        .select(EVENT_COLUMNS)
+        .eq("church_id", churchId)
+        .gte("inicio", new Date().toISOString())
+        .order("inicio", { ascending: true })
+        .limit(limit);
+      if (error) {
+        throw new AppError("internal_error", "Falha ao carregar os eventos", error);
+      }
+      return (data ?? []) as ChurchEvent[];
+    },
+
+    /** Um evento, só se for DESTA igreja: id de outra igreja no link não abre nada. */
+    async findEvent(churchId: string, eventId: string): Promise<ChurchEvent | null> {
+      const { data, error } = await client
+        .from("church_events")
+        .select(EVENT_COLUMNS)
+        .eq("church_id", churchId)
+        .eq("id", eventId)
+        .maybeSingle<ChurchEvent>();
+      if (error) {
+        throw new AppError("internal_error", "Falha ao carregar o evento", error);
+      }
+      return data;
+    },
   };
 }
+
+const EVENT_COLUMNS =
+  "id, church_id, titulo, descricao, inicio, fim, local, preco_cents, inscricoes_abertas";

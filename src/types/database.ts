@@ -198,6 +198,21 @@ export interface Church {
 }
 
 /** Colunas de `churches` legíveis pelo anon (GRANT por coluna na migration). */
+/** Evento publicado pela igreja na página pública. */
+export interface ChurchEvent {
+  id: string;
+  church_id: string;
+  titulo: string;
+  descricao: string | null;
+  inicio: string;
+  fim: string | null;
+  /** Null = no endereço da própria igreja. */
+  local: string | null;
+  /** Zero = gratuito. Pago direto à igreja; a plataforma não cobra. */
+  preco_cents: number;
+  inscricoes_abertas: boolean;
+}
+
 export type PublicChurch = Omit<
   Church,
   | "company_id"
