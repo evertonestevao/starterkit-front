@@ -112,7 +112,7 @@ export function PublicSponsorshipForm({
         <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" />
       </div>
 
-      <TermsCheckboxes />
+      <TermsCheckboxes audience="patrocinador" />
 
       <Button type="submit" size="lg" disabled={pending} className="w-full">
         {pending ? "Aguarde..." : `Assinar patrocínio — ${priceLabel}/mês`}

@@ -27,7 +27,7 @@ export default async function SponsorProfileSetupPage({
   const client = await getSupabaseServerClient();
   const [profile, needsTerms] = await Promise.all([
     createUserService(createSupabaseUserRepository(client)).getMyProfile(),
-    getTermsService().then(async (terms) => !(await terms.hasAcceptedCurrent())),
+    getTermsService().then(async (terms) => !(await terms.hasAcceptedCurrent("patrocinador"))),
   ]);
 
   return (

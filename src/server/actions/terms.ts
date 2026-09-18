@@ -19,7 +19,7 @@ export async function acceptTermsAction(
     }
     const terms = await getTermsService();
     const evidence = await getRequestEvidence();
-    await terms.acceptCurrentTerms(evidence);
+    await terms.acceptCurrentTerms("igreja", evidence);
     // Consentimento de email é separado e explícito: grava a escolha
     // (positiva OU negativa) como evento — evidência nos dois sentidos.
     await terms.setConsent(

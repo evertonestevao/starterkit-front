@@ -455,10 +455,15 @@ export function createSupabaseSponsorBillingStore(adminClient: SupabaseClient): 
     },
 
     async recordTermsAcceptance(userId, evidence, emailConsent) {
+      // O patrocinador aceita o contrato DELE. Sem o filtro de público, com
+      // um documento vigente para igrejas e outro para patrocinadores, esta
+      // consulta devolveria duas linhas — ou, pior, gravaria o aceite do
+      // contrato errado.
       const { data: version, error: versionError } = await adminClient
         .from("terms_versions")
         .select("id")
         .eq("is_current", true)
+        .eq("audience", "patrocinador")
         .maybeSingle<{ id: string }>();
       if (versionError) {
         throw new AppError("internal_error", "Falha ao carregar os termos vigentes", versionError);

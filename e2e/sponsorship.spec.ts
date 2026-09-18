@@ -46,6 +46,14 @@ test("visitante assina patrocínio sem login e a igreja passa a ver o apoio", as
   // 3. Assina como patrocinador novo.
   const sponsorEmail = uniqueEmail("patrocinador");
   await visitorPage.getByRole("link", { name: "Assinar patrocínio" }).click();
+
+  // O patrocinador tem de aceitar o contrato DELE. Apontar para os termos das
+  // igrejas invalidaria o aceite: ele teria concordado com outro contrato.
+  await expect(visitorPage.getByRole("link", { name: /Termos de Uso/i })).toHaveAttribute(
+    "href",
+    "/terms/patrocinador",
+  );
+
   await visitorPage.getByRole("textbox", { name: "Seu nome" }).fill("Padaria E2E");
   await visitorPage.getByRole("textbox", { name: "Email" }).fill(sponsorEmail);
   await visitorPage.getByRole("textbox", { name: "CPF" }).fill("529.982.247-25");

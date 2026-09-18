@@ -15,10 +15,10 @@ export const metadata: Metadata = { title: "Aceite dos termos" };
  */
 export default async function AcceptTermsPage() {
   const terms = await getTermsService();
-  if (await terms.hasAcceptedCurrent()) {
+  if (await terms.hasAcceptedCurrent("igreja")) {
     redirect("/dashboard");
   }
-  const current = await terms.getCurrentTerms();
+  const current = await terms.getCurrentTerms("igreja");
   if (!current) {
     redirect("/dashboard"); // sem versão publicada não há o que aceitar
   }

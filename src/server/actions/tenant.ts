@@ -44,7 +44,7 @@ export async function createCompanyAction(
     // Gate de termos no onboarding: sem aceite da versão vigente, a empresa
     // não é criada (o checkbox required do form é só UX; a verdade é aqui).
     const terms = await getTermsService();
-    if (!(await terms.hasAcceptedCurrent())) {
+    if (!(await terms.hasAcceptedCurrent("igreja"))) {
       if (formData.get("accept_terms") !== "on") {
         throw new AppError(
           "validation_error",
@@ -52,7 +52,7 @@ export async function createCompanyAction(
         );
       }
       const evidence = await getRequestEvidence();
-      await terms.acceptCurrentTerms(evidence);
+      await terms.acceptCurrentTerms("igreja", evidence);
       await terms.setConsent(
         "email_communications",
         formData.get("email_consent") === "on",

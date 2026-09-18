@@ -112,7 +112,7 @@ export function SponsorAccountForm({
         />
       </div>
 
-      {needsTerms ? <TermsCheckboxes /> : null}
+      {needsTerms ? <TermsCheckboxes audience="patrocinador" /> : null}
 
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Salvando..." : "Concluir cadastro"}

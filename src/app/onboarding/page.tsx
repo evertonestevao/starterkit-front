@@ -26,7 +26,7 @@ export default async function OnboardingPage() {
   }
 
   const terms = await getTermsService();
-  const requireTerms = !(await terms.hasAcceptedCurrent());
+  const requireTerms = !(await terms.hasAcceptedCurrent("igreja"));
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">

@@ -29,7 +29,7 @@ export async function createSponsorAccountAction(
     // Aceite dos termos na criação do cadastro: o checkbox required é só UX,
     // a verdade é aqui (mesma postura do onboarding da igreja).
     const terms = await getTermsService();
-    if (!(await terms.hasAcceptedCurrent())) {
+    if (!(await terms.hasAcceptedCurrent("patrocinador"))) {
       if (formData.get("accept_terms") !== "on") {
         throw new AppError(
           "validation_error",
@@ -37,7 +37,7 @@ export async function createSponsorAccountAction(
         );
       }
       const evidence = await getRequestEvidence();
-      await terms.acceptCurrentTerms(evidence);
+      await terms.acceptCurrentTerms("patrocinador", evidence);
       await terms.setConsent(
         "email_communications",
         formData.get("email_consent") === "on",

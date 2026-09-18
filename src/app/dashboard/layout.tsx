@@ -20,7 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Termos primeiro: versão nova publicada força reaceite antes de qualquer
   // tela do dashboard (inclusive para quem entrou por convite).
   const terms = await getTermsService();
-  if (!(await terms.hasAcceptedCurrent())) {
+  if (!(await terms.hasAcceptedCurrent("igreja"))) {
     redirect("/accept-terms");
   }
 
