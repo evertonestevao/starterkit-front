@@ -17,6 +17,11 @@ import { cn } from "@/lib/utils";
 export interface RouteTab {
   href: string;
   label: string;
+  /**
+   * Quantos itens esperam ação nesta aba. Zero ou ausente = sem badge: um
+   * badge que mostra "0" treina o olho a ignorar badges.
+   */
+  count?: number;
 }
 
 export function RouteTabs({ tabs }: { tabs: RouteTab[] }) {
@@ -39,7 +44,20 @@ export function RouteTabs({ tabs }: { tabs: RouteTab[] }) {
                 : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
             )}
           >
-            {tab.label}
+            <span className="flex items-center gap-1.5">
+              {tab.label}
+              {/* Texto escuro no tema escuro: lá o vermelho é mais claro, e
+                  branco sobre ele fica em 2,9:1 — abaixo dos 4,5:1 que texto
+                  pequeno exige. Escuro sobre ele fica em ~6,8:1. */}
+              {tab.count && tab.count > 0 ? (
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[0.7rem] leading-5 font-semibold text-white tabular-nums dark:text-neutral-950">
+                  {tab.count > 99 ? "99+" : tab.count}
+                  <span className="sr-only">
+                    {tab.count === 1 ? " pendência" : " pendências"}
+                  </span>
+                </span>
+              ) : null}
+            </span>
           </Link>
         );
       })}

@@ -31,7 +31,7 @@ export default async function OnboardingPage() {
   // como igreja, use outra conta — misturar operador e cliente na mesma
   // identidade embaralha a auditoria dos dois lados.
   if (await isPlatformStaff()) {
-    redirect("/plataforma/alteracoes");
+    redirect("/plataforma");
   }
 
   const terms = await getTermsService();

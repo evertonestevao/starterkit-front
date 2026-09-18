@@ -7,8 +7,8 @@ import { toActionError, type ActionState } from "./action-state";
 
 /** Server actions da moderação da plataforma. */
 
-const FILA = "/plataforma/alteracoes";
-const DENUNCIAS = "/plataforma/denuncias";
+// Toda decisão muda um número do menu, que vive no layout: revalidar só a
+// página deixaria o badge mostrando a contagem velha.
 
 export async function reviewProfileChangeAction(
   _prev: ActionState | undefined,
@@ -28,7 +28,7 @@ export async function reviewProfileChangeAction(
       via: "painel",
     });
 
-    revalidatePath(FILA);
+    revalidatePath("/plataforma", "layout");
     return { success: aprovada ? "Alteração publicada." : "Alteração recusada." };
   } catch (err) {
     return toActionError(err);
@@ -74,7 +74,7 @@ export async function reviewAbuseReportAction(
       via: "painel",
     });
 
-    revalidatePath(DENUNCIAS);
+    revalidatePath("/plataforma", "layout");
     return {
       success: procedente
         ? "Denúncia marcada como procedente."
@@ -98,7 +98,7 @@ export async function releaseSecurityHoldAction(
       via: "painel",
     });
 
-    revalidatePath(FILA);
+    revalidatePath("/plataforma", "layout");
     return { success: "Conta liberada. O patrocinador já pode pedir alterações de novo." };
   } catch (err) {
     return toActionError(err);

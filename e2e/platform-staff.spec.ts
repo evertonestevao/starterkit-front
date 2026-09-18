@@ -38,12 +38,14 @@ test("moderação entra direto na área dela, sem virar igreja", async ({ page }
 
   // O onboarding não segura mais quem modera...
   await page.goto("/onboarding");
-  await expect(page).toHaveURL(/\/plataforma\/alteracoes/);
-  await expect(page.getByRole("heading", { name: "Alterações pendentes" })).toBeVisible();
+  await expect(page).toHaveURL(/\/plataforma$/);
+  await expect(page.getByRole("heading", { name: "Visão geral" })).toBeVisible();
+  // A receita é amostra, e isso tem de estar dito antes de qualquer número.
+  await expect(page.getByText("Tela de demonstração.")).toBeVisible();
 
   // ...nem o dashboard, que antes mandava aceitar os termos das igrejas.
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/plataforma\/alteracoes/);
+  await expect(page).toHaveURL(/\/plataforma$/);
 
   // E dá para sair — o painel nasceu sem botão de logout.
   await page.getByRole("button", { name: "Sair" }).click();

@@ -5,6 +5,7 @@ import type {
   AbuseReport,
   HiddenSignal,
   PendingProfileChange,
+  PlatformPendingCounts,
   SecurityHold,
 } from "@/types/sponsorship";
 
@@ -153,6 +154,23 @@ export function createSupabasePlatformModerationRepository(
         throw new AppError("internal_error", "Falha ao liberar a conta", error);
       }
       return Boolean(data);
+    },
+
+    async getPendingCounts(): Promise<PlatformPendingCounts> {
+      const { data, error } = await client.rpc("platform_pending_counts").maybeSingle<{
+        alteracoes: number;
+        contas_travadas: number;
+        denuncias: number;
+      }>();
+      if (error) {
+        throw new AppError("internal_error", "Falha ao contar pendências", error);
+      }
+      // Sem linha = não é moderação (a RPC filtra): nada pendente para exibir.
+      return {
+        alteracoes: data?.alteracoes ?? 0,
+        contasTravadas: data?.contas_travadas ?? 0,
+        denuncias: data?.denuncias ?? 0,
+      };
     },
 
     async listStaffEmails(): Promise<string[]> {

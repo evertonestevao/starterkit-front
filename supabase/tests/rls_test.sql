@@ -1039,7 +1039,10 @@ begin
   end if;
 
   -- A fila atravessa tenants de propósito: é o trabalho da moderação.
-  select count(*) into n from public.list_pending_profile_changes();
+  -- Conta só as contas DESTE teste: o banco pode ter outras filas (staging).
+  select count(*) into n from public.list_pending_profile_changes()
+  where sponsor_account_id in ('5a5a5a5a-0000-4000-8000-000000000001',
+                               '5b5b5b5b-0000-4000-8000-000000000002');
   if n <> 2 then
     raise exception 'FALHA list_pending_profile_changes: esperado 2, veio %', n;
   end if;
@@ -1064,7 +1067,8 @@ begin
   end if;
 
   select count(*) into n from public.platform_staff_actions
-  where action = 'sponsor_profile.aprovada';
+  where action = 'sponsor_profile.aprovada'
+    and entity_id = 'c0c0c0c0-0000-4000-8000-00000000000b';
   if n <> 1 then
     raise exception 'FALHA platform_staff_actions: decisao nao foi auditada (% linhas)', n;
   end if;
@@ -1131,11 +1135,13 @@ begin
     'b0000000-0000-4000-8000-00000000000d', 'logo com conteudo impróprio') into v_id;
   if v_id is null then raise exception 'FALHA denuncia: nao registrou'; end if;
 
-  select count(*) into n from public.sponsor_abuse_reports where status = 'aberta';
+  select count(*) into n from public.sponsor_abuse_reports
+  where status = 'aberta' and sponsorship_id = 'b0000000-0000-4000-8000-00000000000d';
   if n <> 1 then raise exception 'FALHA denuncia: esperado 1 aberta, veio %', n; end if;
 
   perform public.report_sponsor_abuse('b0000000-0000-4000-8000-00000000000d', 'de novo');
-  select count(*) into n from public.sponsor_abuse_reports where status = 'aberta';
+  select count(*) into n from public.sponsor_abuse_reports
+  where status = 'aberta' and sponsorship_id = 'b0000000-0000-4000-8000-00000000000d';
   if n <> 1 then raise exception 'FALHA denuncia: duplicou (% abertas)', n; end if;
 
   -- Bob não é da moderação: não vê a fila nem decide.
@@ -1156,7 +1162,8 @@ end $$;
 -- (a policy é da empresa dona), só a fila pela RPC.
 reset role;
 create temp table t_denuncia as
-  select id from public.sponsor_abuse_reports where status = 'aberta';
+  select id from public.sponsor_abuse_reports
+  where status = 'aberta' and sponsorship_id = 'b0000000-0000-4000-8000-00000000000d';
 -- A temp table nasce sem GRANT: quem roda como `authenticated` precisa ler.
 grant select on t_denuncia to authenticated;
 
@@ -1185,13 +1192,15 @@ end $$;
 do $$
 declare n int; ok boolean;
 begin
-  select count(*) into n from public.list_abuse_reports();
+  select count(*) into n from public.list_abuse_reports()
+  where sponsorship_id = 'b0000000-0000-4000-8000-00000000000d';
   if n <> 1 then raise exception 'FALHA list_abuse_reports: staff viu % denuncias', n; end if;
 
   select public.review_abuse_report((select id from t_denuncia), true, 'confirmado') into ok;
   if not ok then raise exception 'FALHA review_abuse_report: decisao nao aplicou'; end if;
 
-  select count(*) into n from public.list_abuse_reports();
+  select count(*) into n from public.list_abuse_reports()
+  where sponsorship_id = 'b0000000-0000-4000-8000-00000000000d';
   if n <> 0 then raise exception 'FALHA review_abuse_report: denuncia seguiu aberta'; end if;
 end $$;
 
@@ -1208,7 +1217,7 @@ begin
   end if;
 
   select count(*) into n from public.platform_staff_actions
-  where action = 'abuse.procedente';
+  where action = 'abuse.procedente' and entity_id = (select id from t_denuncia);
   if n <> 1 then
     raise exception 'FALHA platform_staff_actions: denuncia nao foi auditada (% linhas)', n;
   end if;
@@ -1294,7 +1303,8 @@ select set_config('request.jwt.claims',
 do $$
 declare n int; ok boolean;
 begin
-  select count(*) into n from public.list_security_holds();
+  select count(*) into n from public.list_security_holds()
+  where sponsor_account_id = '5b5b5b5b-0000-4000-8000-000000000002';
   if n <> 1 then raise exception 'FALHA list_security_holds: staff viu % contas', n; end if;
 
   select public.release_sponsor_security_hold('5b5b5b5b-0000-4000-8000-000000000002') into ok;
@@ -1315,7 +1325,8 @@ begin
   if n <> 1 then raise exception 'FALHA release: a conta continua travada'; end if;
 
   select count(*) into n from public.platform_staff_actions
-  where action = 'sponsor_account.hold_liberado';
+  where action = 'sponsor_account.hold_liberado'
+    and entity_id = '5b5b5b5b-0000-4000-8000-000000000002';
   if n <> 1 then
     raise exception 'FALHA platform_staff_actions: liberacao nao foi auditada (% linhas)', n;
   end if;
@@ -1348,6 +1359,38 @@ begin
   where id = 'd1d1d1d1-0000-4000-8000-000000000001';
   if n <> 1 then
     raise exception 'FALHA churches: igreja ativa sumiu da pagina publica';
+  end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Contagem de pendências dos badges (migration 20260919160000).
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- Quem não modera não descobre quantas denúncias existem na plataforma.
+  select count(*) into n from public.platform_pending_counts();
+  if n <> 0 then raise exception 'FALHA platform_pending_counts: devolveu contagem para nao-staff'; end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare v record;
+begin
+  select * into v from public.platform_pending_counts();
+  if v is null then raise exception 'FALHA platform_pending_counts: staff ficou sem contagem'; end if;
+  -- O pedido da Alice segue pendente desde a seção da moderação de perfil.
+  if v.alteracoes < 1 then
+    raise exception 'FALHA platform_pending_counts: nao contou alteracao pendente (%)', v.alteracoes;
   end if;
 end $$;
 

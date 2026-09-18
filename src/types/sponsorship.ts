@@ -74,6 +74,13 @@ export interface PendingProfileChange {
   createdAt: string;
 }
 
+/** O que espera ação da moderação — alimenta os badges do menu. */
+export interface PlatformPendingCounts {
+  alteracoes: number;
+  contasTravadas: number;
+  denuncias: number;
+}
+
 /** Conta travada pelo "não fui eu", esperando o suporte liberar. */
 export interface SecurityHold {
   sponsorAccountId: string;

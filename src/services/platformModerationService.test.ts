@@ -37,6 +37,7 @@ function build(pendente: PendingProfileChange = PENDENTE) {
     listHiddenSignals: vi.fn(async () => []),
     listSecurityHolds: vi.fn(async () => [TRAVADA]),
     releaseSecurityHold: vi.fn(async () => true),
+    getPendingCounts: vi.fn(async () => ({ alteracoes: 0, contasTravadas: 0, denuncias: 0 })),
   };
   const notifier = {
     sendProfileDecision: vi.fn(async () => {}),

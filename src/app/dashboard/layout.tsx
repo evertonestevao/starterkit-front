@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // igrejas, e quem modera não é parte desse contrato. Sem isto, o login
   // mandava a moderação aceitar termos de igreja e depois criar uma.
   if (!active && (await isPlatformStaff())) {
-    redirect("/plataforma/alteracoes");
+    redirect("/plataforma");
   }
 
   // Termos: versão nova publicada força reaceite antes de qualquer tela do

@@ -5,12 +5,8 @@ import { RouteTabs } from "@/components/route-tabs";
 import { Button } from "@/components/ui/button";
 import { brand } from "@/config/brand";
 import { signOutAction } from "@/server/actions/auth";
-import { isPlatformStaff } from "@/server/platform";
+import { getPlatformModerationService, isPlatformStaff } from "@/server/platform";
 
-const TABS = [
-  { href: "/plataforma/alteracoes", label: "Alterações" },
-  { href: "/plataforma/denuncias", label: "Denúncias" },
-];
 
 /**
  * Área da moderação da plataforma.
@@ -22,12 +18,26 @@ const TABS = [
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
   if (!(await isPlatformStaff())) notFound();
 
+  // Contagem REAL, numa ida só ao banco. O badge soma o que tem ação a tomar
+  // em cada aba: em Alterações, os pedidos e as contas travadas — as duas
+  // coisas esperam um clique ali.
+  const pendencias = await (await getPlatformModerationService()).getPendingCounts();
+  const tabs = [
+    { href: "/plataforma", label: "Visão geral" },
+    {
+      href: "/plataforma/alteracoes",
+      label: "Alterações",
+      count: pendencias.alteracoes + pendencias.contasTravadas,
+    },
+    { href: "/plataforma/denuncias", label: "Denúncias", count: pendencias.denuncias },
+  ];
+
   return (
     <div className="flex min-h-svh flex-col bg-background">
       <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-3 px-4">
           <Link
-            href="/plataforma/alteracoes"
+            href="/plataforma"
             className="flex min-w-0 items-center gap-2 font-semibold tracking-tight"
           >
             <ShieldCheck className="size-5 shrink-0 text-primary" aria-hidden />
@@ -44,7 +54,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
           </form>
         </div>
         <div className="mx-auto w-full max-w-5xl px-4">
-          <RouteTabs tabs={TABS} />
+          <RouteTabs tabs={tabs} />
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 lg:py-8">{children}</main>

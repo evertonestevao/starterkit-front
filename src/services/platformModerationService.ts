@@ -3,6 +3,7 @@ import type {
   AbuseReport,
   HiddenSignal,
   PendingProfileChange,
+  PlatformPendingCounts,
   SecurityHold,
 } from "@/types/sponsorship";
 
@@ -38,6 +39,7 @@ export interface PlatformModerationRepository {
   listHiddenSignals(): Promise<HiddenSignal[]>;
   listSecurityHolds(): Promise<SecurityHold[]>;
   releaseSecurityHold(input: { sponsorAccountId: string; via: ModerationChannel }): Promise<boolean>;
+  getPendingCounts(): Promise<PlatformPendingCounts>;
   /** Para onde vão os avisos de fila. */
   listStaffEmails(): Promise<string[]>;
 }
@@ -166,6 +168,11 @@ export function createPlatformModerationService({ repo, notifier, publishLogo }:
 
     listSecurityHolds(): Promise<SecurityHold[]> {
       return repo.listSecurityHolds();
+    },
+
+    /** Números para os badges do menu — só o que tem ação a tomar. */
+    getPendingCounts(): Promise<PlatformPendingCounts> {
+      return repo.getPendingCounts();
     },
 
     /**
