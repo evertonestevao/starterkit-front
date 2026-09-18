@@ -181,9 +181,10 @@ contato indicado na cláusula 1.
 destes Termos, com aviso prévio e prazo para correção — salvo em casos graves,
 como conteúdo ilícito, em que a suspensão pode ser imediata.
 
-10.3. Encerrada a conta, a página pública sai do ar. Os dados da comunidade
-ficam disponíveis para exportação por 30 dias e depois são eliminados, exceto
-o que a lei obrigar a guardar.
+10.3. Encerrada a conta, a página pública sai do ar. Durante 30 dias, a
+Igreja pode pedir, pelo contato da cláusula 1, uma cópia dos dados da
+comunidade; depois desse prazo eles são eliminados, exceto o que a lei obrigar
+a guardar.
 
 10.4. O encerramento da conta da Igreja não gera direito a qualquer valor pago
 por patrocinadores.
