@@ -4,7 +4,7 @@ import {
   createPlatformModerationService,
   type PlatformModerationRepository,
 } from "./platformModerationService";
-import type { PendingProfileChange } from "@/types/sponsorship";
+import type { PendingProfileChange, SecurityHold } from "@/types/sponsorship";
 
 const PENDENTE: PendingProfileChange = {
   id: "mudanca-1",
@@ -18,6 +18,15 @@ const PENDENTE: PendingProfileChange = {
   createdAt: "2026-09-18T10:00:00Z",
 };
 
+const TRAVADA: SecurityHold = {
+  sponsorAccountId: "conta-1",
+  displayName: "Padaria do João",
+  email: "padaria@exemplo.com",
+  securityHoldAt: "2026-09-18T10:00:00Z",
+  ultimaTentativaNome: "Nome Estranho",
+  ultimaTentativaEm: "2026-09-18T09:00:00Z",
+};
+
 function build(pendente: PendingProfileChange = PENDENTE) {
   const repo: PlatformModerationRepository = {
     listPendingProfileChanges: vi.fn(async () => [pendente]),
@@ -26,8 +35,13 @@ function build(pendente: PendingProfileChange = PENDENTE) {
     listAbuseReports: vi.fn(async () => []),
     reviewAbuseReport: vi.fn(async () => true),
     listHiddenSignals: vi.fn(async () => []),
+    listSecurityHolds: vi.fn(async () => [TRAVADA]),
+    releaseSecurityHold: vi.fn(async () => true),
   };
-  const notifier = { sendProfileDecision: vi.fn(async () => {}) };
+  const notifier = {
+    sendProfileDecision: vi.fn(async () => {}),
+    sendHoldReleased: vi.fn(async () => {}),
+  };
   const publishLogo = vi.fn(async () => "https://cdn.exemplo.com/publico/conta-1/logo.png");
   const service = createPlatformModerationService({ repo, notifier, publishLogo });
   return { repo, notifier, publishLogo, service };
@@ -125,5 +139,44 @@ describe("reviewAbuseReport", () => {
       .catch((e) => e);
 
     expect(isAppError(err) && err.code).toBe("not_found");
+  });
+});
+
+describe("releaseSecurityHold", () => {
+  it("libera, avisa o dono e registra", async () => {
+    const { repo, notifier, service } = build();
+
+    await service.releaseSecurityHold({ sponsorAccountId: "conta-1" });
+
+    expect(repo.releaseSecurityHold).toHaveBeenCalledWith({
+      sponsorAccountId: "conta-1",
+      via: "painel",
+    });
+    expect(notifier.sendHoldReleased).toHaveBeenCalledWith({
+      to: "padaria@exemplo.com",
+      displayName: "Padaria do João",
+    });
+  });
+
+  it("liberar NÃO republica o que foi desfeito", async () => {
+    const { repo, service } = build();
+
+    await service.releaseSecurityHold({ sponsorAccountId: "conta-1" });
+
+    // Republicar seria decidir pelo dono justamente no caso em que há dúvida
+    // sobre quem é o dono. A pessoa pede de novo e passa pela fila.
+    expect(repo.reviewProfileChange).not.toHaveBeenCalled();
+  });
+
+  it("conta que não está bloqueada devolve erro claro", async () => {
+    const { repo, service } = build();
+    vi.mocked(repo.listSecurityHolds).mockResolvedValueOnce([]);
+
+    const err = await service
+      .releaseSecurityHold({ sponsorAccountId: "conta-1" })
+      .catch((e) => e);
+
+    expect(isAppError(err) && err.code).toBe("not_found");
+    expect(repo.releaseSecurityHold).not.toHaveBeenCalled();
   });
 });

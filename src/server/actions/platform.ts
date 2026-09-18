@@ -84,3 +84,23 @@ export async function reviewAbuseReportAction(
     return toActionError(err);
   }
 }
+
+export async function releaseSecurityHoldAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await requirePlatformStaff();
+
+    const service = await getPlatformModerationService();
+    await service.releaseSecurityHold({
+      sponsorAccountId: String(formData.get("sponsorAccountId") ?? ""),
+      via: "painel",
+    });
+
+    revalidatePath(FILA);
+    return { success: "Conta liberada. O patrocinador já pode pedir alterações de novo." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}

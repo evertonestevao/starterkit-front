@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PreviewNotice } from "@/components/preview-notice";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -34,6 +35,9 @@ const pageBlocks = [
 export default function PresencePage() {
   return (
     <div className="flex flex-col gap-6">
+      <PreviewNotice>
+        Os blocos abaixo mostram o formato previsto para a presença digital. Nada aqui reflete a sua página pública ainda.
+      </PreviewNotice>
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium text-primary"><MonitorSmartphone className="size-4" /> Sua igreja na internet</div>

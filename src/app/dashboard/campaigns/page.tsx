@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PreviewNotice } from "@/components/preview-notice";
 import Link from "next/link";
 import {
   ArrowDownRight,
@@ -91,6 +92,9 @@ export default function CampaignsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <PreviewNotice>
+        As campanhas abaixo são exemplos para mostrar o formato da tela. Ainda não há cadastro de campanha nem arrecadação de verdade ligada aqui.
+      </PreviewNotice>
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium text-primary">

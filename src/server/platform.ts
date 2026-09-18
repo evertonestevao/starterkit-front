@@ -48,6 +48,7 @@ export async function getPlatformModerationService(): Promise<PlatformModeration
     repo: createSupabasePlatformModerationRepository(client, getSupabaseAdminClient()),
     notifier: {
       sendProfileDecision: (input) => email.sendSponsorProfileDecision(input),
+      sendHoldReleased: (input) => email.sendSponsorHoldReleased(input),
     },
     async publishLogo({ pendingPath, sponsorAccountId }) {
       const nome = pendingPath.split("/").pop() ?? `${sponsorAccountId}.png`;

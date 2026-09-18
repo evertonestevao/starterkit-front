@@ -1,7 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
 import type { PlatformModerationRepository } from "@/services/platformModerationService";
-import type { AbuseReport, HiddenSignal, PendingProfileChange } from "@/types/sponsorship";
+import type {
+  AbuseReport,
+  HiddenSignal,
+  PendingProfileChange,
+  SecurityHold,
+} from "@/types/sponsorship";
 
 interface PendingRow {
   id: string;
@@ -115,6 +120,39 @@ export function createSupabasePlatformModerationRepository(
         sponsorEmail: row.sponsor_email,
         igrejasQueEsconderam: row.igrejas_que_esconderam,
       }));
+    },
+
+    async listSecurityHolds(): Promise<SecurityHold[]> {
+      const { data, error } = await client.rpc("list_security_holds");
+      if (error) {
+        throw new AppError("internal_error", "Falha ao listar contas bloqueadas", error);
+      }
+      return ((data ?? []) as Array<{
+        sponsor_account_id: string;
+        display_name: string;
+        email: string;
+        security_hold_at: string;
+        ultima_tentativa_nome: string | null;
+        ultima_tentativa_em: string | null;
+      }>).map((row) => ({
+        sponsorAccountId: row.sponsor_account_id,
+        displayName: row.display_name,
+        email: row.email,
+        securityHoldAt: row.security_hold_at,
+        ultimaTentativaNome: row.ultima_tentativa_nome,
+        ultimaTentativaEm: row.ultima_tentativa_em,
+      }));
+    },
+
+    async releaseSecurityHold({ sponsorAccountId, via }) {
+      const { data, error } = await client.rpc("release_sponsor_security_hold", {
+        p_sponsor_account_id: sponsorAccountId,
+        p_via: via,
+      });
+      if (error) {
+        throw new AppError("internal_error", "Falha ao liberar a conta", error);
+      }
+      return Boolean(data);
     },
 
     async listStaffEmails(): Promise<string[]> {

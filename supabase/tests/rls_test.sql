@@ -1259,6 +1259,70 @@ end $$;
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Destravar conta bloqueada pelo "não fui eu" (migration 20260918180000).
+-- ---------------------------------------------------------------------------
+reset role;
+
+update public.sponsor_accounts
+set security_hold_at = now()
+where id = '5b5b5b5b-0000-4000-8000-000000000002';
+
+-- Bob é o dono da conta travada, e não é da moderação: não se destrava.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int; ok boolean;
+begin
+  select count(*) into n from public.list_security_holds();
+  if n <> 0 then raise exception 'FALHA list_security_holds: vazou % para nao-staff', n; end if;
+
+  begin
+    select public.release_sponsor_security_hold('5b5b5b5b-0000-4000-8000-000000000002') into ok;
+    raise exception 'FALHA release: o proprio dono destravou a conta';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- Alice é a moderação (cadastrada mais acima nesta suíte).
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int; ok boolean;
+begin
+  select count(*) into n from public.list_security_holds();
+  if n <> 1 then raise exception 'FALHA list_security_holds: staff viu % contas', n; end if;
+
+  select public.release_sponsor_security_hold('5b5b5b5b-0000-4000-8000-000000000002') into ok;
+  if not ok then raise exception 'FALHA release: nao liberou'; end if;
+
+  -- Liberar duas vezes não é erro, é no-op: devolve false.
+  select public.release_sponsor_security_hold('5b5b5b5b-0000-4000-8000-000000000002') into ok;
+  if ok then raise exception 'FALHA release: liberou conta que ja estava livre'; end if;
+end $$;
+
+reset role;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.sponsor_accounts
+  where id = '5b5b5b5b-0000-4000-8000-000000000002' and security_hold_at is null;
+  if n <> 1 then raise exception 'FALHA release: a conta continua travada'; end if;
+
+  select count(*) into n from public.platform_staff_actions
+  where action = 'sponsor_account.hold_liberado';
+  if n <> 1 then
+    raise exception 'FALHA platform_staff_actions: liberacao nao foi auditada (% linhas)', n;
+  end if;
+end $$;
+
+reset role;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'

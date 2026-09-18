@@ -1,5 +1,10 @@
 import { AppError } from "@/lib/errors";
-import type { AbuseReport, HiddenSignal, PendingProfileChange } from "@/types/sponsorship";
+import type {
+  AbuseReport,
+  HiddenSignal,
+  PendingProfileChange,
+  SecurityHold,
+} from "@/types/sponsorship";
 
 /**
  * Moderação da plataforma.
@@ -31,6 +36,8 @@ export interface PlatformModerationRepository {
     via: ModerationChannel;
   }): Promise<boolean>;
   listHiddenSignals(): Promise<HiddenSignal[]>;
+  listSecurityHolds(): Promise<SecurityHold[]>;
+  releaseSecurityHold(input: { sponsorAccountId: string; via: ModerationChannel }): Promise<boolean>;
   /** Para onde vão os avisos de fila. */
   listStaffEmails(): Promise<string[]>;
 }
@@ -42,6 +49,7 @@ export interface ModerationNotifier {
     displayName: string;
     reason: string | null;
   }): Promise<void>;
+  sendHoldReleased(input: { to: string; displayName: string }): Promise<void>;
 }
 
 interface Deps {
@@ -154,6 +162,41 @@ export function createPlatformModerationService({ repo, notifier, publishLogo }:
 
     listHiddenSignals(): Promise<HiddenSignal[]> {
       return repo.listHiddenSignals();
+    },
+
+    listSecurityHolds(): Promise<SecurityHold[]> {
+      return repo.listSecurityHolds();
+    },
+
+    /**
+     * Libera a conta travada pelo "não fui eu". Não republica o que foi
+     * desfeito nem devolve nada ao ar: só permite pedir de novo, e o próximo
+     * pedido passa pela fila como qualquer outro. Republicar aqui seria
+     * decidir pelo dono da conta, justamente no caso em que há dúvida sobre
+     * quem é o dono.
+     */
+    async releaseSecurityHold(input: {
+      sponsorAccountId: string;
+      via?: ModerationChannel;
+    }): Promise<void> {
+      const id = typeof input.sponsorAccountId === "string" ? input.sponsorAccountId.trim() : "";
+      if (!id) throw new AppError("validation_error", "Conta inválida");
+
+      const travadas = await repo.listSecurityHolds();
+      const alvo = travadas.find((c) => c.sponsorAccountId === id);
+      if (!alvo) {
+        throw new AppError("not_found", "Esta conta não está bloqueada.");
+      }
+
+      const ok = await repo.releaseSecurityHold({
+        sponsorAccountId: id,
+        via: input.via ?? "painel",
+      });
+      if (!ok) {
+        throw new AppError("not_found", "Esta conta não está bloqueada.");
+      }
+
+      await notifier.sendHoldReleased({ to: alvo.email, displayName: alvo.displayName });
     },
   };
 }

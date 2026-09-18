@@ -74,6 +74,17 @@ export interface PendingProfileChange {
   createdAt: string;
 }
 
+/** Conta travada pelo "não fui eu", esperando o suporte liberar. */
+export interface SecurityHold {
+  sponsorAccountId: string;
+  displayName: string;
+  email: string;
+  securityHoldAt: string;
+  /** O nome que tentaram publicar e foi desfeito — o contexto da decisão. */
+  ultimaTentativaNome: string | null;
+  ultimaTentativaEm: string | null;
+}
+
 /** Denúncia de uma igreja sobre um patrocinador, na fila da moderação. */
 export interface AbuseReport {
   id: string;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PreviewNotice } from "@/components/preview-notice";
 import {
   ArrowDownToLine,
   ArrowRight,
@@ -73,6 +74,9 @@ export default function FinancePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <PreviewNotice>
+        Os lançamentos e os gráficos abaixo são exemplos. Nenhum valor desta tela vem da contabilidade da sua igreja.
+      </PreviewNotice>
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium text-primary"><HandCoins className="size-4" /> Organização financeira da igreja</div>

@@ -129,6 +129,17 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
       });
     },
 
+    /** Conta destravada: a pessoa precisa saber que pode tentar de novo. */
+    async sendSponsorHoldReleased(input: { to: string; displayName: string }): Promise<void> {
+      const corpo = `A conta de ${input.displayName} foi liberada e você já pode enviar alterações de perfil de novo. Toda alteração continua passando pela conferência da nossa equipe antes de aparecer nas páginas das igrejas.`;
+      await provider.send({
+        to: input.to,
+        subject: "Sua conta foi liberada",
+        text: corpo,
+        html: `<p>${corpo}</p>`,
+      });
+    },
+
     /**
      * Aviso para a moderação. Vai para todos os emails do staff — hoje é
      * email; o bot do Telegram entra como outro provider, sem mexer aqui.

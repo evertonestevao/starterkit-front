@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfileChangeReview } from "@/features/platform/components/profile-change-review";
+import { SecurityHoldList } from "@/features/platform/components/security-hold-list";
 import { getPendingLogoUrl, getPlatformModerationService } from "@/server/platform";
 import type { PendingProfileChange } from "@/types/sponsorship";
 
@@ -31,7 +32,10 @@ function NameDiff({ change }: { change: PendingProfileChange }) {
 
 export default async function PlatformChangesPage() {
   const service = await getPlatformModerationService();
-  const pendentes = await service.listPendingProfileChanges();
+  const [pendentes, travadas] = await Promise.all([
+    service.listPendingProfileChanges(),
+    service.listSecurityHolds(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,6 +46,10 @@ export default async function PlatformChangesPage() {
           sem passar por aqui — até a decisão, as igrejas seguem exibindo o perfil anterior.
         </p>
       </div>
+
+      {/* Vem antes da fila: conta travada é gente esperando para voltar a
+          usar o que paga, e some da fila normal justamente por estar travada. */}
+      <SecurityHoldList holds={travadas} />
 
       {pendentes.length === 0 ? (
         <EmptyState
