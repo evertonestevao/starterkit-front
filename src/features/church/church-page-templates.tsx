@@ -1,343 +1,430 @@
+import type { CSSProperties, ReactNode } from "react";
+import { Outfit } from "next/font/google";
 import {
-  BookOpen,
-  CalendarDays,
-  Check,
-  Church,
+  ArrowRight,
+  CalendarCheck,
   Clock3,
-  HandCoins,
-  Heart,
-  Home,
+  HandHeart,
   MapPin,
-  MessageSquareHeart,
-  Music4,
-  Play,
-  Users,
-  Wifi,
+  Navigation,
+  Share2,
+  UserPlus,
+  type LucideIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { brand } from "@/config/brand";
 import {
-  submitEventSignupAction,
-  submitPrayerRequestAction,
-  submitVisitorAction,
-} from "@/server/actions/church";
+  EventSignupForm,
+  PrayerForm,
+  VisitorForm,
+} from "@/features/church/components/public-actions";
+import { SocialIcon } from "@/features/church/components/social-icon";
+import {
+  churchInitials,
+  directionsUrl,
+  normalizeSocialLinks,
+  orderServiceTimes,
+} from "@/lib/churchPublicPage";
+import { sponsorshipPath } from "@/lib/sponsorPaths";
 // PublicChurch, e não Church: esta página renderiza só o que o `anon` pode
-// ler (as colunas de domínio próprio não têm GRANT para ele).
+// ler (as colunas de domínio próprio ficam de fora).
 import type { PublicChurch as ChurchRecord } from "@/types/database";
 import type { PublicSponsor as Sponsor } from "@/types/sponsorship";
-import { sponsorshipPath } from "@/lib/sponsorPaths";
+
+/**
+ * Página pública da igreja — o que o QR Code, o link no WhatsApp e o domínio
+ * próprio abrem. Quase sempre no celular, quase sempre com pressa.
+ *
+ * Formato: cabeçalho curto, uma grade de atalhos logo em cima (cada bloco
+ * leva à sua seção) e as seções abertas embaixo, em faixas alternadas. Uma
+ * coluna só, estreita também no desktop — é conteúdo de celular.
+ *
+ * Só entra atalho do que existe DE VERDADE nesta igreja. Campo vazio não
+ * aparece: a versão anterior preenchia o vazio com endereço de outra cidade,
+ * links sociais para "#" e botões de "Dízimos" e "Quero ser membro" que não
+ * levavam a lugar nenhum — o visitante não tem como saber que é enfeite.
+ */
+
+const titulos = Outfit({ subsets: ["latin"], weight: ["600", "700"], display: "swap" });
 
 export type ChurchPageTemplateProps = {
   church: ChurchRecord;
   sponsors: Sponsor[];
   templateSlug: "classico" | "clean" | "dark";
-  staticPix: string;
 };
 
-function getSponsorInitials(name: string) {
-  return name
-    .split(" ")
-    .map((segment) => segment[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-function getServiceTimes(church: ChurchRecord) {
-  if (!church.service_times || typeof church.service_times !== "object") {
-    return [] as Array<[string, string]>;
-  }
-
-  const serviceTimes = Object.entries(
-    church.service_times as Record<string, string>,
-  );
-  return serviceTimes.length
-    ? serviceTimes
-    : [["Próximo culto", "Confira os horários"]];
-}
-
-function getSocialLinks(church: ChurchRecord) {
-  if (!church.social_links || typeof church.social_links !== "object") {
-    return [] as Array<[string, string]>;
-  }
-
-  return Object.entries(church.social_links as Record<string, string>);
-}
-
-function BaseChurchPage(
-  props: ChurchPageTemplateProps & {
-    accentClass: string;
-    surfaceClass: string;
-    tintClass: string;
-    shellClass: string;
-    textClass: string;
-    mutedClass: string;
-    buttonClass: string;
-    cardClass: string;
+/**
+ * As três aparências que a igreja pode escolher, como variáveis CSS. A página
+ * é uma só; muda a paleta. Contraste de texto conferido em cada uma (AA).
+ */
+const PALETAS: Record<ChurchPageTemplateProps["templateSlug"], Record<string, string>> = {
+  dark: {
+    "--pg-bg": "#1a1a1a",
+    "--pg-band": "#1f1f1f",
+    "--pg-hero": "#161616",
+    "--pg-hero-text": "#f4f4f4",
+    "--pg-hero-muted": "#a9a9a9",
+    "--pg-hero-accent": "#5ccf9b",
+    "--pg-surface": "#242424",
+    "--pg-surface-2": "#2b2b2b",
+    "--pg-text": "#f1f1f1",
+    "--pg-muted": "#a8a8a8",
+    "--pg-border": "rgba(255, 255, 255, 0.08)",
+    "--pg-accent": "#5ccf9b",
+    "--pg-accent-fg": "#0b1a13",
+    "--pg-accent-soft": "rgba(92, 207, 155, 0.13)",
+    "--pg-danger": "#f2a097",
   },
-) {
-  const entries = getServiceTimes(props.church);
-  const socials = getSocialLinks(props.church);
-  const cityLocation =
-    props.church.address?.match(/,[\s\w\-]+\s*\/?\s*\w+$/)?.[0]?.replace(/^,\s*/, "") ??
-    "Guaiçara · SP";
+  classico: {
+    "--pg-bg": "#f6f1e8",
+    "--pg-band": "#efe8db",
+    "--pg-hero": "#1c2b3a",
+    "--pg-hero-text": "#f6efe2",
+    "--pg-hero-muted": "#cbc4b4",
+    // Vinho sobre o marinho dava 1,6:1 — ilegível. No cabeçalho, dourado.
+    "--pg-hero-accent": "#d9be7e",
+    "--pg-surface": "#ffffff",
+    "--pg-surface-2": "#fbf8f2",
+    "--pg-text": "#1c2b3a",
+    "--pg-muted": "#5b6470",
+    "--pg-border": "rgba(28, 43, 58, 0.12)",
+    "--pg-accent": "#7a2e3a",
+    "--pg-accent-fg": "#fff8f0",
+    "--pg-accent-soft": "rgba(122, 46, 58, 0.09)",
+    "--pg-danger": "#a3322a",
+  },
+  clean: {
+    "--pg-bg": "#f7f8f5",
+    "--pg-band": "#eef2ec",
+    "--pg-hero": "#e3ece4",
+    "--pg-hero-text": "#1d2a21",
+    "--pg-hero-muted": "#4d5c52",
+    "--pg-hero-accent": "#36684a",
+    "--pg-surface": "#ffffff",
+    "--pg-surface-2": "#f8faf7",
+    "--pg-text": "#1d2a21",
+    "--pg-muted": "#58665c",
+    "--pg-border": "rgba(29, 42, 33, 0.1)",
+    "--pg-accent": "#36684a",
+    "--pg-accent-fg": "#ffffff",
+    "--pg-accent-soft": "rgba(54, 104, 74, 0.1)",
+    "--pg-danger": "#a3322a",
+  },
+};
 
-  const actionList = [
-    { label: "Dízimos e ofertas", helper: "Pix ou cartão, em poucos toques", icon: HandCoins },
-    { label: "Pedido de oração", helper: "Conte com a nossa intercessão", icon: Heart },
-    { label: "Inscrição em eventos", helper: "Cultos especiais, retiros e conferências", icon: CalendarDays },
-    { label: "Sou visitante", helper: "Deixe seu contato e receba as boas-vindas", icon: Users },
-    { label: "Quero ser membro", helper: "Primeiro passo para integração", icon: MessageSquareHeart },
-  ];
+interface Atalho {
+  rotulo: string;
+  icone: LucideIcon | "whatsapp";
+  href: string;
+  externo?: boolean;
+}
 
-  const quickLinks = socials.length
-    ? socials.slice(0, 4).map(([label, value]) => ({ label, value }))
-    : [
-        { label: "Instagram", value: "#" },
-        { label: "Louvores", value: "#" },
-        { label: "Bíblia", value: "#" },
-        { label: "Contato", value: "#" },
-      ];
-
+/** Título em duas cores, como na referência: "Pedido de *oração*". */
+function TituloSecao({
+  icone: Icone,
+  antes,
+  destaque,
+  subtitulo,
+}: {
+  icone: LucideIcon;
+  antes: string;
+  destaque: string;
+  subtitulo?: string;
+}) {
   return (
-    <div className={`min-h-screen ${props.shellClass}`}>
-      <div className="mx-auto w-full max-w-6xl">
-        <header className={`${props.surfaceClass} px-4 pb-10 pt-11 text-center sm:px-6`}>
-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[#D9BE7E] bg-transparent">
-            <Church className="h-6 w-6 text-[#D9BE7E]" />
-          </div>
-
-          <h1
-            className="text-[23px] font-semibold tracking-[0.01em] sm:text-[26px]"
-            style={{ fontFamily: "Fraunces, Georgia, serif" }}
-          >
-            {props.church.name}
-          </h1>
-
-          <div className="mt-2 text-[13px] text-white/60">{cityLocation}</div>
-
-          <div
-            className="mx-auto mt-6 max-w-xl border-t border-white/15 pt-5 text-[14.5px] italic leading-relaxed text-white/75 sm:text-[15px]"
-            style={{ fontFamily: "Fraunces, Georgia, serif" }}
-          >
-            “Alegrei-me quando me disseram: vamos à casa do Senhor.”
-            <span className="mt-2 block text-[12px] font-normal not-italic text-[#D9BE7E]">
-              Salmos 122:1
-            </span>
-          </div>
-        </header>
-
-        <main className="px-4 pb-8 pt-7 sm:px-6 lg:px-8">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            {actionList.map((item, index) => {
-              const Icon = item.icon;
-              const isPrimary = index === 0;
-
-              return (
-                <a
-                  key={item.label}
-                  href="#"
-                  className={[
-                    "flex items-center gap-3 rounded-md border px-4 py-4 text-left transition-colors",
-                    isPrimary ? "border-[#6E2A34] bg-[#6E2A34] text-[#F3EDE1]" : "border-[#1C2B3A]/10 bg-white text-[#241E17]",
-                  ].join(" ")}
-                >
-                  <div
-                    className={[
-                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                      isPrimary ? "bg-white/10" : "bg-[#1C2B3A]/5",
-                    ].join(" ")}
-                  >
-                    <Icon className="h-[18px] w-[18px]" />
-                  </div>
-                  <div className="min-w-0">
-                    <strong className="block text-[15.5px] font-semibold">{item.label}</strong>
-                    <span className={[
-                      "block text-[12.5px] leading-snug",
-                      isPrimary ? "text-[#F3EDE1]/70" : "text-[#6B6152]",
-                    ].join(" ")}>
-                      {item.helper}
-                    </span>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-
-          <div className="mt-6">
-            <h2 className="mb-3 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-[#6B6152]">
-              Mais da igreja
-            </h2>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-              {quickLinks.map((link) => (
-                <a
-                  key={link.label}
-                  href={link.value}
-                  className="rounded-md border border-[#1C2B3A]/10 bg-white px-2 py-3 text-center text-[12.5px] font-medium text-[#241E17]"
-                >
-                  {link.label}
-                </a>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-8 border-t border-[#1C2B3A]/10 pt-7">
-            <h2 className="text-[12.5px] font-semibold uppercase tracking-[0.08em] text-[#6B6152]">
-              Apoio desta página
-            </h2>
-            <p className="mt-1 text-[12px] text-[#6B6152]">
-              Empresários da nossa comunidade que tornam este serviço gratuito para a igreja.
-            </p>
-
-            <div className="mt-4 grid grid-cols-2 gap-2.5 md:grid-cols-4">
-              {props.sponsors.length ? (
-                props.sponsors.slice(0, 4).map((sponsor) => (
-                  <div
-                    key={sponsor.id}
-                    className="rounded-md border border-[#1C2B3A]/10 bg-white p-4 text-center"
-                  >
-                    <div className="mx-auto mb-2.5 flex h-9 w-9 items-center justify-center rounded-full border border-[#B08C3E] bg-[#F3EDE1] text-[13px] font-semibold text-[#B08C3E]">
-                      {sponsor.logo_url ? (
-                        <img
-                          src={sponsor.logo_url}
-                          alt={sponsor.name}
-                          className="h-full w-full rounded-full object-cover"
-                        />
-                      ) : (
-                        getSponsorInitials(sponsor.name)
-                      )}
-                    </div>
-                    <strong className="block text-[13px] font-semibold text-[#241E17]">
-                      {sponsor.name}
-                    </strong>
-                    <span className="mt-1 block text-[11px] text-[#6B6152]">Patrocinador</span>
-                  </div>
-                ))
-              ) : (
-                <div className="col-span-2 rounded-md border border-[#1C2B3A]/10 bg-white p-4 text-center text-sm text-[#6B6152] md:col-span-4">
-                  Ainda não há patrocinadores cadastrados.
-                </div>
-              )}
-            </div>
-
-            {/* Porta de entrada do patrocinador: não precisa ser membro. */}
-            <a
-              href={sponsorshipPath(props.church.public_code)}
-              className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#B08C3E] px-4 py-2 text-[13px] font-semibold text-[#8A6D2F] transition-colors hover:bg-[#F3EDE1]"
-            >
-              Quero patrocinar esta igreja
-            </a>
-          </div>
-
-          <div className="mt-8 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <div className={`${props.cardClass} rounded-md border p-4`}>
-              <h3 className="mb-3 text-base font-semibold">Pedido de oração</h3>
-              <form action={submitPrayerRequestAction.bind(null, props.church.id)} className="space-y-3">
-                <input name="name" placeholder="Seu nome (opcional)" className="w-full rounded-md border border-[#1C2B3A]/10 bg-transparent px-3 py-2 text-sm outline-none" />
-                <textarea name="message" placeholder="Escreva seu pedido de oração" required className="min-h-24 w-full rounded-md border border-[#1C2B3A]/10 bg-transparent px-3 py-2 text-sm outline-none" />
-                <Button type="submit" className={props.buttonClass}>
-                  Enviar pedido
-                </Button>
-              </form>
-            </div>
-
-            <div className={`${props.cardClass} rounded-md border p-4`}>
-              <h3 className="mb-3 text-base font-semibold">Inscrição em eventos</h3>
-              <form action={submitEventSignupAction.bind(null, props.church.id)} className="space-y-3">
-                <input name="event_name" placeholder="Nome do evento" required className="w-full rounded-md border border-[#1C2B3A]/10 bg-transparent px-3 py-2 text-sm outline-none" />
-                <input name="person_name" placeholder="Seu nome" required className="w-full rounded-md border border-[#1C2B3A]/10 bg-transparent px-3 py-2 text-sm outline-none" />
-                <input name="contact" placeholder="WhatsApp / telefone / email" required className="w-full rounded-md border border-[#1C2B3A]/10 bg-transparent px-3 py-2 text-sm outline-none" />
-                <Button type="submit" className={props.buttonClass}>
-                  Registrar presença
-                </Button>
-              </form>
-            </div>
-
-            <div className={`${props.cardClass} rounded-md border p-4 md:col-span-2 xl:col-span-1`}>
-              <h3 className="mb-3 text-base font-semibold">Cadastro de visitante</h3>
-              <form action={submitVisitorAction.bind(null, props.church.id)} className="space-y-3">
-                <input name="name" placeholder="Nome completo" required className="w-full rounded-md border border-[#1C2B3A]/10 bg-transparent px-3 py-2 text-sm outline-none" />
-                <input name="contact" placeholder="WhatsApp / telefone / email" required className="w-full rounded-md border border-[#1C2B3A]/10 bg-transparent px-3 py-2 text-sm outline-none" />
-                <Button type="submit" className={props.buttonClass}>
-                  Salvar visita
-                </Button>
-              </form>
-            </div>
-          </div>
-        </main>
-
-        <footer className="px-4 pb-10 pt-6 text-center sm:px-6">
-          <p className="text-[11.5px] leading-relaxed text-[#6B6152]">
-            {props.church.name} — {props.church.address ?? "Rua das Palmeiras, 210, Guaiçara/SP"}
-          </p>
-          <div className="mt-2 text-[10.5px] text-[#6B6152]/70">Página mantida por EverApps</div>
-        </footer>
-      </div>
+    <div className="mb-5">
+      <h2 className={`${titulos.className} flex items-center gap-2.5 text-2xl font-bold`}>
+        <Icone className="size-6 shrink-0 text-[var(--pg-accent)]" aria-hidden />
+        <span>
+          {antes} <span className="text-[var(--pg-accent)]">{destaque}</span>
+        </span>
+      </h2>
+      {subtitulo ? (
+        <p className="mt-2 text-base leading-7 text-[var(--pg-muted)]">{subtitulo}</p>
+      ) : null}
     </div>
   );
 }
 
-export function ChurchPageClassico(props: ChurchPageTemplateProps) {
+/** Faixa de seção de ponta a ponta, conteúdo na coluna estreita. */
+function Faixa({ id, alternada, children }: { id: string; alternada: boolean; children: ReactNode }) {
   return (
-    <BaseChurchPage
-      {...props}
-      accentClass="bg-[#D9BE7E] text-[#1C2B3A]"
-      surfaceClass="bg-[#1C2B3A] text-[#F3EDE1]"
-      tintClass="bg-white/5"
-      shellClass="bg-[#F3EDE1] text-[#241E17]"
-      textClass="text-[#F3EDE1]"
-      mutedClass="text-[#F3EDE1]/70"
-      buttonClass="bg-[#6E2A34] hover:bg-[#5b222b] text-[#F3EDE1]"
-      cardClass="bg-white"
-    />
+    <section
+      id={id}
+      className={`scroll-mt-4 ${alternada ? "bg-[var(--pg-band)]" : "bg-[var(--pg-bg)]"}`}
+    >
+      <div className="mx-auto w-full max-w-xl px-5 py-12">{children}</div>
+    </section>
   );
 }
 
-export function ChurchPageClean(props: ChurchPageTemplateProps) {
-  return (
-    <BaseChurchPage
-      {...props}
-      accentClass="bg-[#3F5C4A] text-white"
-      surfaceClass="bg-[#FCFCFA] text-slate-900"
-      tintClass="bg-[#f2f7f2]"
-      shellClass="bg-[#f7f6f3] text-slate-900"
-      textClass="text-slate-900"
-      mutedClass="text-slate-600"
-      buttonClass="bg-[#3F5C4A] hover:bg-[#2f483a] text-white"
-      cardClass="bg-white"
-    />
-  );
+const cartao = "rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-surface)] p-5";
+
+function iniciais(nome: string): string {
+  return nome
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
 }
 
-export function ChurchPageDark(props: ChurchPageTemplateProps) {
-  return (
-    <BaseChurchPage
-      {...props}
-      accentClass="bg-[#8FB59B] text-slate-950"
-      surfaceClass="bg-[#14181C] text-white"
-      tintClass="bg-white/5"
-      shellClass="bg-[#101416] text-white"
-      textClass="text-white"
-      mutedClass="text-slate-300"
-      buttonClass="bg-[#8FB59B] hover:bg-[#7aa58d] text-slate-950"
-      cardClass="bg-[#1a1f24]"
-    />
-  );
-}
+export function ChurchPageRenderer({ church, sponsors, templateSlug }: ChurchPageTemplateProps) {
+  const horarios = orderServiceTimes(church.service_times);
+  const redes = normalizeSocialLinks(church.social_links);
+  const whatsapp = redes.find((r) => r.kind === "whatsapp");
+  const comoChegar = directionsUrl(church.name, church.address);
+  const temCultos = horarios.length > 0 || Boolean(church.address);
 
-export function ChurchPageRenderer(props: ChurchPageTemplateProps) {
-  switch (props.templateSlug) {
-    case "classico":
-      return <ChurchPageClassico {...props} />;
-    case "clean":
-      return <ChurchPageClean {...props} />;
-    case "dark":
-    default:
-      return <ChurchPageDark {...props} />;
+  const atalhos: Atalho[] = [
+    { rotulo: "Pedido de oração", icone: HandHeart, href: "#oracao" },
+    { rotulo: "Primeira visita", icone: UserPlus, href: "#visita" },
+    { rotulo: "Inscrições", icone: CalendarCheck, href: "#inscricoes" },
+    ...(temCultos ? [{ rotulo: "Cultos e endereço", icone: Clock3, href: "#cultos" }] : []),
+    ...(whatsapp
+      ? [{ rotulo: "WhatsApp", icone: "whatsapp" as const, href: whatsapp.href, externo: true }]
+      : []),
+    ...(redes.length > 0 ? [{ rotulo: "Redes sociais", icone: Share2, href: "#redes" }] : []),
+  ];
+  // O primeiro ocupa a linha inteira; se sobrar um sozinho no fim, ele também.
+  const ultimoSozinho = (atalhos.length - 1) % 2 === 1;
+
+  // Ordem das seções abaixo; a faixa alterna de cor a cada uma.
+  const secoes: Array<{ id: string; conteudo: ReactNode }> = [];
+
+  if (temCultos) {
+    secoes.push({
+      id: "cultos",
+      conteudo: (
+        <>
+          <TituloSecao icone={Clock3} antes="Nossos" destaque="cultos" subtitulo="Venha estar com a gente." />
+          <div className={cartao}>
+            {horarios.length > 0 ? (
+              <ul className="divide-y divide-[var(--pg-border)]">
+                {horarios.map((h) => (
+                  <li key={h.dia} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                    <span className="font-semibold">{h.dia}</span>
+                    <span className="text-right text-[var(--pg-muted)] tabular-nums">{h.horario}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {church.address ? (
+              <div className={horarios.length > 0 ? "mt-5 border-t border-[var(--pg-border)] pt-5" : ""}>
+                <p className="flex items-start gap-2 leading-6">
+                  <MapPin className="mt-1 size-4 shrink-0 text-[var(--pg-accent)]" aria-hidden />
+                  <span>{church.address}</span>
+                </p>
+                {comoChegar ? (
+                  <a
+                    href={comoChegar}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--pg-accent)] font-semibold text-[var(--pg-accent-fg)]"
+                  >
+                    <Navigation className="size-4" aria-hidden />
+                    Como chegar
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </>
+      ),
+    });
   }
+
+  secoes.push(
+    {
+      id: "oracao",
+      conteudo: (
+        <>
+          <TituloSecao
+            icone={HandHeart}
+            antes="Pedido de"
+            destaque="oração"
+            subtitulo="Compartilhe seu pedido e a nossa equipe vai orar por você. Pode ser anônimo."
+          />
+          <div className={cartao}>
+            <PrayerForm churchId={church.id} />
+          </div>
+        </>
+      ),
+    },
+    {
+      id: "visita",
+      conteudo: (
+        <>
+          <TituloSecao
+            icone={UserPlus}
+            antes="Primeira"
+            destaque="visita?"
+            subtitulo="Que alegria ter você aqui! Deixe seu contato e a gente te recebe."
+          />
+          <div className={cartao}>
+            <VisitorForm churchId={church.id} />
+          </div>
+        </>
+      ),
+    },
+    {
+      id: "inscricoes",
+      conteudo: (
+        <>
+          <TituloSecao
+            icone={CalendarCheck}
+            antes="Inscrições em"
+            destaque="eventos"
+            subtitulo="Retiros, cultos especiais e encontros. Diga qual e a gente guarda o seu lugar."
+          />
+          <div className={cartao}>
+            <EventSignupForm churchId={church.id} />
+          </div>
+        </>
+      ),
+    },
+  );
+
+  if (redes.length > 0) {
+    secoes.push({
+      id: "redes",
+      conteudo: (
+        <>
+          <TituloSecao icone={Share2} antes="Redes" destaque="sociais" subtitulo="Acompanhe a igreja durante a semana." />
+          <div className="grid grid-cols-2 gap-3">
+            {redes.map((rede) => (
+              <a
+                key={rede.kind}
+                href={rede.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-16 items-center justify-center gap-2.5 rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-surface)] font-semibold"
+              >
+                <SocialIcon kind={rede.kind} className="size-5" />
+                {rede.rotulo}
+              </a>
+            ))}
+          </div>
+        </>
+      ),
+    });
+  }
+
+  // Quem sustenta a página: por último e discreto — quem chegou aqui veio
+  // pela igreja, não pelos apoiadores.
+  secoes.push({
+    id: "apoio",
+    conteudo: (
+      <div className={cartao}>
+        <h2 className={`${titulos.className} text-lg font-semibold`}>Quem apoia esta página</h2>
+        {sponsors.length > 0 ? (
+          <ul className="mt-4 grid grid-cols-2 gap-3">
+            {sponsors.map((sponsor) => (
+              <li key={sponsor.id} className="flex items-center gap-2.5">
+                {sponsor.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
+                  <img src={sponsor.logo_url} alt="" className="size-10 shrink-0 rounded-lg bg-white object-contain" />
+                ) : (
+                  <span
+                    aria-hidden
+                    className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--pg-accent-soft)] text-xs font-semibold text-[var(--pg-accent)]"
+                  >
+                    {iniciais(sponsor.name)}
+                  </span>
+                )}
+                <span className="min-w-0 text-sm leading-5 font-medium">{sponsor.name}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="mt-4 text-sm leading-6 text-[var(--pg-muted)]">
+          Negócios e pessoas da comunidade mantêm esta página no ar, sem custo para a igreja.
+        </p>
+        <a
+          href={sponsorshipPath(church.public_code)}
+          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--pg-accent)]"
+        >
+          Quero apoiar esta igreja
+          <ArrowRight className="size-4" aria-hidden />
+        </a>
+      </div>
+    ),
+  });
+
+  return (
+    <div
+      style={PALETAS[templateSlug] as CSSProperties}
+      className="min-h-svh bg-[var(--pg-bg)] text-[var(--pg-text)]"
+    >
+      <header className="bg-[var(--pg-hero)]">
+        <div className="mx-auto flex w-full max-w-xl flex-col items-center px-5 pt-14 pb-10 text-center">
+          {church.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
+            <img src={church.logo_url} alt="" className="h-20 w-auto max-w-[70%] object-contain" />
+          ) : (
+            <span
+              aria-hidden
+              className={`${titulos.className} flex size-20 items-center justify-center rounded-full border-2 border-[var(--pg-hero-muted)]/40 text-3xl font-semibold text-[var(--pg-hero-text)]`}
+            >
+              {churchInitials(church.name)}
+            </span>
+          )}
+          <h1
+            className={`${titulos.className} mt-5 text-3xl leading-tight font-bold text-balance text-[var(--pg-hero-text)]`}
+          >
+            {church.name}
+          </h1>
+          {church.address ? (
+            <p className="mt-2 text-base text-[var(--pg-hero-muted)]">{church.address}</p>
+          ) : null}
+        </div>
+      </header>
+
+      <nav aria-label="Atalhos" className="bg-[var(--pg-hero)] pb-12">
+        <div className="mx-auto w-full max-w-xl px-5">
+          <p className={`${titulos.className} mb-5 text-center text-2xl font-bold text-[var(--pg-hero-accent)]`}>
+            Bem-vindo(a)!
+          </p>
+          <ul className="grid grid-cols-2 gap-3">
+            {atalhos.map((a, i) => {
+              const largo = i === 0 || (ultimoSozinho && i === atalhos.length - 1);
+              return (
+                <li key={a.rotulo} className={largo ? "col-span-2" : undefined}>
+                  <a
+                    href={a.href}
+                    {...(a.externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    className="flex h-full min-h-[5.5rem] flex-col items-center justify-center gap-2 rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-surface)] px-3 py-4 text-center font-semibold text-[var(--pg-text)] transition-colors hover:border-[var(--pg-accent)]"
+                  >
+                    {a.icone === "whatsapp" ? (
+                      <SocialIcon kind="whatsapp" className="size-6 text-[var(--pg-accent)]" />
+                    ) : (
+                      <a.icone className="size-6 text-[var(--pg-accent)]" aria-hidden />
+                    )}
+                    {a.rotulo}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </nav>
+
+      {secoes.map((s, i) => (
+        <Faixa key={s.id} id={s.id} alternada={i % 2 === 0}>
+          {s.conteudo}
+        </Faixa>
+      ))}
+
+      <footer className="bg-[var(--pg-bg)] px-4 pt-2 pb-10 text-center">
+        <a href={brand.url} className="text-xs text-[var(--pg-muted)] underline-offset-4 hover:underline">
+          Página criada com {brand.name}
+        </a>
+      </footer>
+    </div>
+  );
 }
 
 export const templatePreviewOptions = [
   { slug: "classico", label: "Clássico", hint: "Navy + vinho" },
-  { slug: "clean", label: "Clean", hint: "Claro + sábia" },
+  { slug: "clean", label: "Clean", hint: "Claro + sálvia" },
   { slug: "dark", label: "Dark", hint: "Grafite + verde" },
 ] as const;

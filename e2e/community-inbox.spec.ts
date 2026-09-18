@@ -29,7 +29,8 @@ test("pedido de oração enviado na página pública aparece no painel", async (
   await form.locator('input[name="name"]').fill("Visitante E2E");
   await form.locator('textarea[name="message"], input[name="message"]').first().fill(pedido);
   await form.locator('button[type="submit"]').click();
-  await visitorPage.waitForTimeout(1000);
+  // O visitante precisa SABER que chegou — antes a página não dizia nada.
+  await expect(visitorPage.getByText("Recebemos o seu pedido")).toBeVisible();
   await visitor.close();
 
   // O pastor vê o pedido, com o texto exato.
@@ -56,7 +57,8 @@ test("igreja não vê pedido enviado para outra igreja", async ({ page, context 
   await form.locator('input[name="name"]').fill("Alguem da Igreja A");
   await form.locator('textarea[name="message"], input[name="message"]').first().fill(segredo);
   await form.locator('button[type="submit"]').click();
-  await visitorPage.waitForTimeout(1000);
+  // O visitante precisa SABER que chegou — antes a página não dizia nada.
+  await expect(visitorPage.getByText("Recebemos o seu pedido")).toBeVisible();
   await visitor.close();
 
   // Pastor de OUTRA igreja, em sessão limpa, não pode ver nada disso.

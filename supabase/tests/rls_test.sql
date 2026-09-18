@@ -1396,6 +1396,31 @@ end $$;
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Tema da igreja resolvido para quem visita sem login (migration 20260919180000).
+-- `select *` em churches falhava para o anon e toda igreja caía no tema padrão.
+-- ---------------------------------------------------------------------------
+reset role;
+
+update public.churches
+set template_mode = 'custom',
+    template_id = (select id from public.templates where slug = 'classico')
+where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+declare v uuid;
+begin
+  select public.resolve_template('d1d1d1d1-0000-4000-8000-000000000001') into v;
+  if v is distinct from (select id from public.templates where slug = 'classico') then
+    raise exception 'FALHA resolve_template: anon nao recebeu o tema escolhido (%)', coalesce(v::text, '<null>');
+  end if;
+end $$;
+
+reset role;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'

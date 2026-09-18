@@ -4,96 +4,72 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppError } from "@/lib/errors";
 import { getSupabaseServerClient } from "@/server/supabase-server";
+import { getPublicSubmissionService } from "@/server/publicSubmission";
 import { getActiveTenant } from "@/server/tenant";
+import { toActionError, type ActionState } from "./action-state";
 
 async function getChurchClient() {
   const supabase = await getSupabaseServerClient();
   return supabase;
 }
 
+/**
+ * Formulários da página pública da igreja. Devolvem ActionState em vez de
+ * lançar erro: quem está do outro lado é um visitante no celular, e um campo
+ * vazio não pode virar a tela de erro do sistema. O id da igreja vem
+ * vinculado pela página (bind), e o service valida o formato de novo.
+ */
+
 export async function submitPrayerRequestAction(
   churchId: string,
+  _prev: ActionState | undefined,
   formData: FormData,
-) {
-  const message = String(formData.get("message") ?? "").trim();
-  if (!message) {
-    throw new AppError("validation_error", "Escreva o seu pedido de oração.");
+): Promise<ActionState> {
+  try {
+    await (await getPublicSubmissionService()).submitPrayerRequest({
+      churchId,
+      name: formData.get("name") ?? "",
+      message: formData.get("message") ?? "",
+    });
+    return { success: "Recebemos o seu pedido. Vamos orar por você." };
+  } catch (err) {
+    return toActionError(err);
   }
-
-  const name = String(formData.get("name") ?? "").trim() || null;
-  const supabase = await getChurchClient();
-  const { error } = await supabase.from("prayer_requests").insert({
-    church_id: churchId,
-    name,
-    message,
-  });
-
-  if (error) {
-    throw new AppError(
-      "internal_error",
-      "Não foi possível registrar o pedido de oração.",
-    );
-  }
-
-}
-
-export async function submitEventSignupAction(
-  churchId: string,
-  formData: FormData,
-) {
-  const eventName = String(formData.get("event_name") ?? "").trim();
-  const personName = String(formData.get("person_name") ?? "").trim();
-  const contact = String(formData.get("contact") ?? "").trim();
-
-  if (!eventName || !personName || !contact) {
-    throw new AppError(
-      "validation_error",
-      "Preencha todos os campos do evento.",
-    );
-  }
-
-  const supabase = await getChurchClient();
-  const { error } = await supabase.from("event_signups").insert({
-    church_id: churchId,
-    event_name: eventName,
-    person_name: personName,
-    contact,
-  });
-
-  if (error) {
-    throw new AppError(
-      "internal_error",
-      "Não foi possível registrar a inscrição.",
-    );
-  }
-
 }
 
 export async function submitVisitorAction(
   churchId: string,
+  _prev: ActionState | undefined,
   formData: FormData,
-) {
-  const name = String(formData.get("name") ?? "").trim();
-  const contact = String(formData.get("contact") ?? "").trim();
-
-  if (!name || !contact) {
-    throw new AppError("validation_error", "Informe seu nome e contato.");
+): Promise<ActionState> {
+  try {
+    await (await getPublicSubmissionService()).submitVisitor({
+      churchId,
+      name: formData.get("name") ?? "",
+      contact: formData.get("contact") ?? "",
+    });
+    return { success: "Obrigado! Alguém da igreja vai falar com você." };
+  } catch (err) {
+    return toActionError(err);
   }
+}
 
-  const supabase = await getChurchClient();
-  const { error } = await supabase.from("visitors").insert({
-    church_id: churchId,
-    name,
-    contact,
-  });
-
-  if (error) {
-    throw new AppError(
-      "internal_error",
-      "Não foi possível registrar o visitante.",
-    );
+export async function submitEventSignupAction(
+  churchId: string,
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await (await getPublicSubmissionService()).submitEventSignup({
+      churchId,
+      eventName: formData.get("event_name") ?? "",
+      personName: formData.get("person_name") ?? "",
+      contact: formData.get("contact") ?? "",
+    });
+    return { success: "Inscrição feita. Até lá!" };
+  } catch (err) {
+    return toActionError(err);
   }
-
 }
 
 export async function updateChurchTemplateAction(

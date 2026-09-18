@@ -53,7 +53,6 @@ export default async function PublicChurchPage({
       church={church}
       sponsors={sponsors}
       templateSlug={templateSlug}
-      staticPix="PIX Tag Igreja: 00000.00000.00000.00000"
     />
   );
 }
