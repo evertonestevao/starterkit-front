@@ -73,9 +73,25 @@ export default async function PlatformReportsPage() {
                 </p>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
-                <blockquote className="border-l-2 pl-3 text-sm leading-6 text-muted-foreground italic">
-                  {report.motivo}
-                </blockquote>
+                {/* Muita denúncia é sobre a imagem. Decidir sem vê-la seria
+                    decidir no escuro — o mesmo motivo de a fila de
+                    alterações mostrar atual e proposto lado a lado. */}
+                <div className="flex items-start gap-4">
+                  {report.logoUrl ? (
+                    <figure className="flex shrink-0 flex-col items-center gap-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- logo em storage externo */}
+                      <img
+                        src={report.logoUrl}
+                        alt={`Logo exibido hoje por ${report.sponsorName}`}
+                        className="size-16 rounded-lg border object-contain"
+                      />
+                      <figcaption className="text-xs text-muted-foreground">no ar</figcaption>
+                    </figure>
+                  ) : null}
+                  <blockquote className="border-l-2 pl-3 text-sm leading-6 text-muted-foreground italic">
+                    {report.motivo}
+                  </blockquote>
+                </div>
                 <AbuseReportReview report={report} />
               </CardContent>
             </Card>
