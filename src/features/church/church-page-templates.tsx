@@ -4,7 +4,8 @@ import {
   ArrowRight,
   CalendarCheck,
   Clock3,
-  HandHeart,
+  HandCoins,
+  Heart,
   MapPin,
   Navigation,
   Share2,
@@ -17,6 +18,7 @@ import {
   PrayerForm,
   VisitorForm,
 } from "@/features/church/components/public-actions";
+import { CopyPix } from "@/features/church/components/copy-pix";
 import { SocialIcon } from "@/features/church/components/social-icon";
 import {
   churchInitials,
@@ -175,21 +177,108 @@ export function ChurchPageRenderer({ church, sponsors, templateSlug }: ChurchPag
   const comoChegar = directionsUrl(church.name, church.address);
   const temCultos = horarios.length > 0 || Boolean(church.address);
 
-  const atalhos: Atalho[] = [
-    { rotulo: "Pedido de oração", icone: HandHeart, href: "#oracao" },
-    { rotulo: "Primeira visita", icone: UserPlus, href: "#visita" },
-    { rotulo: "Inscrições", icone: CalendarCheck, href: "#inscricoes" },
-    ...(temCultos ? [{ rotulo: "Cultos e endereço", icone: Clock3, href: "#cultos" }] : []),
+  const temPix = Boolean(church.pix_chave);
+
+  // Ordem definida pelo dono do produto: Dízimos em destaque no topo; depois
+  // oração + visitante; depois eventos + cultos. WhatsApp e redes só entram,
+  // no fim, quando a igreja os tem.
+  const destaque: Atalho | null = temPix
+    ? { rotulo: "Dízimos e ofertas", icone: HandCoins, href: "#dizimos" }
+    : null;
+  const pares: Atalho[] = [
+    { rotulo: "Pedido de oração", icone: Heart, href: "#oracao" },
+    { rotulo: "Sou visitante", icone: UserPlus, href: "#visita" },
+    { rotulo: "Eventos", icone: CalendarCheck, href: "#inscricoes" },
+    ...(temCultos ? [{ rotulo: "Cultos", icone: Clock3, href: "#cultos" }] : []),
     ...(whatsapp
       ? [{ rotulo: "WhatsApp", icone: "whatsapp" as const, href: whatsapp.href, externo: true }]
       : []),
     ...(redes.length > 0 ? [{ rotulo: "Redes sociais", icone: Share2, href: "#redes" }] : []),
   ];
-  // O primeiro ocupa a linha inteira; se sobrar um sozinho no fim, ele também.
-  const ultimoSozinho = (atalhos.length - 1) % 2 === 1;
+  const atalhos: Atalho[] = destaque ? [destaque, ...pares] : pares;
+  // Dízimos ocupa a linha inteira; se sobrar um sozinho no fim, ele também.
+  const ultimoSozinho = pares.length % 2 === 1;
 
   // Ordem das seções abaixo; a faixa alterna de cor a cada uma.
   const secoes: Array<{ id: string; conteudo: ReactNode }> = [];
+
+  if (temPix && church.pix_chave) {
+    secoes.push({
+      id: "dizimos",
+      conteudo: (
+        <>
+          <TituloSecao
+            icone={HandCoins}
+            antes="Dízimos e"
+            destaque="ofertas"
+            subtitulo="Sua contribuição sustenta a obra desta igreja. A doação vai direto para a conta dela."
+          />
+          <div className={cartao}>
+            <p className="mb-2 text-sm font-medium">Chave PIX</p>
+            <CopyPix chave={church.pix_chave} />
+            {church.pix_titular ? (
+              <p className="mt-4 text-sm leading-6 text-[var(--pg-muted)]">
+                Antes de confirmar, veja se o app do seu banco mostra{" "}
+                <strong className="font-semibold text-[var(--pg-text)]">{church.pix_titular}</strong>{" "}
+                como quem vai receber.
+              </p>
+            ) : null}
+          </div>
+        </>
+      ),
+    });
+  }
+
+  secoes.push(
+    {
+      id: "oracao",
+      conteudo: (
+        <>
+          <TituloSecao
+            icone={Heart}
+            antes="Pedido de"
+            destaque="oração"
+            subtitulo="Compartilhe seu pedido e a nossa equipe vai orar por você. Pode ser anônimo."
+          />
+          <div className={cartao}>
+            <PrayerForm churchId={church.id} />
+          </div>
+        </>
+      ),
+    },
+    {
+      id: "visita",
+      conteudo: (
+        <>
+          <TituloSecao
+            icone={UserPlus}
+            antes="Sou"
+            destaque="visitante"
+            subtitulo="Que alegria ter você aqui! Deixe seu contato e a gente te recebe."
+          />
+          <div className={cartao}>
+            <VisitorForm churchId={church.id} />
+          </div>
+        </>
+      ),
+    },
+    {
+      id: "inscricoes",
+      conteudo: (
+        <>
+          <TituloSecao
+            icone={CalendarCheck}
+            antes="Inscrições em"
+            destaque="eventos"
+            subtitulo="Retiros, cultos especiais e encontros. Diga qual e a gente guarda o seu lugar."
+          />
+          <div className={cartao}>
+            <EventSignupForm churchId={church.id} />
+          </div>
+        </>
+      ),
+    },
+  );
 
   if (temCultos) {
     secoes.push({
@@ -233,57 +322,6 @@ export function ChurchPageRenderer({ church, sponsors, templateSlug }: ChurchPag
     });
   }
 
-  secoes.push(
-    {
-      id: "oracao",
-      conteudo: (
-        <>
-          <TituloSecao
-            icone={HandHeart}
-            antes="Pedido de"
-            destaque="oração"
-            subtitulo="Compartilhe seu pedido e a nossa equipe vai orar por você. Pode ser anônimo."
-          />
-          <div className={cartao}>
-            <PrayerForm churchId={church.id} />
-          </div>
-        </>
-      ),
-    },
-    {
-      id: "visita",
-      conteudo: (
-        <>
-          <TituloSecao
-            icone={UserPlus}
-            antes="Primeira"
-            destaque="visita?"
-            subtitulo="Que alegria ter você aqui! Deixe seu contato e a gente te recebe."
-          />
-          <div className={cartao}>
-            <VisitorForm churchId={church.id} />
-          </div>
-        </>
-      ),
-    },
-    {
-      id: "inscricoes",
-      conteudo: (
-        <>
-          <TituloSecao
-            icone={CalendarCheck}
-            antes="Inscrições em"
-            destaque="eventos"
-            subtitulo="Retiros, cultos especiais e encontros. Diga qual e a gente guarda o seu lugar."
-          />
-          <div className={cartao}>
-            <EventSignupForm churchId={church.id} />
-          </div>
-        </>
-      ),
-    },
-  );
-
   if (redes.length > 0) {
     secoes.push({
       id: "redes",
@@ -308,47 +346,6 @@ export function ChurchPageRenderer({ church, sponsors, templateSlug }: ChurchPag
       ),
     });
   }
-
-  // Quem sustenta a página: por último e discreto — quem chegou aqui veio
-  // pela igreja, não pelos apoiadores.
-  secoes.push({
-    id: "apoio",
-    conteudo: (
-      <div className={cartao}>
-        <h2 className={`${titulos.className} text-lg font-semibold`}>Quem apoia esta página</h2>
-        {sponsors.length > 0 ? (
-          <ul className="mt-4 grid grid-cols-2 gap-3">
-            {sponsors.map((sponsor) => (
-              <li key={sponsor.id} className="flex items-center gap-2.5">
-                {sponsor.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
-                  <img src={sponsor.logo_url} alt="" className="size-10 shrink-0 rounded-lg bg-white object-contain" />
-                ) : (
-                  <span
-                    aria-hidden
-                    className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--pg-accent-soft)] text-xs font-semibold text-[var(--pg-accent)]"
-                  >
-                    {iniciais(sponsor.name)}
-                  </span>
-                )}
-                <span className="min-w-0 text-sm leading-5 font-medium">{sponsor.name}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <p className="mt-4 text-sm leading-6 text-[var(--pg-muted)]">
-          Negócios e pessoas da comunidade mantêm esta página no ar, sem custo para a igreja.
-        </p>
-        <a
-          href={sponsorshipPath(church.public_code)}
-          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--pg-accent)]"
-        >
-          Quero apoiar esta igreja
-          <ArrowRight className="size-4" aria-hidden />
-        </a>
-      </div>
-    ),
-  });
 
   return (
     <div
@@ -386,7 +383,7 @@ export function ChurchPageRenderer({ church, sponsors, templateSlug }: ChurchPag
           </p>
           <ul className="grid grid-cols-2 gap-3">
             {atalhos.map((a, i) => {
-              const largo = i === 0 || (ultimoSozinho && i === atalhos.length - 1);
+              const largo = (destaque !== null && i === 0) || (ultimoSozinho && i === atalhos.length - 1);
               return (
                 <li key={a.rotulo} className={largo ? "col-span-2" : undefined}>
                   <a
@@ -407,6 +404,46 @@ export function ChurchPageRenderer({ church, sponsors, templateSlug }: ChurchPag
           </ul>
         </div>
       </nav>
+
+      {/* Quem sustenta a página, logo abaixo dos atalhos: é o que mantém a
+          página no ar sem custo para a igreja. */}
+      <section id="apoio" className="bg-[var(--pg-bg)]">
+        <div className="mx-auto w-full max-w-xl px-5 pt-10">
+          <div className={cartao}>
+        <h2 className={`${titulos.className} text-lg font-semibold`}>Quem apoia esta página</h2>
+        {sponsors.length > 0 ? (
+          <ul className="mt-4 grid grid-cols-2 gap-3">
+            {sponsors.map((sponsor) => (
+              <li key={sponsor.id} className="flex items-center gap-2.5">
+                {sponsor.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
+                  <img src={sponsor.logo_url} alt="" className="size-10 shrink-0 rounded-lg bg-white object-contain" />
+                ) : (
+                  <span
+                    aria-hidden
+                    className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--pg-accent-soft)] text-xs font-semibold text-[var(--pg-accent)]"
+                  >
+                    {iniciais(sponsor.name)}
+                  </span>
+                )}
+                <span className="min-w-0 text-sm leading-5 font-medium">{sponsor.name}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="mt-4 text-sm leading-6 text-[var(--pg-muted)]">
+          Negócios e pessoas da comunidade mantêm esta página no ar, sem custo para a igreja.
+        </p>
+        <a
+          href={sponsorshipPath(church.public_code)}
+          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--pg-accent)]"
+        >
+          Quero apoiar esta igreja
+          <ArrowRight className="size-4" aria-hidden />
+        </a>
+      </div>
+        </div>
+      </section>
 
       {secoes.map((s, i) => (
         <Faixa key={s.id} id={s.id} alternada={i % 2 === 0}>

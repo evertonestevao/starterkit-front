@@ -38,6 +38,8 @@ function makeChurch(overrides: Partial<Church> = {}): Church {
     template_mode: "inherit",
     template_id: null,
     public_code: "igreja-x",
+    pix_chave: null,
+    pix_titular: null,
     dominio_customizado: null,
     dominio_status: "nao_configurado",
     dominio_suporte_pago: false,

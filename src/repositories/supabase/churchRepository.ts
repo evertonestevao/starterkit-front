@@ -12,7 +12,7 @@ import type { PublicSponsor } from "@/types/sponsorship";
  * permission denied — que é exatamente o comportamento desejado.
  */
 export const PUBLIC_CHURCH_COLUMNS =
-  "id, parent_id, name, slug, logo_url, address, service_times, social_links, path, template_mode, template_id, public_code, created_at, updated_at";
+  "id, parent_id, name, slug, logo_url, address, service_times, social_links, path, template_mode, template_id, public_code, pix_chave, pix_titular, created_at, updated_at";
 
 export function createSupabasePublicChurchRepository(client: SupabaseClient) {
   return {

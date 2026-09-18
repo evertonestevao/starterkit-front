@@ -179,6 +179,10 @@ export interface Church {
   template_mode: ChurchTemplateMode;
   template_id: string | null;
   public_code: string;
+  /** Chave PIX da própria igreja (dízimos e ofertas). A plataforma não intermedeia. */
+  pix_chave: string | null;
+  /** Titular da chave, para quem doa conferir no app do banco. */
+  pix_titular: string | null;
   /** Host próprio da igreja, minúsculo e sem protocolo. Null = só o padrão. */
   dominio_customizado: string | null;
   dominio_status: ChurchDomainStatus;
