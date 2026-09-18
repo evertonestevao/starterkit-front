@@ -60,7 +60,7 @@ export function SponsorshipDisclosure({
               <strong className="font-medium text-foreground">para a igreja</strong> com dízimo ou
               oferta? Isso é outra coisa, e fica{" "}
               <Link
-                href={`/t/${encodeURIComponent(churchPublicCode)}`}
+                href={`/igreja/${encodeURIComponent(churchPublicCode)}`}
                 className="underline underline-offset-4 hover:text-foreground"
               >
                 na página dela

@@ -19,7 +19,7 @@ import type {
  *
  * Duas premissas que valem para tudo aqui:
  *
- * 1. O endereço padrão (/t/{public_code}) NUNCA depende deste fluxo. Toda
+ * 1. O endereço padrão (/igreja/{public_code}) NUNCA depende deste fluxo. Toda
  *    falha — provedor fora do ar, DNS errado, domínio expirado — degrada para
  *    "a igreja continua no endereço padrão", nunca para "a igreja sumiu".
  * 2. A promoção para `ativo` só acontece depois de o provedor confirmar posse
@@ -164,7 +164,7 @@ export function createChurchDomainService(deps: ChurchDomainServiceDeps) {
       churchId: church.id,
       churchName: church.name,
       // Sempre presente, com domínio próprio ou sem ele.
-      defaultUrl: `${appUrl.replace(/\/$/, "")}/t/${church.public_code}`,
+      defaultUrl: `${appUrl.replace(/\/$/, "")}/igreja/${church.public_code}`,
       sponsorInviteUrl: `${appUrl.replace(/\/$/, "")}/patrocinador/patrocinar/${encodeURIComponent(church.public_code)}`,
       domain,
       status: church.dominio_status,

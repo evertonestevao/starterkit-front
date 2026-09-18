@@ -35,7 +35,6 @@ export async function submitPrayerRequestAction(
     );
   }
 
-  revalidatePath(`/t/${churchId}`);
 }
 
 export async function submitEventSignupAction(
@@ -68,7 +67,6 @@ export async function submitEventSignupAction(
     );
   }
 
-  revalidatePath(`/t/${churchId}`);
 }
 
 export async function submitVisitorAction(
@@ -96,7 +94,6 @@ export async function submitVisitorAction(
     );
   }
 
-  revalidatePath(`/t/${churchId}`);
 }
 
 export async function updateChurchTemplateAction(

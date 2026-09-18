@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  * 404 da aplicação inteira.
  *
  * Escrita para DOIS públicos, porque `notFound()` é chamado tanto em rotas do
- * painel quanto em /t/[public_code] — a página pública da igreja. Quem cai
+ * painel quanto em /igreja/[public_code] — a página pública da igreja. Quem cai
  * aqui por um QR code impresso errado não faz ideia do que é um dashboard, e
  * mandá-lo "voltar ao painel" seria inútil. Daí o tom acolhedor, o caminho
  * para o início e a dica específica de quem procurava uma igreja.

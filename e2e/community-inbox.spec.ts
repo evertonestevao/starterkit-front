@@ -18,7 +18,11 @@ test("pedido de oração enviado na página pública aparece no painel", async (
   // Visitante anônimo, em outra sessão.
   const visitor = await context.browser()!.newContext();
   const visitorPage = await visitor.newPage();
+
+  // O endereço antigo (/t/) segue chegando na página: QR impresso e link já
+  // enviado não podem quebrar por causa da troca para /igreja/.
   await visitorPage.goto(`/t/${publicCode}`);
+  await expect(visitorPage).toHaveURL(new RegExp(`/igreja/${publicCode}$`));
 
   const pedido = `Orem pela minha familia ${Date.now()}`;
   const form = visitorPage.locator("form").first();
@@ -46,7 +50,7 @@ test("igreja não vê pedido enviado para outra igreja", async ({ page, context 
 
   const visitor = await context.browser()!.newContext();
   const visitorPage = await visitor.newPage();
-  await visitorPage.goto(`/t/${codeA}`);
+  await visitorPage.goto(`/igreja/${codeA}`);
   const segredo = `Pedido reservado ${Date.now()}`;
   const form = visitorPage.locator("form").first();
   await form.locator('input[name="name"]').fill("Alguem da Igreja A");

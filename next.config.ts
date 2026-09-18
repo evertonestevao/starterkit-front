@@ -16,6 +16,24 @@ const nextConfig: NextConfig = {
    * são roteáveis na prática). Só vale em dev — produção (Vercel) não usa.
    */
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*"],
+
+  /**
+   * A página pública da igreja saiu de /t/<código> para /igreja/<código>: o
+   * link é mais compartilhado (WhatsApp) do que digitado, e "igreja" se
+   * explica sozinho. O endereço antigo segue funcionando com redirect
+   * PERMANENTE — qualquer link já enviado ou QR impresso com /t/ continua
+   * chegando. Este redirect não pode ser removido depois que houver material
+   * impresso com o endereço antigo.
+   */
+  async redirects() {
+    return [
+      {
+        source: "/t/:publicCode",
+        destination: "/igreja/:publicCode",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

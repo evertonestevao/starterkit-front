@@ -12,7 +12,7 @@ import {
  *
  * 1. RESOLVER O TENANT PELO HOST. Se a request chegou por um domínio próprio de
  *    igreja (igrejax.com.br), ela é reescrita para a página pública daquela
- *    igreja. Endereço padrão (tagigreja.com.br/t/{public_code}) segue
+ *    igreja. Endereço padrão (tagigreja.com.br/igreja/{public_code}) segue
  *    funcionando sempre — é o caminho que não depende de DNS de terceiro.
  *
  * 2. Manter a sessão Supabase renovada nos cookies e fazer a checagem OTIMISTA
@@ -95,10 +95,10 @@ export async function proxy(request: NextRequest) {
       }
 
       // Hoje a presença pública da igreja é uma página só. Quando houver
-      // subrotas públicas, elas entram aqui mapeadas sob /t/{public_code}.
+      // subrotas públicas, elas entram aqui mapeadas sob /igreja/{public_code}.
       if (pathname === "/") {
         const url = request.nextUrl.clone();
-        url.pathname = `/t/${match.publicCode}`;
+        url.pathname = `/igreja/${match.publicCode}`;
         return NextResponse.rewrite(url);
       }
     }

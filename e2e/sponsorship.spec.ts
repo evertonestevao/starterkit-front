@@ -65,7 +65,7 @@ test("visitante assina patrocínio sem login e a igreja passa a ver o apoio", as
 
   // 4. O nome aparece na página pública da igreja.
   const publicCode = invitePath(inviteUrl).split("/").pop()!;
-  await visitorPage.goto(`/t/${publicCode}`);
+  await visitorPage.goto(`/igreja/${publicCode}`);
   await expect(visitorPage.getByText("Padaria E2E")).toBeVisible();
 
   // 5. E o pastor vê o patrocinador no painel dele.

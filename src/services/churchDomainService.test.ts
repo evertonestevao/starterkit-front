@@ -210,7 +210,7 @@ describe("claimDomain", () => {
     // A tela recebe as instruções já montadas: A na raiz + TXT do desafio.
     expect(view.dns.map((r) => r.type)).toEqual(["A", "TXT"]);
     // O endereço padrão continua ali, seja qual for o estado do domínio.
-    expect(view.defaultUrl).toBe("https://tagigreja.com.br/t/igreja-x");
+    expect(view.defaultUrl).toBe("https://tagigreja.com.br/igreja/igreja-x");
   });
 
   it("desfaz a reserva quando o provedor recusa o domínio", async () => {
@@ -356,7 +356,7 @@ describe("removeDomain", () => {
     expect(harness.calls.cleared).toEqual([CHURCH_ID]);
     expect(view.status).toBe("nao_configurado");
     expect(view.customUrl).toBeNull();
-    expect(view.defaultUrl).toBe("https://tagigreja.com.br/t/igreja-x");
+    expect(view.defaultUrl).toBe("https://tagigreja.com.br/igreja/igreja-x");
   });
 });
 
