@@ -19,10 +19,12 @@ import { requestProfileChangeAction } from "@/server/actions/sponsorProfile";
 export function SponsorProfileForm({
   displayName,
   phone,
+  logoUrl,
   bloqueada,
 }: {
   displayName: string;
   phone: string | null;
+  logoUrl: string | null;
   bloqueada: boolean;
 }) {
   const [state, formAction, pending] = useActionState(requestProfileChangeAction, undefined);
@@ -54,6 +56,34 @@ export function SponsorProfileForm({
         <p className="text-xs text-muted-foreground">
           É o nome que aparece nas páginas das igrejas que você apoia. Mudanças passam pela
           conferência da nossa equipe antes de entrar no ar.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="logo">Logo</Label>
+        <div className="flex items-center gap-3">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
+            <img
+              src={logoUrl}
+              alt="Logo que aparece hoje nas páginas das igrejas"
+              className="size-14 shrink-0 rounded-lg border object-contain"
+            />
+          ) : (
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
+              sem logo
+            </span>
+          )}
+          <Input
+            id="logo"
+            name="logo"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={bloqueada}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          PNG, JPG ou WebP, até 1 MB. Como o nome, o logo passa pela conferência antes de aparecer.
         </p>
       </div>
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { getEmailProvider } from "@/adapters/email";
+import { createSupabaseStorageProvider } from "@/adapters/storage/supabaseStorageProvider";
 import { getServerEnv } from "@/config/env";
 import { createSupabasePlatformModerationRepository } from "@/repositories/supabase/platformModerationRepository";
 import { createSupabaseSponsorProfileRepository } from "@/repositories/supabase/sponsorProfileRepository";
@@ -11,6 +12,8 @@ import {
 import { getSupabaseAdminClient } from "./supabase-admin";
 import { getSupabaseServerClient } from "./supabase-server";
 import { hashUrlToken, makeUrlToken } from "./tokens";
+
+export const SPONSOR_LOGOS_BUCKET = "sponsor-logos";
 
 /**
  * Montagem do serviço de perfil do patrocinador.
@@ -25,8 +28,18 @@ async function build(): Promise<SponsorProfileService> {
   const client = await getSupabaseServerClient();
   const staff = createSupabasePlatformModerationRepository(client, getSupabaseAdminClient());
 
+  // Upload com o client do USUÁRIO: a policy do bucket é que garante que ele
+  // só escreve na pasta `pendente/<uid>` dele. Com service_role aqui, um bug
+  // de path bastaria para escrever direto na pasta pública e pular a fila.
+  const logos = createSupabaseStorageProvider(client, SPONSOR_LOGOS_BUCKET);
+
   return createSponsorProfileService({
     repo: createSupabaseSponsorProfileRepository(client),
+    storage: {
+      upload: ({ path, bytes, contentType }) =>
+        logos.upload({ path, content: bytes, contentType }).then(() => undefined),
+      publicUrl: (path) => logos.getPublicUrl(path),
+    },
     appUrl: env.APP_URL,
     makeToken: makeUrlToken,
     hashToken: hashUrlToken,

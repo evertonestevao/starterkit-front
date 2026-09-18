@@ -18,6 +18,8 @@ export interface StorageProvider {
   /** Sobe o arquivo e devolve o path final. Lança AppError em falha. */
   upload(params: StorageUploadParams): Promise<{ path: string }>;
   remove(path: string): Promise<void>;
+  /** Move dentro do mesmo bucket (usado ao publicar o que foi aprovado). */
+  move(from: string, to: string): Promise<void>;
   /** URL pública do arquivo (buckets públicos). Função pura, sem I/O. */
   getPublicUrl(path: string): string;
 }

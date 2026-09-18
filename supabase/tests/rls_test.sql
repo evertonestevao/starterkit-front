@@ -1216,6 +1216,49 @@ end $$;
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Bucket dos logos (migration 20260918160000).
+--
+-- O ponto sensível: escrever direto em `publico/` pularia a moderação
+-- inteira. Só service_role pode, e é isso que está sendo provado.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  -- Na própria pasta pendente: liberado.
+  insert into storage.objects (bucket_id, name)
+  values ('sponsor-logos', 'pendente/a1a1a1a1-0000-4000-8000-000000000001/logo.png');
+
+  -- Direto na pasta pública: é o atalho que não pode existir.
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('sponsor-logos', 'publico/5a5a5a5a-0000-4000-8000-000000000001/logo.png');
+    raise exception 'FALHA storage: patrocinador escreveu na pasta publica (pulou a moderacao)';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- Na pasta pendente de OUTRO usuário: bloqueado.
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('sponsor-logos', 'pendente/b2b2b2b2-0000-4000-8000-000000000002/logo.png');
+    raise exception 'FALHA storage: escreveu na pasta pendente de outro usuario';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- Sem prefixo de pasta: também não.
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('sponsor-logos', 'logo.png');
+    raise exception 'FALHA storage: escreveu na raiz do bucket';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+reset role;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'

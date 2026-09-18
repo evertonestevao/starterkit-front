@@ -9,6 +9,7 @@ import {
 
 const CONTA: SponsorProfileAccount = {
   id: "conta-1",
+  userId: "user-1",
   displayName: "Padaria do João",
   logoUrl: null,
   email: "padaria@exemplo.com",
@@ -27,14 +28,20 @@ function build(overrides: Partial<SponsorProfileAccount> = {}) {
     sendChangeRequested: vi.fn(async () => {}),
     sendStaffAlert: vi.fn(async () => {}),
   };
+  const storage = {
+    upload: vi.fn(async () => {}),
+    publicUrl: (path: string) => `https://cdn.exemplo.com/${path}`,
+  };
   const service = createSponsorProfileService({
     repo,
     notifier,
+    storage,
+    makeFileId: () => "arquivo-1",
     appUrl: "https://app.exemplo.com",
     makeToken: () => "token-de-teste-com-tamanho-suficiente",
     hashToken: (t) => `hash:${t}`,
   });
-  return { repo, notifier, service };
+  return { repo, notifier, storage, service };
 }
 
 describe("requestChange", () => {
@@ -112,5 +119,60 @@ describe("undoByToken", () => {
 
     expect(await service.undoByToken("token-de-teste-com-tamanho-suficiente")).toBe(false);
     expect(notifier.sendStaffAlert).not.toHaveBeenCalled();
+  });
+});
+
+describe("logo", () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]);
+
+  it("guarda na pasta pendente do próprio usuário, com o tipo tirado dos bytes", async () => {
+    const { repo, storage, service } = build();
+
+    const pediu = await service.requestChange({}, { bytes: PNG, declaredType: "image/gif" });
+
+    expect(pediu).toBe(true);
+    // O declaredType era mentira; o que vale é a assinatura do arquivo.
+    expect(storage.upload).toHaveBeenCalledWith({
+      path: "pendente/user-1/arquivo-1.png",
+      bytes: PNG,
+      contentType: "image/png",
+    });
+    expect(repo.requestChange).toHaveBeenCalledWith(
+      expect.objectContaining({ logoPath: "pendente/user-1/arquivo-1.png" }),
+    );
+  });
+
+  it("recusa arquivo que não é imagem aceita, sem subir nada", async () => {
+    const { repo, storage, service } = build();
+    const svg = new TextEncoder().encode("<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+
+    const err = await service
+      .requestChange({}, { bytes: svg, declaredType: "image/png" })
+      .catch((e) => e);
+
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(storage.upload).not.toHaveBeenCalled();
+    expect(repo.requestChange).not.toHaveBeenCalled();
+  });
+
+  it("recusa arquivo acima de 1 MB", async () => {
+    const { storage, service } = build();
+    const grande = new Uint8Array(1024 * 1024 + 1);
+    grande.set(PNG);
+
+    const err = await service
+      .requestChange({}, { bytes: grande, declaredType: "image/png" })
+      .catch((e) => e);
+
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(storage.upload).not.toHaveBeenCalled();
+  });
+
+  it("conta bloqueada não sobe logo nenhum", async () => {
+    const { storage, service } = build({ securityHoldAt: "2026-09-18T10:00:00Z" });
+
+    await service.requestChange({}, { bytes: PNG, declaredType: "image/png" }).catch(() => {});
+
+    expect(storage.upload).not.toHaveBeenCalled();
   });
 });

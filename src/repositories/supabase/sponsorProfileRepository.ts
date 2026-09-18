@@ -27,7 +27,7 @@ export function createSupabaseSponsorProfileRepository(
     async getMyAccount(): Promise<SponsorProfileAccount | null> {
       const { data, error } = await client
         .from("sponsor_accounts")
-        .select("id, display_name, logo_url, email, security_hold_at")
+        .select("id, user_id, display_name, logo_url, email, security_hold_at")
         .is("deleted_at", null)
         .maybeSingle();
       if (error) {
@@ -36,6 +36,7 @@ export function createSupabaseSponsorProfileRepository(
       if (!data) return null;
       return {
         id: data.id as string,
+        userId: data.user_id as string,
         displayName: data.display_name as string,
         logoUrl: (data.logo_url as string | null) ?? null,
         email: data.email as string,

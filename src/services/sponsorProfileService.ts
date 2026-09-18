@@ -1,5 +1,6 @@
 import { phoneSchema, sponsorProfileChangeSchema } from "@/features/sponsor/schemas";
 import { AppError, toValidationError } from "@/lib/errors";
+import { EXTENSAO_POR_TIPO, MAX_LOGO_BYTES, sniffImageType } from "@/lib/imageValidation";
 import type { SponsorProfileChange } from "@/types/sponsorship";
 
 /**
@@ -16,6 +17,8 @@ import type { SponsorProfileChange } from "@/types/sponsorship";
 
 export interface SponsorProfileAccount {
   id: string;
+  /** Dono da conta no Auth: é a pasta dele no storage do logo. */
+  userId: string;
   displayName: string;
   logoUrl: string | null;
   email: string;
@@ -35,6 +38,18 @@ export interface SponsorProfileRepository {
   updatePhone(phone: string | null): Promise<void>;
 }
 
+/** Arquivo cru vindo do formulário, antes de qualquer confiança. */
+export interface LogoUpload {
+  bytes: Uint8Array;
+  /** O que o navegador declarou. Só serve para mensagem de erro. */
+  declaredType: string;
+}
+
+export interface LogoStorage {
+  upload(input: { path: string; bytes: Uint8Array; contentType: string }): Promise<void>;
+  publicUrl(path: string): string;
+}
+
 export interface SponsorProfileNotifier {
   /** Para o dono da conta: "pedimos isso; se não foi você, desfaça". */
   sendChangeRequested(input: {
@@ -51,7 +66,10 @@ export interface SponsorProfileNotifier {
 interface Deps {
   repo: SponsorProfileRepository;
   notifier: SponsorProfileNotifier;
+  storage: LogoStorage;
   appUrl: string;
+  /** Nome do arquivo no storage; injetado para o teste não depender de sorte. */
+  makeFileId?: () => string;
   /** Gera o token do link "não fui eu" (texto puro, vai só no email). */
   makeToken: () => string;
   /** O banco guarda só o hash: vazamento da tabela não vira link válido. */
@@ -65,12 +83,39 @@ const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export function createSponsorProfileService({
   repo,
   notifier,
+  storage,
   appUrl,
   makeToken,
   hashToken,
+  makeFileId = () => crypto.randomUUID(),
   now = () => new Date(),
 }: Deps) {
   const base = appUrl.replace(/\/+$/, "");
+
+  /**
+   * Valida e guarda o arquivo. O tipo sai dos BYTES: o `Content-Type` e a
+   * extensão são escolhidos por quem envia, então checá-los não decide nada.
+   */
+  async function guardarLogo(account: SponsorProfileAccount, logo: LogoUpload): Promise<string> {
+    if (logo.bytes.length === 0) {
+      throw new AppError("validation_error", "O arquivo do logo chegou vazio.");
+    }
+    if (logo.bytes.length > MAX_LOGO_BYTES) {
+      throw new AppError("validation_error", "O logo precisa ter no máximo 1 MB.");
+    }
+
+    const tipo = sniffImageType(logo.bytes);
+    if (!tipo) {
+      throw new AppError(
+        "validation_error",
+        "Envie o logo em PNG, JPG ou WebP. Outros formatos não são aceitos.",
+      );
+    }
+
+    const path = `pendente/${account.userId}/${makeFileId()}.${EXTENSAO_POR_TIPO[tipo]}`;
+    await storage.upload({ path, bytes: logo.bytes, contentType: tipo });
+    return path;
+  }
 
   async function requireAccount(): Promise<SponsorProfileAccount> {
     const account = await repo.getMyAccount();
@@ -93,7 +138,7 @@ export function createSponsorProfileService({
      * Pede a alteração. Devolve `false` quando não havia nada para mudar —
      * salvar o mesmo nome de novo não deve virar fila para alguém julgar.
      */
-    async requestChange(input: unknown): Promise<boolean> {
+    async requestChange(input: unknown, logo?: LogoUpload | null): Promise<boolean> {
       const parsed = sponsorProfileChangeSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
 
@@ -107,7 +152,15 @@ export function createSponsorProfileService({
 
       const nome = parsed.data.displayName ?? null;
       const nomeMudou = nome !== null && nome !== account.displayName;
-      const logoPath = parsed.data.logoPath ?? null;
+
+      // O arquivo sobe ANTES do pedido existir, na pasta pendente do próprio
+      // usuário. Se o pedido falhar, sobra um arquivo órfão que ninguém
+      // referencia — preferível ao contrário, um pedido apontando para nada.
+      let logoPath: string | null = parsed.data.logoPath ?? null;
+      if (logo) {
+        logoPath = await guardarLogo(account, logo);
+      }
+
       if (!nomeMudou && !logoPath) return false;
 
       const token = makeToken();

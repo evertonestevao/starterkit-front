@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfileChangeReview } from "@/features/platform/components/profile-change-review";
-import { getPlatformModerationService } from "@/server/platform";
+import { getPendingLogoUrl, getPlatformModerationService } from "@/server/platform";
 import type { PendingProfileChange } from "@/types/sponsorship";
 
 export const metadata: Metadata = { title: "Alterações pendentes" };
@@ -68,9 +68,28 @@ export default async function PlatformChangesPage() {
               <CardContent className="flex flex-col gap-4">
                 <NameDiff change={change} />
                 {change.novoLogoPath ? (
-                  <p className="text-sm text-muted-foreground">
-                    Enviou um logo novo: <span className="font-mono text-xs">{change.novoLogoPath}</span>
-                  </p>
+                  <div className="flex flex-wrap items-center gap-4">
+                    {change.atualLogoUrl ? (
+                      <figure className="flex flex-col items-center gap-1">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- logo em storage externo */}
+                        <img
+                          src={change.atualLogoUrl}
+                          alt=""
+                          className="size-16 rounded-lg border object-contain"
+                        />
+                        <figcaption className="text-xs text-muted-foreground">atual</figcaption>
+                      </figure>
+                    ) : null}
+                    <figure className="flex flex-col items-center gap-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- logo em storage externo */}
+                      <img
+                        src={getPendingLogoUrl(change.novoLogoPath)}
+                        alt="Logo enviado pelo patrocinador, aguardando conferência"
+                        className="size-16 rounded-lg border object-contain"
+                      />
+                      <figcaption className="text-xs font-medium">proposto</figcaption>
+                    </figure>
+                  </div>
                 ) : null}
                 <ProfileChangeReview change={change} />
               </CardContent>

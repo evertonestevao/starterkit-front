@@ -16,9 +16,22 @@ export async function requestProfileChangeAction(
     const service = await getSponsorProfileService();
     const displayName = formData.get("displayName");
 
-    const pediu = await service.requestChange({
-      displayName: typeof displayName === "string" ? displayName : undefined,
-    });
+    // O arquivo vira bytes aqui e só. Quem decide se é imagem — e qual — é o
+    // service, olhando a assinatura binária; o tipo que o navegador declara
+    // não vale como prova.
+    const arquivo = formData.get("logo");
+    const logo =
+      arquivo instanceof File && arquivo.size > 0
+        ? {
+            bytes: new Uint8Array(await arquivo.arrayBuffer()),
+            declaredType: arquivo.type,
+          }
+        : null;
+
+    const pediu = await service.requestChange(
+      { displayName: typeof displayName === "string" ? displayName : undefined },
+      logo,
+    );
 
     // O telefone não passa por moderação: não aparece em página nenhuma.
     await service.updatePhone(formData.get("phone"));

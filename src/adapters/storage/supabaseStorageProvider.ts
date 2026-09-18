@@ -25,6 +25,13 @@ export function createSupabaseStorageProvider(
       return { path: data.path };
     },
 
+    async move(from: string, to: string) {
+      const { error } = await client.storage.from(bucket).move(from, to);
+      if (error) {
+        throw new AppError("internal_error", "Falha ao publicar arquivo", error);
+      }
+    },
+
     async remove(path: string) {
       const { error } = await client.storage.from(bucket).remove([path]);
       if (error) {

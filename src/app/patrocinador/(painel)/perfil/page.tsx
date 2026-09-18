@@ -38,7 +38,8 @@ export default async function SponsorProfilePage() {
           <Clock3 className="size-4" />
           <AlertDescription>
             Você já tem uma alteração esperando conferência
-            {pending.novo_display_name ? ` (novo nome: “${pending.novo_display_name}”)` : ""}. Até
+            {pending.novo_display_name ? ` (novo nome: “${pending.novo_display_name}”)` : ""}
+            {pending.novo_logo_path ? " (logo novo enviado)" : ""}. Até
             ela ser aprovada, as igrejas seguem exibindo o perfil atual. Enviar outra substitui
             esta.
           </AlertDescription>
@@ -58,6 +59,7 @@ export default async function SponsorProfilePage() {
           <SponsorProfileForm
             displayName={account.displayName}
             phone={sponsorAccount?.phone ?? null}
+            logoUrl={account.logoUrl}
             bloqueada={Boolean(account.securityHoldAt)}
           />
         </CardContent>

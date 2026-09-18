@@ -1,5 +1,6 @@
 import "server-only";
 import { getEmailProvider } from "@/adapters/email";
+import { createSupabaseStorageProvider } from "@/adapters/storage/supabaseStorageProvider";
 import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
 import { createSupabasePlatformModerationRepository } from "@/repositories/supabase/platformModerationRepository";
@@ -9,6 +10,7 @@ import {
   type PlatformModerationService,
 } from "@/services/platformModerationService";
 import { getSupabaseAdminClient } from "./supabase-admin";
+import { SPONSOR_LOGOS_BUCKET } from "./sponsorProfile";
 import { getSupabaseServerClient } from "./supabase-server";
 
 /**
@@ -37,10 +39,33 @@ export async function getPlatformModerationService(): Promise<PlatformModeration
   const email = createEmailService({ provider: getEmailProvider(), appUrl: env.APP_URL });
   const client = await getSupabaseServerClient();
 
+  // Publicar é mover de `pendente/` para `publico/`, e só service_role
+  // escreve na pasta pública: é isso que impede subir direto para lá e pular
+  // a fila. A URL final sai do storage, não do banco.
+  const logos = createSupabaseStorageProvider(getSupabaseAdminClient(), SPONSOR_LOGOS_BUCKET);
+
   return createPlatformModerationService({
     repo: createSupabasePlatformModerationRepository(client, getSupabaseAdminClient()),
     notifier: {
       sendProfileDecision: (input) => email.sendSponsorProfileDecision(input),
     },
+    async publishLogo({ pendingPath, sponsorAccountId }) {
+      const nome = pendingPath.split("/").pop() ?? `${sponsorAccountId}.png`;
+      const destino = `publico/${sponsorAccountId}/${nome}`;
+      await logos.move(pendingPath, destino);
+      return logos.getPublicUrl(destino);
+    },
   });
+}
+
+/**
+ * URL do arquivo que ainda está na pasta pendente, para a moderação ver o que
+ * está decidindo. Só a moderação chega nesta página; o arquivo é o que a
+ * própria pessoa enviou.
+ */
+export function getPendingLogoUrl(pendingPath: string): string {
+  return createSupabaseStorageProvider(
+    getSupabaseAdminClient(),
+    SPONSOR_LOGOS_BUCKET,
+  ).getPublicUrl(pendingPath);
 }
