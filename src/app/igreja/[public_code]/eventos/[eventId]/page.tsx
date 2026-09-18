@@ -163,7 +163,7 @@ export default async function ChurchEventPage({ params }: Params) {
           ) : (
             <p className="mt-2 text-base leading-7 text-[var(--pg-muted)]">
               {jaComecou
-                ? "Este evento já começou. Fique de olho na programação para os próximos."
+                ? "Este evento já começou. Fique de olho nos próximos eventos."
                 : "As inscrições para este evento estão encerradas."}
             </p>
           )}

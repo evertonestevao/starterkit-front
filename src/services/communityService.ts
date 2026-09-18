@@ -26,7 +26,7 @@ export interface CommunityRepository {
   ): Promise<{ items: PrayerRequest[]; total: number }>;
   listEventSignups(
     companyId: string,
-    opts: { limit: number; offset: number },
+    opts: { limit: number; offset: number; eventId?: string },
   ): Promise<{ items: EventSignup[]; total: number }>;
   listVisitors(
     companyId: string,
@@ -36,6 +36,8 @@ export interface CommunityRepository {
 }
 
 const PAGE_SIZE = 20;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createCommunityService(repo: CommunityRepository) {
   function requireCompany(companyId: string): string {
@@ -60,12 +62,17 @@ export function createCommunityService(repo: CommunityRepository) {
 
     async listEventSignups(
       companyId: string,
-      params?: PageParams,
+      params?: PageParams & { eventId?: string },
     ): Promise<Paginated<EventSignup>> {
       const { page, pageSize, offset } = normalizePageParams(params, PAGE_SIZE);
+      // Filtro vindo da URL: só um uuid bem formado vira filtro; o resto é
+      // ignorado (lista tudo) em vez de virar erro de banco.
+      const eventId =
+        params?.eventId && UUID.test(params.eventId) ? params.eventId : undefined;
       const { items, total } = await repo.listEventSignups(requireCompany(companyId), {
         limit: pageSize,
         offset,
+        eventId,
       });
       return { items, total, page, pageSize };
     },

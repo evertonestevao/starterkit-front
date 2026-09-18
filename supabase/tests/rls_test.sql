@@ -1519,6 +1519,43 @@ values ('d1d1d1d1-0000-4000-8000-000000000001', 'Evento da Alice', now() + inter
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Programação com contagem de inscritos (migration 20260920120000).
+-- A função é SECURITY INVOKER: a contagem precisa passar pela RLS de
+-- event_signups, senão outra empresa leria quantos inscritos a igreja tem.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- A dona vê o inscrito do Retiro RLS (inscrito mais acima nesta suíte).
+  select inscritos into n from public.list_company_events('c1c1c1c1-0000-4000-8000-000000000001')
+  where id = 'e0e0e0e0-0000-4000-8000-000000000001';
+  if n is distinct from 1 then
+    raise exception 'FALHA list_company_events: dona viu % inscritos (esperado 1)', coalesce(n::text, '<null>');
+  end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- Bob é de outra empresa: o evento é público, a contagem de inscritos não.
+  select inscritos into n from public.list_company_events('c1c1c1c1-0000-4000-8000-000000000001')
+  where id = 'e0e0e0e0-0000-4000-8000-000000000001';
+  if n is distinct from 0 then
+    raise exception 'FALHA list_company_events: outra empresa viu % inscritos da igreja alheia', n;
+  end if;
+end $$;
+
+reset role;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'

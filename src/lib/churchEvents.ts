@@ -63,3 +63,50 @@ export function eventSummary(descricao: string | null, max = 140): string | null
   const ultimoEspaco = corte.lastIndexOf(" ");
   return `${corte.slice(0, ultimoEspaco > max * 0.6 ? ultimoEspaco : max).trimEnd()}…`;
 }
+
+/**
+ * O campo <input type="datetime-local"> devolve "2026-10-17T19:00", SEM fuso.
+ * Quem cadastra está pensando no horário de Brasília; sem fixar isso, o
+ * servidor (em UTC) gravaria 19:00 de Londres e o evento apareceria às 16:00.
+ *
+ * -03:00 fixo: o Brasil não tem horário de verão desde 2019. Se voltar a
+ * ter, é aqui que muda.
+ */
+export function brasiliaLocalToIso(local: string): string | null {
+  const texto = local.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(texto)) return null;
+  const comSegundos = texto.length === 16 ? `${texto}:00` : texto;
+  const data = new Date(`${comSegundos}-03:00`);
+  return Number.isNaN(data.getTime()) ? null : data.toISOString();
+}
+
+/** Volta: ISO → valor para preencher um datetime-local no horário de Brasília. */
+export function isoToBrasiliaLocal(iso: string): string {
+  const data = new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000);
+  return data.toISOString().slice(0, 16);
+}
+
+/**
+ * "180", "180,00", "R$ 1.250,50", "1250.5" → centavos. Vazio ou zero =
+ * gratuito (0). Texto que não é valor → null, para o formulário recusar em
+ * vez de gravar um preço errado.
+ */
+export function parseBrlToCents(texto: string | null | undefined): number | null {
+  const limpo = (texto ?? "").replace(/R\$|\s/g, "");
+  if (limpo === "") return 0;
+
+  let normalizado: string;
+  if (limpo.includes(",")) {
+    // Formato brasileiro: ponto é milhar, vírgula é decimal.
+    normalizado = limpo.replace(/\./g, "").replace(",", ".");
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(limpo)) {
+    // "1.250" sem vírgula: ponto como milhar.
+    normalizado = limpo.replace(/\./g, "");
+  } else {
+    normalizado = limpo;
+  }
+
+  if (!/^\d+(\.\d{1,2})?$/.test(normalizado)) return null;
+  return Math.round(Number(normalizado) * 100);
+}
+

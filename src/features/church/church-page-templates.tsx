@@ -128,7 +128,7 @@ export function ChurchPageRenderer({ church, sponsors, eventos, templateSlug }: 
   const pares: Atalho[] = [
     { rotulo: "Pedido de oração", icone: Heart, href: "#oracao" },
     { rotulo: "Sou visitante", icone: UserPlus, href: "#visita" },
-    // Eventos abre a tela da programação — e só aparece com evento agendado.
+    // Eventos abre a tela de eventos — e só aparece com evento agendado.
     ...(eventos.length > 0
       ? [{ rotulo: "Eventos", icone: CalendarCheck, href: `/igreja/${church.public_code}/eventos` }]
       : []),
@@ -234,7 +234,7 @@ export function ChurchPageRenderer({ church, sponsors, eventos, templateSlug }: 
             href={`/igreja/${church.public_code}/eventos`}
             className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--pg-accent)]"
           >
-            Ver toda a programação
+            Ver todos os eventos
             <ArrowRight className="size-4" aria-hidden />
           </a>
         </>

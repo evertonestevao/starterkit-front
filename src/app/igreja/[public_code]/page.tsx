@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { ChurchPageRenderer } from "@/features/church/church-page-templates";
 import { getPublicChurchRepository, loadPublicChurch } from "@/server/publicChurch";
 
-/** Quantos eventos a página inicial mostra antes do "ver toda a programação". */
+/** Quantos eventos a página inicial mostra antes do "ver todos os eventos". */
 const EVENTOS_NA_PREVIA = 3;
 
 export default async function PublicChurchPage({

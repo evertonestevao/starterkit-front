@@ -71,3 +71,27 @@ export const publicEventSignupSchema = z.object({
   contact: contatoSchema,
 });
 
+/**
+ * Criação de evento pelo painel. Chega cru do formulário (texto); datas e
+ * preço são convertidos no service, que também confere que a igreja é da
+ * empresa ativa e que o início é no futuro.
+ */
+export const createChurchEventSchema = z.object({
+  churchId: churchIdSchema,
+  titulo: z.string().trim().min(2, "Dê um nome ao evento").max(120, "Nome muito longo"),
+  descricao: z
+    .string()
+    .trim()
+    .max(4000, "A descrição pode ter até 4.000 caracteres")
+    .transform((v) => (v === "" ? null : v)),
+  inicio: z.string().trim().min(1, "Informe quando o evento começa"),
+  fim: z.string().trim(),
+  local: z
+    .string()
+    .trim()
+    .max(200, "Local muito longo")
+    .transform((v) => (v === "" ? null : v)),
+  preco: z.string().trim().max(20, "Valor inválido"),
+  inscricoesAbertas: z.boolean(),
+});
+

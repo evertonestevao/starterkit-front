@@ -11,13 +11,15 @@ export function createSupabaseCommunityRepository(client: SupabaseClient): Commu
   async function listTable<T>(
     table: string,
     companyId: string,
-    { limit, offset }: { limit: number; offset: number },
+    { limit, offset, eventId }: { limit: number; offset: number; eventId?: string },
     errorMessage: string,
   ): Promise<{ items: T[]; total: number }> {
-    const { data, error, count } = await client
+    let query = client
       .from(table)
       .select("*", { count: "exact" })
-      .eq("company_id", companyId)
+      .eq("company_id", companyId);
+    if (eventId) query = query.eq("event_id", eventId);
+    const { data, error, count } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
     if (error) {

@@ -14,12 +14,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!carregado) return { title: "Eventos" };
   return {
     title: `Eventos · ${carregado.church.name}`,
-    description: `Próximos eventos da ${carregado.church.name}. Veja a programação e faça sua inscrição.`,
+    description: `Próximos eventos da ${carregado.church.name}. Veja os detalhes e faça sua inscrição.`,
   };
 }
 
 /**
- * Programação da igreja: os próximos eventos, do mais perto ao mais longe.
+ * Eventos da igreja (com inscrição): os próximos, do mais perto ao mais longe.
  * Cada cartão abre o detalhe, onde fica a inscrição.
  */
 export default async function ChurchEventsPage({ params }: Params) {
@@ -72,7 +72,7 @@ export default async function ChurchEventsPage({ params }: Params) {
         ) : (
           <div className="rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-surface)] p-6 text-center">
             <p className="font-medium">Nenhum evento agendado no momento.</p>
-            <p className="mt-1 text-sm text-[var(--pg-muted)]">Volte em breve para ver a programação.</p>
+            <p className="mt-1 text-sm text-[var(--pg-muted)]">Volte em breve para ver os próximos.</p>
             <Link href={base} className="mt-4 inline-block text-sm font-semibold text-[var(--pg-accent)]">
               Voltar para a página da igreja
             </Link>
