@@ -405,43 +405,44 @@ export function ChurchPageRenderer({ church, sponsors, templateSlug }: ChurchPag
         </div>
       </nav>
 
-      {/* Quem sustenta a página, logo abaixo dos atalhos: é o que mantém a
-          página no ar sem custo para a igreja. */}
-      <section id="apoio" className="bg-[var(--pg-bg)]">
-        <div className="mx-auto w-full max-w-xl px-5 pt-10">
-          <div className={cartao}>
-        <h2 className={`${titulos.className} text-lg font-semibold`}>Quem apoia esta página</h2>
-        {sponsors.length > 0 ? (
-          <ul className="mt-4 grid grid-cols-2 gap-3">
-            {sponsors.map((sponsor) => (
-              <li key={sponsor.id} className="flex items-center gap-2.5">
-                {sponsor.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
-                  <img src={sponsor.logo_url} alt="" className="size-10 shrink-0 rounded-lg bg-white object-contain" />
-                ) : (
-                  <span
-                    aria-hidden
-                    className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--pg-accent-soft)] text-xs font-semibold text-[var(--pg-accent)]"
-                  >
-                    {iniciais(sponsor.name)}
-                  </span>
-                )}
-                <span className="min-w-0 text-sm leading-5 font-medium">{sponsor.name}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <p className="mt-4 text-sm leading-6 text-[var(--pg-muted)]">
-          Negócios e pessoas da comunidade mantêm esta página no ar, sem custo para a igreja.
-        </p>
-        <a
-          href={sponsorshipPath(church.public_code)}
-          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--pg-accent)]"
-        >
-          Quero apoiar esta igreja
-          <ArrowRight className="size-4" aria-hidden />
-        </a>
-      </div>
+      {/* Quem sustenta a página, logo abaixo dos atalhos. Sem caixa em volta:
+          é uma faixa leve de "quem apoia", não mais um card — dentro de uma
+          faixa que já é um bloco, a borda virava card dentro de card. */}
+      <section id="apoio" className="border-t border-[var(--pg-border)] bg-[var(--pg-bg)]">
+        <div className="mx-auto w-full max-w-xl px-5 py-10 text-center">
+          <h2 className="text-xs font-semibold tracking-[0.14em] text-[var(--pg-muted)] uppercase">
+            Quem apoia esta página
+          </h2>
+          {sponsors.length > 0 ? (
+            <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-left sm:flex sm:flex-wrap sm:justify-center sm:gap-x-6 sm:gap-y-4">
+              {sponsors.map((sponsor) => (
+                <li key={sponsor.id} className="flex items-center gap-2.5">
+                  {sponsor.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
+                    <img src={sponsor.logo_url} alt="" className="size-9 shrink-0 rounded-lg bg-white object-contain" />
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--pg-accent-soft)] text-xs font-semibold text-[var(--pg-accent)]"
+                    >
+                      {iniciais(sponsor.name)}
+                    </span>
+                  )}
+                  <span className="min-w-0 text-sm leading-5 font-medium">{sponsor.name}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="mx-auto mt-5 max-w-sm text-sm leading-6 text-[var(--pg-muted)]">
+            Negócios e pessoas da comunidade mantêm esta página no ar, sem custo para a igreja.{" "}
+            <a
+              href={sponsorshipPath(church.public_code)}
+              className="inline-flex items-center gap-1 font-semibold whitespace-nowrap text-[var(--pg-accent)]"
+            >
+              Quero apoiar
+              <ArrowRight className="size-3.5" aria-hidden />
+            </a>
+          </p>
         </div>
       </section>
 
