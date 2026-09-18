@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ShieldCheck } from "lucide-react";
+import { LogOut, ShieldCheck } from "lucide-react";
 import { RouteTabs } from "@/components/route-tabs";
+import { Button } from "@/components/ui/button";
 import { brand } from "@/config/brand";
+import { signOutAction } from "@/server/actions/auth";
 import { isPlatformStaff } from "@/server/platform";
 
 const TABS = [
@@ -34,6 +36,12 @@ export default async function PlatformLayout({ children }: { children: React.Rea
               · Moderação
             </span>
           </Link>
+          <form action={signOutAction} className="ml-auto">
+            <Button type="submit" variant="ghost" size="sm" className="gap-1.5">
+              <LogOut className="size-4" aria-hidden />
+              Sair
+            </Button>
+          </form>
         </div>
         <div className="mx-auto w-full max-w-5xl px-4">
           <RouteTabs tabs={TABS} />

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { brand } from "@/config/brand";
 import { CreateCompanyForm } from "@/features/companies/components/create-company-form";
+import { isPlatformStaff } from "@/server/platform";
 import { getActiveTenant } from "@/server/tenant";
 import { getTermsService } from "@/server/terms";
 
@@ -23,6 +24,14 @@ export default async function OnboardingPage() {
   const { companies } = await getActiveTenant();
   if (companies.length > 0) {
     redirect("/dashboard");
+  }
+
+  // Quem modera a plataforma não é uma igreja sem cadastro. O cadastro público
+  // leva todo mundo para cá; a moderação segue para a área dela. Para testar
+  // como igreja, use outra conta — misturar operador e cliente na mesma
+  // identidade embaralha a auditoria dos dois lados.
+  if (await isPlatformStaff()) {
+    redirect("/plataforma/alteracoes");
   }
 
   const terms = await getTermsService();
