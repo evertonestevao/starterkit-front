@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
 import { PaginationControls } from "@/components/pagination-controls";
 import { Card, CardContent } from "@/components/ui/card";
-import { getCommunityService } from "@/server/community";
+import { getCommunityService, getPrayerCountsTree } from "@/server/community";
 import { getActiveTenant } from "@/server/tenant";
 
 export const metadata: Metadata = { title: "Pedidos de oração" };
@@ -29,11 +29,27 @@ export default async function PrayersPage({
   const { active } = await getActiveTenant();
   if (!active) return null; // layout já redirecionou
 
+  // Pedido de oração é dado sensível (LGPD): o texto é de quem lidera a
+  // igreja. A RLS já não devolve nada para member; a tela explica o porquê em
+  // vez de mostrar uma lista vazia sem motivo.
+  if (active.role === "member") {
+    return (
+      <EmptyState
+        icon={HandHeart}
+        title="Os pedidos ficam com a liderança"
+        description="Quem recebe pedido de oração conta coisa íntima. Por isso o texto é visível só para quem administra a igreja."
+      />
+    );
+  }
+
   const { page } = await searchParams;
   const community = await getCommunityService();
-  const [requests, counts] = await Promise.all([
+  const [requests, counts, contagens] = await Promise.all([
     community.listPrayerRequests(active.id, { page: Number(page) || 1 }),
     community.getCounts(active.id),
+    // Contagem das igrejas ABAIXO desta na árvore: quem lidera acima sabe
+    // quantos pedidos cada congregação recebeu, e nunca o que dizem.
+    getPrayerCountsTree(30).catch(() => []),
   ]);
   const now = new Date();
 
@@ -70,6 +86,27 @@ export default async function PrayersPage({
           hint={`de ${requests.total}`}
         />
       </div>
+
+      {/* Com mais de uma igreja na árvore, vale mostrar a divisão. Com uma
+          só, o número já está nos cartões acima. */}
+      {contagens.length > 1 ? (
+        <Card>
+          <CardContent className="flex flex-col gap-2">
+            <p className="text-sm font-medium">Pedidos por igreja da sua árvore (30 dias)</p>
+            <p className="text-xs text-muted-foreground">
+              Só a quantidade. O que foi escrito fica com a igreja que recebeu.
+            </p>
+            <ul className="mt-1 flex flex-col gap-1.5">
+              {contagens.map((c) => (
+                <li key={c.churchId} className="flex justify-between gap-4 text-sm">
+                  <span className="min-w-0 truncate">{c.churchName}</span>
+                  <span className="font-medium tabular-nums">{c.total}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {requests.items.length === 0 ? (
         <EmptyState

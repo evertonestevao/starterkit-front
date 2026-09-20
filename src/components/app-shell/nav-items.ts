@@ -46,10 +46,12 @@ export const navItems: NavItem[] = [
     roles: ["owner", "admin"],
   },
   {
+    // Dado sensível (LGPD): o texto do pedido é só de quem lidera a igreja.
+    // A RLS também não devolve nada para member.
     title: "Pedidos de oração",
     href: "/dashboard/prayers",
     icon: HandHeart,
-    roles: ["owner", "admin", "member"],
+    roles: ["owner", "admin"],
   },
   {
     // O dia a dia (cultos semanais e especiais), sem inscrição.

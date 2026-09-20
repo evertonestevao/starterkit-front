@@ -1782,9 +1782,15 @@ select set_config('request.jwt.claims',
 do $$
 declare n int;
 begin
-  -- X vê X e A, em todas as tabelas de dado de igreja.
+  -- X vê X e A nos dados de contato; pedido de oração é só da própria igreja
+  -- (migration 20260922120000), e da congregação X só recebe a CONTAGEM.
   select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
-  if n <> 2 then raise exception 'FALHA arvore: subsede X ve % pedidos (esperado 2)', n; end if;
+  if n <> 1 then raise exception 'FALHA arvore: subsede X ve % pedidos (esperado 1, o dela)', n; end if;
+  select count(*) into n from public.prayer_counts_tree(365) where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA oracao: subsede X ve contagem de % igrejas (esperado 2)', n; end if;
+  select total into n from public.prayer_counts_tree(365)
+  where church_id = '7d7d7d7d-0000-4000-8000-000000000004';
+  if n <> 1 then raise exception 'FALHA oracao: contagem da congregacao A veio %', n; end if;
   select count(*) into n from public.visitors where church_id::text like '7d7d7d7d-%';
   if n <> 2 then raise exception 'FALHA arvore: subsede X ve % visitantes (esperado 2)', n; end if;
   select count(*) into n from public.event_signups where church_id::text like '7d7d7d7d-%';
@@ -1832,8 +1838,15 @@ select set_config('request.jwt.claims',
 do $$
 declare n int;
 begin
+  -- Pedido de oração é dado sensível: member não lê nem o da própria igreja,
+  -- nem a contagem das de baixo.
   select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
-  if n <> 2 then raise exception 'FALHA arvore: member de X ve % pedidos (esperado 2)', n; end if;
+  if n <> 0 then raise exception 'FALHA oracao: member leu % pedidos', n; end if;
+  select count(*) into n from public.prayer_counts_tree(365) where church_id::text like '7d7d7d7d-%';
+  if n <> 0 then raise exception 'FALHA oracao: member leu contagem de % igrejas', n; end if;
+  -- Contato deixado para ser procurado segue visível pela árvore.
+  select count(*) into n from public.visitors where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA arvore: member de X ve % visitantes (esperado 2)', n; end if;
   -- Patrocínio é leitura de gestão: member não vê nem o da própria igreja.
   select count(*) into n from public.sponsorships where church_id::text like '7d7d7d7d-%';
   if n <> 0 then raise exception 'FALHA arvore: member ve patrocinios'; end if;
@@ -1846,9 +1859,15 @@ select set_config('request.jwt.claims',
 do $$
 declare n int;
 begin
+  -- Texto de pedido de oração: só o da própria sede, nunca o das de baixo.
   select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
-  if n <> 3 then raise exception 'FALHA arvore: sede ve % pedidos antes de ligar X (esperado 3: S, Y, B)', n; end if;
-  select count(*) into n from public.prayer_requests
+  if n <> 1 then raise exception 'FALHA oracao: sede leu % pedidos (esperado 1, o dela)', n; end if;
+  -- Contagem: a própria e as de baixo (S, Y, B) — X ainda não é dela.
+  select count(*) into n from public.prayer_counts_tree(365) where church_id::text like '7d7d7d7d-%';
+  if n <> 3 then raise exception 'FALHA oracao: sede ve contagem de % igrejas antes de ligar X (esperado 3)', n; end if;
+  select count(*) into n from public.visitors where church_id::text like '7d7d7d7d-%';
+  if n <> 3 then raise exception 'FALHA arvore: sede ve % visitantes antes de ligar X (esperado 3)', n; end if;
+  select count(*) into n from public.visitors
   where church_id in ('7d7d7d7d-0000-4000-8000-000000000002', '7d7d7d7d-0000-4000-8000-000000000004');
   if n <> 0 then raise exception 'FALHA arvore: sede enxerga subsede que ainda nao e dela'; end if;
 end $$;
@@ -1892,8 +1911,10 @@ select set_config('request.jwt.claims',
 do $$
 declare n int;
 begin
+  select count(*) into n from public.prayer_counts_tree(365) where church_id::text like '7d7d7d7d-%';
+  if n <> 5 then raise exception 'FALHA oracao: sede ve contagem de % igrejas depois de ligar X (esperado 5)', n; end if;
   select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
-  if n <> 5 then raise exception 'FALHA arvore: sede ve % pedidos depois de ligar X (esperado 5)', n; end if;
+  if n <> 1 then raise exception 'FALHA oracao: ligar a subsede deu acesso ao TEXTO de % pedidos', n; end if;
   select count(*) into n from public.sponsorships where church_id::text like '7d7d7d7d-%';
   if n <> 5 then raise exception 'FALHA arvore: sede ve % patrocinios (esperado 5)', n; end if;
 end $$;
@@ -1905,9 +1926,9 @@ select set_config('request.jwt.claims',
 do $$
 declare n int;
 begin
-  select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
-  if n <> 2 then raise exception 'FALHA arvore: subsede Y ve % pedidos (esperado 2: Y e B)', n; end if;
-  select count(*) into n from public.prayer_requests
+  select count(*) into n from public.prayer_counts_tree(365) where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA arvore: subsede Y ve contagem de % igrejas (esperado 2: Y e B)', n; end if;
+  select count(*) into n from public.visitors
   where church_id in ('7d7d7d7d-0000-4000-8000-000000000002', '7d7d7d7d-0000-4000-8000-000000000004');
   if n <> 0 then raise exception 'FALHA arvore: subsede Y enxerga a irma X'; end if;
 end $$;
