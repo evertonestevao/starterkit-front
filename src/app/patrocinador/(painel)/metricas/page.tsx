@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
-import { Eye, FlaskConical, MousePointerClick, TrendingUp, Users } from "lucide-react";
-import { BarChartCard } from "@/components/charts/bar-chart-card";
-import { DonutChartCard } from "@/components/charts/donut-chart-card";
-import { LineChartCard } from "@/components/charts/line-chart-card";
+import { Church, Eye } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -14,167 +11,115 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { clickRatePercent, SPONSOR_METRICS_SAMPLE } from "@/features/sponsor/mock-metrics";
+import { formatMonthShort, lastMonths, pivotVisitsByChurch } from "@/lib/visitMetrics";
+import { getVisitMetricsRepository } from "@/server/churchVisits";
 
 export const metadata: Metadata = { title: "Métricas" };
 
-const integer = { maximumFractionDigits: 0 } as const;
+const MESES = 6;
 
+/**
+ * Visitas às páginas das igrejas apoiadas, por mês — só enquanto a marca
+ * estava no ar (depois de ativar, antes de terminar e antes de a igreja
+ * esconder). É medição real, gravada desde a migration 20260921110000.
+ *
+ * Cliques na marca ficam de fora de propósito: hoje a marca na página da
+ * igreja não leva a lugar nenhum, então não existe clique para contar.
+ */
 export default async function SponsorMetricsPage() {
-  // Tudo nesta tela é amostra (ver src/features/sponsor/mock-metrics.ts).
-  // De propósito NÃO se mistura número real aqui: "1 igreja no seu plano"
-  // ao lado de uma tabela de exemplo com 3 igrejas só confunde.
-  const sample = SPONSOR_METRICS_SAMPLE;
-  const clickRate = clickRatePercent(sample);
+  const repo = await getVisitMetricsRepository();
+  const months = lastMonths(MESES);
+  const rows = pivotVisitsByChurch(await repo.listSponsorChurchVisits(MESES), months);
+
+  const noMes = rows.reduce((sum, row) => sum + row.porMes[0], 0);
+  const noPeriodo = rows.reduce((sum, row) => sum + row.total, 0);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Métricas</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Quanto a sua marca apareceu para quem visitou as páginas das igrejas que você apoia.
+          Quantas vezes a página de cada igreja que você apoia foi aberta enquanto a sua marca estava
+          nela — pelo link, pelo QR Code ou pela tag NFC.
         </p>
       </div>
 
-      {/* O rótulo fica no topo, antes de qualquer número: ninguém deve
-          confundir amostra com medição. */}
-      <Alert>
-        <FlaskConical className="size-4" />
-        <AlertDescription>
-          <strong className="font-medium text-foreground">Dados de demonstração.</strong> Os
-          números abaixo são um exemplo do que esta tela vai mostrar. A medição real começa
-          quando as páginas públicas passarem a registrar visitas, cliques e leituras de QR Code.
-        </AlertDescription>
-      </Alert>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <MetricCard
           icon={Eye}
-          label="Aparições da marca"
-          value={sample.appearances.toLocaleString("pt-BR")}
-          hint="últimos 30 dias"
+          label="Visitas neste mês"
+          value={noMes.toLocaleString("pt-BR")}
+          hint="páginas abertas com a sua marca"
         />
         <MetricCard
-          icon={Users}
-          label="Pessoas alcançadas"
-          value={sample.reach.toLocaleString("pt-BR")}
-          hint="visitantes distintos"
-        />
-        <MetricCard
-          icon={MousePointerClick}
-          label="Cliques no seu perfil"
-          value={sample.clicks.toLocaleString("pt-BR")}
-          hint={`${clickRate.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% das aparições`}
-        />
-        <MetricCard
-          icon={TrendingUp}
-          label="Variação no mês"
-          value={`+${sample.appearancesTrendPercent}%`}
-          hint="contra os 30 dias anteriores"
+          icon={Church}
+          label={`Últimos ${MESES} meses`}
+          value={noPeriodo.toLocaleString("pt-BR")}
+          hint={`em ${rows.length} ${rows.length === 1 ? "igreja" : "igrejas"}`}
         />
       </div>
 
-      {/* Uma série por gráfico: aparições e cliques têm ordens de grandeza
-          diferentes e não dividem o mesmo eixo. */}
-      <LineChartCard
-        title="Aparições por mês"
-        description="Evolução da exposição da sua marca nos últimos 6 meses."
-        data={sample.monthly}
-        xKey="month"
-        yKey="appearances"
-        valueFormat={integer}
-      />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <BarChartCard
-          title="Aparições por igreja"
-          description="Onde sua marca apareceu mais no período."
-          data={sample.byChurch}
-          xKey="church"
-          yKey="appearances"
-          valueFormat={integer}
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={Eye}
+          title="Nenhuma visita contada ainda"
+          description="As visitas aparecem aqui quando alguém abrir a página de uma igreja enquanto o seu patrocínio estiver ativo."
         />
-        <DonutChartCard
-          title="Como chegaram até a página"
-          description="Origem das visitas em que sua marca apareceu."
-          data={sample.sources.map((source) => ({ label: source.label, value: source.value }))}
-          valueFormat={integer}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Detalhe por igreja</CardTitle>
-          <CardDescription>
-            Aparições e cliques de cada comunidade apoiada, no período.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* Desktop: tabela. Mobile: cards (regra de layout do projeto). */}
-          <div className="hidden md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Igreja</TableHead>
-                  <TableHead className="text-right">Aparições</TableHead>
-                  <TableHead className="text-right">Cliques</TableHead>
-                  <TableHead className="text-right">Taxa</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sample.byChurch.map((row) => (
-                  <TableRow key={row.church}>
-                    <TableCell className="font-medium">{row.church}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {row.appearances.toLocaleString("pt-BR")}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {row.clicks.toLocaleString("pt-BR")}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {((row.clicks / row.appearances) * 100).toLocaleString("pt-BR", {
-                        maximumFractionDigits: 1,
-                      })}
-                      %
-                    </TableCell>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Por igreja e por mês</CardTitle>
+            <CardDescription>
+              Uma pessoa abrindo a mesma página várias vezes seguidas conta uma vez.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Desktop: tabela. Mobile: cards (regra de layout do projeto). */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Igreja</TableHead>
+                    {months.map((m) => (
+                      <TableHead key={m} className="text-right">
+                        {formatMonthShort(m)}
+                      </TableHead>
+                    ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => (
+                    <TableRow key={row.churchId}>
+                      <TableCell className="font-medium">{row.churchName}</TableCell>
+                      {row.porMes.map((n, i) => (
+                        <TableCell key={months[i]} className="text-right tabular-nums">
+                          {n.toLocaleString("pt-BR")}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
 
-          <div className="flex flex-col gap-3 md:hidden">
-            {sample.byChurch.map((row) => (
-              <div key={row.church} className="rounded-lg border p-3">
-                <p className="font-medium">{row.church}</p>
-                <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <dt className="text-muted-foreground">Aparições</dt>
-                    <dd className="mt-0.5 font-semibold tabular-nums">
-                      {row.appearances.toLocaleString("pt-BR")}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Cliques</dt>
-                    <dd className="mt-0.5 font-semibold tabular-nums">
-                      {row.clicks.toLocaleString("pt-BR")}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Taxa</dt>
-                    <dd className="mt-0.5 font-semibold tabular-nums">
-                      {((row.clicks / row.appearances) * 100).toLocaleString("pt-BR", {
-                        maximumFractionDigits: 1,
-                      })}
-                      %
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex flex-col gap-3 md:hidden">
+              {rows.map((row) => (
+                <div key={row.churchId} className="rounded-lg border p-3">
+                  <p className="font-medium">{row.churchName}</p>
+                  <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                    {row.porMes.map((n, i) => (
+                      <div key={months[i]}>
+                        <dt className="text-muted-foreground">{formatMonthShort(months[i])}</dt>
+                        <dd className="mt-0.5 font-semibold tabular-nums">{n.toLocaleString("pt-BR")}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

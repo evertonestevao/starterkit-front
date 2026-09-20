@@ -1915,6 +1915,97 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Visitas à página pública (migration 20260921110000). Reaproveita a árvore
+-- acima, já com X ligada à sede.
+-- ---------------------------------------------------------------------------
+insert into public.church_page_visits (church_id, origem) values
+  ('7d7d7d7d-0000-4000-8000-000000000004', 'qr'),
+  ('7d7d7d7d-0000-4000-8000-000000000004', 'nfc'),
+  ('7d7d7d7d-0000-4000-8000-000000000005', 'link'),
+  ('7d7d7d7d-0000-4000-8000-000000000001', 'link');
+
+-- A igreja B escondeu a marca ONTEM: a visita de hoje não conta para ele.
+update public.sponsorships set hidden_at = now() - interval '1 day'
+where church_id = '7d7d7d7d-0000-4000-8000-000000000005';
+
+-- Ninguém grava visita pela chave pública (inflaria a métrica do patrocinador).
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+do $$
+begin
+  begin
+    insert into public.church_page_visits (church_id, origem)
+    values ('7d7d7d7d-0000-4000-8000-000000000004', 'qr');
+    raise exception 'FALHA visitas: anon gravou visita';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000004","email":"rls-conga@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  begin
+    insert into public.church_page_visits (church_id, origem)
+    values ('7d7d7d7d-0000-4000-8000-000000000004', 'qr');
+    raise exception 'FALHA visitas: igreja gravou visita pelo client';
+  exception when sqlstate '42501' then null;
+  end;
+
+  select count(*) into n from public.church_page_visits where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA visitas: congregacao A ve % visitas (esperado 2)', n; end if;
+
+  -- Métrica da plataforma não abre para igreja.
+  begin
+    perform * from public.platform_visits_by_week(8);
+    raise exception 'FALHA visitas: igreja leu a metrica da plataforma';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform * from public.platform_pilot_summary();
+    raise exception 'FALHA visitas: igreja leu o resumo do piloto';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Quem não é patrocinador recebe lista vazia, não a de outro.
+  select count(*) into n from public.sponsor_church_visits(6);
+  if n <> 0 then raise exception 'FALHA visitas: nao-patrocinador viu % linhas', n; end if;
+end $$;
+
+-- Patrocinador: só as igrejas dele, e só enquanto a marca estava no ar.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000008","email":"rls-patro2@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select coalesce(sum(visitas), 0) into n from public.sponsor_church_visits(6)
+  where church_id::text like '7d7d7d7d-%';
+  if n <> 3 then raise exception 'FALHA visitas: patrocinador ve % visitas (esperado 3: A=2, S=1; B escondeu)', n; end if;
+
+  select count(*) into n from public.sponsor_church_visits(6)
+  where church_id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if n <> 0 then raise exception 'FALHA visitas: contou visita depois de a igreja esconder a marca'; end if;
+end $$;
+
+-- Staff da plataforma vê os agregados.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select coalesce(sum(qr), 0) into n from public.platform_visits_by_week(8)
+  where church_id = '7d7d7d7d-0000-4000-8000-000000000004';
+  if n <> 1 then raise exception 'FALHA visitas: staff viu % leituras de QR em A (esperado 1)', n; end if;
+
+  select patrocinadores_pagantes into n from public.platform_pilot_summary();
+  if n < 1 then raise exception 'FALHA visitas: resumo do piloto sem o patrocinador ativo'; end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

@@ -5,7 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { getServerEnv } from "@/config/env";
 import { ChurchHierarchyForm } from "@/features/platform/components/church-hierarchy-form";
+import { churchTagUrl } from "@/lib/churchVisits";
 import { getChurchHierarchyService } from "@/server/platform";
 import { CHURCH_TIPO_LABEL } from "@/services/churchHierarchyService";
 
@@ -28,6 +30,7 @@ export default async function PlatformChurchesPage({
     ? todas.filter((c) => c.name.toLowerCase().includes(termo) || c.publicCode.includes(termo))
     : todas;
   const visiveis = filtradas.slice(0, LIMITE);
+  const appUrl = getServerEnv().APP_URL;
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,7 +72,13 @@ export default async function PlatformChurchesPage({
                     <Badge variant="secondary">{CHURCH_TIPO_LABEL[church.tipo]}</Badge>
                     {!church.companyId ? <Badge variant="outline">demonstração</Badge> : null}
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">/igreja/{church.publicCode}</p>
+                  {/* Endereços que vão impressos: o ?origem= separa QR de NFC nas métricas. */}
+                  <p className="mt-0.5 break-all text-xs text-muted-foreground">
+                    QR: {churchTagUrl(appUrl, church.publicCode, "qr")}
+                  </p>
+                  <p className="break-all text-xs text-muted-foreground">
+                    NFC: {churchTagUrl(appUrl, church.publicCode, "nfc")}
+                  </p>
                 </div>
                 <div className="w-full lg:max-w-xl">
                   <ChurchHierarchyForm church={church} all={todas} />
