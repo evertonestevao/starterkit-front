@@ -1556,6 +1556,91 @@ end $$;
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Programação da igreja (migration 20260920140000).
+-- ---------------------------------------------------------------------------
+reset role;
+
+insert into public.church_schedule (id, church_id, titulo, tipo, dia_semana, hora) values
+  ('f0f0f0f0-0000-4000-8000-000000000001', 'd1d1d1d1-0000-4000-8000-000000000001', 'Culto RLS', 'semanal', 0, '18:00');
+
+-- Semanal sem dia, ou com data, não entra: o CHECK do banco segura.
+do $$
+begin
+  begin
+    insert into public.church_schedule (church_id, titulo, tipo, hora)
+    values ('d1d1d1d1-0000-4000-8000-000000000001', 'Sem dia', 'semanal', '10:00');
+    raise exception 'FALHA church_schedule: aceitou semanal sem dia da semana';
+  exception when check_violation then null; -- esperado
+  end;
+end $$;
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_schedule where id = 'f0f0f0f0-0000-4000-8000-000000000001';
+  if n <> 1 then raise exception 'FALHA church_schedule: visitante nao ve a programacao'; end if;
+
+  begin
+    insert into public.church_schedule (church_id, titulo, tipo, dia_semana, hora)
+    values ('d1d1d1d1-0000-4000-8000-000000000001', 'Anon', 'semanal', 1, '10:00');
+    raise exception 'FALHA church_schedule: anon gravou na programacao';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  begin
+    insert into public.church_schedule (church_id, titulo, tipo, dia_semana, hora)
+    values ('d1d1d1d1-0000-4000-8000-000000000001', 'Intruso', 'semanal', 1, '10:00');
+    raise exception 'FALHA church_schedule: outra empresa gravou na programacao alheia';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- Remover (soft delete) item de outra igreja: a policy esconde a linha.
+  update public.church_schedule set deleted_at = now()
+  where id = 'f0f0f0f0-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA church_schedule: outra empresa removeu item alheio'; end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  insert into public.church_schedule (church_id, titulo, tipo, data, hora)
+  values ('d1d1d1d1-0000-4000-8000-000000000001', 'Santa Ceia RLS', 'especial', current_date + 10, '18:00');
+
+  update public.church_schedule set deleted_at = now()
+  where id = 'f0f0f0f0-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALHA church_schedule: dona nao conseguiu remover'; end if;
+end $$;
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_schedule where id = 'f0f0f0f0-0000-4000-8000-000000000001';
+  if n <> 0 then raise exception 'FALHA church_schedule: item removido segue publico'; end if;
+end $$;
+
+reset role;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'

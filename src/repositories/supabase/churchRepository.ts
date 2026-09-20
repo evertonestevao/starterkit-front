@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
-import type { ChurchEvent, PublicChurch } from "@/types/database";
+import type { ChurchEvent, ChurchScheduleItem, PublicChurch } from "@/types/database";
 import type { PublicSponsor } from "@/types/sponsorship";
 
 /**
@@ -69,6 +69,10 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
       return data?.slug ?? null;
     },
 
+    listSchedule(churchId: string): Promise<ChurchScheduleItem[]> {
+      return listPublicSchedule(client, churchId);
+    },
+
     /** Próximos eventos (a partir de agora), do mais perto para o mais longe. */
     async listUpcomingEvents(churchId: string, limit = 50): Promise<ChurchEvent[]> {
       const { data, error } = await client
@@ -98,6 +102,20 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
       return data;
     },
   };
+}
+
+/** A programação publicada (cultos semanais e especiais). */
+export async function listPublicSchedule(
+  client: SupabaseClient,
+  churchId: string,
+): Promise<ChurchScheduleItem[]> {
+  const { data, error } = await client
+    .from("church_schedule")
+    .select("id, church_id, titulo, tipo, dia_semana, data, hora, descricao, local")
+    .eq("church_id", churchId)
+    .order("hora");
+  if (error) throw new AppError("internal_error", "Falha ao carregar a programação", error);
+  return (data ?? []) as ChurchScheduleItem[];
 }
 
 const EVENT_COLUMNS =

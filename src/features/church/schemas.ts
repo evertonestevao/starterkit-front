@@ -95,3 +95,36 @@ export const createChurchEventSchema = z.object({
   inscricoesAbertas: z.boolean(),
 });
 
+/**
+ * Item da programação (culto semanal ou especial). Semanal pede dia da
+ * semana; especial pede data. A coerência entre os dois é conferida aqui e
+ * repetida por CHECK no banco.
+ */
+export const createScheduleItemSchema = z
+  .object({
+    churchId: churchIdSchema,
+    titulo: z.string().trim().min(2, "Dê um nome, ex.: Culto de celebração").max(80, "Nome muito longo"),
+    tipo: z.enum(["semanal", "especial"], { error: "Escolha: toda semana ou data específica" }),
+    diaSemana: z.string().trim(),
+    data: z.string().trim(),
+    hora: z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Informe o horário, ex.: 19:30"),
+    descricao: z
+      .string()
+      .trim()
+      .max(500, "A descrição pode ter até 500 caracteres")
+      .transform((v) => (v === "" ? null : v)),
+    local: z
+      .string()
+      .trim()
+      .max(200, "Local muito longo")
+      .transform((v) => (v === "" ? null : v)),
+  })
+  .superRefine((v, ctx) => {
+    if (v.tipo === "semanal" && !/^[0-6]$/.test(v.diaSemana)) {
+      ctx.addIssue({ code: "custom", path: ["diaSemana"], message: "Escolha o dia da semana" });
+    }
+    if (v.tipo === "especial" && !/^\d{4}-\d{2}-\d{2}$/.test(v.data)) {
+      ctx.addIssue({ code: "custom", path: ["data"], message: "Escolha a data" });
+    }
+  });
+

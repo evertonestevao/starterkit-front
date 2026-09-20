@@ -198,6 +198,22 @@ export interface Church {
 }
 
 /** Colunas de `churches` legíveis pelo anon (GRANT por coluna na migration). */
+/** Item da programação: culto semanal ou especial. Sem inscrição. */
+export interface ChurchScheduleItem {
+  id: string;
+  church_id: string;
+  titulo: string;
+  tipo: "semanal" | "especial";
+  /** 0 = domingo … 6 = sábado. Só no semanal. */
+  dia_semana: number | null;
+  /** "2026-10-04". Só no especial. */
+  data: string | null;
+  /** "19:30:00" (time do Postgres). */
+  hora: string;
+  descricao: string | null;
+  local: string | null;
+}
+
 /** Evento publicado pela igreja na página pública. */
 export interface ChurchEvent {
   id: string;

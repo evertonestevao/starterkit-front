@@ -18,6 +18,13 @@ import { CopyPix } from "@/features/church/components/copy-pix";
 import { fonteTitulos as titulos, PublicShell } from "@/features/church/components/public-shell";
 import { SocialIcon } from "@/features/church/components/social-icon";
 import {
+  formatHora,
+  groupWeekly,
+  specialBadge,
+  specialWhen,
+  upcomingSpecials,
+} from "@/lib/churchSchedule";
+import {
   churchInitials,
   directionsUrl,
   normalizeSocialLinks,
@@ -26,7 +33,7 @@ import {
 import { sponsorshipPath } from "@/lib/sponsorPaths";
 // PublicChurch, e não Church: esta página renderiza só o que o `anon` pode
 // ler (as colunas de domínio próprio ficam de fora).
-import type { ChurchEvent, PublicChurch as ChurchRecord } from "@/types/database";
+import type { ChurchEvent, ChurchScheduleItem, PublicChurch as ChurchRecord } from "@/types/database";
 import type { ChurchTheme } from "@/server/publicChurch";
 import type { PublicSponsor as Sponsor } from "@/types/sponsorship";
 
@@ -50,6 +57,8 @@ export type ChurchPageTemplateProps = {
   sponsors: Sponsor[];
   /** Próximos eventos (poucos): a página mostra uma prévia e leva à lista. */
   eventos: ChurchEvent[];
+  /** Programação publicada: cultos semanais e especiais. */
+  programacao: ChurchScheduleItem[];
   templateSlug: ChurchTheme;
 };
 
@@ -110,12 +119,24 @@ function iniciais(nome: string): string {
     .join("");
 }
 
-export function ChurchPageRenderer({ church, sponsors, eventos, templateSlug }: ChurchPageTemplateProps) {
+export function ChurchPageRenderer({
+  church,
+  sponsors,
+  eventos,
+  programacao,
+  templateSlug,
+}: ChurchPageTemplateProps) {
   const horarios = orderServiceTimes(church.service_times);
   const redes = normalizeSocialLinks(church.social_links);
   const whatsapp = redes.find((r) => r.kind === "whatsapp");
   const comoChegar = directionsUrl(church.name, church.address);
-  const temCultos = horarios.length > 0 || Boolean(church.address);
+  const semana = groupWeekly(programacao);
+  // Especiais dos próximos meses; mais que isso vira ruído na página.
+  const especiais = upcomingSpecials(programacao).slice(0, 4);
+  // Igreja que ainda não usa a Programação cai no campo antigo (texto livre).
+  const usaLegado = semana.length === 0 && especiais.length === 0;
+  const temCultos =
+    semana.length > 0 || especiais.length > 0 || horarios.length > 0 || Boolean(church.address);
 
   const temPix = Boolean(church.pix_chave);
 
@@ -132,7 +153,7 @@ export function ChurchPageRenderer({ church, sponsors, eventos, templateSlug }: 
     ...(eventos.length > 0
       ? [{ rotulo: "Eventos", icone: CalendarCheck, href: `/igreja/${church.public_code}/eventos` }]
       : []),
-    ...(temCultos ? [{ rotulo: "Cultos", icone: Clock3, href: "#cultos" }] : []),
+    ...(temCultos ? [{ rotulo: "Programação", icone: Clock3, href: "#programacao" }] : []),
     ...(whatsapp
       ? [{ rotulo: "WhatsApp", icone: "whatsapp" as const, href: whatsapp.href, externo: true }]
       : []),
@@ -244,12 +265,41 @@ export function ChurchPageRenderer({ church, sponsors, eventos, templateSlug }: 
 
   if (temCultos) {
     secoes.push({
-      id: "cultos",
+      id: "programacao",
       conteudo: (
         <>
-          <TituloSecao icone={Clock3} antes="Nossos" destaque="cultos" subtitulo="Venha estar com a gente." />
+          <TituloSecao icone={Clock3} antes="Nossa" destaque="programação" subtitulo="Venha estar com a gente." />
           <div className={cartao}>
-            {horarios.length > 0 ? (
+            {semana.length > 0 ? (
+              <div className="flex flex-col gap-4">
+                {semana.map((d) => (
+                  <div key={d.dia}>
+                    <p className="text-xs font-semibold tracking-[0.12em] text-[var(--pg-muted)] uppercase">
+                      {d.rotulo}
+                    </p>
+                    <ul className="mt-1.5 flex flex-col gap-1.5">
+                      {d.itens.map((item) => (
+                        <li key={item.id} className="flex items-baseline gap-3">
+                          <span className="w-12 shrink-0 font-semibold text-[var(--pg-accent)] tabular-nums">
+                            {formatHora(item.hora)}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="font-medium">{item.titulo}</span>
+                            {item.descricao || item.local ? (
+                              <span className="block text-sm text-[var(--pg-muted)]">
+                                {[item.descricao, item.local].filter(Boolean).join(" · ")}
+                              </span>
+                            ) : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {usaLegado && horarios.length > 0 ? (
               <ul className="divide-y divide-[var(--pg-border)]">
                 {horarios.map((h) => (
                   <li key={h.dia} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
@@ -259,8 +309,43 @@ export function ChurchPageRenderer({ church, sponsors, eventos, templateSlug }: 
                 ))}
               </ul>
             ) : null}
+
+            {especiais.length > 0 ? (
+              <div className={semana.length > 0 ? "mt-5 border-t border-[var(--pg-border)] pt-5" : ""}>
+                <p className="text-xs font-semibold tracking-[0.12em] text-[var(--pg-muted)] uppercase">
+                  Especiais
+                </p>
+                <ul className="mt-2 flex flex-col gap-3">
+                  {especiais.map((item) => {
+                    const selo = specialBadge(item.data!);
+                    return (
+                      <li key={item.id} className="flex items-center gap-3">
+                        <span className="flex size-12 shrink-0 flex-col items-center justify-center rounded-xl bg-[var(--pg-accent-soft)] text-[var(--pg-accent)]">
+                          <span className={`${titulos.className} text-lg leading-none font-bold`}>{selo.dia}</span>
+                          <span className="mt-0.5 text-[0.65rem] font-semibold tracking-wider">{selo.mes}</span>
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-medium">{item.titulo}</span>
+                          <span className="block text-sm text-[var(--pg-muted)]">
+                            {specialWhen(item.data!, item.hora)}
+                            {item.local ? ` · ${item.local}` : ""}
+                          </span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
+
             {church.address ? (
-              <div className={horarios.length > 0 ? "mt-5 border-t border-[var(--pg-border)] pt-5" : ""}>
+              <div
+                className={
+                  semana.length > 0 || especiais.length > 0 || (usaLegado && horarios.length > 0)
+                    ? "mt-5 border-t border-[var(--pg-border)] pt-5"
+                    : ""
+                }
+              >
                 <p className="flex items-start gap-2 leading-6">
                   <MapPin className="mt-1 size-4 shrink-0 text-[var(--pg-accent)]" aria-hidden />
                   <span>{church.address}</span>

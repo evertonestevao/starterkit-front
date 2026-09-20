@@ -1,4 +1,5 @@
 import {
+  CalendarClock,
   CalendarDays,
   CreditCard,
   HandHeart,
@@ -51,6 +52,14 @@ export const navItems: NavItem[] = [
     roles: ["owner", "admin", "member"],
   },
   {
+    // O dia a dia (cultos semanais e especiais), sem inscrição.
+    title: "Programação",
+    href: "/dashboard/programacao",
+    icon: CalendarClock,
+    roles: ["owner", "admin", "member"],
+  },
+  {
+    // Só o que tem inscrição e/ou pagamento.
     title: "Eventos",
     href: "/dashboard/events",
     icon: CalendarDays,
