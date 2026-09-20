@@ -2232,6 +2232,77 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- "Copiei a chave PIX" (migration 20260922130000)
+-- ---------------------------------------------------------------------------
+insert into public.church_pix_copies (church_id) values ('7d7d7d7d-0000-4000-8000-000000000004');
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+do $$
+begin
+  begin
+    insert into public.church_pix_copies (church_id) values ('7d7d7d7d-0000-4000-8000-000000000004');
+    raise exception 'FALHA pix: anon gravou copia da chave';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  -- Congregação B não vê o que é da congregação A.
+  select count(*) into n from public.church_pix_copies;
+  if n <> 0 then raise exception 'FALHA pix: congregacao B viu % copias alheias', n; end if;
+  begin
+    perform * from public.platform_pix_copies_by_week(8);
+    raise exception 'FALHA pix: igreja leu a metrica da plataforma';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- A igreja da chave vê o próprio número; a subsede acima também.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000002","email":"rls-subx@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_pix_copies;
+  if n <> 1 then raise exception 'FALHA pix: subsede X viu % copias (esperado 1, da congregacao dela)', n; end if;
+end $$;
+
+-- A igreja escreve a própria chave PIX; a de outra igreja, não.
+do $$
+declare n int;
+begin
+  update public.churches set pix_chave = 'chave@subx', pix_titular = 'Igreja Sub X'
+  where id = '7d7d7d7d-0000-4000-8000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALHA pix: dona nao conseguiu gravar a propria chave'; end if;
+
+  update public.churches set pix_chave = 'chave@roubada'
+  where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA pix: igreja gravou a chave de outra'; end if;
+end $$;
+
+-- Member não mexe na chave PIX (é por ela que a doação entra).
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000006","email":"rls-membx@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  update public.churches set pix_chave = 'chave@member'
+  where id = '7d7d7d7d-0000-4000-8000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA pix: member trocou a chave da igreja'; end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

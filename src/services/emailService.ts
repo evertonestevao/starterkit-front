@@ -144,6 +144,37 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
      * Aviso para a moderação. Vai para todos os emails do staff — hoje é
      * email; o bot do Telegram entra como outro provider, sem mexer aqui.
      */
+    /**
+     * Troca da chave PIX da igreja. Vai para TODOS os administradores,
+     * inclusive quem fez a troca: se uma conta for invadida, é por este email
+     * que os outros ficam sabendo. A chave vai mascarada — o email pode estar
+     * sendo lido por quem invadiu.
+     */
+    async sendPixChanged(input: {
+      to: string[];
+      churchName: string;
+      chaveMascarada: string;
+      titular: string;
+      alteradoPor: string;
+    }): Promise<void> {
+      const assunto = `A chave PIX de ${input.churchName} foi alterada`;
+      const linhas = [
+        `A chave PIX que aparece na página de ${input.churchName} foi alterada por ${input.alteradoPor}.`,
+        `Nova chave: ${input.chaveMascarada} · Titular: ${input.titular}`,
+        "Se não foi você nem alguém da equipe, troque a senha da conta e volte a chave agora: é por ela que as doações entram.",
+      ];
+      await Promise.all(
+        input.to.map((to) =>
+          provider.send({
+            to,
+            subject: assunto,
+            text: linhas.join("\n\n"),
+            html: linhas.map((l) => `<p>${l}</p>`).join("\n"),
+          }),
+        ),
+      );
+    },
+
     async sendPlatformStaffAlert(input: {
       to: string[];
       subject: string;
