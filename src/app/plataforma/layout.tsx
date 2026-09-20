@@ -24,7 +24,6 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   const pendencias = await (await getPlatformModerationService()).getPendingCounts();
   const tabs = [
     { href: "/plataforma", label: "Visão geral" },
-    { href: "/plataforma/piloto", label: "Piloto" },
     {
       href: "/plataforma/alteracoes",
       label: "Alterações",

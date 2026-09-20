@@ -40,8 +40,10 @@ test("moderação entra direto na área dela, sem virar igreja", async ({ page }
   await page.goto("/onboarding");
   await expect(page).toHaveURL(/\/plataforma$/);
   await expect(page.getByRole("heading", { name: "Visão geral" })).toBeVisible();
-  // A receita é amostra, e isso tem de estar dito antes de qualquer número.
-  await expect(page.getByText("Tela de demonstração.")).toBeVisible();
+  // Os números da visão geral são MEDIDOS (a amostra saiu do ar): o que a
+  // tela promete é patrocínio e alcance de verdade.
+  await expect(page.getByText("Patrocinadores pagantes")).toBeVisible();
+  await expect(page.getByText("Números medidos, sem amostra.")).toBeVisible();
 
   // ...nem o dashboard, que antes mandava aceitar os termos das igrejas.
   await page.goto("/dashboard");
