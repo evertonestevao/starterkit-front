@@ -276,6 +276,28 @@ export function createSupabaseSponsorBillingStore(adminClient: SupabaseClient): 
       if (error) throw new AppError("internal_error", "Falha ao desfazer o pedido", error);
     },
 
+    async findCharge(gateway, gatewayPaymentId) {
+      const { data, error } = await adminClient
+        .from("sponsor_charges")
+        .select("*")
+        .eq("gateway", gateway)
+        .eq("gateway_payment_id", gatewayPaymentId)
+        .maybeSingle<SponsorCharge>();
+      if (error) throw new AppError("internal_error", "Falha ao localizar cobrança", error);
+      return data;
+    },
+
+    async hasPaidChargeOnOrAfter(sponsorId, dueDate) {
+      const { count, error } = await adminClient
+        .from("sponsor_charges")
+        .select("id", { count: "exact", head: true })
+        .eq("sponsor_id", sponsorId)
+        .eq("status", "paid")
+        .gte("due_date", dueDate);
+      if (error) throw new AppError("internal_error", "Falha ao conferir cobranças pagas", error);
+      return (count ?? 0) > 0;
+    },
+
     async upsertCharge(input) {
       const lookup = () =>
         adminClient

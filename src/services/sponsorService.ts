@@ -124,6 +124,10 @@ export interface SponsorBillingStore {
   finalizeEndedCancellations(now: string, accountId?: string): Promise<number>;
   /** Cancela na hora um pedido que não chegou a virar cobrança. */
   discardPendingSponsorship(sponsorshipId: string, at: string): Promise<void>;
+  /** Cobrança já gravada deste pagamento, se existir. */
+  findCharge(gateway: string, gatewayPaymentId: string): Promise<SponsorCharge | null>;
+  /** Existe cobrança PAGA com vencimento igual ou posterior a esta data? */
+  hasPaidChargeOnOrAfter(sponsorId: string, dueDate: string): Promise<boolean>;
   /** Devolve a cobrança e se ela acabou de ser criada. */
   upsertCharge(input: ChargeUpsert): Promise<{ charge: SponsorCharge; created: boolean }>;
   countChargeItems(chargeId: string): Promise<number>;
@@ -393,7 +397,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
    */
   async function applyBillingEvent(
     event: BillingWebhookEvent,
-  ): Promise<"applied" | "ignored" | "unknown_subscription"> {
+  ): Promise<"applied" | "ignored" | "unknown_subscription" | "stale"> {
     if (event.kind !== "charge") return "ignored";
     const { charge, provider } = event;
     if (!charge.subscriptionId) return "ignored";
@@ -405,6 +409,23 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         subscriptionId: charge.subscriptionId,
       });
       return "unknown_subscription";
+    }
+
+    // Webhook não chega em ordem: uma reentrega de "vencido" pode aparecer
+    // depois do "pago" do MESMO pagamento. Aplicar na ordem de chegada faria
+    // a marca do patrocinador sumir da vitrine por uma cobrança que já foi
+    // quitada. Pagamento só sai de `paid` por estorno ou cancelamento.
+    const existente = await store.findCharge(provider, charge.paymentId);
+    if (
+      existente?.status === "paid" &&
+      (charge.status === "pending" || charge.status === "overdue")
+    ) {
+      log.warn("[sponsor] evento atrasado ignorado: cobrança já paga", {
+        provider,
+        paymentId: charge.paymentId,
+        recebido: charge.status,
+      });
+      return "stale";
     }
 
     const nowIso = now().toISOString();
@@ -469,9 +490,13 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         patch.billing_status = "active";
         patch.next_due_date = addMonths(charge.dueDate, 1);
         break;
-      case "overdue":
-        patch.billing_status = "overdue";
+      case "overdue": {
+        // "Vencido" de um ciclo ANTIGO, chegando depois de um ciclo novo já
+        // pago, não pode marcar a conta como inadimplente.
+        const cicloMaisNovoPago = await store.hasPaidChargeOnOrAfter(account.id, charge.dueDate);
+        if (!cicloMaisNovoPago) patch.billing_status = "overdue";
         break;
+      }
       case "pending":
         if (account.billing_status !== "overdue") {
           patch.next_due_date = charge.dueDate;

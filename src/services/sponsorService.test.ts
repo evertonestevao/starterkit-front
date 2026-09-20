@@ -279,6 +279,17 @@ function makeWorld(
       const row = sponsorships.find((s) => s.id === sponsorshipId);
       if (row) Object.assign(row, { status: "canceled", canceled_at: at, ends_at: at });
     },
+    async findCharge(gateway: string, gatewayPaymentId: string) {
+      return (
+        charges.find((c) => c.gateway === gateway && c.gateway_payment_id === gatewayPaymentId) ??
+        null
+      );
+    },
+    async hasPaidChargeOnOrAfter(sponsorId: string, dueDate: string) {
+      return charges.some(
+        (c) => c.sponsor_id === sponsorId && c.status === "paid" && c.due_date >= dueDate,
+      );
+    },
     async upsertCharge(input: ChargeUpsert) {
       const existing = charges.find(
         (c) => c.gateway === input.gateway && c.gateway_payment_id === input.gatewayPaymentId,
@@ -1040,5 +1051,72 @@ describe("vagas de primeiro patrocínio", () => {
     await world.service.startPublicSponsorship(publicInput, evidence);
 
     expect(world.sponsorships[0].primeiro).toBe(true);
+  });
+});
+
+describe("webhook fora de ordem", () => {
+  function cobranca(
+    world: ReturnType<typeof makeWorld>,
+    over: Partial<{ paymentId: string; dueDate: string; status: "paid" | "overdue" | "pending" }>,
+  ): BillingWebhookEvent {
+    return {
+      kind: "charge",
+      provider: "fake",
+      charge: {
+        paymentId: over.paymentId ?? "pay-1",
+        subscriptionId: world.account!.gateway_subscription_id,
+        amountCents: 3990,
+        dueDate: over.dueDate ?? "2026-10-17",
+        status: over.status ?? "paid",
+        paidAt: over.status === "paid" || !over.status ? "2026-10-17T12:00:00.000Z" : null,
+        invoiceUrl: null,
+      },
+    };
+  }
+
+  it('"vencido" reentregue depois do "pago" não rebaixa a cobrança', async () => {
+    const world = makeWorld();
+    await signUp(world);
+    await world.service.startSponsorship(A, USER);
+
+    await world.service.applyBillingEvent(cobranca(world, { paymentId: "pay-x", status: "paid" }));
+    const resultado = await world.service.applyBillingEvent(
+      cobranca(world, { paymentId: "pay-x", status: "overdue" }),
+    );
+
+    expect(resultado).toBe("stale");
+    expect(world.charges.find((c) => c.gateway_payment_id === "pay-x")?.status).toBe("paid");
+    // E a conta segue em dia: a marca não sai da vitrine por evento atrasado.
+    expect(world.account?.billing_status).toBe("active");
+  });
+
+  it('"vencido" de um ciclo antigo não derruba a conta que já pagou o ciclo novo', async () => {
+    const world = makeWorld();
+    await signUp(world);
+    await world.service.startSponsorship(A, USER);
+
+    // Ciclo novo pago...
+    await world.service.applyBillingEvent(
+      cobranca(world, { paymentId: "pay-novembro", dueDate: "2026-11-17", status: "paid" }),
+    );
+    // ...e só então chega o "vencido" de outubro.
+    await world.service.applyBillingEvent(
+      cobranca(world, { paymentId: "pay-outubro", dueDate: "2026-10-17", status: "overdue" }),
+    );
+
+    expect(world.account?.billing_status).toBe("active");
+    expect(world.charges.find((c) => c.gateway_payment_id === "pay-outubro")?.status).toBe("overdue");
+  });
+
+  it("vencido do ciclo corrente ainda marca a conta como atrasada", async () => {
+    const world = makeWorld();
+    await signUp(world);
+    await world.service.startSponsorship(A, USER);
+
+    await world.service.applyBillingEvent(
+      cobranca(world, { paymentId: "pay-dezembro", dueDate: "2026-12-17", status: "overdue" }),
+    );
+
+    expect(world.account?.billing_status).toBe("overdue");
   });
 });
