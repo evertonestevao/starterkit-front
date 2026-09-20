@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AddScheduleItemForm,
+  EditScheduleItemForm,
   RemoveScheduleItemButton,
 } from "@/features/church/components/schedule-forms";
 import { formatHora, groupWeekly, specialBadge, specialWhen, upcomingSpecials } from "@/lib/churchSchedule";
@@ -78,13 +79,25 @@ export default async function SchedulePage() {
                   <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{d.rotulo}</p>
                   <ul className="mt-1.5 divide-y rounded-lg border">
                     {d.itens.map((item) => (
-                      <li key={item.id} className="flex items-center gap-3 px-3 py-2.5">
-                        <span className="w-12 shrink-0 font-semibold tabular-nums">{formatHora(item.hora)}</span>
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="truncate font-medium">{item.titulo}</span>
-                          <Detalhes item={item} mostrarIgreja={variasIgrejas} />
-                        </span>
-                        {podeEditar ? <RemoveScheduleItemButton itemId={item.id} titulo={item.titulo} /> : null}
+                      <li key={item.id} className="flex flex-col">
+                        <div className="flex items-center gap-3 px-3 py-2.5">
+                          <span className="w-12 shrink-0 font-semibold tabular-nums">{formatHora(item.hora)}</span>
+                          <span className="flex min-w-0 flex-1 flex-col">
+                            <span className="truncate font-medium">{item.titulo}</span>
+                            <Detalhes item={item} mostrarIgreja={variasIgrejas} />
+                          </span>
+                          {podeEditar ? <RemoveScheduleItemButton itemId={item.id} titulo={item.titulo} /> : null}
+                        </div>
+                        {/* Edição fechada por padrão: a lista existe para ser
+                            lida de relance, não para ser preenchida. */}
+                        {podeEditar ? (
+                          <details>
+                            <summary className="cursor-pointer px-3 pb-2 text-xs text-muted-foreground">
+                              Editar
+                            </summary>
+                            <EditScheduleItemForm item={item} />
+                          </details>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
@@ -107,7 +120,8 @@ export default async function SchedulePage() {
                 {especiais.map((item) => {
                   const selo = specialBadge(item.data!);
                   return (
-                    <li key={item.id} className="flex items-center gap-3 rounded-lg border p-3">
+                    <li key={item.id} className="flex flex-col rounded-lg border">
+                      <div className="flex items-center gap-3 p-3">
                       <span className="flex size-11 shrink-0 flex-col items-center justify-center rounded-lg bg-secondary text-primary">
                         <span className="text-base leading-none font-semibold">{selo.dia}</span>
                         <span className="mt-0.5 text-[0.6rem] font-semibold tracking-wider">{selo.mes}</span>
@@ -117,7 +131,18 @@ export default async function SchedulePage() {
                         <span className="text-xs text-muted-foreground">{specialWhen(item.data!, item.hora)}</span>
                         <Detalhes item={item} mostrarIgreja={variasIgrejas} />
                       </span>
-                      {podeEditar ? <RemoveScheduleItemButton itemId={item.id} titulo={item.titulo} /> : null}
+                        {podeEditar ? (
+                          <RemoveScheduleItemButton itemId={item.id} titulo={item.titulo} />
+                        ) : null}
+                      </div>
+                      {podeEditar ? (
+                        <details>
+                          <summary className="cursor-pointer px-3 pb-2 text-xs text-muted-foreground">
+                            Editar
+                          </summary>
+                          <EditScheduleItemForm item={item} />
+                        </details>
+                      ) : null}
                     </li>
                   );
                 })}

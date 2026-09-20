@@ -110,3 +110,12 @@ export function parseBrlToCents(texto: string | null | undefined): number | null
   return Math.round(Number(normalizado) * 100);
 }
 
+
+/**
+ * Centavos -> "180,00", para preencher o campo de valor na edição. Vírgula
+ * como separador decimal: é o que `parseBrlToCents` lê de volta, e é como a
+ * pessoa digitou da primeira vez.
+ */
+export function centsToBrl(cents: number): string {
+  return (cents / 100).toFixed(2).replace(".", ",");
+}

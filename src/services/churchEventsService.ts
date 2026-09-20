@@ -1,4 +1,4 @@
-import { createChurchEventSchema } from "@/features/church/schemas";
+import { createChurchEventSchema, updateChurchEventSchema } from "@/features/church/schemas";
 import { brasiliaLocalToIso, parseBrlToCents } from "@/lib/churchEvents";
 import { AppError, toValidationError } from "@/lib/errors";
 import type { RoleCode } from "@/types/database";
@@ -30,6 +30,22 @@ export interface ChurchEventsRepository {
   listCompanyEvents(companyId: string): Promise<CompanyEvent[]>;
   /** Igrejas da empresa, para validar a escolhida e montar o seletor. */
   listCompanyChurches(companyId: string): Promise<Array<{ id: string; name: string; address: string | null }>>;
+  /** Edição, só se o evento for da empresa. Devolve se alterou. */
+  updateEvent(
+    companyId: string,
+    eventId: string,
+    input: {
+      titulo: string;
+      descricao: string | null;
+      inicio: string;
+      fim: string | null;
+      local: string | null;
+      precoCents: number;
+      inscricoesAbertas: boolean;
+    },
+  ): Promise<boolean>;
+  /** Soft delete, só se o evento for da empresa. Devolve se removeu. */
+  softDeleteEvent(companyId: string, eventId: string): Promise<boolean>;
   insertEvent(input: {
     churchId: string;
     titulo: string;
@@ -132,6 +148,66 @@ export function createChurchEventsService(
         precoCents,
         inscricoesAbertas: dados.inscricoesAbertas,
       });
+    },
+
+    /**
+     * Edita um evento publicado. A igreja não muda (ver o mesmo raciocínio na
+     * programação) e o início PODE ficar no passado: corrigir a data de um
+     * evento que já começou é justamente o caso em que a igreja mais precisa
+     * editar.
+     */
+    async updateEvent(actor: EventActor, input: unknown): Promise<void> {
+      if (!canManageEvents(actor.role)) {
+        throw new AppError("forbidden", "Só quem administra a igreja pode editar eventos.");
+      }
+
+      const parsed = updateChurchEventSchema.safeParse(input);
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      const dados = parsed.data;
+
+      const inicio = brasiliaLocalToIso(dados.inicio);
+      if (!inicio) throw new AppError("validation_error", "Data de início inválida.");
+
+      let fim: string | null = null;
+      if (dados.fim) {
+        fim = brasiliaLocalToIso(dados.fim);
+        if (!fim) throw new AppError("validation_error", "Data de término inválida.");
+        if (new Date(fim).getTime() < new Date(inicio).getTime()) {
+          throw new AppError("validation_error", "O término não pode ser antes do início.");
+        }
+      }
+
+      const precoCents = parseBrlToCents(dados.preco);
+      if (precoCents === null) {
+        throw new AppError("validation_error", "Valor inválido. Use, por exemplo, 180,00.");
+      }
+
+      const alterou = await repo.updateEvent(actor.companyId, dados.eventId, {
+        titulo: dados.titulo,
+        descricao: dados.descricao,
+        inicio,
+        fim,
+        local: dados.local,
+        precoCents,
+        inscricoesAbertas: dados.inscricoesAbertas,
+      });
+      if (!alterou) throw new AppError("not_found", "Evento não encontrado.");
+    },
+
+    /**
+     * Tira o evento do ar (soft delete). As inscrições ficam: quem se
+     * inscreveu precisa continuar aparecendo na lista para ser avisado de que
+     * o evento foi cancelado.
+     */
+    async removeEvent(actor: EventActor, eventId: unknown): Promise<void> {
+      if (!canManageEvents(actor.role)) {
+        throw new AppError("forbidden", "Só quem administra a igreja pode remover eventos.");
+      }
+      const id = typeof eventId === "string" ? eventId.trim() : "";
+      if (!/^[0-9a-f-]{36}$/i.test(id)) throw new AppError("validation_error", "Evento inválido.");
+      if (!(await repo.softDeleteEvent(actor.companyId, id))) {
+        throw new AppError("not_found", "Evento não encontrado.");
+      }
     },
   };
 }

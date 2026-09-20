@@ -74,3 +74,36 @@ export async function removeScheduleItemAction(
     return toActionError(err);
   }
 }
+
+/** Edita um item da programação. A igreja do item não muda. */
+export async function updateScheduleItemAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const actor = await ator();
+    const itemId = texto(formData, "itemId");
+    const titulo = texto(formData, "titulo");
+    await (await getChurchScheduleService()).updateItem(actor, {
+      itemId,
+      titulo,
+      tipo: texto(formData, "tipo"),
+      diaSemana: texto(formData, "diaSemana"),
+      data: texto(formData, "data"),
+      hora: texto(formData, "hora"),
+      descricao: texto(formData, "descricao"),
+      local: texto(formData, "local"),
+    });
+    await recordAudit({
+      companyId: actor.companyId,
+      action: "church_schedule.updated",
+      entityType: "church_schedule",
+      entityId: itemId,
+      metadata: { titulo: titulo.trim() },
+    });
+    revalidatePath(PAGINA);
+    return { success: `“${titulo.trim()}” foi atualizado.` };
+  } catch (err) {
+    return toActionError(err);
+  }
+}

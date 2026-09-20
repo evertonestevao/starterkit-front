@@ -12,6 +12,8 @@ function build() {
     listCompanyEvents: vi.fn(async () => []),
     listCompanyChurches: vi.fn(async () => [{ id: IGREJA, name: "Igreja Esperança", address: null }]),
     insertEvent: vi.fn(async () => "evento-1"),
+    updateEvent: vi.fn(async () => true),
+    softDeleteEvent: vi.fn(async () => true),
   };
   return { repo, service: createChurchEventsService(repo, () => AGORA) };
 }
@@ -127,3 +129,68 @@ describe("getAgenda", () => {
   });
 });
 
+
+describe("updateEvent e removeEvent", () => {
+  it("edita um evento que já começou: corrigir a data é justamente o caso", async () => {
+    const { repo, service } = build();
+
+    await service.updateEvent(
+      { companyId: EMPRESA, role: "admin" },
+      {
+        eventId: "99999999-9999-4999-8999-999999999999",
+        titulo: "Encontro de casais",
+        descricao: "",
+        inicio: "2026-09-01T19:00",
+        fim: "",
+        local: "",
+        preco: "120,00",
+        inscricoesAbertas: true,
+      },
+    );
+
+    expect(repo.updateEvent).toHaveBeenCalledWith(
+      EMPRESA,
+      "99999999-9999-4999-8999-999999999999",
+      expect.objectContaining({ precoCents: 12000, inscricoesAbertas: true }),
+    );
+  });
+
+  it("recusa término antes do início", async () => {
+    const { repo, service } = build();
+
+    await expect(
+      service.updateEvent(
+        { companyId: EMPRESA, role: "admin" },
+        {
+          eventId: "99999999-9999-4999-8999-999999999999",
+          titulo: "Retiro",
+          descricao: "",
+          inicio: "2026-10-10T19:00",
+          fim: "2026-10-09T19:00",
+          local: "",
+          preco: "0",
+          inscricoesAbertas: true,
+        },
+      ),
+    ).rejects.toMatchObject({ code: "validation_error" });
+    expect(repo.updateEvent).not.toHaveBeenCalled();
+  });
+
+  it("member não remove evento", async () => {
+    const { repo, service } = build();
+
+    await expect(
+      service.removeEvent({ companyId: EMPRESA, role: "member" }, "99999999-9999-4999-8999-999999999999"),
+    ).rejects.toMatchObject({ code: "forbidden" });
+    expect(repo.softDeleteEvent).not.toHaveBeenCalled();
+  });
+
+  it("evento de outra empresa não é removido", async () => {
+    const { repo, service } = build();
+    (repo.softDeleteEvent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
+
+    await expect(
+      service.removeEvent({ companyId: EMPRESA, role: "owner" }, "99999999-9999-4999-8999-999999999999"),
+    ).rejects.toMatchObject({ code: "not_found" });
+  });
+});

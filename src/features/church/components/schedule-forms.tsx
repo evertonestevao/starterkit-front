@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import {
   addScheduleItemAction,
   removeScheduleItemAction,
+  updateScheduleItemAction,
 } from "@/server/actions/churchSchedule";
 
 const selectClasses =
@@ -165,6 +166,111 @@ export function RemoveScheduleItemButton({ itemId, titulo }: { itemId: string; t
       >
         <Trash2 className="size-4" />
       </Button>
+    </form>
+  );
+}
+
+/**
+ * Edição de um item, aberta só quando a pessoa pede (o padrão é a lista
+ * enxuta). A igreja não aparece: mudar de igreja é criar lá e apagar aqui,
+ * e o formulário não deve sugerir o contrário.
+ */
+export function EditScheduleItemForm({
+  item,
+}: {
+  item: {
+    id: string;
+    titulo: string;
+    tipo: "semanal" | "especial";
+    dia_semana: number | null;
+    data: string | null;
+    hora: string;
+    descricao: string | null;
+    local: string | null;
+  };
+}) {
+  const [state, formAction, pending] = useActionState(updateScheduleItemAction, undefined);
+  const [tipo, setTipo] = useState<"semanal" | "especial">(item.tipo);
+
+  return (
+    <form action={formAction} className="flex flex-col gap-3 border-t px-3 py-3">
+      <input type="hidden" name="itemId" value={item.id} />
+      {state?.error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{state.error}</AlertDescription>
+        </Alert>
+      ) : null}
+      {state?.success ? (
+        <Alert>
+          <AlertDescription>{state.success}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`titulo-${item.id}`}>Nome</Label>
+          <Input id={`titulo-${item.id}`} name="titulo" required defaultValue={item.titulo} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`hora-${item.id}`}>Horário</Label>
+          <Input
+            id={`hora-${item.id}`}
+            name="hora"
+            type="time"
+            required
+            defaultValue={item.hora.slice(0, 5)}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`tipo-${item.id}`}>Quando</Label>
+          <select
+            id={`tipo-${item.id}`}
+            name="tipo"
+            className={selectClasses}
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value as "semanal" | "especial")}
+          >
+            <option value="semanal">Toda semana</option>
+            <option value="especial">Data específica</option>
+          </select>
+        </div>
+        {tipo === "semanal" ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`dia-${item.id}`}>Dia da semana</Label>
+            <select
+              id={`dia-${item.id}`}
+              name="diaSemana"
+              className={selectClasses}
+              defaultValue={String(item.dia_semana ?? 0)}
+            >
+              {DIAS_DA_SEMANA.map((dia, i) => (
+                <option key={dia} value={i}>
+                  {dia}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`data-${item.id}`}>Data</Label>
+            <Input id={`data-${item.id}`} name="data" type="date" defaultValue={item.data ?? ""} />
+          </div>
+        )}
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label htmlFor={`local-${item.id}`}>Local (opcional)</Label>
+          <Input id={`local-${item.id}`} name="local" defaultValue={item.local ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label htmlFor={`descricao-${item.id}`}>Descrição (opcional)</Label>
+          <Input id={`descricao-${item.id}`} name="descricao" defaultValue={item.descricao ?? ""} />
+        </div>
+      </div>
+
+      <div>
+        <Button type="submit" size="sm" disabled={pending}>
+          Salvar alterações
+        </Button>
+      </div>
     </form>
   );
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   brasiliaLocalToIso,
+  centsToBrl,
   eventDateBadge,
   eventPrice,
   eventSummary,
@@ -91,3 +92,15 @@ describe("parseBrlToCents", () => {
   });
 });
 
+
+describe("centsToBrl", () => {
+  it("formata centavos com vírgula, do jeito que o campo lê de volta", () => {
+    expect(centsToBrl(12000)).toBe("120,00");
+    expect(centsToBrl(0)).toBe("0,00");
+    expect(centsToBrl(999)).toBe("9,99");
+  });
+
+  it("volta pelo parse sem perder valor", () => {
+    expect(parseBrlToCents(centsToBrl(18050))).toBe(18050);
+  });
+});

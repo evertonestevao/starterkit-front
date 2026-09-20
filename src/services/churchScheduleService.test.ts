@@ -11,6 +11,7 @@ function build() {
     listCompanySchedule: vi.fn(async () => []),
     listCompanyChurches: vi.fn(async () => [{ id: IGREJA, name: "Igreja Esperança" }]),
     insertItem: vi.fn(async () => "item-1"),
+    updateItem: vi.fn(async () => true),
     softDeleteItem: vi.fn(async () => true),
   };
   return { repo, service: createChurchScheduleService(repo, () => AGORA) };
@@ -98,5 +99,55 @@ describe("removeItem", () => {
       .catch((e) => e);
 
     expect(isAppError(err) && err.code).toBe("not_found");
+  });
+});
+
+describe("updateItem", () => {
+  it("edita mantendo a igreja e troca o tipo do item", async () => {
+    const { repo, service } = build();
+
+    await service.updateItem(
+      { companyId: EMPRESA, role: "admin" },
+      {
+        itemId: "99999999-9999-4999-8999-999999999999",
+        titulo: "Culto da família",
+        tipo: "especial",
+        diaSemana: "",
+        data: "2026-10-04",
+        hora: "19:00",
+        descricao: "",
+        local: "",
+      },
+    );
+
+    expect(repo.updateItem).toHaveBeenCalledWith(
+      EMPRESA,
+      "99999999-9999-4999-8999-999999999999",
+      expect.objectContaining({ tipo: "especial", data: "2026-10-04", diaSemana: null }),
+    );
+  });
+
+  it("member não edita a programação", async () => {
+    const { repo, service } = build();
+
+    await expect(
+      service.updateItem(
+        { companyId: EMPRESA, role: "member" },
+        { itemId: "99999999-9999-4999-8999-999999999999", titulo: "Culto X", tipo: "semanal", diaSemana: "0", data: "", hora: "18:00", descricao: "", local: "" },
+      ),
+    ).rejects.toMatchObject({ code: "forbidden" });
+    expect(repo.updateItem).not.toHaveBeenCalled();
+  });
+
+  it("item de outra empresa não é encontrado", async () => {
+    const { repo, service } = build();
+    (repo.updateItem as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
+
+    await expect(
+      service.updateItem(
+        { companyId: EMPRESA, role: "owner" },
+        { itemId: "99999999-9999-4999-8999-999999999999", titulo: "Culto X", tipo: "semanal", diaSemana: "0", data: "", hora: "18:00", descricao: "", local: "" },
+      ),
+    ).rejects.toMatchObject({ code: "not_found" });
   });
 });

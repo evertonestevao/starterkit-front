@@ -42,6 +42,27 @@ export function createSupabaseChurchScheduleRepository(client: SupabaseClient): 
       return (data ?? []) as Array<{ id: string; name: string }>;
     },
 
+    async updateItem(companyId, itemId, input) {
+      // O filtro por empresa vai junto do update: id de outra igreja não muda.
+      const { data, error } = await client
+        .from("church_schedule")
+        .update({
+          titulo: input.titulo,
+          tipo: input.tipo,
+          dia_semana: input.diaSemana,
+          data: input.data,
+          hora: input.hora,
+          descricao: input.descricao,
+          local: input.local,
+        })
+        .eq("id", itemId)
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .select("id");
+      if (error) throw new AppError("internal_error", "Falha ao editar a programação", error);
+      return (data ?? []).length > 0;
+    },
+
     async insertItem(input) {
       const { data, error } = await client
         .from("church_schedule")

@@ -52,6 +52,38 @@ export function createSupabaseChurchEventsRepository(client: SupabaseClient): Ch
       return (data ?? []) as Array<{ id: string; name: string; address: string | null }>;
     },
 
+    async updateEvent(companyId, eventId, input) {
+      const { data, error } = await client
+        .from("church_events")
+        .update({
+          titulo: input.titulo,
+          descricao: input.descricao,
+          inicio: input.inicio,
+          fim: input.fim,
+          local: input.local,
+          preco_cents: input.precoCents,
+          inscricoes_abertas: input.inscricoesAbertas,
+        })
+        .eq("id", eventId)
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .select("id");
+      if (error) throw new AppError("internal_error", "Falha ao editar o evento", error);
+      return (data ?? []).length > 0;
+    },
+
+    async softDeleteEvent(companyId, eventId) {
+      const { data, error } = await client
+        .from("church_events")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", eventId)
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .select("id");
+      if (error) throw new AppError("internal_error", "Falha ao remover o evento", error);
+      return (data ?? []).length > 0;
+    },
+
     async insertEvent(input) {
       const { data, error } = await client
         .from("church_events")

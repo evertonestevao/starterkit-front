@@ -1,4 +1,4 @@
-import { createScheduleItemSchema } from "@/features/church/schemas";
+import { createScheduleItemSchema, updateScheduleItemSchema } from "@/features/church/schemas";
 import { hojeEmBrasilia } from "@/lib/churchSchedule";
 import { AppError, toValidationError } from "@/lib/errors";
 import type { ChurchScheduleItem } from "@/types/database";
@@ -29,6 +29,20 @@ export interface ChurchScheduleRepository {
     descricao: string | null;
     local: string | null;
   }): Promise<string>;
+  /** Edição, só se o item for da empresa. Devolve se alterou. */
+  updateItem(
+    companyId: string,
+    itemId: string,
+    input: {
+      titulo: string;
+      tipo: "semanal" | "especial";
+      diaSemana: number | null;
+      data: string | null;
+      hora: string;
+      descricao: string | null;
+      local: string | null;
+    },
+  ): Promise<boolean>;
   /** Soft delete, só se o item for da empresa. Devolve se removeu. */
   softDeleteItem(companyId: string, itemId: string): Promise<boolean>;
 }
@@ -80,6 +94,35 @@ export function createChurchScheduleService(
         descricao: dados.descricao,
         local: dados.local,
       });
+    },
+
+    /**
+     * Edita um item. A igreja NÃO muda: mover um culto de uma igreja para
+     * outra é criar lá e apagar aqui, e misturar as duas coisas num formulário
+     * só é como a programação de uma congregação acaba na página de outra.
+     */
+    async updateItem(actor: EventActor, input: unknown): Promise<void> {
+      exigePermissao(actor);
+
+      const parsed = updateScheduleItemSchema.safeParse(input);
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      const dados = parsed.data;
+
+      const especial = dados.tipo === "especial";
+      if (especial && dados.data < hojeEmBrasilia(now())) {
+        throw new AppError("validation_error", "A data do culto especial já passou.");
+      }
+
+      const alterou = await repo.updateItem(actor.companyId, dados.itemId, {
+        titulo: dados.titulo,
+        tipo: dados.tipo,
+        diaSemana: especial ? null : Number(dados.diaSemana),
+        data: especial ? dados.data : null,
+        hora: dados.hora,
+        descricao: dados.descricao,
+        local: dados.local,
+      });
+      if (!alterou) throw new AppError("not_found", "Item não encontrado.");
     },
 
     async removeItem(actor: EventActor, itemId: unknown): Promise<void> {

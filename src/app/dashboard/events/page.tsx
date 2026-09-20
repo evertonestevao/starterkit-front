@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CalendarDays, CalendarPlus, CheckCircle2, ListChecks, Users } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
+import { EventAdminForms } from "@/features/church/components/event-admin-forms";
 import { PaginationControls } from "@/components/pagination-controls";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -37,17 +38,23 @@ function formatDateTime(iso: string): string {
 }
 
 /** Linha de evento: data, nome, preço e inscritos. Tocar filtra a lista. */
-function LinhaEvento({ evento, ativo }: { evento: CompanyEvent; ativo: boolean }) {
+function LinhaEvento({
+  evento,
+  ativo,
+  podeEditar,
+}: {
+  evento: CompanyEvent;
+  ativo: boolean;
+  podeEditar: boolean;
+}) {
   const selo = eventDateBadge(evento.inicio);
   return (
-    <Link
-      href={`/dashboard/events?evento=${evento.id}#inscricoes`}
-      aria-current={ativo ? "true" : undefined}
-      className={cn(
-        "flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted",
-        ativo && "border-primary bg-primary/5",
-      )}
-    >
+    <div className={cn("rounded-lg border", ativo && "border-primary bg-primary/5")}>
+      <Link
+        href={`/dashboard/events?evento=${evento.id}#inscricoes`}
+        aria-current={ativo ? "true" : undefined}
+        className="flex items-center gap-3 p-3 transition-colors hover:bg-muted"
+      >
       <span className="flex size-12 shrink-0 flex-col items-center justify-center rounded-lg bg-secondary text-primary">
         <span className="text-lg leading-none font-semibold">{selo.dia}</span>
         <span className="mt-0.5 text-[0.65rem] font-semibold tracking-wider">{selo.mes}</span>
@@ -68,7 +75,18 @@ function LinhaEvento({ evento, ativo }: { evento: CompanyEvent; ativo: boolean }
           </Badge>
         ) : null}
       </span>
-    </Link>
+      </Link>
+      {/* Fechado por padrão: a lista serve para achar o evento, não para
+          editá-lo o tempo todo. */}
+      {podeEditar ? (
+        <details>
+          <summary className="cursor-pointer px-3 pb-2 text-xs text-muted-foreground">
+            Editar ou remover
+          </summary>
+          <EventAdminForms evento={evento} />
+        </details>
+      ) : null}
+    </div>
   );
 }
 
@@ -166,7 +184,9 @@ export default async function EventsPage({
               ) : null}
             </p>
           ) : (
-            proximos.map((e) => <LinhaEvento key={e.id} evento={e} ativo={e.id === selecionado?.id} />)
+            proximos.map((e) => (
+              <LinhaEvento key={e.id} evento={e} ativo={e.id === selecionado?.id} podeEditar={podePublicar} />
+            ))
           )}
 
           {anteriores.length > 0 ? (
@@ -176,7 +196,12 @@ export default async function EventsPage({
               </summary>
               <div className="mt-2 flex flex-col gap-2 opacity-80">
                 {anteriores.map((e) => (
-                  <LinhaEvento key={e.id} evento={e} ativo={e.id === selecionado?.id} />
+                  <LinhaEvento
+                    key={e.id}
+                    evento={e}
+                    ativo={e.id === selecionado?.id}
+                    podeEditar={podePublicar}
+                  />
                 ))}
               </div>
             </details>
