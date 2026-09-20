@@ -2303,6 +2303,73 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Onboarding: a igreja que o pastor cria sozinho entra fora da árvore
+-- ---------------------------------------------------------------------------
+-- Ela nasce `subsede` sem pai: não aparece para ninguém além dela mesma, e é
+-- a plataforma que depois a coloca no lugar certo.
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('5e5e5e5e-0000-4000-8000-00000000000b', 'rls-novo@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Pastor novo"}');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000000b","email":"rls-novo@test.local","role":"authenticated"}', true);
+do $$
+begin
+  perform public.create_company_with_church('Igreja da Arvore RLS', 'rls-onboarding-arvore');
+end $$;
+
+reset role;
+do $$
+declare v_church public.churches;
+begin
+  select * into v_church from public.churches where slug like 'rls-onboarding-arvore%';
+  if v_church.tipo <> 'subsede' then
+    raise exception 'FALHA onboarding: igreja nasceu com tipo %', v_church.tipo;
+  end if;
+  if v_church.parent_id is not null then
+    raise exception 'FALHA onboarding: igreja nasceu pendurada em alguem';
+  end if;
+  if v_church.path::text <> v_church.slug then
+    raise exception 'FALHA onboarding: path inesperado (%)', v_church.path::text;
+  end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-sede@test.local","role":"authenticated"}', true);
+do $$
+declare v_id uuid;
+begin
+  select id into v_id from public.churches where slug like 'rls-onboarding-arvore%';
+  if public.can_view_church(v_id) then
+    raise exception 'FALHA onboarding: igreja recem-criada ja aparece para a sede';
+  end if;
+end $$;
+
+-- A plataforma põe a igreja no lugar; só então a sede a enxerga.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+do $$
+declare v_id uuid;
+begin
+  select id into v_id from public.churches where slug like 'rls-onboarding-arvore%';
+  perform public.platform_set_church_hierarchy(v_id, 'congregacao', '7d7d7d7d-0000-4000-8000-000000000002');
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-sede@test.local","role":"authenticated"}', true);
+do $$
+declare v_id uuid;
+begin
+  select id into v_id from public.churches where slug like 'rls-onboarding-arvore%';
+  if not public.can_view_church(v_id) then
+    raise exception 'FALHA onboarding: igreja ligada continua invisivel para a sede';
+  end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------
