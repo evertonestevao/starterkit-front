@@ -2,14 +2,18 @@ import "server-only";
 import { getServerEnv, requireServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
 import { createAsaasBillingProvider } from "./asaasBillingProvider";
+import { createAsaasReceivingProvider } from "./asaasReceivingProvider";
 import { createFakeBillingProvider } from "./fakeBillingProvider";
+import { createFakeReceivingProvider } from "./fakeReceivingProvider";
 import { createFakeGateway } from "./fakeGateway";
 import type { PaymentGateway } from "./PaymentGateway";
+import type { ReceivingProvider } from "./ReceivingProvider";
 import type { RecurringBillingProvider } from "./RecurringBillingProvider";
 import { createStripeGateway } from "./stripeGateway";
 
 export type { PaymentGateway } from "./PaymentGateway";
 export type { RecurringBillingProvider } from "./RecurringBillingProvider";
+export type { ReceivingProvider } from "./ReceivingProvider";
 
 /**
  * PONTO ÚNICO de escolha de provedor de pagamento. Nenhum outro arquivo sabe
@@ -74,6 +78,51 @@ export function getRecurringBillingProvider(name?: string | null): RecurringBill
       return createFakeBillingProvider();
     default:
       throw new AppError("internal_error", "Provedor de cobrança desconhecido", {
+        requested: resolved,
+      });
+  }
+}
+
+export const RECEIVING_PROVIDERS = ["asaas", "fake"] as const;
+export type ReceivingProviderName = (typeof RECEIVING_PROVIDERS)[number];
+
+export function isReceivingProviderName(name: string): name is ReceivingProviderName {
+  return (RECEIVING_PROVIDERS as readonly string[]).includes(name);
+}
+
+/** Provedor que abre as subcontas NOVAS de igreja. */
+export function getDefaultReceivingProviderName(): ReceivingProviderName {
+  return getServerEnv().RECEIVING_PROVIDER;
+}
+
+/**
+ * Recebimento da igreja (doação por cartão na subconta dela). Resolvido pelo
+ * NOME gravado na conta — trocar o provedor padrão não pode derrubar as
+ * igrejas que já recebem pelo antigo.
+ */
+export function getReceivingProvider(name?: string | null): ReceivingProvider {
+  const env = getServerEnv();
+  const resolved = name ?? env.RECEIVING_PROVIDER;
+
+  switch (resolved) {
+    case "asaas":
+      return createAsaasReceivingProvider({
+        // A chave da conta-MÃE: é ela que abre subcontas. As cobranças, essas,
+        // nascem com a chave da subconta da igreja.
+        apiKey: requireServerEnv("ASAAS_API_KEY"),
+        baseUrl: env.ASAAS_API_URL,
+      });
+    case "fake":
+      // O webhook do fake confia num token que está no código; fora de um
+      // ambiente configurado como fake, ele não pode ser alcançável.
+      if (env.RECEIVING_PROVIDER !== "fake") {
+        throw new AppError("forbidden", "Provedor de recebimento indisponível", {
+          requested: resolved,
+        });
+      }
+      return createFakeReceivingProvider();
+    default:
+      throw new AppError("internal_error", "Provedor de recebimento desconhecido", {
         requested: resolved,
       });
   }

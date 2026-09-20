@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CalendarCheck,
   Clock3,
+  CreditCard,
   HandCoins,
   Heart,
   MapPin,
@@ -62,6 +63,11 @@ export type ChurchPageTemplateProps = {
   /** BR Code do PIX e o QR dele, montados no servidor a partir da chave. */
   pixCopiaECola?: string | null;
   pixQrDataUrl?: string | null;
+  /**
+   * Link de doação por cartão, quando a igreja tem conta aprovada no provedor
+   * E escolheu ligar o cartão. Null é o caso comum: PIX sozinho basta.
+   */
+  linkCartao?: string | null;
   templateSlug: ChurchTheme;
 };
 
@@ -129,6 +135,7 @@ export function ChurchPageRenderer({
   programacao,
   pixCopiaECola = null,
   pixQrDataUrl = null,
+  linkCartao = null,
   templateSlug,
 }: ChurchPageTemplateProps) {
   const horarios = orderServiceTimes(church.service_times);
@@ -144,11 +151,13 @@ export function ChurchPageRenderer({
     semana.length > 0 || especiais.length > 0 || horarios.length > 0 || Boolean(church.address);
 
   const temPix = Boolean(church.pix_chave);
+  // A seção de doação existe com PIX, com cartão, ou com os dois.
+  const temDoacao = temPix || Boolean(linkCartao);
 
   // Ordem definida pelo dono do produto: Dízimos em destaque no topo; depois
   // oração + visitante; depois eventos + cultos. WhatsApp e redes só entram,
   // no fim, quando a igreja os tem.
-  const destaque: Atalho | null = temPix
+  const destaque: Atalho | null = temDoacao
     ? { rotulo: "Dízimos e ofertas", icone: HandCoins, href: "#dizimos" }
     : null;
   const pares: Atalho[] = [
@@ -171,7 +180,7 @@ export function ChurchPageRenderer({
   // Ordem das seções abaixo; a faixa alterna de cor a cada uma.
   const secoes: Array<{ id: string; conteudo: ReactNode }> = [];
 
-  if (temPix && church.pix_chave) {
+  if (temDoacao) {
     secoes.push({
       id: "dizimos",
       conteudo: (
@@ -183,19 +192,36 @@ export function ChurchPageRenderer({
             subtitulo="Sua contribuição sustenta a obra desta igreja. A doação vai direto para a conta dela."
           />
           <div className={cartao}>
-            <p className="mb-2 text-sm font-medium">Chave PIX</p>
-            <CopyPix
-              chave={church.pix_chave}
-              churchId={church.id}
-              copiaECola={pixCopiaECola}
-              qrDataUrl={pixQrDataUrl}
-            />
-            {church.pix_titular ? (
+            {church.pix_chave ? (
+              <>
+                <p className="mb-2 text-sm font-medium">Chave PIX</p>
+                <CopyPix
+                  chave={church.pix_chave}
+                  churchId={church.id}
+                  copiaECola={pixCopiaECola}
+                  qrDataUrl={pixQrDataUrl}
+                />
+              </>
+            ) : null}
+            {church.pix_chave && church.pix_titular ? (
               <p className="mt-4 text-sm leading-6 text-[var(--pg-muted)]">
                 Antes de confirmar, veja se o app do seu banco mostra{" "}
                 <strong className="font-semibold text-[var(--pg-text)]">{church.pix_titular}</strong>{" "}
                 como quem vai receber.
               </p>
+            ) : null}
+            {/* Cartão: leva para a página do provedor, onde a doação é paga.
+                O dinheiro cai na conta da própria igreja. */}
+            {linkCartao ? (
+              <a
+                href={linkCartao}
+                target="_blank"
+                rel="noreferrer"
+                className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--pg-border)] font-semibold ${church.pix_chave ? "mt-4" : ""}`}
+              >
+                <CreditCard className="size-4" aria-hidden />
+                Doar com cartão
+              </a>
             ) : null}
           </div>
         </>

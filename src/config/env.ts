@@ -60,6 +60,18 @@ const serverEnvSchema = z.object({
   ASAAS_API_URL: z.url().default("https://api-sandbox.asaas.com/v3"),
   /** Token que o Asaas envia no header asaas-access-token do webhook. */
   ASAAS_WEBHOOK_TOKEN: z.string().min(16).optional(),
+  /**
+   * Provedor das SUBCONTAS das igrejas (doação por cartão). Separado do
+   * patrocínio de propósito: dá para rodar o patrocínio em produção e as
+   * subcontas ainda em "fake" enquanto o cadastro é validado no sandbox.
+   */
+  RECEIVING_PROVIDER: z.enum(["asaas", "fake"]).default("fake"),
+  /**
+   * Chave de 32 bytes (64 hex ou 44 base64) que cifra a chave de API de cada
+   * subconta. Perder esta chave é perder o acesso às subcontas; trocá-la
+   * exige recifrar todas.
+   */
+  RECEIVING_KEY_SECRET: z.string().min(32).optional(),
 });
 
 export function getClientEnv() {

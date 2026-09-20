@@ -69,6 +69,22 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
       return data?.slug ?? null;
     },
 
+    /**
+      * Link de doação por cartão, quando a igreja tem conta aprovada e ligou o
+      * cartão. A RPC devolve só isso: a subconta tem documento e segredos que
+      * a página pública não pode nem cheirar.
+      */
+    async getCardDonationLink(churchId: string): Promise<string | null> {
+      const { data, error } = await client.rpc("church_card_donation_link", {
+        p_church_id: churchId,
+      });
+      if (error) {
+        console.error("[church-page] falha ao carregar o link de cartão", error);
+        return null;
+      }
+      return (data as string | null) ?? null;
+    },
+
     listSchedule(churchId: string): Promise<ChurchScheduleItem[]> {
       return listPublicSchedule(client, churchId);
     },

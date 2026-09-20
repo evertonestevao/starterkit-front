@@ -64,4 +64,25 @@ propósito, para exercitar a página sem dízimo configurado.
 - `/dashboard` — painel da igreja (entre com um pastor)
 - `/dashboard/settings/igreja` — nome, endereço, redes, logo e o endereço público
 - `/dashboard/settings/pix` — chave PIX dos dízimos
+- `/dashboard/settings/recebimento` — cadastro opcional da subconta e o cartão
 - `/plataforma` — moderação (entre com `plataforma@dev.local`)
+
+## Recebimento por cartão (opcional)
+
+Em dev, `RECEIVING_PROVIDER=fake` aprova a subconta na hora — em produção a
+análise leva de horas a dias, e é por isso que a tela tem o estado "em
+análise". `RECEIVING_KEY_SECRET` é a chave que cifra a chave de API de cada
+subconta; gere a sua com:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Para simular uma doação chegando (o webhook é por igreja, com token próprio):
+pegue o token no `church_payment_accounts.webhook_token_hash` — ele é só o
+hash, então em dev o caminho mais simples é refazer o cadastro e capturar o
+token gerado no log, ou chamar a rota com o token que o `fake` espera:
+
+```bash
+curl -X POST http://localhost:3000/api/webhooks/donations/fake   -H "content-type: application/json" -H "x-webhook-token: <token da igreja>"   -d '{"accountReference":"fake_acc_<documento>","paymentId":"pay_1","amountCents":5000,"status":"recebida"}'
+```

@@ -23,6 +23,7 @@ export default async function SettingsLayout({
     tabs.push({ href: "/dashboard/settings/igreja", label: "Página da igreja" });
     tabs.push({ href: "/dashboard/settings/domain", label: "Domínio próprio" });
     tabs.push({ href: "/dashboard/settings/pix", label: "Dízimos (PIX)" });
+    tabs.push({ href: "/dashboard/settings/recebimento", label: "Cartão" });
   }
 
   return (

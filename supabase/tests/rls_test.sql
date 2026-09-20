@@ -2467,6 +2467,173 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Recebimento por cartão: subconta da igreja (migration 20260924100000)
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000002","email":"rls-subx@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- A igreja preenche o cadastro da PRÓPRIA conta.
+  insert into public.church_payment_accounts (church_id, razao_social, documento, email, cidade, uf)
+  values ('7d7d7d7d-0000-4000-8000-000000000002', 'Associacao Sub X', '11222333000181',
+          'tesouraria@subx.test', 'Lins', 'SP');
+
+  -- A conta de outra igreja, não.
+  begin
+    insert into public.church_payment_accounts (church_id, razao_social, documento)
+    values ('7d7d7d7d-0000-4000-8000-000000000005', 'Invasora', '11222333000181');
+    raise exception 'FALHA recebimento: igreja criou conta para outra';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Quem aprova é o provedor: `status` não tem GRANT de escrita.
+  begin
+    update public.church_payment_accounts set status = 'aprovada'
+    where church_id = '7d7d7d7d-0000-4000-8000-000000000002';
+    raise exception 'FALHA recebimento: igreja se aprovou sozinha';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Os segredos da subconta não são nem legíveis nem graváveis pelo client.
+  begin
+    perform api_key_cifrada from public.church_payment_accounts
+    where church_id = '7d7d7d7d-0000-4000-8000-000000000002';
+    raise exception 'FALHA recebimento: igreja leu a chave da subconta';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.church_payment_accounts set api_key_cifrada = 'minha'
+    where church_id = '7d7d7d7d-0000-4000-8000-000000000002';
+    raise exception 'FALHA recebimento: igreja gravou a chave da subconta';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.church_payment_accounts set webhook_token_hash = 'meu'
+    where church_id = '7d7d7d7d-0000-4000-8000-000000000002';
+    raise exception 'FALHA recebimento: igreja gravou o token do webhook';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Ligar o cartão é escolha dela (só vale com a conta aprovada; quem confere
+  -- isso é o service).
+  update public.church_payment_accounts set aceita_cartao = true
+  where church_id = '7d7d7d7d-0000-4000-8000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALHA recebimento: igreja nao ligou o proprio cartao'; end if;
+end $$;
+
+-- Member não enxerga nem configura conta de recebimento.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000006","email":"rls-membx@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_payment_accounts;
+  if n <> 0 then raise exception 'FALHA recebimento: member viu % contas', n; end if;
+end $$;
+
+-- Congregação B (outra empresa) não vê a conta da subsede X.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_payment_accounts;
+  if n <> 0 then raise exception 'FALHA recebimento: outra igreja viu % contas', n; end if;
+end $$;
+
+reset role;
+
+-- O botão do cartão na página pública só existe com conta APROVADA, escolha
+-- da igreja e link pronto — as três coisas.
+update public.church_payment_accounts
+set status = 'aprovada', link_doacao = 'https://pagamento.exemplo/doar/subx'
+where church_id = '7d7d7d7d-0000-4000-8000-000000000002';
+
+insert into public.church_donations (church_id, provider, external_payment_id, amount_cents, metodo, status, paga_em)
+values ('7d7d7d7d-0000-4000-8000-000000000002', 'fake', 'pay_rls_doacao', 5000, 'cartao', 'recebida', now());
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+do $$
+declare v_link text;
+begin
+  select public.church_card_donation_link('7d7d7d7d-0000-4000-8000-000000000002') into v_link;
+  if v_link is distinct from 'https://pagamento.exemplo/doar/subx' then
+    raise exception 'FALHA recebimento: pagina publica nao recebeu o link (%)', coalesce(v_link, '<null>');
+  end if;
+
+  -- Igreja sem conta aprovada não devolve link nenhum.
+  select public.church_card_donation_link('7d7d7d7d-0000-4000-8000-000000000004') into v_link;
+  if v_link is not null then raise exception 'FALHA recebimento: igreja sem conta devolveu link'; end if;
+
+  -- A tabela em si continua fechada para o anon.
+  begin
+    perform 1 from public.church_payment_accounts;
+    raise exception 'FALHA recebimento: anon leu as contas de recebimento';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Doação só entra pelo webhook (service_role).
+  begin
+    insert into public.church_donations (church_id, provider, external_payment_id, amount_cents, status)
+    values ('7d7d7d7d-0000-4000-8000-000000000002', 'fake', 'pay_falso', 100, 'recebida');
+    raise exception 'FALHA doacao: anon gravou doacao';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- Desligando o cartão, o botão some da página na hora.
+reset role;
+update public.church_payment_accounts set aceita_cartao = false
+where church_id = '7d7d7d7d-0000-4000-8000-000000000002';
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+do $$
+declare v_link text;
+begin
+  select public.church_card_donation_link('7d7d7d7d-0000-4000-8000-000000000002') into v_link;
+  if v_link is not null then
+    raise exception 'FALHA recebimento: cartao desligado continua na pagina';
+  end if;
+end $$;
+
+-- A igreja lê as próprias doações; a sede, pela árvore; outra igreja, não.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000002","email":"rls-subx@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_donations;
+  if n <> 1 then raise exception 'FALHA doacao: a igreja viu % doacoes (esperado 1)', n; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-sede@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_donations;
+  if n <> 1 then raise exception 'FALHA doacao: a sede viu % doacoes da subsede (esperado 1)', n; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_donations;
+  if n <> 0 then raise exception 'FALHA doacao: subsede Y viu doacao da irma X'; end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

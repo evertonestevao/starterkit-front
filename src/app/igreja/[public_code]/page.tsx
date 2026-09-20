@@ -27,7 +27,7 @@ export default async function PublicChurchPage({
   const repo = await getPublicChurchRepository();
   // Nenhuma das duas listas pode derrubar a página da igreja: vazia é melhor
   // do que tela de erro para quem veio pelo QR Code.
-  const [sponsors, eventos, programacao] = await Promise.all([
+  const [sponsors, eventos, programacao, linkCartao] = await Promise.all([
     repo.listPublicSponsors(church.id).catch((err: unknown) => {
       console.error("[church-page] falha ao carregar patrocinadores", err);
       return [];
@@ -39,6 +39,10 @@ export default async function PublicChurchPage({
     repo.listSchedule(church.id).catch((err: unknown) => {
       console.error("[church-page] falha ao carregar a programação", err);
       return [];
+    }),
+    repo.getCardDonationLink(church.id).catch((err: unknown) => {
+      console.error("[church-page] falha ao carregar o link de cartão", err);
+      return null;
     }),
   ]);
 
@@ -70,6 +74,7 @@ export default async function PublicChurchPage({
       programacao={programacao}
       pixCopiaECola={pixCopiaECola}
       pixQrDataUrl={pixQrDataUrl}
+      linkCartao={linkCartao}
       templateSlug={theme}
     />
   );
