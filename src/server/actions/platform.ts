@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   getChurchHierarchyService,
   getPlatformModerationService,
+  getPlatformSettingsService,
   requirePlatformStaff,
 } from "@/server/platform";
 import { getPublicSponsorProfileService } from "@/server/sponsorProfile";
@@ -124,6 +125,27 @@ export async function setChurchHierarchyAction(
     });
     revalidatePath("/plataforma/igrejas");
     return { success: "Hierarquia salva." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Vagas de primeiro patrocínio e carência da marca. */
+export async function updatePlatformSettingsAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await requirePlatformStaff();
+    const service = await getPlatformSettingsService();
+    await service.update({
+      vagasSede: formData.get("vagasSede"),
+      vagasSubsede: formData.get("vagasSubsede"),
+      vagasCongregacao: formData.get("vagasCongregacao"),
+      carenciaMarcaDias: formData.get("carenciaMarcaDias"),
+    });
+    revalidatePath("/plataforma/configuracoes");
+    return { success: "Configurações salvas." };
   } catch (err) {
     return toActionError(err);
   }

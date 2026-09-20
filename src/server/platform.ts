@@ -5,11 +5,16 @@ import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
 import { createSupabaseChurchHierarchyRepository } from "@/repositories/supabase/churchHierarchyRepository";
 import { createSupabasePlatformModerationRepository } from "@/repositories/supabase/platformModerationRepository";
+import { createSupabasePlatformSettingsRepository } from "@/repositories/supabase/platformSettingsRepository";
 import {
   createChurchHierarchyService,
   type ChurchHierarchyService,
 } from "@/services/churchHierarchyService";
 import { createEmailService } from "@/services/emailService";
+import {
+  createPlatformSettingsService,
+  type PlatformSettingsService,
+} from "@/services/platformSettingsService";
 import {
   createPlatformModerationService,
   type PlatformModerationService,
@@ -80,4 +85,10 @@ export function getPendingLogoUrl(pendingPath: string): string {
 export async function getChurchHierarchyService(): Promise<ChurchHierarchyService> {
   const client = await getSupabaseServerClient();
   return createChurchHierarchyService(createSupabaseChurchHierarchyRepository(client));
+}
+
+/** Configurações da plataforma (vagas de primeiro patrocínio e carência da marca). */
+export async function getPlatformSettingsService(): Promise<PlatformSettingsService> {
+  const client = await getSupabaseServerClient();
+  return createPlatformSettingsService(createSupabasePlatformSettingsRepository(client));
 }

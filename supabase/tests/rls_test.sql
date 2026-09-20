@@ -2006,6 +2006,70 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Configurações da plataforma (migration 20260922100000)
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000004","email":"rls-conga@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  begin
+    perform public.platform_get_settings();
+    raise exception 'FALHA settings: igreja leu as configuracoes da plataforma';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.platform_update_settings(null, null, null, 3);
+    raise exception 'FALHA settings: igreja alterou as configuracoes da plataforma';
+  exception when sqlstate '42501' then null;
+  end;
+  -- Nem com GRANT: a tabela não tem policy nenhuma.
+  begin
+    perform 1 from public.platform_settings;
+    raise exception 'FALHA settings: igreja leu a tabela direto';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select carencia_marca_dias into n from public.platform_get_settings();
+  if n <> 15 then raise exception 'FALHA settings: carencia inicial veio % (esperado 15)', n; end if;
+
+  select vagas_primeiro_congregacao into n from public.platform_get_settings();
+  if n is not null then raise exception 'FALHA settings: vagas deveriam nascer ilimitadas'; end if;
+
+  -- Carência precisa ser inteiro >= 0.
+  begin
+    perform public.platform_update_settings(null, null, null, -1);
+    raise exception 'FALHA settings: carencia negativa foi aceita';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Uma vaga de primeiro patrocínio por congregação.
+  perform public.platform_update_settings(null, null, 1, 15);
+  select vagas_primeiro_congregacao into n from public.platform_get_settings();
+  if n <> 1 then raise exception 'FALHA settings: vagas de congregacao nao gravaram'; end if;
+
+end $$;
+
+reset role;
+
+-- A trilha é conferida fora da sessão do staff: nem ele lê a tabela direto.
+do $$
+declare n int;
+begin
+  select count(*) into n from public.platform_staff_actions
+  where action = 'platform.settings.update';
+  if n <> 1 then raise exception 'FALHA settings: alteracao sem registro na trilha'; end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------
