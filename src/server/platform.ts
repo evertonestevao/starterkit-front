@@ -3,7 +3,12 @@ import { getEmailProvider } from "@/adapters/email";
 import { createSupabaseStorageProvider } from "@/adapters/storage/supabaseStorageProvider";
 import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
+import { createSupabaseChurchHierarchyRepository } from "@/repositories/supabase/churchHierarchyRepository";
 import { createSupabasePlatformModerationRepository } from "@/repositories/supabase/platformModerationRepository";
+import {
+  createChurchHierarchyService,
+  type ChurchHierarchyService,
+} from "@/services/churchHierarchyService";
 import { createEmailService } from "@/services/emailService";
 import {
   createPlatformModerationService,
@@ -69,4 +74,10 @@ export function getPendingLogoUrl(pendingPath: string): string {
     getSupabaseAdminClient(),
     SPONSOR_LOGOS_BUCKET,
   ).getPublicUrl(pendingPath);
+}
+
+/** Árvore Sede > Subsede > Congregação (só a plataforma liga uma igreja a outra). */
+export async function getChurchHierarchyService(): Promise<ChurchHierarchyService> {
+  const client = await getSupabaseServerClient();
+  return createChurchHierarchyService(createSupabaseChurchHierarchyRepository(client));
 }

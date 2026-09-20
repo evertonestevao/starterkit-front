@@ -1,7 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getPlatformModerationService, requirePlatformStaff } from "@/server/platform";
+import {
+  getChurchHierarchyService,
+  getPlatformModerationService,
+  requirePlatformStaff,
+} from "@/server/platform";
 import { getPublicSponsorProfileService } from "@/server/sponsorProfile";
 import { toActionError, type ActionState } from "./action-state";
 
@@ -100,6 +104,26 @@ export async function releaseSecurityHoldAction(
 
     revalidatePath("/plataforma", "layout");
     return { success: "Conta liberada. O patrocinador já pode pedir alterações de novo." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Define o tipo da igreja e a igreja acima dela (ex.: ligar subsede à sede). */
+export async function setChurchHierarchyAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await requirePlatformStaff();
+    const service = await getChurchHierarchyService();
+    await service.setHierarchy({
+      churchId: String(formData.get("churchId") ?? ""),
+      tipo: String(formData.get("tipo") ?? ""),
+      parentId: String(formData.get("parentId") ?? ""),
+    });
+    revalidatePath("/plataforma/igrejas");
+    return { success: "Hierarquia salva." };
   } catch (err) {
     return toActionError(err);
   }

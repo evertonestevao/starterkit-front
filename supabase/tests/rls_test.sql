@@ -1641,6 +1641,297 @@ end $$;
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Hierarquia Sede -> Subsede -> Congregação (migration 20260921100000).
+--
+-- Árvore montada (como superuser):
+--     S (sede)
+--     └── Y (subsede) ── B (congregação)
+--     X (subsede SOLTA, sem sede ainda) ── A (congregação)
+--
+-- Provas: congregação A não vê B; subsede X não vê Y; a sede só vê o que está
+-- abaixo dela; ligar X à sede depois é só preencher parent_id — os paths da
+-- subárvore se ajustam e nenhum dado de negócio é tocado.
+-- ---------------------------------------------------------------------------
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('5e5e5e5e-0000-4000-8000-000000000001', 'rls-sede@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Sede"}'),
+  ('5e5e5e5e-0000-4000-8000-000000000002', 'rls-subx@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Subsede X"}'),
+  ('5e5e5e5e-0000-4000-8000-000000000003', 'rls-suby@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Subsede Y"}'),
+  ('5e5e5e5e-0000-4000-8000-000000000004', 'rls-conga@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Congregacao A"}'),
+  ('5e5e5e5e-0000-4000-8000-000000000005', 'rls-congb@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Congregacao B"}'),
+  ('5e5e5e5e-0000-4000-8000-000000000006', 'rls-membx@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Member X"}'),
+  ('5e5e5e5e-0000-4000-8000-000000000007', 'rls-staff2@test.local','authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Staff arvore"}'),
+  ('5e5e5e5e-0000-4000-8000-000000000008', 'rls-patro2@test.local','authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Patrocinador arvore"}');
+
+insert into public.companies (id, name, slug, created_by) values
+  ('6c6c6c6c-0000-4000-8000-000000000001', 'Sede',  'rls-arv-sede',  '5e5e5e5e-0000-4000-8000-000000000001'),
+  ('6c6c6c6c-0000-4000-8000-000000000002', 'Sub X', 'rls-arv-subx',  '5e5e5e5e-0000-4000-8000-000000000002'),
+  ('6c6c6c6c-0000-4000-8000-000000000003', 'Sub Y', 'rls-arv-suby',  '5e5e5e5e-0000-4000-8000-000000000003'),
+  ('6c6c6c6c-0000-4000-8000-000000000004', 'Cong A','rls-arv-conga', '5e5e5e5e-0000-4000-8000-000000000004'),
+  ('6c6c6c6c-0000-4000-8000-000000000005', 'Cong B','rls-arv-congb', '5e5e5e5e-0000-4000-8000-000000000005');
+
+insert into public.company_members (company_id, user_id, role) values
+  ('6c6c6c6c-0000-4000-8000-000000000001', '5e5e5e5e-0000-4000-8000-000000000001', 'owner'),
+  ('6c6c6c6c-0000-4000-8000-000000000002', '5e5e5e5e-0000-4000-8000-000000000002', 'owner'),
+  ('6c6c6c6c-0000-4000-8000-000000000003', '5e5e5e5e-0000-4000-8000-000000000003', 'owner'),
+  ('6c6c6c6c-0000-4000-8000-000000000004', '5e5e5e5e-0000-4000-8000-000000000004', 'owner'),
+  ('6c6c6c6c-0000-4000-8000-000000000005', '5e5e5e5e-0000-4000-8000-000000000005', 'owner'),
+  ('6c6c6c6c-0000-4000-8000-000000000002', '5e5e5e5e-0000-4000-8000-000000000006', 'member');
+
+insert into public.churches (id, company_id, name, slug, public_code, tipo, parent_id) values
+  ('7d7d7d7d-0000-4000-8000-000000000001', '6c6c6c6c-0000-4000-8000-000000000001', 'Sede',   'rls-arv-sede',  'rls-arv-sede',  'sede',        null),
+  ('7d7d7d7d-0000-4000-8000-000000000003', '6c6c6c6c-0000-4000-8000-000000000003', 'Sub Y',  'rls-arv-suby',  'rls-arv-suby',  'subsede',     '7d7d7d7d-0000-4000-8000-000000000001'),
+  ('7d7d7d7d-0000-4000-8000-000000000002', '6c6c6c6c-0000-4000-8000-000000000002', 'Sub X',  'rls-arv-subx',  'rls-arv-subx',  'subsede',     null),
+  ('7d7d7d7d-0000-4000-8000-000000000004', '6c6c6c6c-0000-4000-8000-000000000004', 'Cong A', 'rls-arv-conga', 'rls-arv-conga', 'congregacao', '7d7d7d7d-0000-4000-8000-000000000002'),
+  ('7d7d7d7d-0000-4000-8000-000000000005', '6c6c6c6c-0000-4000-8000-000000000005', 'Cong B', 'rls-arv-congb', 'rls-arv-congb', 'congregacao', '7d7d7d7d-0000-4000-8000-000000000003');
+
+-- Um de cada dado de igreja em cada nó. company_id vem do trigger.
+insert into public.prayer_requests (church_id, message)
+select id, 'pedido ' || name from public.churches where id::text like '7d7d7d7d-%';
+insert into public.visitors (church_id, name, contact)
+select id, 'visitante ' || name, '11999990000' from public.churches where id::text like '7d7d7d7d-%';
+insert into public.event_signups (church_id, event_name, person_name, contact)
+select id, 'evento', 'inscrito ' || name, '11999990000' from public.churches where id::text like '7d7d7d7d-%';
+
+insert into public.sponsor_accounts (id, user_id, kind, display_name, email, document, billing_status)
+values ('8a8a8a8a-0000-4000-8000-000000000001', '5e5e5e5e-0000-4000-8000-000000000008',
+        'business', 'Patrocinador Arvore', 'rls-patro2@test.local', '11222333000181', 'active');
+insert into public.sponsorships (sponsor_id, church_id, company_id, status, activated_at)
+select '8a8a8a8a-0000-4000-8000-000000000001', id, company_id, 'active', now()
+from public.churches where id::text like '7d7d7d7d-%';
+
+insert into public.platform_staff (user_id, email)
+values ('5e5e5e5e-0000-4000-8000-000000000007', 'rls-staff2@test.local');
+
+-- Estado inicial dos paths e tipos.
+do $$
+declare v_path text;
+begin
+  select path::text into v_path from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if v_path <> 'rls-arv-sede.rls-arv-suby.rls-arv-congb' then
+    raise exception 'FALHA arvore: path de B inesperado (%)', v_path;
+  end if;
+  select path::text into v_path from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000004';
+  if v_path <> 'rls-arv-subx.rls-arv-conga' then
+    raise exception 'FALHA arvore: path de A inesperado (%)', v_path;
+  end if;
+end $$;
+
+-- Regras da árvore (como superuser: é o trigger que barra, não o GRANT).
+do $$
+begin
+  begin
+    insert into public.churches (company_id, name, slug, public_code, tipo, parent_id)
+    values ('6c6c6c6c-0000-4000-8000-000000000004', 'Neta', 'rls-arv-neta', 'rls-arv-neta', 'congregacao',
+            '7d7d7d7d-0000-4000-8000-000000000004');
+    raise exception 'FALHA arvore: congregacao aceitou congregacao abaixo dela';
+  exception when sqlstate '23514' then null;
+  end;
+
+  begin
+    insert into public.churches (company_id, name, slug, public_code, tipo)
+    values ('6c6c6c6c-0000-4000-8000-000000000004', 'Orfa', 'rls-arv-orfa', 'rls-arv-orfa', 'congregacao');
+    raise exception 'FALHA arvore: congregacao sem igreja acima foi aceita';
+  exception when sqlstate '23514' then null;
+  end;
+
+  begin
+    update public.churches set parent_id = '7d7d7d7d-0000-4000-8000-000000000001'
+    where id = '7d7d7d7d-0000-4000-8000-000000000001';
+    raise exception 'FALHA arvore: sede ficou abaixo de si mesma';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Subsede Y tem congregação abaixo: não pode virar congregação.
+  begin
+    update public.churches set tipo = 'congregacao', parent_id = '7d7d7d7d-0000-4000-8000-000000000001'
+    where id = '7d7d7d7d-0000-4000-8000-000000000003';
+    raise exception 'FALHA arvore: subsede com filhas virou congregacao';
+  exception when sqlstate '23514' then null;
+  end;
+end $$;
+
+-- ------------------------- congregação A ----------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000004","email":"rls-conga@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
+  if n <> 1 then raise exception 'FALHA arvore: congregacao A ve % pedidos (esperado 1, o dela)', n; end if;
+  select count(*) into n from public.prayer_requests where church_id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if n <> 0 then raise exception 'FALHA arvore: congregacao A enxerga a congregacao B'; end if;
+  select count(*) into n from public.visitors where church_id = '7d7d7d7d-0000-4000-8000-000000000002';
+  if n <> 0 then raise exception 'FALHA arvore: congregacao enxerga a subsede acima dela'; end if;
+
+  -- Ninguém da igreja cria igreja pelo client (INSERT revogado).
+  begin
+    insert into public.churches (company_id, name, slug, public_code)
+    values ('6c6c6c6c-0000-4000-8000-000000000004', 'Invasora', 'rls-arv-inv', 'rls-arv-inv');
+    raise exception 'FALHA arvore: authenticated inseriu igreja direto';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- ------------------------- subsede X (owner) ------------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000002","email":"rls-subx@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- X vê X e A, em todas as tabelas de dado de igreja.
+  select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA arvore: subsede X ve % pedidos (esperado 2)', n; end if;
+  select count(*) into n from public.visitors where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA arvore: subsede X ve % visitantes (esperado 2)', n; end if;
+  select count(*) into n from public.event_signups where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA arvore: subsede X ve % inscricoes (esperado 2)', n; end if;
+  select count(*) into n from public.sponsorships where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA arvore: admin de X ve % patrocinios (esperado 2)', n; end if;
+
+  -- Subsede X não vê subsede Y nem a congregação de Y.
+  select count(*) into n from public.prayer_requests
+  where church_id in ('7d7d7d7d-0000-4000-8000-000000000003', '7d7d7d7d-0000-4000-8000-000000000005');
+  if n <> 0 then raise exception 'FALHA arvore: subsede X enxerga a subsede Y'; end if;
+
+  -- Árvore só muda pela plataforma: sem GRANT de UPDATE em parent_id/tipo.
+  begin
+    update public.churches set parent_id = '7d7d7d7d-0000-4000-8000-000000000001'
+    where id = '7d7d7d7d-0000-4000-8000-000000000002';
+    raise exception 'FALHA arvore: admin mudou parent_id direto';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.churches set tipo = 'sede' where id = '7d7d7d7d-0000-4000-8000-000000000002';
+    raise exception 'FALHA arvore: admin mudou o proprio tipo';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.platform_set_church_hierarchy(
+      '7d7d7d7d-0000-4000-8000-000000000002', 'subsede', '7d7d7d7d-0000-4000-8000-000000000001');
+    raise exception 'FALHA arvore: nao-staff usou a RPC da plataforma';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Leitura desce a árvore; escrita não: X não publica evento na agenda de A.
+  begin
+    insert into public.church_events (church_id, titulo, inicio)
+    values ('7d7d7d7d-0000-4000-8000-000000000004', 'Evento imposto', now() + interval '5 days');
+    raise exception 'FALHA arvore: subsede escreveu na agenda da congregacao';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- --------------------------- subsede X (member) ---------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000006","email":"rls-membx@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA arvore: member de X ve % pedidos (esperado 2)', n; end if;
+  -- Patrocínio é leitura de gestão: member não vê nem o da própria igreja.
+  select count(*) into n from public.sponsorships where church_id::text like '7d7d7d7d-%';
+  if n <> 0 then raise exception 'FALHA arvore: member ve patrocinios'; end if;
+end $$;
+
+-- ------------------------- sede, ANTES de ligar X -------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-sede@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
+  if n <> 3 then raise exception 'FALHA arvore: sede ve % pedidos antes de ligar X (esperado 3: S, Y, B)', n; end if;
+  select count(*) into n from public.prayer_requests
+  where church_id in ('7d7d7d7d-0000-4000-8000-000000000002', '7d7d7d7d-0000-4000-8000-000000000004');
+  if n <> 0 then raise exception 'FALHA arvore: sede enxerga subsede que ainda nao e dela'; end if;
+end $$;
+
+-- ------------------- plataforma liga X à sede (sem migrar dado) ------------
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  perform public.platform_set_church_hierarchy(
+    '7d7d7d7d-0000-4000-8000-000000000002', 'subsede', '7d7d7d7d-0000-4000-8000-000000000001');
+end $$;
+
+reset role;
+
+do $$
+declare v_path text; n int;
+begin
+  -- A subárvore inteira foi junto (a congregação A também).
+  select path::text into v_path from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000004';
+  if v_path <> 'rls-arv-sede.rls-arv-subx.rls-arv-conga' then
+    raise exception 'FALHA arvore: path de A nao acompanhou a ligacao (%)', v_path;
+  end if;
+  -- Dado de negócio intocado: o company_id dos registros segue o de cada igreja.
+  select count(*) into n from public.prayer_requests p
+  join public.churches c on c.id = p.church_id
+  where c.id::text like '7d7d7d7d-%' and p.company_id is distinct from c.company_id;
+  if n <> 0 then raise exception 'FALHA arvore: ligar a sede alterou dado de negocio'; end if;
+  -- E a decisão ficou registrada na trilha da plataforma.
+  select count(*) into n from public.platform_staff_actions
+  where action = 'church.hierarchy.set' and entity_id = '7d7d7d7d-0000-4000-8000-000000000002';
+  if n <> 1 then raise exception 'FALHA arvore: ligacao sem registro em platform_staff_actions'; end if;
+end $$;
+
+-- --------------------------- sede, DEPOIS de ligar X ----------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-sede@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
+  if n <> 5 then raise exception 'FALHA arvore: sede ve % pedidos depois de ligar X (esperado 5)', n; end if;
+  select count(*) into n from public.sponsorships where church_id::text like '7d7d7d7d-%';
+  if n <> 5 then raise exception 'FALHA arvore: sede ve % patrocinios (esperado 5)', n; end if;
+end $$;
+
+-- Subsede Y continua sem ver X, mesmo agora que as duas têm a mesma sede.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.prayer_requests where church_id::text like '7d7d7d7d-%';
+  if n <> 2 then raise exception 'FALHA arvore: subsede Y ve % pedidos (esperado 2: Y e B)', n; end if;
+  select count(*) into n from public.prayer_requests
+  where church_id in ('7d7d7d7d-0000-4000-8000-000000000002', '7d7d7d7d-0000-4000-8000-000000000004');
+  if n <> 0 then raise exception 'FALHA arvore: subsede Y enxerga a irma X'; end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
+-- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
+-- ---------------------------------------------------------------------------
+do $$
+declare v_sem_rls text;
+begin
+  select string_agg(distinct c.relname, ', ') into v_sem_rls
+  from pg_class c
+  join pg_namespace ns on ns.oid = c.relnamespace and ns.nspname = 'public'
+  join pg_attribute a on a.attrelid = c.oid and a.attname in ('church_id', 'company_id') and not a.attisdropped
+  where c.relkind = 'r'
+    and not c.relrowsecurity;
+  if v_sem_rls is not null then
+    raise exception 'FALHA cobertura: tabelas com dado de igreja SEM RLS: %', v_sem_rls;
+  end if;
+end $$;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'

@@ -30,6 +30,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
       count: pendencias.alteracoes + pendencias.contasTravadas,
     },
     { href: "/plataforma/denuncias", label: "Denúncias", count: pendencias.denuncias },
+    { href: "/plataforma/igrejas", label: "Igrejas" },
   ];
 
   return (

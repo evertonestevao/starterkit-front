@@ -28,6 +28,7 @@ function makeChurch(overrides: Partial<Church> = {}): Church {
     id: CHURCH_ID,
     company_id: COMPANY_ID,
     parent_id: null,
+    tipo: "subsede",
     name: "Igreja X",
     slug: "igreja-x",
     logo_url: null,

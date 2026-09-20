@@ -164,11 +164,15 @@ export type ChurchDomainStatus =
   | "ativo"
   | "erro";
 
+/** Nível na árvore Sede > Subsede > Congregação. Só a plataforma altera. */
+export type ChurchTipo = "sede" | "subsede" | "congregacao";
+
 export interface Church {
   id: string;
   /** Empresa dona. Null só nas igrejas de demonstração semeadas no core. */
   company_id: string | null;
   parent_id: string | null;
+  tipo: ChurchTipo;
   name: string;
   slug: string;
   logo_url: string | null;
@@ -240,6 +244,7 @@ export type PublicChurch = Omit<
   | "dominio_ultimo_erro"
   | "dominio_solicitado_em"
   | "deleted_at"
+  | "tipo"
 >;
 
 export interface PrayerRequest {
