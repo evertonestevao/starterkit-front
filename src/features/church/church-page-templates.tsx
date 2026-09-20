@@ -59,6 +59,9 @@ export type ChurchPageTemplateProps = {
   eventos: ChurchEvent[];
   /** Programação publicada: cultos semanais e especiais. */
   programacao: ChurchScheduleItem[];
+  /** BR Code do PIX e o QR dele, montados no servidor a partir da chave. */
+  pixCopiaECola?: string | null;
+  pixQrDataUrl?: string | null;
   templateSlug: ChurchTheme;
 };
 
@@ -124,6 +127,8 @@ export function ChurchPageRenderer({
   sponsors,
   eventos,
   programacao,
+  pixCopiaECola = null,
+  pixQrDataUrl = null,
   templateSlug,
 }: ChurchPageTemplateProps) {
   const horarios = orderServiceTimes(church.service_times);
@@ -179,7 +184,12 @@ export function ChurchPageRenderer({
           />
           <div className={cartao}>
             <p className="mb-2 text-sm font-medium">Chave PIX</p>
-            <CopyPix chave={church.pix_chave} />
+            <CopyPix
+              chave={church.pix_chave}
+              churchId={church.id}
+              copiaECola={pixCopiaECola}
+              qrDataUrl={pixQrDataUrl}
+            />
             {church.pix_titular ? (
               <p className="mt-4 text-sm leading-6 text-[var(--pg-muted)]">
                 Antes de confirmar, veja se o app do seu banco mostra{" "}

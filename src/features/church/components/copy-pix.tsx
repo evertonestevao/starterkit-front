@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { registerPixCopyAction } from "@/server/actions/churchPixCopy";
 
 /**
  * Chave PIX com botão de copiar. No celular, copiar e colar no app do banco é
@@ -11,22 +12,52 @@ import { Check, Copy } from "lucide-react";
  * A chave também fica visível e selecionável: se o navegador bloquear a área
  * de transferência, ainda dá para copiar segurando o dedo.
  */
-export function CopyPix({ chave }: { chave: string }) {
+export function CopyPix({
+  chave,
+  churchId,
+  copiaECola,
+  qrDataUrl,
+}: {
+  chave: string;
+  churchId: string;
+  /** BR Code ("copia e cola"): é o que o QR carrega e o que o botão copia. */
+  copiaECola?: string | null;
+  qrDataUrl?: string | null;
+}) {
   const [copiado, setCopiado] = useState(false);
 
   async function copiar() {
     try {
-      await navigator.clipboard.writeText(chave);
+      // Copia o "copia e cola" quando existe: colado no app do banco, ele já
+      // abre a doação com o recebedor preenchido. A chave crua é o plano B.
+      await navigator.clipboard.writeText(copiaECola || chave);
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
     } catch {
       // Sem permissão de área de transferência: a chave segue na tela.
       setCopiado(false);
     }
+    // Métrica anônima de intenção de doar. Nunca atrapalha a cópia.
+    void registerPixCopyAction(churchId).catch(() => {});
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {qrDataUrl ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-[var(--pg-border)] bg-white p-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={qrDataUrl}
+            alt="QR Code do PIX desta igreja"
+            className="size-44 sm:size-52"
+            width={512}
+            height={512}
+          />
+          <p className="text-center text-xs text-neutral-600">
+            Aponte a câmera do app do seu banco
+          </p>
+        </div>
+      ) : null}
       <p className="rounded-xl border border-[var(--pg-border)] bg-[var(--pg-surface-2)] px-4 py-3 font-mono text-base break-all select-all">
         {chave}
       </p>

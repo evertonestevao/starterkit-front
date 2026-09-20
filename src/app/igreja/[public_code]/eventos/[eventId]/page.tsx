@@ -64,7 +64,7 @@ export default async function ChurchEventPage({ params }: Params) {
             Para garantir sua vaga, faça um PIX de{" "}
             <strong className="font-semibold">{eventPrice(evento.preco_cents)}</strong> para a igreja:
           </p>
-          <CopyPix chave={church.pix_chave} />
+          <CopyPix chave={church.pix_chave} churchId={church.id} />
           {church.pix_titular ? (
             <p className="text-sm leading-6 text-[var(--pg-muted)]">
               Confira se o app do banco mostra{" "}

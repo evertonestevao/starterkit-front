@@ -72,3 +72,33 @@ export function createSupabaseVisitMetricsRepository(client: SupabaseClient) {
     },
   };
 }
+
+/** Registro de "copiei a chave PIX". Mesma regra das visitas: só service_role. */
+export function createSupabasePixCopyRepository(adminClient: SupabaseClient) {
+  return {
+    async insertCopy(churchId: string): Promise<void> {
+      const { error } = await adminClient.from("church_pix_copies").insert({ church_id: churchId });
+      if (error) throw new AppError("internal_error", "Falha ao registrar a cópia", error);
+    },
+  };
+}
+
+/** Cópias da chave PIX por igreja e semana (painel da plataforma). */
+export async function listPixCopiesByWeek(
+  client: SupabaseClient,
+  weeks = 8,
+): Promise<Array<{ churchId: string; churchName: string; semana: string; copias: number }>> {
+  const { data, error } = await client.rpc("platform_pix_copies_by_week", { p_weeks: weeks });
+  if (error) throw new AppError("internal_error", "Falha ao carregar as cópias da chave", error);
+  return ((data ?? []) as Array<{
+    church_id: string;
+    church_name: string;
+    semana: string;
+    copias: number;
+  }>).map((row) => ({
+    churchId: row.church_id,
+    churchName: row.church_name,
+    semana: row.semana,
+    copias: row.copias,
+  }));
+}

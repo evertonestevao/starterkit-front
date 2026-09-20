@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getVisitMetricsRepository } from "@/server/churchVisits";
+import { getPixCopiesByWeek, getVisitMetricsRepository } from "@/server/churchVisits";
 import { formatCents } from "@/services/sponsorPricing";
 
 export const metadata: Metadata = { title: "Piloto" };
@@ -36,7 +36,14 @@ function formatSemana(iso: string): string {
  */
 export default async function PlatformPilotPage() {
   const repo = await getVisitMetricsRepository();
-  const [resumo, visitas] = await Promise.all([repo.getPilotSummary(), repo.listVisitsByWeek(SEMANAS)]);
+  const [resumo, visitas, copiasPix] = await Promise.all([
+    repo.getPilotSummary(),
+    repo.listVisitsByWeek(SEMANAS),
+    getPixCopiesByWeek(SEMANAS),
+  ]);
+  // Chave copiada é INTENÇÃO de doar: no v1 a doação vai direto para a igreja
+  // e a plataforma não vê valor nenhum.
+  const copiasPorSemana = new Map(copiasPix.map((c) => [`${c.semana}|${c.churchId}`, c.copias]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,7 +87,9 @@ export default async function PlatformPilotPage() {
           <CardTitle>Aberturas da página por igreja e semana</CardTitle>
           <CardDescription>
             Últimas {SEMANAS} semanas. QR e NFC só aparecem separados quando o material impresso usa
-            o endereço com a origem (?origem=qr ou ?origem=nfc).
+            o endereço com a origem (?origem=qr ou ?origem=nfc). &quot;PIX copiado&quot; conta quem
+            copiou a chave da igreja — é intenção de doar, não doação: o dinheiro vai direto para a
+            igreja e a plataforma não vê valor nenhum.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -97,6 +106,7 @@ export default async function PlatformPilotPage() {
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead className="text-right">QR</TableHead>
                       <TableHead className="text-right">NFC</TableHead>
+                      <TableHead className="text-right">PIX copiado</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -107,6 +117,9 @@ export default async function PlatformPilotPage() {
                         <TableCell className="text-right tabular-nums">{v.total}</TableCell>
                         <TableCell className="text-right tabular-nums">{v.qr}</TableCell>
                         <TableCell className="text-right tabular-nums">{v.nfc}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {copiasPorSemana.get(`${v.semana}|${v.churchId}`) ?? 0}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -118,7 +131,8 @@ export default async function PlatformPilotPage() {
                     <p className="font-medium">{v.churchName}</p>
                     <p className="text-xs text-muted-foreground">semana de {formatSemana(v.semana)}</p>
                     <p className="mt-1 text-sm tabular-nums">
-                      {v.total} no total · {v.qr} QR · {v.nfc} NFC
+                      {v.total} no total · {v.qr} QR · {v.nfc} NFC ·{" "}
+                      {copiasPorSemana.get(`${v.semana}|${v.churchId}`) ?? 0} PIX copiado
                     </p>
                   </div>
                 ))}

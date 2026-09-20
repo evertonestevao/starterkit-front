@@ -3,10 +3,12 @@ import { createHash } from "node:crypto";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { isAppError } from "@/lib/errors";
-import { parseVisitOrigin } from "@/lib/churchVisits";
+import { isAutomatedVisit, parseVisitOrigin } from "@/lib/churchVisits";
 import {
   createSupabaseChurchVisitRepository,
+  createSupabasePixCopyRepository,
   createSupabaseVisitMetricsRepository,
+  listPixCopiesByWeek,
 } from "@/repositories/supabase/churchVisitRepository";
 import { createChurchVisitService, type VisitDeduper } from "@/services/churchVisitService";
 import { createRateLimiter } from "./rateLimit";
@@ -75,4 +77,35 @@ export async function trackChurchVisit(
 /** Leituras das métricas com a sessão de quem pediu (as RPCs filtram). */
 export async function getVisitMetricsRepository() {
   return createSupabaseVisitMetricsRepository(await getSupabaseServerClient());
+}
+
+/**
+ * Registra que alguém copiou a chave PIX da igreja. Mesmas regras da visita:
+ * robô e pré-carregamento não contam, a mesma pessoa só conta uma vez na
+ * janela, e nada sobre quem copiou é gravado.
+ */
+export async function recordPixCopy(churchId: string): Promise<void> {
+  try {
+    const h = await headers();
+    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip");
+    const automatica = isAutomatedVisit({
+      userAgent: h.get("user-agent"),
+      purpose: h.get("sec-purpose") ?? h.get("purpose"),
+      nextPrefetch: h.get("next-router-prefetch"),
+    });
+    if (automatica) return;
+
+    const chave = visitorKey(ip ?? null);
+    if (chave && !(await deduper.firstInWindow(`pix:${churchId}:${chave}`))) return;
+
+    await createSupabasePixCopyRepository(getSupabaseAdminClient()).insertCopy(churchId);
+  } catch (err) {
+    // Métrica nunca atrapalha a doação: quem copiou já tem a chave na mão.
+    console.error("[church-pix] falha ao registrar a cópia da chave", err);
+  }
+}
+
+/** Cópias da chave PIX por igreja e semana (só a plataforma lê). */
+export async function getPixCopiesByWeek(weeks = 8) {
+  return listPixCopiesByWeek(await getSupabaseServerClient(), weeks);
 }

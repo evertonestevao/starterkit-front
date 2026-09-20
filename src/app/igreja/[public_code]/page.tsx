@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { ChurchPageRenderer } from "@/features/church/church-page-templates";
 import { VISIT_ORIGIN_PARAM } from "@/lib/churchVisits";
+import { buildPixPayload } from "@/lib/pixPayload";
+import { qrPngDataUrl } from "@/lib/qr";
 import { trackChurchVisit } from "@/server/churchVisits";
 import { getPublicChurchRepository, loadPublicChurch } from "@/server/publicChurch";
 
@@ -40,12 +42,34 @@ export default async function PublicChurchPage({
     }),
   ]);
 
+  // O QR do PIX sai da chave da própria igreja e aponta direto para ela: a
+  // plataforma não entra no caminho do dinheiro. Falhar aqui não pode
+  // derrubar a página — a chave copiável continua valendo.
+  let pixCopiaECola: string | null = null;
+  let pixQrDataUrl: string | null = null;
+  if (church.pix_chave) {
+    try {
+      pixCopiaECola = buildPixPayload({
+        chave: church.pix_chave,
+        titular: church.pix_titular ?? church.name,
+        cidade: church.address?.split(/[-,]/).at(-1)?.trim(),
+      });
+      pixQrDataUrl = await qrPngDataUrl(pixCopiaECola, 512);
+    } catch (err) {
+      console.error("[church-page] falha ao gerar o QR do PIX", err);
+      pixCopiaECola = null;
+      pixQrDataUrl = null;
+    }
+  }
+
   return (
     <ChurchPageRenderer
       church={church}
       sponsors={sponsors}
       eventos={eventos}
       programacao={programacao}
+      pixCopiaECola={pixCopiaECola}
+      pixQrDataUrl={pixQrDataUrl}
       templateSlug={theme}
     />
   );
