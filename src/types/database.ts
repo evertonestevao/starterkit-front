@@ -169,8 +169,8 @@ export type ChurchTipo = "sede" | "subsede" | "congregacao";
 
 export interface Church {
   id: string;
-  /** Empresa dona. Null só nas igrejas de demonstração semeadas no core. */
-  company_id: string | null;
+  /** Empresa dona. NOT NULL desde a migration 20260923100000. */
+  company_id: string;
   parent_id: string | null;
   tipo: ChurchTipo;
   name: string;

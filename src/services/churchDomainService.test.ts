@@ -267,8 +267,14 @@ describe("claimDomain", () => {
     ).rejects.toSatisfy((err: unknown) => isAppError(err) && err.code === "forbidden");
   });
 
-  it("nega igreja sem dono (linha de demonstração)", async () => {
-    const harness = makeHarness({ church: makeChurch({ company_id: null }) });
+  it("nega igreja sem dono", async () => {
+    // `company_id` é NOT NULL desde a migration 20260923100000, então este
+    // estado não vem mais do banco. O cast mantém a guarda do service sob
+    // teste: ela é a última linha entre um dado torto e um domínio reivindicado
+    // por quem não é dono de nada.
+    const harness = makeHarness({
+      church: makeChurch({ company_id: null as unknown as string }),
+    });
 
     await expect(
       makeService(harness).claimDomain(CHURCH_ID, "igrejax.com.br", ADMIN),

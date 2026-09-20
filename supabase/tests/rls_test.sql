@@ -396,14 +396,17 @@ begin
   end;
 end $$;
 
--- Igreja sem dono (linhas de demonstração) nunca segura domínio.
+-- Igreja sem dono não existe mais: `company_id` virou NOT NULL na migration
+-- 20260923100000, junto com a remoção das igrejas de demonstração. O CHECK
+-- `churches_dominio_exige_dono` segue no banco como segunda tranca; aqui a
+-- primeira já barra.
 do $$
 begin
   begin
     insert into public.churches (company_id, name, slug, public_code, dominio_customizado)
     values (null, 'Sem dono', 'rls-sem-dono', 'rls-sem-dono', 'semdono.com.br');
-    raise exception 'FALHA dominio: igreja sem company_id recebeu dominio';
-  exception when check_violation then null; -- esperado
+    raise exception 'FALHA dominio: igreja sem company_id foi criada';
+  exception when not_null_violation or check_violation then null; -- esperado
   end;
 end $$;
 
@@ -486,9 +489,12 @@ values ('c0000000-0000-4000-8000-00000000000d', 'a0000000-0000-4000-8000-0000000
 insert into public.sponsor_charge_items (charge_id, sponsorship_id, church_id, company_id, position, amount_cents)
 values ('c0000000-0000-4000-8000-00000000000d', 'b0000000-0000-4000-8000-00000000000d', 'd2d2d2d2-0000-4000-8000-000000000002', 'c2c2c2c2-0000-4000-8000-000000000002', 1, 3990);
 
--- Igreja sem dono (demonstração) para provar que não recebe patrocínio pago.
-insert into public.churches (id, company_id, name, slug, public_code)
-values ('d9d9d9d9-0000-4000-8000-000000000009', null, 'Igreja Demo RLS', 'rls-igreja-demo', 'rls-demo');
+-- Igreja EXCLUÍDA, para provar que não recebe patrocínio pago. (Antes esta
+-- fixture era uma igreja sem dono; `company_id` virou NOT NULL na migration
+-- 20260923100000 e esse estado deixou de existir.)
+insert into public.churches (id, company_id, name, slug, public_code, deleted_at)
+values ('d9d9d9d9-0000-4000-8000-000000000009', 'c2c2c2c2-0000-4000-8000-000000000002',
+        'Igreja Excluida RLS', 'rls-igreja-demo', 'rls-demo', now());
 
 -- ---------------------------- sessão da CAROL -----------------------------
 set local role authenticated;
@@ -557,11 +563,11 @@ begin
   exception when unique_violation then null;
   end;
 
-  -- Igreja sem dono não recebe patrocínio pago.
+  -- Igreja excluída não recebe patrocínio pago.
   begin
     perform public.request_sponsorship('d9d9d9d9-0000-4000-8000-000000000009');
-    raise exception 'FALHA sponsor: igreja sem dono aceitou patrocinio';
-  exception when sqlstate 'P0002' then null;
+    raise exception 'FALHA sponsor: igreja excluida aceitou patrocinio';
+  exception when sqlstate 'P0002' or no_data_found then null;
   end;
 
   -- Escrita direta em patrocínio/cobrança: sem GRANT.
@@ -2365,6 +2371,97 @@ begin
   if not public.can_view_church(v_id) then
     raise exception 'FALHA onboarding: igreja ligada continua invisivel para a sede';
   end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Página da igreja: quem administra edita a própria (migration 20260923100000)
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000002","email":"rls-subx@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- A própria igreja: nome, endereço, redes e endereço público.
+  update public.churches
+  set name = 'Sub X Renomeada',
+      address = 'Rua Nova, 100',
+      social_links = '{"instagram":"@subx"}'::jsonb,
+      public_code = 'rls-arv-subx-novo'
+  where id = '7d7d7d7d-0000-4000-8000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALHA perfil: dona nao editou a propria pagina'; end if;
+
+  -- A da congregação abaixo dela: a árvore dá leitura, não escrita.
+  update public.churches set name = 'Invadida'
+  where id = '7d7d7d7d-0000-4000-8000-000000000004';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA perfil: subsede editou a pagina da congregacao'; end if;
+
+  -- Endereço público repetido: o índice único recusa.
+  begin
+    update public.churches set public_code = 'rls-arv-congb'
+    where id = '7d7d7d7d-0000-4000-8000-000000000002';
+    raise exception 'FALHA perfil: dois enderecos publicos iguais foram aceitos';
+  exception when sqlstate '23505' then null;
+  end;
+
+  -- Formato que não vira URL: o CHECK recusa.
+  begin
+    update public.churches set public_code = 'Endereço Com Espaço'
+    where id = '7d7d7d7d-0000-4000-8000-000000000002';
+    raise exception 'FALHA perfil: endereco publico invalido foi aceito';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Colunas que continuam fora do alcance do client.
+  begin
+    update public.churches set slug = 'outro-slug'
+    where id = '7d7d7d7d-0000-4000-8000-000000000002';
+    raise exception 'FALHA perfil: admin alterou o slug (base do path da arvore)';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- Member não edita a página nem troca o endereço público.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000006","email":"rls-membx@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  update public.churches set name = 'Member mandou'
+  where id = '7d7d7d7d-0000-4000-8000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA perfil: member editou a pagina da igreja'; end if;
+end $$;
+
+-- Logo: cada igreja escreve só na própria pasta do bucket.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000002","email":"rls-subx@test.local","role":"authenticated"}', true);
+do $$
+begin
+  insert into storage.objects (bucket_id, name)
+  values ('church-logos', '7d7d7d7d-0000-4000-8000-000000000002/logo.png');
+
+  -- Na pasta da congregação abaixo: a sede/subsede não publica logo por cima
+  -- de quem está abaixo dela.
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('church-logos', '7d7d7d7d-0000-4000-8000-000000000004/logo.png');
+    raise exception 'FALHA logo: subsede escreveu na pasta da congregacao';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Pasta que não é id de igreja nenhuma.
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('church-logos', 'qualquer-coisa/logo.png');
+    raise exception 'FALHA logo: pasta fora do padrao foi aceita';
+  exception when sqlstate '42501' then null;
+  end;
 end $$;
 
 reset role;

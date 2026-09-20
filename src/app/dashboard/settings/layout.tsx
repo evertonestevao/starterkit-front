@@ -20,6 +20,7 @@ export default async function SettingsLayout({
   // A aba escondida é conveniência de UI — a autorização real está no
   // service e na RLS, que recusam member mesmo com a URL na mão.
   if (active && permissionService.canEditCompany(active.role)) {
+    tabs.push({ href: "/dashboard/settings/igreja", label: "Página da igreja" });
     tabs.push({ href: "/dashboard/settings/domain", label: "Domínio próprio" });
     tabs.push({ href: "/dashboard/settings/pix", label: "Dízimos (PIX)" });
   }

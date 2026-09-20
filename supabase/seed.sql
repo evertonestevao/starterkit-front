@@ -10,14 +10,8 @@
 --
 -- Senha de todos os usuários: dev123456 (as contas estão em docs/dev.md).
 
--- ---------------------------------------------------------------------------
--- Fora as igrejas de demonstração do core
--- ---------------------------------------------------------------------------
--- A migration do core semeia 4 igrejas sem empresa dona. Elas nasceram soltas
--- (o INSERT buscava o pai por subconsulta na mesma instrução, que não enxerga
--- as linhas da própria instrução), não têm dono, não recebem patrocínio e
--- agora só poluem a árvore de dev, que tem gente de verdade.
-delete from public.churches where company_id is null;
+-- As igrejas de demonstração do core saem na migration 20260923100000, que
+-- também tornou `churches.company_id` NOT NULL. Aqui embaixo é só gente nova.
 
 -- ---------------------------------------------------------------------------
 -- Ajudantes (removidos no fim do arquivo)
