@@ -73,12 +73,44 @@ export default async function PlatformChurchesPage({
                     {!church.companyId ? <Badge variant="outline">demonstração</Badge> : null}
                   </div>
                   {/* Endereços que vão impressos: o ?origem= separa QR de NFC nas métricas. */}
-                  <p className="mt-0.5 break-all text-xs text-muted-foreground">
-                    QR: {churchTagUrl(appUrl, church.publicCode, "qr")}
-                  </p>
-                  <p className="break-all text-xs text-muted-foreground">
-                    NFC: {churchTagUrl(appUrl, church.publicCode, "nfc")}
-                  </p>
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-xs text-muted-foreground">
+                      QR Code e tag NFC
+                    </summary>
+                    <div className="mt-2 flex flex-col gap-2 rounded-lg border p-3">
+                      <div>
+                        <p className="text-xs font-medium">Endereço do QR impresso</p>
+                        <p className="break-all text-xs text-muted-foreground">
+                          {churchTagUrl(appUrl, church.publicCode, "qr")}
+                        </p>
+                        <p className="mt-1 flex gap-3 text-xs">
+                          <a className="text-primary hover:underline" href={`/plataforma/igrejas/${church.id}/qr?formato=png&origem=qr`}>
+                            Baixar PNG
+                          </a>
+                          <a className="text-primary hover:underline" href={`/plataforma/igrejas/${church.id}/qr?formato=svg&origem=qr`}>
+                            Baixar SVG
+                          </a>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium">Endereço para gravar na tag NFC</p>
+                        <p className="break-all text-xs text-muted-foreground select-all">
+                          {churchTagUrl(appUrl, church.publicCode, "nfc")}
+                        </p>
+                        <p className="mt-1 flex gap-3 text-xs">
+                          <a className="text-primary hover:underline" href={`/plataforma/igrejas/${church.id}/qr?formato=png&origem=nfc`}>
+                            Baixar PNG
+                          </a>
+                          <a className="text-primary hover:underline" href={`/plataforma/igrejas/${church.id}/qr?formato=svg&origem=nfc`}>
+                            Baixar SVG
+                          </a>
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        SVG para impressão grande (não perde nitidez); PNG para uso rápido.
+                      </p>
+                    </div>
+                  </details>
                 </div>
                 <div className="w-full lg:max-w-xl">
                   <ChurchHierarchyForm church={church} all={todas} />
