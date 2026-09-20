@@ -71,6 +71,12 @@ export default async function PlatformChurchesPage({
                     <span className="truncate font-medium">{church.name}</span>
                     <Badge variant="secondary">{CHURCH_TIPO_LABEL[church.tipo]}</Badge>
                     {!church.companyId ? <Badge variant="outline">demonstração</Badge> : null}
+                    {/* Igreja recém-criada pelo onboarding: nasce como subsede
+                        solta, vendo só a si mesma, até a plataforma colocá-la
+                        no lugar certo da árvore. */}
+                    {church.tipo === "subsede" && !church.parentId ? (
+                      <Badge variant="outline">hierarquia a definir</Badge>
+                    ) : null}
                   </div>
                   {/* Endereços que vão impressos: o ?origem= separa QR de NFC nas métricas. */}
                   <details className="mt-1">
