@@ -62,4 +62,6 @@ propósito, para exercitar a página sem dízimo configurado.
 - `/igreja/<public_code>` — página pública (ex.: `/igreja/zona-norte-vila-nova`)
 - `/igreja/<public_code>?origem=qr` — mesma página, contando como leitura de QR
 - `/dashboard` — painel da igreja (entre com um pastor)
+- `/dashboard/settings/igreja` — nome, endereço, redes, logo e o endereço público
+- `/dashboard/settings/pix` — chave PIX dos dízimos
 - `/plataforma` — moderação (entre com `plataforma@dev.local`)
