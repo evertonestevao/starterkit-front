@@ -21,6 +21,12 @@ export interface CompanySponsor {
   /** Escondido pela igreja: some da página pública, mas segue pagando. */
   hiddenAt: string | null;
   denunciaAberta: boolean;
+  /**
+   * Fora da vitrine por atraso além da carência. Diferente de `hiddenAt`:
+   * ninguém da igreja escondeu — a marca volta sozinha quando o patrocinador
+   * pagar.
+   */
+  emCarencia: boolean;
 }
 
 export interface CompanySponsorsRepository {

@@ -13,6 +13,7 @@ interface CompanySponsorRow {
   ends_at: string | null;
   hidden_at: string | null;
   denuncia_aberta: boolean;
+  em_carencia: boolean;
 }
 
 /**
@@ -44,6 +45,7 @@ export function createSupabaseChurchSponsorsRepository(
         endsAt: row.ends_at,
         hiddenAt: row.hidden_at,
         denunciaAberta: row.denuncia_aberta,
+        emCarencia: row.em_carencia,
       }));
     },
 

@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PublicSponsorshipForm } from "@/features/sponsor/components/public-sponsorship-form";
 import { SponsorshipDisclosure } from "@/features/sponsor/components/sponsorship-disclosure";
 import { isAppError } from "@/lib/errors";
@@ -60,10 +61,22 @@ export default async function NewSponsorshipPage({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <PublicSponsorshipForm
-          churchPublicCode={invite.church.publicCode}
-          priceLabel={formatCents(invite.entryPriceCents)}
-        />
+        {/* Avisa ANTES do formulário: preencher tudo para ouvir "esgotou" no
+            fim seria o pior jeito de contar. O backend recusa de qualquer
+            forma, na hora de criar a assinatura. */}
+        {invite.vagasEsgotadas ? (
+          <Alert>
+            <AlertDescription>
+              As vagas de patrocínio desta igreja estão esgotadas no momento. Fale com a igreja para
+              entrar na fila — assim que uma vaga abrir, o patrocínio pode ser iniciado.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <PublicSponsorshipForm
+            churchPublicCode={invite.church.publicCode}
+            priceLabel={formatCents(invite.entryPriceCents)}
+          />
+        )}
         <SponsorshipDisclosure
           churchName={invite.church.name}
           churchPublicCode={invite.church.publicCode}

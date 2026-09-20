@@ -2070,6 +2070,147 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Vagas de primeiro patrocínio (migration 20260922110000)
+-- ---------------------------------------------------------------------------
+-- A congregação A passa a ter a única vaga ocupada.
+update public.sponsorships set primeiro = true
+where church_id = '7d7d7d7d-0000-4000-8000-000000000004';
+
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('5e5e5e5e-0000-4000-8000-000000000009', 'rls-patro3@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Patrocinador da fila"}');
+insert into public.sponsor_accounts (id, user_id, kind, display_name, email, document, billing_status)
+values ('8a8a8a8a-0000-4000-8000-000000000002', '5e5e5e5e-0000-4000-8000-000000000009',
+        'business', 'Patrocinador da Fila', 'rls-patro3@test.local', '44555666000114', 'active');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000009","email":"rls-patro3@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_slots record; n int;
+begin
+  select * into v_slots from public.church_primeiro_slots('7d7d7d7d-0000-4000-8000-000000000004');
+  if v_slots.limite <> 1 or v_slots.ocupadas <> 1 then
+    raise exception 'FALHA vagas: congregacao A com limite % e ocupadas %', v_slots.limite, v_slots.ocupadas;
+  end if;
+
+  -- Primeiro patrocínio numa igreja lotada: barrado.
+  begin
+    perform public.request_sponsorship('7d7d7d7d-0000-4000-8000-000000000004');
+    raise exception 'FALHA vagas: primeiro patrocinio entrou em igreja lotada';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Numa congregação com vaga, entra — e nasce marcado como primeiro.
+  perform public.request_sponsorship('7d7d7d7d-0000-4000-8000-000000000005');
+  select count(*) into n from public.sponsorships
+  where sponsor_id = '8a8a8a8a-0000-4000-8000-000000000002' and primeiro;
+  if n <> 1 then raise exception 'FALHA vagas: o primeiro patrocinio nao foi marcado'; end if;
+
+  -- EXPANSÃO para a igreja lotada: permitida, porque não ocupa vaga.
+  perform public.request_sponsorship('7d7d7d7d-0000-4000-8000-000000000004');
+  select count(*) into n from public.sponsorships
+  where sponsor_id = '8a8a8a8a-0000-4000-8000-000000000002'
+    and church_id = '7d7d7d7d-0000-4000-8000-000000000004' and not primeiro;
+  if n <> 1 then raise exception 'FALHA vagas: expansao barrada em igreja lotada'; end if;
+
+  select * into v_slots from public.church_primeiro_slots('7d7d7d7d-0000-4000-8000-000000000004');
+  if v_slots.ocupadas <> 1 then raise exception 'FALHA vagas: expansao ocupou vaga'; end if;
+end $$;
+
+-- Limite de volta para ilimitado: a fila abre de novo, sem tocar em nada.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+do $$
+begin
+  perform public.platform_update_settings(null, null, null, 15);
+end $$;
+
+reset role;
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('5e5e5e5e-0000-4000-8000-00000000000a', 'rls-patro4@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Patrocinador sem limite"}');
+insert into public.sponsor_accounts (id, user_id, kind, display_name, email, document, billing_status)
+values ('8a8a8a8a-0000-4000-8000-000000000003', '5e5e5e5e-0000-4000-8000-00000000000a',
+        'business', 'Sem Limite', 'rls-patro4@test.local', '55666777000125', 'active');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000000a","email":"rls-patro4@test.local","role":"authenticated"}', true);
+do $$
+declare v_slots record;
+begin
+  select * into v_slots from public.church_primeiro_slots('7d7d7d7d-0000-4000-8000-000000000004');
+  if v_slots.limite is not null then raise exception 'FALHA vagas: limite deveria ser ilimitado'; end if;
+  perform public.request_sponsorship('7d7d7d7d-0000-4000-8000-000000000004');
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Carência da marca na vitrine (migration 20260922110000)
+-- ---------------------------------------------------------------------------
+-- O patrocinador da congregação A fica com uma cobrança vencida há 40 dias.
+insert into public.sponsor_charges (sponsor_id, gateway, gateway_payment_id, amount_cents, active_count, due_date, status)
+values ('8a8a8a8a-0000-4000-8000-000000000001', 'fake', 'pay_rls_atraso', 3990, 1, current_date - 40, 'overdue');
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.list_church_sponsors('7d7d7d7d-0000-4000-8000-000000000004')
+  where display_name = 'Patrocinador Arvore';
+  if n <> 0 then raise exception 'FALHA carencia: marca atrasada ha 40 dias continua na vitrine'; end if;
+end $$;
+
+-- Carência de 60 dias: a mesma marca volta NA HORA, sem reprocessar nada.
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+do $$
+begin
+  perform public.platform_update_settings(null, null, null, 60);
+end $$;
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.list_church_sponsors('7d7d7d7d-0000-4000-8000-000000000004')
+  where display_name = 'Patrocinador Arvore';
+  if n <> 1 then raise exception 'FALHA carencia: aumentar a carencia nao devolveu a marca'; end if;
+end $$;
+
+-- Volta para 15 e o pagamento é confirmado (como faria o webhook): a marca
+-- volta sozinha, sem ninguém mexer no patrocínio.
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+do $$
+begin
+  perform public.platform_update_settings(null, null, null, 15);
+end $$;
+
+reset role;
+update public.sponsor_charges set status = 'paid', paid_at = now()
+where gateway_payment_id = 'pay_rls_atraso';
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.list_church_sponsors('7d7d7d7d-0000-4000-8000-000000000004')
+  where display_name = 'Patrocinador Arvore';
+  if n <> 1 then raise exception 'FALHA carencia: pagou e a marca nao voltou'; end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

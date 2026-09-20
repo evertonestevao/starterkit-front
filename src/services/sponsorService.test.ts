@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { RecurringBillingProvider } from "@/adapters/payment/RecurringBillingProvider";
-import { isAppError } from "@/lib/errors";
+import { AppError, isAppError } from "@/lib/errors";
 import type {
   BillingWebhookEvent,
   SponsorAccount,
@@ -42,6 +42,8 @@ function makeWorld(
     /** Simula o provedor recusando gerar link para email sem conta. */
     accessLinkFailsFor?: string;
     publicLimiter?: { consume: (key: string) => Promise<void> };
+    /** Vagas de primeiro patrocínio por igreja (ausente = ilimitado). */
+    vagas?: Record<string, number>;
   } = {},
 ) {
   let clock = new Date("2026-09-17T15:00:00Z");
@@ -168,11 +170,31 @@ function makeWorld(
     },
     async requestSponsorship(churchId) {
       if (!account) throw new Error("sem conta");
-      if (account.billing_status === "overdue") throw new Error("pagamento pendente");
+      const conta = account;
+      if (conta.billing_status === "overdue") throw new Error("pagamento pendente");
+      // Índice único real: (patrocinador, igreja) entre os vivos.
       const live = sponsorships.find(
-        (s) => s.church_id === churchId && s.status !== "canceled",
+        (s) => s.church_id === churchId && s.sponsor_id === conta.id && s.status !== "canceled",
       );
       if (live) throw new Error("duplicado");
+      // Mesma regra da RPC: é o primeiro patrocínio da conta quem ocupa vaga.
+      const primeiro = !sponsorships.some(
+        (s) =>
+          s.sponsor_id === conta.id &&
+          ["pending_payment", "active", "cancel_scheduled"].includes(s.status),
+      );
+      if (primeiro) {
+        const limite = options.vagas?.[churchId];
+        const ocupadas = sponsorships.filter(
+          (s) =>
+            s.church_id === churchId &&
+            s.primeiro &&
+            ["pending_payment", "active", "cancel_scheduled"].includes(s.status),
+        ).length;
+        if (limite !== undefined && ocupadas >= limite) {
+          throw new AppError("conflict", "As vagas de patrocínio desta igreja estão esgotadas.");
+        }
+      }
       const createdAt = tick();
       const active = account.billing_status === "active";
       const row: Sponsorship = {
@@ -181,6 +203,7 @@ function makeWorld(
         church_id: churchId,
         company_id: CHURCHES[churchId].companyId,
         status: active ? "active" : "pending_payment",
+        primeiro,
         activated_at: active ? createdAt : null,
         cancel_requested_at: null,
         ends_at: null,
@@ -338,7 +361,20 @@ function makeWorld(
       };
       return account;
     },
-    async createSponsorshipForAccount(accountId, churchId, companyId) {
+    async getChurchPrimeiroSlots(churchId) {
+      const limite = options.vagas?.[churchId];
+      return {
+        limite: limite ?? null,
+        ocupadas: sponsorships.filter(
+          (s) =>
+            s.church_id === churchId &&
+            s.primeiro &&
+            ["pending_payment", "active", "cancel_scheduled"].includes(s.status),
+        ).length,
+      };
+    },
+
+    async createSponsorshipForAccount(accountId, churchId, companyId, primeiro) {
       const createdAt = tick();
       const isActive = account?.billing_status === "active";
       const row: Sponsorship = {
@@ -347,6 +383,7 @@ function makeWorld(
         church_id: churchId,
         company_id: companyId,
         status: isActive ? "active" : "pending_payment",
+        primeiro,
         activated_at: isActive ? createdAt : null,
         cancel_requested_at: null,
         ends_at: null,
@@ -928,5 +965,80 @@ describe("login por link (sem senha)", () => {
       "sponsor-access-link:maria@exemplo.com",
       "sponsor-access-link-ip:203.0.113.7",
     ]);
+  });
+});
+
+describe("vagas de primeiro patrocínio", () => {
+  const publicInput = {
+    churchPublicCode: "a",
+    kind: "person" as const,
+    displayName: "Maria Souza",
+    document: "529.982.247-25",
+    phone: "(14) 99999-8888",
+    email: "maria@exemplo.com",
+    acceptTerms: true as const,
+    emailConsent: true,
+  };
+  const evidence = { ipAddress: "203.0.113.7", userAgent: "teste" };
+
+  it("sem limite configurado, entra quem quiser", async () => {
+    const world = makeWorld();
+    await signUp(world);
+
+    await world.service.startSponsorship(A, USER);
+
+    expect(world.sponsorships[0]).toMatchObject({ church_id: A, primeiro: true });
+  });
+
+  it("limite cheio barra o primeiro patrocínio, e nada é cobrado", async () => {
+    const world = makeWorld({ vagas: { [A]: 1 } });
+    await signUp(world);
+    await world.service.startSponsorship(A, USER);
+
+    // Segundo patrocinador, mesma igreja: a vaga acabou.
+    const outro = makeWorld({ vagas: { [A]: 1 } });
+    await signUp(outro);
+    // A vaga da igreja A já está ocupada pelo patrocinador do outro mundo.
+    outro.sponsorships.push({ ...world.sponsorships[0], sponsor_id: "acc-outro" });
+
+    await expect(outro.service.startSponsorship(A, USER)).rejects.toMatchObject({
+      code: "conflict",
+    });
+    expect(outro.charges).toHaveLength(0);
+  });
+
+  it("expansão entra mesmo com a igreja lotada: ela não ocupa vaga", async () => {
+    const world = makeWorld({ vagas: { [B]: 0 } });
+    await signUp(world);
+    // A primeira igreja é a A (sem limite); B está fechada para novos.
+    await world.service.startSponsorship(A, USER);
+
+    await world.service.startSponsorship(B, USER);
+
+    expect(world.sponsorships.map((s) => [s.church_id, s.primeiro])).toEqual([
+      [A, true],
+      [B, false],
+    ]);
+  });
+
+  it("na assinatura pública, a vaga é conferida antes de criar conta e cobrança", async () => {
+    const world = makeWorld({ vagas: { [A]: 0 } });
+
+    await expect(world.service.startPublicSponsorship(publicInput, evidence)).rejects.toMatchObject({
+      code: "conflict",
+    });
+
+    expect(world.account).toBeNull();
+    expect(world.sponsorships).toHaveLength(0);
+    expect(world.charges).toHaveLength(0);
+    expect(world.emailsSent).toHaveLength(0);
+  });
+
+  it("assinatura pública nasce marcada como primeiro patrocínio", async () => {
+    const world = makeWorld();
+
+    await world.service.startPublicSponsorship(publicInput, evidence);
+
+    expect(world.sponsorships[0].primeiro).toBe(true);
   });
 });

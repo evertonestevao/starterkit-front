@@ -118,6 +118,8 @@ export interface Sponsorship {
   church_id: string;
   company_id: string;
   status: SponsorshipStatus;
+  /** Assinatura inicial do patrocinador: só ela ocupa vaga na igreja. */
+  primeiro: boolean;
   activated_at: string | null;
   cancel_requested_at: string | null;
   ends_at: string | null;

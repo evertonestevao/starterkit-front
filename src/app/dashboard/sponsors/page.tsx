@@ -51,6 +51,11 @@ function SponsorCard({ sponsor, showChurch }: { sponsor: CompanySponsor; showChu
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate font-medium">{sponsor.sponsorName}</p>
             {leaving ? <Badge variant="outline">Sai em {formatDate(sponsor.endsAt)}</Badge> : null}
+            {sponsor.emCarencia ? (
+              <Badge variant="outline" className="gap-1">
+                Fora da vitrine: pagamento atrasado
+              </Badge>
+            ) : null}
             {sponsor.hiddenAt ? (
               <Badge variant="secondary" className="gap-1">
                 <EyeOff className="size-3" aria-hidden />

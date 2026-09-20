@@ -151,8 +151,15 @@ export interface SponsorBillingStore {
     phone: string | null;
     document: string;
   }): Promise<SponsorAccount>;
+  /** Limite de vagas de primeiro patrocínio da igreja e quantas já foram ocupadas. */
+  getChurchPrimeiroSlots(churchId: string): Promise<{ limite: number | null; ocupadas: number }>;
   /** Mesma decisão de status da RPC: sem cobrança ativa nasce pendente. */
-  createSponsorshipForAccount(accountId: string, churchId: string, companyId: string): Promise<Sponsorship>;
+  createSponsorshipForAccount(
+    accountId: string,
+    churchId: string,
+    companyId: string,
+    primeiro: boolean,
+  ): Promise<Sponsorship>;
   recordTermsAcceptance(
     userId: string,
     evidence: RequestEvidence,
@@ -614,12 +621,17 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       church: SponsorshipInviteChurch;
       tiers: PriceTier[];
       entryPriceCents: number;
+      /** Sem vaga, a página avisa em vez de deixar preencher para falhar depois. */
+      vagasEsgotadas: boolean;
     }> {
       const church = await store.findChurchByPublicCode(publicCode);
       if (!church || !church.companyId) {
         throw new AppError("not_found", "Igreja não encontrada.");
       }
-      const tiers = await store.listPriceTiers();
+      const [tiers, slots] = await Promise.all([
+        store.listPriceTiers(),
+        store.getChurchPrimeiroSlots(church.id),
+      ]);
       return {
         church: {
           id: church.id,
@@ -630,6 +642,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         },
         tiers,
         entryPriceCents: totalForCount(1, tiers),
+        vagasEsgotadas: slots.limite !== null && slots.ocupadas >= slots.limite,
       };
     },
 
@@ -708,6 +721,15 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         throw new AppError("not_found", "Igreja não encontrada.");
       }
 
+      // Quem assina por aqui nunca tem conta ainda, então isto é sempre um
+      // PRIMEIRO patrocínio e ocupa vaga. A checagem é feita antes de criar
+      // usuário, conta e cliente no gateway — a RPC do fluxo logado barra no
+      // banco, e este caminho não passa por ela.
+      const slots = await store.getChurchPrimeiroSlots(church.id);
+      if (slots.limite !== null && slots.ocupadas >= slots.limite) {
+        throw new AppError("conflict", "As vagas de patrocínio desta igreja estão esgotadas.");
+      }
+
       // Endereço público que cria cliente no gateway e dispara email: sem
       // limite, vira máquina de spam.
       await deps.publicRateLimiter?.consume(`public-sponsorship:${data.email}`);
@@ -750,6 +772,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         account.id,
         church.id,
         church.companyId,
+        true,
       );
 
       let billing: { invoiceUrl: string | null; syncPending: boolean };

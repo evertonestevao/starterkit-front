@@ -40,11 +40,19 @@ async function readTiers(client: SupabaseClient): Promise<PriceTier[]> {
   }));
 }
 
-function mapRpcError(error: { code?: string }, fallback: string): AppError {
+function mapRpcError(error: { code?: string; message?: string }, fallback: string): AppError {
   switch (error.code) {
     case UNIQUE_VIOLATION:
       return new AppError("conflict", "Você já patrocina esta igreja.", error);
     case CHECK_VIOLATION:
+      // Duas regras da RPC usam check_violation; a mensagem do banco separa.
+      if (/vaga/i.test(error.message ?? "")) {
+        return new AppError(
+          "conflict",
+          "As vagas de patrocínio desta igreja estão esgotadas.",
+          error,
+        );
+      }
       return new AppError(
         "validation_error",
         "Há um pagamento pendente. Regularize-o para patrocinar outra igreja.",
@@ -421,7 +429,17 @@ export function createSupabaseSponsorBillingStore(adminClient: SupabaseClient): 
       return data;
     },
 
-    async createSponsorshipForAccount(accountId, churchId, companyId) {
+    async getChurchPrimeiroSlots(churchId) {
+      const { data, error } = await adminClient
+        .rpc("church_primeiro_slots", { p_church_id: churchId })
+        .maybeSingle<{ limite: number | null; ocupadas: number }>();
+      if (error || !data) {
+        throw new AppError("internal_error", "Falha ao consultar as vagas", error);
+      }
+      return { limite: data.limite, ocupadas: data.ocupadas };
+    },
+
+    async createSponsorshipForAccount(accountId, churchId, companyId, primeiro) {
       // Mesma decisão da RPC request_sponsorship: com cobrança ativa o
       // patrocínio já nasce valendo; senão espera o 1º pagamento.
       const { data: account, error: accountError } = await adminClient
@@ -442,6 +460,8 @@ export function createSupabaseSponsorBillingStore(adminClient: SupabaseClient): 
           company_id: companyId,
           status: isActive ? "active" : "pending_payment",
           activated_at: isActive ? new Date().toISOString() : null,
+          // Só a assinatura inicial ocupa vaga na igreja.
+          primeiro,
         })
         .select("*")
         .single<Sponsorship>();
