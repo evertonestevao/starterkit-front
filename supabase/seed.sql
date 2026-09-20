@@ -29,15 +29,20 @@ as $$
 declare
   v_id uuid := gen_random_uuid();
 begin
+  -- As colunas de token nascem NULL nesta tabela, e o GoTrue (em Go) quebra ao
+  -- ler NULL onde espera texto: com elas nulas, `listUsers` da API de admin
+  -- passa a falhar para o projeto inteiro. Por isso entram como string vazia.
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change, email_change_token_new
   )
   values (
     v_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
     p_email, crypt('dev123456', gen_salt('bf')), now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
-    jsonb_build_object('full_name', p_nome), now(), now()
+    jsonb_build_object('full_name', p_nome), now(), now(),
+    '', '', '', ''
   );
 
   -- Sem a identidade, o login por email/senha do GoTrue não encontra a conta.
