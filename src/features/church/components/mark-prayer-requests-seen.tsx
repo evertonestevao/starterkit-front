@@ -1,8 +1,20 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { markPrayerRequestsSeenAction } from "@/server/actions/community";
+
+/**
+ * Espera antes de marcar como visto, para o selo "Novo" e o badge do menu
+ * não sumirem no instante em que a página abre — a pessoa precisa de um
+ * tempo para notar o que chegou antes de o aviso desaparecer.
+ *
+ * `markPrayerRequestsSeenAction` chama `revalidatePath`, e uma Server
+ * Function chamada direto (sem `<form>`) já atualiza a tela sozinha assim
+ * que termina — não precisa de `router.refresh()` depois. Por isso é a
+ * CHAMADA da action que precisa esperar, não algo depois dela: atrasar só
+ * um refresh redundante não atrasaria nada, o sumiço já teria acontecido.
+ */
+const ATRASO_ANTES_DE_MARCAR_MS = 8_000;
 
 /**
  * Dispara "marcar como visto" quando a pessoa REALMENTE abre a tela.
@@ -13,6 +25,10 @@ import { markPrayerRequestsSeenAction } from "@/server/actions/community";
  * servidor SEM o usuário ter clicado — e a marca de "visto" sumiria do badge
  * antes de alguém realmente ler o pedido. Um efeito de montagem só dispara
  * quando o componente entra de fato na árvore visível.
+ *
+ * Se a pessoa sair da tela antes do atraso terminar, a marca nunca chega a
+ * ser gravada nesta visita — de propósito: "abriu e fechou na hora" não é a
+ * mesma coisa que "abriu e leu". Na próxima visita, ainda conta como novo.
  */
 export function MarkPrayerRequestsSeen({
   companyId,
@@ -26,19 +42,17 @@ export function MarkPrayerRequestsSeen({
   // React roda efeitos duas vezes em dev). A RPC já é idempotente — isto só
   // evita uma chamada de rede à toa.
   const jaMarcou = useRef(false);
-  const router = useRouter();
 
   useEffect(() => {
     if (!seenUpTo || jaMarcou.current) return;
-    jaMarcou.current = true;
-    void markPrayerRequestsSeenAction(companyId, seenUpTo).then(() => {
-      // `revalidatePath` na action invalida o cache, mas só troca o que já
-      // está montado na tela com uma navegação — e aqui não há nenhuma
-      // (o efeito roda na MESMA página). É isto que faz o badge do menu
-      // sumir sem precisar sair e voltar.
-      router.refresh();
-    });
-  }, [companyId, seenUpTo, router]);
+
+    const temporizador = setTimeout(() => {
+      jaMarcou.current = true;
+      void markPrayerRequestsSeenAction(companyId, seenUpTo);
+    }, ATRASO_ANTES_DE_MARCAR_MS);
+
+    return () => clearTimeout(temporizador);
+  }, [companyId, seenUpTo]);
 
   return null;
 }

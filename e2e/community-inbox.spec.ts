@@ -43,12 +43,16 @@ test("pedido de oração enviado na página pública aparece no painel", async (
   await expect(page.getByText(pedido)).toBeVisible();
   await expect(page.getByText("Novo")).toBeVisible();
 
-  // Abrir a tela marca como visto sozinho (sem precisar clicar em nada): o
-  // badge do menu some, ainda na mesma página — a marca é gravada no banco,
-  // não só escondida no navegador.
-  await expect(page.getByLabel(/pedido\(s\) de oração não visto\(s\)/)).toHaveCount(0);
+  // Abrir a tela marca como visto sozinho (sem precisar clicar em nada), mas
+  // só depois de um atraso proposital (MarkPrayerRequestsSeen): sumir na
+  // hora não dá tempo de a pessoa notar o que era novo. O timeout aqui é
+  // maior que esse atraso de propósito, não é tolerância a lentidão.
+  await expect(page.getByLabel(/pedido\(s\) de oração não visto\(s\)/)).toHaveCount(0, {
+    timeout: 12_000,
+  });
 
-  // Recarregando do zero, o pedido já visto não aparece mais como "Novo".
+  // Recarregando do zero, o pedido já visto não aparece mais como "Novo" —
+  // a marca foi gravada no banco, não só escondida no navegador.
   await page.reload();
   await expect(page.getByText(pedido)).toBeVisible();
   await expect(page.getByText("Novo")).toHaveCount(0);

@@ -6,12 +6,11 @@ import { getCommunityService } from "@/server/community";
 /**
  * Marca os pedidos de oração como vistos até `seenUpTo` (o `created_at` do
  * mais recente que a tela mostrou). Chamada direto de um componente cliente
- * (sem `<form>`), como `switchCompanyAction`.
- *
- * `revalidatePath` só invalida o CACHE do servidor; quem chama ainda precisa
- * de `router.refresh()` no client para a sidebar (que está montada nesta
- * mesma navegação, não numa nova) buscar os dados de novo — ver
- * MarkPrayerRequestsSeen.
+ * (sem `<form>`), como `switchCompanyAction` — e como toda Server Function
+ * chamada assim, `revalidatePath` já atualiza sozinha a tela que estiver
+ * olhando o caminho invalidado; quem chama não precisa de `router.refresh()`
+ * depois (ver MarkPrayerRequestsSeen, que atrasa a CHAMADA a esta action,
+ * não algo depois dela).
  *
  * Silenciosa de propósito: isto roda sozinho ao abrir a tela, e um erro aqui
  * não pode virar um alerta atravessado no caminho de quem só queria ler os
