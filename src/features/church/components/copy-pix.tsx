@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { registerPixCopyAction } from "@/server/actions/churchPixCopy";
 
 /**
@@ -24,19 +24,12 @@ export function CopyPix({
   copiaECola?: string | null;
   qrDataUrl?: string | null;
 }) {
-  const [copiado, setCopiado] = useState(false);
+  const { copied: copiado, copy } = useCopyToClipboard(2500);
 
   async function copiar() {
-    try {
-      // Copia o "copia e cola" quando existe: colado no app do banco, ele já
-      // abre a doação com o recebedor preenchido. A chave crua é o plano B.
-      await navigator.clipboard.writeText(copiaECola || chave);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2500);
-    } catch {
-      // Sem permissão de área de transferência: a chave segue na tela.
-      setCopiado(false);
-    }
+    // Copia o "copia e cola" quando existe: colado no app do banco, ele já
+    // abre a doação com o recebedor preenchido. A chave crua é o plano B.
+    await copy(copiaECola || chave);
     // Métrica anônima de intenção de doar. Nunca atrapalha a cópia.
     void registerPixCopyAction(churchId).catch(() => {});
   }

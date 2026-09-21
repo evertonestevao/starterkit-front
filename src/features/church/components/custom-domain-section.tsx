@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useTransition } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { cn } from "@/lib/utils";
 import {
   claimCustomDomainAction,
@@ -81,7 +82,7 @@ const STATUS_PRESENTATION: Record<ChurchDomainStatus, StatusPresentation> = {
 };
 
 function CopyButton({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   return (
     <Button
@@ -90,13 +91,10 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       size="sm"
       className="gap-1.5"
       onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(value);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        } catch {
-          // Clipboard bloqueado (http, permissão negada): o valor segue
-          // visível e selecionável na tela, então não é um beco sem saída.
+        const ok = await copy(value);
+        if (!ok) {
+          // Nem o fallback funcionou: o valor segue visível e selecionável
+          // na tela, então não é um beco sem saída.
           toast.error("Não foi possível copiar. Selecione o texto manualmente.");
         }
       }}

@@ -37,6 +37,30 @@ test("igreja cadastra subconta, liga o cartão e o botão aparece na página", a
   await expect(visitante.getByText("igreja-cartao@e2e.local")).toBeVisible();
   await expect(visitante.getByRole("link", { name: "Doar com cartão" })).toHaveCount(0);
 
+  // O botão de copiar a chave PIX precisa copiar de verdade, não só mudar de
+  // legenda. `navigator.clipboard` só existe em HTTPS ou localhost — e esta
+  // página é feita para ser aberta via QR Code, ou seja, testada no celular
+  // pelo IP da máquina em HTTP puro, onde essa API some.
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await visitante.getByRole("button", { name: "Copiar chave PIX" }).click();
+  await expect(visitante.getByText("Chave copiada!")).toBeVisible();
+  await expect
+    .poll(() => visitante.evaluate(() => navigator.clipboard.readText()))
+    .toContain("igreja-cartao@e2e.local");
+
+  // Sem a Clipboard API (o cenário real do bug), o botão cai no fallback e
+  // ainda assim copia — só a leitura via API muda, a cópia de fato acontece
+  // pelo document.execCommand.
+  const semClipboard = await context.newPage();
+  await semClipboard.addInitScript(() => {
+    // @ts-expect-error -- simula um contexto inseguro (HTTP fora de localhost).
+    delete window.navigator.__proto__.clipboard;
+    Object.defineProperty(window.navigator, "clipboard", { value: undefined, configurable: true });
+  });
+  await semClipboard.goto(`/igreja/${publicCode}`);
+  await semClipboard.getByRole("button", { name: "Copiar chave PIX" }).click();
+  await expect(semClipboard.getByText("Chave copiada!")).toBeVisible();
+
   // A igreja manda o cadastro da subconta. Com o provedor fake, aprova na hora.
   await page.goto("/dashboard/settings/recebimento");
   await page.getByLabel("Nome da igreja como está no documento").fill("Associacao Igreja Cartao");
