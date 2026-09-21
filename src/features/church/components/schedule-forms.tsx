@@ -28,19 +28,33 @@ export function AddScheduleItemForm({ igrejas }: { igrejas: Array<{ id: string; 
   const form = useRef<HTMLFormElement>(null);
   const unica = igrejas.length === 1 ? igrejas[0] : null;
 
+  // Em qual modo o envio em exibição (state) foi feito. Comparado com `tipo`
+  // atual na hora de renderizar: sem isso, um erro de quando o modo era
+  // "semanal" (ex.: "Escolha o dia da semana") continuaria na tela depois de
+  // trocar para "especial", parecendo um problema do modo atual — que nem
+  // chegou a ser testado ainda. Atualizado no onSubmit (handler de evento,
+  // não efeito): é normal estado nascer do evento de envio.
+  const [tipoDoEnvio, setTipoDoEnvio] = useState(tipo);
+  const mensagemDoModoAtual = tipoDoEnvio === tipo;
+
   // Depois de adicionar, o formulário volta limpo para o próximo item.
   useEffect(() => {
     if (state?.success) form.current?.reset();
   }, [state]);
 
   return (
-    <form ref={form} action={formAction} className="flex flex-col gap-4">
-      {state?.error ? (
+    <form
+      ref={form}
+      action={formAction}
+      onSubmit={() => setTipoDoEnvio(tipo)}
+      className="flex flex-col gap-4"
+    >
+      {state?.error && mensagemDoModoAtual ? (
         <Alert variant="destructive">
           <AlertDescription>{state.error}</AlertDescription>
         </Alert>
       ) : null}
-      {state?.success ? (
+      {state?.success && mensagemDoModoAtual ? (
         <Alert>
           <AlertDescription>{state.success}</AlertDescription>
         </Alert>
@@ -191,16 +205,26 @@ export function EditScheduleItemForm({
 }) {
   const [state, formAction, pending] = useActionState(updateScheduleItemAction, undefined);
   const [tipo, setTipo] = useState<"semanal" | "especial">(item.tipo);
+  // Mesmo cuidado do formulário de adicionar: em qual modo o envio em
+  // exibição foi feito, comparado com o modo atual — sem isto, um erro de
+  // quando o item ainda era "semanal" ficaria na tela depois de trocar para
+  // "especial".
+  const [tipoDoEnvio, setTipoDoEnvio] = useState(tipo);
+  const mensagemDoModoAtual = tipoDoEnvio === tipo;
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 border-t px-3 py-3">
+    <form
+      action={formAction}
+      onSubmit={() => setTipoDoEnvio(tipo)}
+      className="flex flex-col gap-3 border-t px-3 py-3"
+    >
       <input type="hidden" name="itemId" value={item.id} />
-      {state?.error ? (
+      {state?.error && mensagemDoModoAtual ? (
         <Alert variant="destructive">
           <AlertDescription>{state.error}</AlertDescription>
         </Alert>
       ) : null}
-      {state?.success ? (
+      {state?.success && mensagemDoModoAtual ? (
         <Alert>
           <AlertDescription>{state.success}</AlertDescription>
         </Alert>
