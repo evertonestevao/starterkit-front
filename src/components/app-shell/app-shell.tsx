@@ -22,6 +22,8 @@ interface AppShellProps extends UserMenuProps {
   initialCollapsed: boolean;
   /** Convites pendentes PARA o usuário — badge de atenção em Configurações. */
   pendingInvitesCount?: number;
+  /** Pedidos de oração chegados desde a última vez que ESTA pessoa abriu a tela. */
+  unseenPrayerRequestsCount?: number;
   children: React.ReactNode;
 }
 
@@ -34,6 +36,7 @@ interface AppShellProps extends UserMenuProps {
 export function AppShell({
   initialCollapsed,
   pendingInvitesCount = 0,
+  unseenPrayerRequestsCount = 0,
   children,
   ...user
 }: AppShellProps) {
@@ -67,6 +70,7 @@ export function AppShell({
           collapsed={collapsed}
           pathname={pathname}
           pendingInvitesCount={pendingInvitesCount}
+          unseenPrayerRequestsCount={unseenPrayerRequestsCount}
         />
         <div className="mt-auto border-t p-2">
           <Button
@@ -92,6 +96,7 @@ export function AppShell({
             collapsed={false}
             pathname={pathname}
             pendingInvitesCount={pendingInvitesCount}
+            unseenPrayerRequestsCount={unseenPrayerRequestsCount}
             onNavigate={() => setDrawerOpen(false)}
           />
         </SheetContent>
@@ -124,26 +129,37 @@ export function AppShell({
   );
 }
 
+/** Badge de atenção por item de menu: href -> quantidade + rótulo do que é. */
+function badgesByHref(pendingInvitesCount: number, unseenPrayerRequestsCount: number) {
+  return {
+    "/dashboard/settings": { count: pendingInvitesCount, label: "convite(s) pendente(s)" },
+    "/dashboard/prayers": { count: unseenPrayerRequestsCount, label: "pedido(s) de oração não visto(s)" },
+  } as const;
+}
+
 function SidebarNav({
   collapsed,
   pathname,
   pendingInvitesCount = 0,
+  unseenPrayerRequestsCount = 0,
   onNavigate,
 }: {
   collapsed: boolean;
   pathname: string;
   pendingInvitesCount?: number;
+  unseenPrayerRequestsCount?: number;
   onNavigate?: () => void;
 }) {
   const { active } = useTenant();
   const visible = navItems.filter((item) => item.roles.includes(active.role));
+  const badges = badgesByHref(pendingInvitesCount, unseenPrayerRequestsCount);
 
   return (
     <nav className="flex flex-col gap-1 p-2">
       {visible.map((item) => {
         const isActive = pathname === item.href;
-        // Badge de atenção: convites pendentes para o usuário, em Configurações.
-        const badgeCount = item.href === "/dashboard/settings" ? pendingInvitesCount : 0;
+        const badge = badges[item.href as keyof typeof badges];
+        const badgeCount = badge?.count ?? 0;
         const link = (
           <Link
             key={item.href}
@@ -164,12 +180,12 @@ function SidebarNav({
               collapsed ? (
                 <span
                   className="absolute right-1.5 top-1.5 size-2 rounded-full bg-destructive"
-                  aria-label={`${badgeCount} convite(s) pendente(s)`}
+                  aria-label={`${badgeCount} ${badge?.label}`}
                 />
               ) : (
                 <span
                   className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-medium text-white"
-                  aria-label={`${badgeCount} convite(s) pendente(s)`}
+                  aria-label={`${badgeCount} ${badge?.label}`}
                 >
                   {badgeCount}
                 </span>

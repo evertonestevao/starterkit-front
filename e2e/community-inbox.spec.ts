@@ -33,10 +33,26 @@ test("pedido de oração enviado na página pública aparece no painel", async (
   await expect(visitorPage.getByText("Recebemos o seu pedido")).toBeVisible();
   await visitor.close();
 
-  // O pastor vê o pedido, com o texto exato.
+  // Antes de abrir a caixa: o menu já avisa que tem 1 pedido não visto.
+  await page.goto("/dashboard");
+  await expect(page.getByLabel("1 pedido(s) de oração não visto(s)")).toBeVisible();
+
+  // O pastor vê o pedido, com o texto exato, e marcado como novo.
   await page.goto("/dashboard/prayers");
   await expect(page.getByText("Visitante E2E")).toBeVisible();
   await expect(page.getByText(pedido)).toBeVisible();
+  await expect(page.getByText("Novo")).toBeVisible();
+
+  // Abrir a tela marca como visto sozinho (sem precisar clicar em nada): o
+  // badge do menu some, ainda na mesma página — a marca é gravada no banco,
+  // não só escondida no navegador.
+  await expect(page.getByLabel(/pedido\(s\) de oração não visto\(s\)/)).toHaveCount(0);
+
+  // Recarregando do zero, o pedido já visto não aparece mais como "Novo".
+  await page.reload();
+  await expect(page.getByText(pedido)).toBeVisible();
+  await expect(page.getByText("Novo")).toHaveCount(0);
+  await expect(page.getByLabel(/pedido\(s\) de oração não visto\(s\)/)).toHaveCount(0);
 });
 
 test("igreja não vê pedido enviado para outra igreja", async ({ page, context }) => {

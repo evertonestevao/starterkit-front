@@ -33,6 +33,11 @@ export interface CommunityRepository {
     opts: { limit: number; offset: number },
   ): Promise<{ items: Visitor[]; total: number }>;
   countAll(companyId: string, since: string): Promise<CommunityCounts>;
+  /** Até quando a PRÓPRIA sessão já viu os pedidos desta empresa. Null = nunca viu. */
+  getPrayerSeenAt(companyId: string): Promise<string | null>;
+  countPrayerRequestsSince(companyId: string, since: string | null): Promise<number>;
+  /** Marca "vi tudo até este ponto" para o usuário logado (auth.uid() na RPC). */
+  markPrayerRequestsSeen(companyId: string, seenAt: string): Promise<void>;
 }
 
 const PAGE_SIZE = 20;
@@ -90,6 +95,27 @@ export function createCommunityService(repo: CommunityRepository) {
     async getCounts(companyId: string, now: Date = new Date()): Promise<CommunityCounts> {
       const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
       return repo.countAll(requireCompany(companyId), since);
+    },
+
+    /** Até quando a própria sessão já viu os pedidos desta empresa. Null = nunca viu. */
+    async getPrayerSeenAt(companyId: string): Promise<string | null> {
+      return repo.getPrayerSeenAt(requireCompany(companyId));
+    },
+
+    /** Badge da sidebar: quantos pedidos chegaram depois da última vez que a pessoa olhou. */
+    async getUnseenPrayerCount(companyId: string): Promise<number> {
+      const seenAt = await repo.getPrayerSeenAt(requireCompany(companyId));
+      return repo.countPrayerRequestsSince(companyId, seenAt);
+    },
+
+    /**
+     * "Vi tudo até este ponto." `seenUpTo` é o `created_at` do pedido mais
+     * recente que a tela mostrou — não o relógio do servidor: um pedido novo
+     * chegando entre o carregamento da página e o clique não pode ser
+     * marcado como visto por alguém que nunca chegou a lê-lo.
+     */
+    async markPrayerRequestsSeen(companyId: string, seenUpTo: string): Promise<void> {
+      return repo.markPrayerRequestsSeen(requireCompany(companyId), seenUpTo);
     },
   };
 }

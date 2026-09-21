@@ -3,7 +3,9 @@ import { CalendarClock, HandHeart, Inbox, MessageCircleHeart } from "lucide-reac
 import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
 import { PaginationControls } from "@/components/pagination-controls";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { MarkPrayerRequestsSeen } from "@/features/church/components/mark-prayer-requests-seen";
 import { getCommunityService, getPrayerCountsTree } from "@/server/community";
 import { getActiveTenant } from "@/server/tenant";
 
@@ -44,17 +46,27 @@ export default async function PrayersPage({
 
   const { page } = await searchParams;
   const community = await getCommunityService();
-  const [requests, counts, contagens] = await Promise.all([
+  const [requests, counts, contagens, seenAt] = await Promise.all([
     community.listPrayerRequests(active.id, { page: Number(page) || 1 }),
     community.getCounts(active.id),
     // Contagem das igrejas ABAIXO desta na árvore: quem lidera acima sabe
     // quantos pedidos cada congregação recebeu, e nunca o que dizem.
     getPrayerCountsTree(30).catch(() => []),
+    // Buscado ANTES de marcar como visto: o selo "Novo" usa o que já estava
+    // gravado quando a página carregou, não o valor que está prestes a virar.
+    community.getPrayerSeenAt(active.id).catch(() => null),
   ]);
   const now = new Date();
+  const isNovo = (createdAt: string) => seenAt === null || createdAt > seenAt;
+  // O mais recente desta página: em geral é a página 1, que traz os mais
+  // novos primeiro — é o que vira o próximo "já vi até aqui".
+  const seenUpTo = requests.items[0]?.created_at ?? null;
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Sem saída visual: só dispara a marca de "visto" no navegador,
+          quando a tela é realmente aberta (ver o componente). */}
+      <MarkPrayerRequestsSeen companyId={active.id} seenUpTo={seenUpTo} />
       <div>
         <div className="flex items-center gap-2 text-sm font-medium text-primary">
           <HandHeart className="size-4" /> Cuidado com quem pediu
@@ -118,11 +130,12 @@ export default async function PrayersPage({
         <>
           <div className="flex flex-col gap-3">
             {requests.items.map((request) => (
-              <Card key={request.id}>
+              <Card key={request.id} className={isNovo(request.created_at) ? "border-primary/40" : undefined}>
                 <CardContent className="flex flex-col gap-2">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="font-medium">
+                    <p className="flex items-center gap-2 font-medium">
                       {request.name?.trim() || "Pedido anônimo"}
+                      {isNovo(request.created_at) ? <Badge>Novo</Badge> : null}
                     </p>
                     <span className="text-xs text-muted-foreground">
                       {whenLabel(request.created_at, now)}

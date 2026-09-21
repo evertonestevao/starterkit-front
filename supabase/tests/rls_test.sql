@@ -2634,6 +2634,118 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- "Já vi": badge de pedidos de oração não visualizados (migration
+-- 20260925100000). Reaproveita a árvore acima (Sub X com um pedido, dono e
+-- member) e ganha um SEGUNDO admin, para provar que a marca é POR PESSOA.
+-- ---------------------------------------------------------------------------
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('5e5e5e5e-0000-4000-8000-00000000000c', 'rls-subx2@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Segundo admin de X"}');
+insert into public.company_members (company_id, user_id, role) values
+  ('6c6c6c6c-0000-4000-8000-000000000002', '5e5e5e5e-0000-4000-8000-00000000000c', 'admin');
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+do $$
+begin
+  begin
+    perform public.mark_prayer_requests_seen('6c6c6c6c-0000-4000-8000-000000000002', now());
+    raise exception 'FALHA visto: anon chamou a RPC de marcar como visto';
+  exception when sqlstate '42501' then null; -- sem GRANT de execute
+  end;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000006","email":"rls-membx@test.local","role":"authenticated"}', true);
+do $$
+begin
+  -- Member não administra a empresa: não faz sentido existir marca de
+  -- "visto" para quem nem acessa a tela dos pedidos.
+  begin
+    perform public.mark_prayer_requests_seen('6c6c6c6c-0000-4000-8000-000000000002', now());
+    raise exception 'FALHA visto: member marcou pedidos como vistos';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000004","email":"rls-conga@test.local","role":"authenticated"}', true);
+do $$
+begin
+  -- Admin de OUTRA empresa não marca "visto" na caixa alheia.
+  begin
+    perform public.mark_prayer_requests_seen('6c6c6c6c-0000-4000-8000-000000000002', now());
+    raise exception 'FALHA visto: admin de outra empresa marcou pedidos de Sub X como vistos';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- O dono de Sub X marca "vi até 1 hora atrás" — antes do pedido da fixture
+-- (inserido nesta mesma transação, logo com created_at = now() da transação).
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000002","email":"rls-subx@test.local","role":"authenticated"}', true);
+do $$
+declare n int; v_seen timestamptz;
+begin
+  perform public.mark_prayer_requests_seen(
+    '6c6c6c6c-0000-4000-8000-000000000002', now() - interval '1 hour');
+
+  select count(*) into n from public.prayer_requests_last_seen;
+  if n <> 1 then raise exception 'FALHA visto: dono nao ve a propria marca (viu %)', n; end if;
+
+  -- Direto na tabela, sem passar pela RPC: sem GRANT de insert/update, só a
+  -- RPC escreve.
+  begin
+    insert into public.prayer_requests_last_seen (user_id, company_id, seen_at)
+    values (auth.uid(), '6c6c6c6c-0000-4000-8000-000000000002', now());
+    raise exception 'FALHA visto: insert direto na tabela foi aceito';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.prayer_requests_last_seen set seen_at = now();
+    raise exception 'FALHA visto: update direto na tabela foi aceito';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Chamar de novo com uma marca MAIS ANTIGA não pode regredir (duas abas
+  -- abertas, ou um clique duplicado, não podem devolver pedido a "não lido").
+  perform public.mark_prayer_requests_seen(
+    '6c6c6c6c-0000-4000-8000-000000000002', now() - interval '2 hours');
+  select seen_at into v_seen from public.prayer_requests_last_seen;
+  if v_seen <> (now() - interval '1 hour') then
+    raise exception 'FALHA visto: marca regrediu com um valor mais antigo (%)', v_seen;
+  end if;
+
+  -- Uma marca MAIS NOVA, essa sim, avança.
+  perform public.mark_prayer_requests_seen(
+    '6c6c6c6c-0000-4000-8000-000000000002', now() + interval '1 hour');
+  select seen_at into v_seen from public.prayer_requests_last_seen;
+  if v_seen <> (now() + interval '1 hour') then
+    raise exception 'FALHA visto: marca nao avancou com um valor mais novo (%)', v_seen;
+  end if;
+end $$;
+
+-- O SEGUNDO admin de Sub X não tem marca nenhuma: a de quem já viu é PESSOAL,
+-- não da empresa. Ele ainda não abriu a tela, então tudo conta como novo
+-- para ele.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000000c","email":"rls-subx2@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.prayer_requests_last_seen;
+  if n <> 0 then
+    raise exception 'FALHA visto: a marca do primeiro admin vazou para o segundo (viu %)', n;
+  end if;
+
+  perform public.mark_prayer_requests_seen('6c6c6c6c-0000-4000-8000-000000000002', now());
+  select count(*) into n from public.prayer_requests_last_seen;
+  if n <> 1 then raise exception 'FALHA visto: segundo admin nao conseguiu marcar a propria'; end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

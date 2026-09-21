@@ -4,6 +4,7 @@ import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell/app-shell";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
 import { createSupabaseUserRepository } from "@/repositories/supabase/userRepository";
 import { createMemoryRateLimiter } from "@/server/rateLimit";
+import { getCommunityService } from "@/server/community";
 import { createInviteService } from "@/services/inviteService";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getSponsorService } from "@/server/sponsor";
@@ -58,6 +59,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect("/login");
   }
 
+  // Member não vê "Pedidos de oração" no menu (a RLS também não devolve
+  // nada para ele) — poupa a consulta.
+  const unseenPrayerRequestsCount =
+    active.role === "member"
+      ? 0
+      : await (await getCommunityService()).getUnseenPrayerCount(active.id).catch(() => 0);
+
   const cookieStore = await cookies();
   const initialCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "true";
 
@@ -69,6 +77,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         userEmail={userData.user.email ?? ""}
         avatarUrl={profile?.avatar_url ?? null}
         pendingInvitesCount={myInvites.length}
+        unseenPrayerRequestsCount={unseenPrayerRequestsCount}
       >
         {/* Aviso permanente, em toda tela do painel: a plataforma não toca no
             dinheiro das doações. É a pergunta que toda igreja faz na primeira

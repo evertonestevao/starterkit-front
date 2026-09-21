@@ -9,7 +9,7 @@ import {
 
 const COMPANY = "11111111-1111-4111-8111-111111111111";
 
-function makeRepo() {
+function makeRepo(overrides: Partial<CommunityRepository> = {}) {
   const calls: Array<{ op: string; companyId: string; extra?: unknown }> = [];
   const repo: CommunityRepository = {
     async listPrayerRequests(companyId, opts) {
@@ -28,6 +28,18 @@ function makeRepo() {
       calls.push({ op: "counts", companyId, extra: since });
       return { prayerRequests: 3, eventSignups: 2, visitors: 1, lastWeek: 4 };
     },
+    async getPrayerSeenAt(companyId) {
+      calls.push({ op: "seenAt", companyId });
+      return null;
+    },
+    async countPrayerRequestsSince(companyId, since) {
+      calls.push({ op: "unseenCount", companyId, extra: since });
+      return 0;
+    },
+    async markPrayerRequestsSeen(companyId, seenAt) {
+      calls.push({ op: "markSeen", companyId, extra: seenAt });
+    },
+    ...overrides,
   };
   return { repo, calls };
 }
@@ -62,6 +74,64 @@ describe("communityService", () => {
 
     expect(counts).toMatchObject({ prayerRequests: 3, lastWeek: 4 });
     expect(calls[0].extra).toBe("2026-09-10T12:00:00.000Z");
+  });
+
+  it("nunca viu: o badge conta TODOS os pedidos, não só os recentes", async () => {
+    const { repo } = makeRepo({
+      async getPrayerSeenAt() {
+        return null;
+      },
+      async countPrayerRequestsSince(_companyId, since) {
+        // O repositório é quem decide "todos" quando since é null — o
+        // service só precisa repassar o null adiante, não fabricar uma data.
+        return since === null ? 7 : 0;
+      },
+    });
+
+    const total = await createCommunityService(repo).getUnseenPrayerCount(COMPANY);
+
+    expect(total).toBe(7);
+  });
+
+  it("já viu: o badge conta só o que chegou depois da marca", async () => {
+    // O "999" no ramo errado é a prova: se o service passasse qualquer coisa
+    // diferente da marca (ex.: null, ou esquecesse de repassar), o resultado
+    // sairia 999, não 2.
+    const { repo } = makeRepo({
+      async getPrayerSeenAt() {
+        return "2026-09-01T00:00:00.000Z";
+      },
+      async countPrayerRequestsSince(_companyId, since) {
+        return since === "2026-09-01T00:00:00.000Z" ? 2 : 999;
+      },
+    });
+
+    const total = await createCommunityService(repo).getUnseenPrayerCount(COMPANY);
+
+    expect(total).toBe(2);
+  });
+
+  it("marcar como visto repassa o companyId e o ponto exato informado", async () => {
+    const { repo, calls } = makeRepo();
+
+    await createCommunityService(repo).markPrayerRequestsSeen(COMPANY, "2026-09-20T10:00:00.000Z");
+
+    expect(calls).toEqual([
+      { op: "markSeen", companyId: COMPANY, extra: "2026-09-20T10:00:00.000Z" },
+    ]);
+  });
+
+  it("sem empresa ativa, nem o badge nem a marca de visto tocam o repositório", async () => {
+    const { repo, calls } = makeRepo();
+    const service = createCommunityService(repo);
+
+    await expect(service.getUnseenPrayerCount("")).rejects.toSatisfy(
+      (err: unknown) => isAppError(err) && err.code === "unauthorized",
+    );
+    await expect(service.markPrayerRequestsSeen("", "2026-09-20T10:00:00.000Z")).rejects.toSatisfy(
+      (err: unknown) => isAppError(err) && err.code === "unauthorized",
+    );
+    expect(calls).toHaveLength(0);
   });
 });
 

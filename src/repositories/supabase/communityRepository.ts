@@ -87,5 +87,45 @@ export function createSupabaseCommunityRepository(client: SupabaseClient): Commu
       ]);
       return { prayerRequests, eventSignups, visitors, lastWeek: p7 + e7 + v7 };
     },
+
+    async getPrayerSeenAt(companyId) {
+      // RLS já restringe a linha à própria sessão (user_id = auth.uid());
+      // não existe "ver o quanto outra pessoa já viu" para vazar.
+      const { data, error } = await client
+        .from("prayer_requests_last_seen")
+        .select("seen_at")
+        .eq("company_id", companyId)
+        .maybeSingle<{ seen_at: string }>();
+      if (error) throw new AppError("internal_error", "Falha ao consultar pedidos vistos", error);
+      return data?.seen_at ?? null;
+    },
+
+    async countPrayerRequestsSince(companyId, since) {
+      if (since === null) return countAllRows("prayer_requests", companyId);
+
+      // NÃO é `countSince` (usa >=, pensado para "últimos N dias" com um
+      // corte arbitrário): `since` aqui é o `created_at` exato do último
+      // pedido que a pessoa já viu, então precisa ser ESTRITO (>). Com >=,
+      // esse mesmo pedido nunca deixaria de contar como "não visto" — o
+      // badge nunca zeraria.
+      const { count, error } = await client
+        .from("prayer_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", companyId)
+        .gt("created_at", since);
+      if (error) throw new AppError("internal_error", "Falha ao contar pedidos não vistos", error);
+      return count ?? 0;
+    },
+
+    async markPrayerRequestsSeen(companyId, seenAt) {
+      // RPC (não upsert direto): funde com GREATEST, então duas abas abertas
+      // não conseguem fazer a marca andar para trás uma da outra. Ver o
+      // comentário completo na migration 20260925100000.
+      const { error } = await client.rpc("mark_prayer_requests_seen", {
+        p_company_id: companyId,
+        p_seen_at: seenAt,
+      });
+      if (error) throw new AppError("internal_error", "Falha ao marcar pedidos como vistos", error);
+    },
   };
 }
