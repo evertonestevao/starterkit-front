@@ -84,15 +84,20 @@ function TituloSecao({
   antes,
   destaque,
   subtitulo,
+  centralizado = false,
 }: {
   icone: LucideIcon;
   antes: string;
   destaque: string;
   subtitulo?: string;
+  /** Redes sociais: título, subtítulo e os links abaixo ficam todos no centro. */
+  centralizado?: boolean;
 }) {
   return (
-    <div className="mb-5">
-      <h2 className={`${titulos.className} flex items-center gap-2.5 text-2xl font-bold`}>
+    <div className={`mb-5 ${centralizado ? "text-center" : ""}`}>
+      <h2
+        className={`${titulos.className} flex items-center gap-2.5 text-2xl font-bold ${centralizado ? "justify-center" : ""}`}
+      >
         <Icone className="size-6 shrink-0 text-[var(--pg-accent)]" aria-hidden />
         <span>
           {antes} <span className="text-[var(--pg-accent)]">{destaque}</span>
@@ -410,15 +415,24 @@ export function ChurchPageRenderer({
       id: "redes",
       conteudo: (
         <>
-          <TituloSecao icone={Share2} antes="Redes" destaque="sociais" subtitulo="Acompanhe a igreja durante a semana." />
-          <div className="grid grid-cols-2 gap-3">
+          <TituloSecao
+            icone={Share2}
+            antes="Redes"
+            destaque="sociais"
+            subtitulo="Acompanhe a igreja durante a semana."
+            centralizado
+          />
+          {/* flex + justify-center (não grid-cols-2 fixo): com 1 rede ela fica
+              sozinha no meio, com 2 elas dividem o centro, com 3+ a última
+              linha incompleta também fica centralizada. */}
+          <div className="flex flex-wrap justify-center gap-3">
             {redes.map((rede) => (
               <a
                 key={rede.kind}
                 href={rede.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-16 items-center justify-center gap-2.5 rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-surface)] font-semibold"
+                className="flex h-16 basis-[calc(50%-0.375rem)] items-center justify-center gap-2.5 rounded-2xl border border-[var(--pg-border)] bg-[var(--pg-surface)] font-semibold"
               >
                 <SocialIcon kind={rede.kind} className="size-5" />
                 {rede.rotulo}
