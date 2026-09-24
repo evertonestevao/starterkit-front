@@ -39,6 +39,8 @@ export async function requestProfileChangeAction(
 
     // O telefone não passa por moderação: não aparece em página nenhuma.
     await service.updatePhone(formData.get("phone"));
+    // Liga/desliga a vitrine: também não passa por moderação (não é conteúdo).
+    await service.updateVisibility(formData.get("visibleOnPage") === "on");
 
     revalidatePath(PERFIL);
     return {

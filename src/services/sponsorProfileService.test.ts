@@ -24,6 +24,7 @@ function build(overrides: Partial<SponsorProfileAccount> = {}) {
     requestChange: vi.fn(async () => "mudanca-1"),
     cancelByToken: vi.fn(async () => true),
     updatePhone: vi.fn(async () => {}),
+    updateVisibility: vi.fn(async () => {}),
   };
   const notifier: SponsorProfileNotifier = {
     sendChangeRequested: vi.fn(async () => {}),

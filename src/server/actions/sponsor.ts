@@ -52,6 +52,7 @@ export async function createSponsorAccountAction(
         displayName: formData.get("displayName"),
         document: formData.get("document"),
         phone: formData.get("phone") ?? "",
+        visibleOnPage: formData.get("visibleOnPage") === "on",
       },
       actor,
     );
@@ -82,6 +83,7 @@ export async function startPublicSponsorshipAction(
         email: formData.get("email"),
         document: formData.get("document"),
         phone: formData.get("phone") ?? "",
+        visibleOnPage: formData.get("visibleOnPage") === "on",
         acceptTerms: formData.get("accept_terms") === "on",
         emailConsent: formData.get("email_consent") === "on",
       },
@@ -103,7 +105,19 @@ export async function startPublicSponsorshipAction(
       };
     }
   } catch (err) {
-    return toActionError(err);
+    // Devolve o que foi digitado: sem isso o form volta em branco no erro
+    // (rate limit, recusa do provedor etc.) e a pessoa perde o preenchimento.
+    return {
+      ...toActionError(err),
+      values: {
+        kind: String(formData.get("kind") ?? ""),
+        displayName: String(formData.get("displayName") ?? ""),
+        email: String(formData.get("email") ?? ""),
+        document: String(formData.get("document") ?? ""),
+        phone: String(formData.get("phone") ?? ""),
+        visibleOnPage: formData.get("visibleOnPage") === "on" ? "on" : "",
+      },
+    };
   }
   redirect(destination);
 }

@@ -23,6 +23,7 @@ const ACCOUNT: SponsorAccount = {
   phone: null,
   document: "11144477735",
   logo_url: null,
+  visible_on_page: true,
   link_tipo: null,
   link_valor: null,
   gateway: null,

@@ -1,21 +1,16 @@
 "use client";
 
 import { useActionState, useState, useTransition, type FormEvent } from "react";
-import { Building2, User } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TermsCheckboxes } from "@/features/terms/components/terms-checkboxes";
+import { DEFAULT_SPONSOR_KIND, SPONSOR_KIND_OPTIONS } from "@/features/sponsor/sponsorKindOptions";
 import { formatDocumentFor } from "@/lib/brDocument";
 import { cn } from "@/lib/utils";
 import { createSponsorAccountAction } from "@/server/actions/sponsor";
 import type { SponsorKind } from "@/types/sponsorship";
-
-const KIND_OPTIONS: Array<{ value: SponsorKind; label: string; hint: string; icon: typeof User }> = [
-  { value: "person", label: "Pessoa", hint: "Apoio em seu nome, com CPF", icon: User },
-  { value: "business", label: "Empresa", hint: "Apoio de um negócio, com CNPJ", icon: Building2 },
-];
 
 export function SponsorAccountForm({
   next,
@@ -27,7 +22,7 @@ export function SponsorAccountForm({
   needsTerms: boolean;
 }) {
   const [state, formAction, pending] = useActionState(createSponsorAccountAction, undefined);
-  const [kind, setKind] = useState<SponsorKind>("person");
+  const [kind, setKind] = useState<SponsorKind>(DEFAULT_SPONSOR_KIND);
   const [documentValue, setDocumentValue] = useState("");
   const [submitting, startTransition] = useTransition();
   const isBusiness = kind === "business";
@@ -55,7 +50,7 @@ export function SponsorAccountForm({
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Quem vai patrocinar?</legend>
         <div className="grid grid-cols-2 gap-3">
-          {KIND_OPTIONS.map(({ value, label, hint, icon: Icon }) => (
+          {SPONSOR_KIND_OPTIONS.map(({ value, label, hint, icon: Icon }) => (
             <label
               key={value}
               className={cn(
@@ -99,9 +94,26 @@ export function SponsorAccountForm({
           required
         />
         <p className="text-xs text-muted-foreground">
-          É o nome que aparece na página da igreja que você apoia.
+          É o nome que vai aparecer na página da igreja que você apoia — não precisa ser igual ao
+          do CPF/CNPJ.
         </p>
       </div>
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="visibleOnPage"
+          defaultChecked
+          className="mt-0.5 size-4 accent-primary"
+        />
+        <span>
+          Aparecer na página da igreja
+          <span className="block text-xs text-muted-foreground">
+            Desmarcado, seu patrocínio vale do mesmo jeito — só não aparece na vitrine pública.
+            Você pode mudar isso depois, no seu painel.
+          </span>
+        </span>
+      </label>
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="document">{isBusiness ? "CNPJ" : "CPF"}</Label>

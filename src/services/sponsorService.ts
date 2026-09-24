@@ -64,6 +64,7 @@ export interface SponsorRepository {
     email: string;
     phone: string | null;
     document: string;
+    visibleOnPage: boolean;
   }): Promise<SponsorAccount>;
   updateMyAccount(input: { displayName: string; phone: string | null }): Promise<void>;
   listMySponsorships(): Promise<SponsorshipWithChurch[]>;
@@ -154,6 +155,7 @@ export interface SponsorBillingStore {
     email: string;
     phone: string | null;
     document: string;
+    visibleOnPage: boolean;
   }): Promise<SponsorAccount>;
   /** Limite de vagas de primeiro patrocínio da igreja e quantas já foram ocupadas. */
   getChurchPrimeiroSlots(churchId: string): Promise<{ limite: number | null; ocupadas: number }>;
@@ -558,6 +560,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         email: actor.email,
         phone: parsed.data.phone,
         document: parsed.data.document,
+        visibleOnPage: parsed.data.visibleOnPage,
       });
     },
 
@@ -807,6 +810,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         email: data.email,
         phone: data.phone,
         document: data.document,
+        visibleOnPage: data.visibleOnPage,
       });
 
       // Aceite dos termos: é aqui que a pessoa entra no serviço (LGPD).

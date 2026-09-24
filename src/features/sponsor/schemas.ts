@@ -26,6 +26,8 @@ export const sponsorSignupSchema = z
     displayName: z.string().trim().min(2, "Informe o nome").max(120),
     document: z.string().trim().transform(onlyDigits),
     phone: phoneSchema,
+    /** Se o patrocínio aparece na vitrine pública da igreja. Padrão: aparece. */
+    visibleOnPage: z.boolean(),
   })
   .superRefine((value, ctx) => {
     if (!isValidDocumentFor(value.kind, value.document)) {

@@ -1,20 +1,15 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Building2, User } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TermsCheckboxes } from "@/features/terms/components/terms-checkboxes";
+import { DEFAULT_SPONSOR_KIND, SPONSOR_KIND_OPTIONS } from "@/features/sponsor/sponsorKindOptions";
 import { cn } from "@/lib/utils";
 import { startPublicSponsorshipAction } from "@/server/actions/sponsor";
 import type { SponsorKind } from "@/types/sponsorship";
-
-const KIND_OPTIONS: Array<{ value: SponsorKind; label: string; hint: string; icon: typeof User }> = [
-  { value: "person", label: "Pessoa", hint: "Apoio em meu nome, com CPF", icon: User },
-  { value: "business", label: "Empresa", hint: "Apoio de um negócio, com CNPJ", icon: Building2 },
-];
 
 /**
  * Formulário do patrocinador novo, na página pública. Pede o mínimo que o
@@ -29,7 +24,9 @@ export function PublicSponsorshipForm({
   priceLabel: string;
 }) {
   const [state, formAction, pending] = useActionState(startPublicSponsorshipAction, undefined);
-  const [kind, setKind] = useState<SponsorKind>("person");
+  const [kind, setKind] = useState<SponsorKind>(
+    (state?.values?.kind as SponsorKind) || DEFAULT_SPONSOR_KIND,
+  );
   const isBusiness = kind === "business";
 
   return (
@@ -50,7 +47,7 @@ export function PublicSponsorshipForm({
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Quem vai patrocinar?</legend>
         <div className="grid grid-cols-2 gap-3">
-          {KIND_OPTIONS.map(({ value, label, hint, icon: Icon }) => (
+          {SPONSOR_KIND_OPTIONS.map(({ value, label, hint, icon: Icon }) => (
             <label
               key={value}
               className={cn(
@@ -78,15 +75,48 @@ export function PublicSponsorshipForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="displayName">{isBusiness ? "Nome do negócio" : "Seu nome"}</Label>
-        <Input id="displayName" name="displayName" minLength={2} maxLength={120} required />
+        <Input
+          id="displayName"
+          name="displayName"
+          minLength={2}
+          maxLength={120}
+          defaultValue={state?.values?.displayName}
+          required
+        />
         <p className="text-xs text-muted-foreground">
-          É o nome que aparece na página da igreja.
+          É o nome que vai aparecer na página da igreja que você apoia — não precisa ser igual ao
+          do CPF/CNPJ.
         </p>
       </div>
 
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="visibleOnPage"
+          defaultChecked={
+            state?.values ? state.values.visibleOnPage === "on" : true
+          }
+          className="mt-0.5 size-4 accent-primary"
+        />
+        <span>
+          Aparecer na página da igreja
+          <span className="block text-xs text-muted-foreground">
+            Desmarcado, seu patrocínio vale do mesmo jeito — só não aparece na vitrine pública.
+            Você pode mudar isso depois, no seu painel.
+          </span>
+        </span>
+      </label>
+
       <div className="flex flex-col gap-2">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          defaultValue={state?.values?.email}
+          required
+        />
         <p className="text-xs text-muted-foreground">
           Para onde vão a fatura e o link de acesso ao seu painel.
         </p>
@@ -100,6 +130,7 @@ export function PublicSponsorshipForm({
           inputMode="numeric"
           autoComplete="off"
           placeholder={isBusiness ? "00.000.000/0000-00" : "000.000.000-00"}
+          defaultValue={state?.values?.document}
           required
         />
         <p className="text-xs text-muted-foreground">
@@ -109,7 +140,14 @@ export function PublicSponsorshipForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="phone">Celular (opcional)</Label>
-        <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" />
+        <Input
+          id="phone"
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          defaultValue={state?.values?.phone}
+        />
       </div>
 
       <TermsCheckboxes audience="patrocinador" />

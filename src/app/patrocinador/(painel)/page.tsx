@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, CircleDollarSign, Church, HandHeart, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CircleDollarSign,
+  Church,
+  HandHeart,
+  ImagePlus,
+  RefreshCw,
+} from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -8,6 +16,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDueDate } from "@/features/sponsor/components/status-badges";
 import { getSponsorService } from "@/server/sponsor";
+import { getSponsorProfileService } from "@/server/sponsorProfile";
 import { formatCents } from "@/services/sponsorPricing";
 
 export const metadata: Metadata = { title: "Painel do patrocinador" };
@@ -20,10 +29,18 @@ const PAYMENT_STATE = {
 
 export default async function SponsorHomePage() {
   const service = await getSponsorService();
-  const [overview, tiers] = await Promise.all([service.getOverview(), service.getPriceTable()]);
+  const [overview, tiers, profile] = await Promise.all([
+    service.getOverview(),
+    service.getPriceTable(),
+    (await getSponsorProfileService()).getMyProfile(),
+  ]);
   const { account } = overview;
   const payment = PAYMENT_STATE[overview.paymentState];
   const lastTier = tiers[tiers.length - 1];
+  // Sem logo aprovado nem um enviado esperando conferência: ainda não fez
+  // nada — vale chamar atenção. Já tendo um dos dois, o aviso só repetiria
+  // o que a pessoa já sabe.
+  const semLogo = !account.logo_url && !profile.pending?.novo_logo_path;
 
   return (
     <div className="flex flex-col gap-6">
@@ -61,6 +78,18 @@ export default async function SponsorHomePage() {
           <AlertDescription>
             Estamos atualizando o valor da sua assinatura no meio de pagamento. O total abaixo já é o
             que vale para a próxima cobrança.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {semLogo ? (
+        <Alert>
+          <ImagePlus className="size-4" />
+          <AlertDescription className="flex flex-wrap items-center gap-3">
+            <span>Você ainda não enviou uma logo. Com ela, seu apoio aparece com identidade visual nas páginas das igrejas.</span>
+            <Link href="/patrocinador/perfil" className={buttonVariants({ size: "sm", variant: "outline" })}>
+              Enviar logo
+            </Link>
           </AlertDescription>
         </Alert>
       ) : null}

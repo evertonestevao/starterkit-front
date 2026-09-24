@@ -41,6 +41,7 @@ export interface SponsorProfileRepository {
   }): Promise<string>;
   cancelByToken(tokenHash: string): Promise<boolean>;
   updatePhone(phone: string | null): Promise<void>;
+  updateVisibility(visible: boolean): Promise<void>;
 }
 
 /** Arquivo cru vindo do formulário, antes de qualquer confiança. */
@@ -228,6 +229,15 @@ export function createSponsorProfileService({
       if (!parsed.success) throw toValidationError(parsed.error.issues);
       await requireAccount();
       await repo.updatePhone(parsed.data);
+    },
+
+    /**
+     * Liga/desliga a própria vitrine. Não é conteúdo (não dá pra desfigurar
+     * nada), então salva direto — igual ao telefone, sem moderação.
+     */
+    async updateVisibility(visible: boolean): Promise<void> {
+      await requireAccount();
+      await repo.updateVisibility(visible);
     },
 
     /**

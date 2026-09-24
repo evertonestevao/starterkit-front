@@ -147,6 +147,7 @@ function makeWorld(
         phone: input.phone,
         document: input.document,
         logo_url: null,
+        visible_on_page: true,
         link_tipo: null,
         link_valor: null,
         gateway: null,
@@ -365,6 +366,7 @@ function makeWorld(
         phone: input.phone,
         document: input.document,
         logo_url: null,
+        visible_on_page: true,
         link_tipo: null,
         link_valor: null,
         gateway: null,
@@ -478,7 +480,13 @@ function makeWorld(
 
 async function signUp(world: ReturnType<typeof makeWorld>) {
   await world.service.createAccount(
-    { kind: "person", displayName: "Maria Souza", document: "529.982.247-25", phone: "(11) 98888-7777" },
+    {
+      kind: "person",
+      displayName: "Maria Souza",
+      document: "529.982.247-25",
+      phone: "(11) 98888-7777",
+      visibleOnPage: true,
+    },
     USER,
   );
 }
@@ -501,7 +509,13 @@ describe("cadastro", () => {
     const world = makeWorld();
     await expect(
       world.service.createAccount(
-        { kind: "business", displayName: "Padaria", document: "52998224725", phone: "" },
+        {
+          kind: "business",
+          displayName: "Padaria",
+          document: "52998224725",
+          phone: "",
+          visibleOnPage: true,
+        },
         USER,
       ),
     ).rejects.toThrow(/CNPJ inválido/);
@@ -846,6 +860,7 @@ describe("assinatura pública (sem login)", () => {
     document: "529.982.247-25",
     phone: "(14) 99999-8888",
     email: "maria@exemplo.com",
+    visibleOnPage: true,
     acceptTerms: true as const,
     emailConsent: true,
   };
@@ -943,6 +958,7 @@ describe("login por link (sem senha)", () => {
         document: "529.982.247-25",
         phone: "",
         email: "maria@exemplo.com",
+        visibleOnPage: true,
         acceptTerms: true as const,
         emailConsent: false,
       },
@@ -997,6 +1013,7 @@ describe("vagas de primeiro patrocínio", () => {
     document: "529.982.247-25",
     phone: "(14) 99999-8888",
     email: "maria@exemplo.com",
+    visibleOnPage: true,
     acceptTerms: true as const,
     emailConsent: true,
   };
@@ -1144,6 +1161,7 @@ describe("autopatrocínio: conta com is_self_payment usa valor fixo, não a tabe
     phone: null,
     document: "11144477735",
     logo_url: null,
+    visible_on_page: true,
     link_tipo: null,
     link_valor: null,
     gateway: null,

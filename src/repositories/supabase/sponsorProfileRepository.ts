@@ -98,6 +98,16 @@ export function createSupabaseSponsorProfileRepository(
         throw new AppError("internal_error", "Falha ao salvar o telefone", error);
       }
     },
+
+    async updateVisibility(visible) {
+      const { error } = await client
+        .from("sponsor_accounts")
+        .update({ visible_on_page: visible })
+        .eq("id", await currentAccountId());
+      if (error) {
+        throw new AppError("internal_error", "Falha ao salvar a visibilidade", error);
+      }
+    },
   };
 
   return repo;

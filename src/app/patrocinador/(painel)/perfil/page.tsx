@@ -72,6 +72,7 @@ export default async function SponsorProfilePage() {
               account.link ? sponsorLinkToInput({ tipo: account.link.tipo, valor: account.link.valor }) : ""
             }
             bloqueada={Boolean(account.securityHoldAt)}
+            visibleOnPage={sponsorAccount?.visible_on_page ?? true}
           />
         </CardContent>
       </Card>

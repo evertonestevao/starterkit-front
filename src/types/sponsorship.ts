@@ -30,6 +30,8 @@ export interface SponsorAccount {
   phone: string | null;
   document: string;
   logo_url: string | null;
+  /** Escolha do próprio patrocinador; não passa por moderação (não é conteúdo). */
+  visible_on_page: boolean;
   /** Destino da logo na página pública (site ou WhatsApp). Só a moderação escreve. */
   link_tipo: SponsorLinkKind | null;
   link_valor: string | null;

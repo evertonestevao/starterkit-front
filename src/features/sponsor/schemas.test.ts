@@ -8,6 +8,7 @@ const base = {
   document: "529.982.247-25",
   phone: "(14) 99999-8888",
   email: "  Maria@Exemplo.COM ",
+  visibleOnPage: true,
   acceptTerms: true as const,
   emailConsent: false,
 };
@@ -46,6 +47,7 @@ describe("publicSponsorshipSchema", () => {
         displayName: "Padaria",
         document: "11.222.333/0001-81",
         phone: "",
+        visibleOnPage: true,
       }).success,
     ).toBe(true);
   });

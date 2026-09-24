@@ -90,6 +90,7 @@ export function createSupabaseSponsorRepository(client: SupabaseClient): Sponsor
           email: input.email,
           phone: input.phone,
           document: input.document,
+          visible_on_page: input.visibleOnPage,
         })
         .select("*")
         .single<SponsorAccount>();
@@ -441,6 +442,7 @@ export function createSupabaseSponsorBillingStore(adminClient: SupabaseClient): 
           email: input.email,
           phone: input.phone,
           document: input.document,
+          visible_on_page: input.visibleOnPage,
         })
         .select("*")
         .single<SponsorAccount>();
