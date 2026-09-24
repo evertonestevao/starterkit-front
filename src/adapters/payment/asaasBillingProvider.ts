@@ -115,7 +115,7 @@ export function createAsaasBillingProvider(config: AsaasBillingProviderConfig): 
       // porque só existe no header.
       throw new AppError("payment_error", "O provedor de pagamentos recusou a operação.", {
         status: res.status,
-        errors: data.errors?.map((e) => e.code),
+        errors: data.errors,
       });
     }
     return { status: res.status, data };

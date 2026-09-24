@@ -15,7 +15,16 @@ const nextConfig: NextConfig = {
    * bloco 172.16.0.0/12 exato (também libera 172.0-15 e 172.32-255, que não
    * são roteáveis na prática). Só vale em dev — produção (Vercel) não usa.
    */
-  allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*"],
+  allowedDevOrigins: [
+    "192.168.*.*",
+    "10.*.*.*",
+    "172.*.*.*",
+    // Túnel usado para testar em dev pelo domínio público (webhooks,
+    // celular fora da rede local). Sem isso, o WebSocket do HMR é bloqueado
+    // e o cliente de dev do Next recarrega a página inteira ao tentar
+    // reconectar — o sintoma era a tela reiniciar sozinha ao digitar.
+    "igrejalocal.everapps.com.br",
+  ],
 
   /**
    * A página pública da igreja saiu de /t/<código> para /igreja/<código>: o
