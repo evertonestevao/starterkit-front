@@ -1,4 +1,6 @@
 import type { EmailProvider } from "@/adapters/email/EmailProvider";
+import { describeApproved, LINK_TIPO_LABEL } from "@/lib/churchLinks";
+import type { ChurchLinkTipo } from "@/types/churchLinks";
 import type { CompanyInvite } from "@/types/database";
 import type { InviteNotifier } from "./inviteService";
 
@@ -14,6 +16,15 @@ interface EmailServiceDeps {
   appUrl: string;
 }
 
+/** Texto vindo do usuário indo para dentro de HTML de email. */
+function escapeHtml(texto: string): string {
+  return texto
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function createEmailService({ provider, appUrl }: EmailServiceDeps) {
   const base = appUrl.replace(/\/+$/, "");
 
@@ -22,10 +33,10 @@ export function createEmailService({ provider, appUrl }: EmailServiceDeps) {
       const acceptUrl = `${base}/invites/accept?token=${invite.token}`;
       await provider.send({
         to: invite.email,
-        subject: "Você foi convidado para uma empresa",
+        subject: "Você foi convidado para uma igreja",
         text: `Você recebeu um convite (papel: ${invite.role}). Aceite em: ${acceptUrl}`,
         html: [
-          "<p>Você recebeu um convite para entrar em uma empresa.</p>",
+          "<p>Você recebeu um convite para entrar em uma igreja.</p>",
           `<p>Papel: <strong>${invite.role}</strong></p>`,
           `<p><a href="${acceptUrl}">Aceitar convite</a></p>`,
           "<p>O convite expira em 7 dias. Se você não esperava este email, ignore-o.</p>",
@@ -77,6 +88,7 @@ O link vale por uma única entrada. Se não foi você, ignore este email.`,
       displayNameBefore: string;
       displayNameAfter: string | null;
       logoChanged: boolean;
+      linkChange: { href: string | null } | null;
       undoUrl: string;
     }): Promise<void> {
       const mudancas: string[] = [];
@@ -84,6 +96,15 @@ O link vale por uma única entrada. Se não foi você, ignore este email.`,
         mudancas.push(`Nome: "${input.displayNameBefore}" → "${input.displayNameAfter}"`);
       }
       if (input.logoChanged) mudancas.push("Logo: um novo arquivo foi enviado");
+      // O destino aparece por extenso: é onde o dono da conta percebe um
+      // link que não pôs.
+      if (input.linkChange) {
+        mudancas.push(
+          input.linkChange.href
+            ? `Link da logo: ${input.linkChange.href}`
+            : "Link da logo: removido",
+        );
+      }
 
       await provider.send({
         to: input.to,
@@ -99,7 +120,7 @@ Se não foi você, desfaça agora: ${input.undoUrl}
 Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com o suporte.`,
         html: [
           "<p>Recebemos um pedido para alterar o que aparece nas páginas das igrejas que você apoia:</p>",
-          `<ul>${mudancas.map((m) => `<li>${m}</li>`).join("")}</ul>`,
+          `<ul>${mudancas.map((m) => `<li>${escapeHtml(m)}</li>`).join("")}</ul>`,
           "<p>A alteração passa pela conferência da nossa equipe antes de entrar no ar, então nada mudou ainda.</p>",
           `<p><strong>Se não foi você:</strong> <a href="${input.undoUrl}">desfaça agora</a>.</p>`,
           "<p>Isso cancela o pedido e bloqueia novas alterações na sua conta até você falar com o suporte.</p>",
@@ -188,6 +209,126 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
             subject: input.subject,
             text: input.lines.join("\n\n"),
             html: input.lines.map((line) => `<p>${line}</p>`).join("\n"),
+          }),
+        ),
+      );
+    },
+
+    /**
+     * Pedido de vínculo, para a igreja SUPERIOR: alguém abriu o link dela e quer
+     * entrar na árvore. Nada mudou ainda — ela decide no painel.
+     */
+    async sendChurchLinkRequested(input: {
+      to: string[];
+      parentName: string;
+      childName: string;
+      tipo: ChurchLinkTipo;
+    }): Promise<void> {
+      if (input.to.length === 0) return;
+      const painel = `${base}/dashboard/settings/vinculos`;
+      const posicao = LINK_TIPO_LABEL[input.tipo].toLowerCase();
+      const resumo = `${input.childName} pediu para ser ${posicao} de ${input.parentName}.`;
+      const explicacao = "Nada mudou ainda: a igreja só entra na sua rede se você aprovar, e você pode ajustar a função ou recusar.";
+
+      await Promise.all(
+        input.to.map((to) =>
+          provider.send({
+            to,
+            subject: "Pedido de vínculo para a sua igreja",
+            text: `${resumo}\n\n${explicacao}\n\nVeja o pedido e responda no painel: ${painel}`,
+            html: [
+              `<p>${escapeHtml(resumo)}</p>`,
+              `<p>${escapeHtml(explicacao)}</p>`,
+              `<p><a href="${painel}">Ver o pedido no painel</a></p>`,
+            ].join("\n"),
+          }),
+        ),
+      );
+    },
+
+    /** Decisão da superior sobre o pedido, para a igreja que pediu. */
+    async sendChurchLinkDecided(input: {
+      to: string[];
+      approved: boolean;
+      parentName: string;
+      childName: string;
+      tipo: ChurchLinkTipo;
+      motivo: string | null;
+    }): Promise<void> {
+      if (input.to.length === 0) return;
+      const painel = `${base}/dashboard/settings/vinculos`;
+      const resumo = input.approved
+        ? describeApproved({ parentName: input.parentName, childName: input.childName, tipo: input.tipo })
+        : `${input.parentName} não aprovou o pedido de vínculo de ${input.childName}.`;
+      const motivo = !input.approved && input.motivo ? `Motivo informado: ${input.motivo}` : null;
+
+      await Promise.all(
+        input.to.map((to) =>
+          provider.send({
+            to,
+            subject: input.approved ? "Vínculo entre igrejas aprovado" : "Pedido de vínculo não aprovado",
+            text: [resumo, motivo, `Veja no painel: ${painel}`].filter(Boolean).join("\n\n"),
+            html: [
+              `<p>${escapeHtml(resumo)}</p>`,
+              motivo ? `<p>${escapeHtml(motivo)}</p>` : "",
+              `<p><a href="${painel}">Abrir vínculos no painel</a></p>`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          }),
+        ),
+      );
+    },
+
+    /** A superior mudou a posição da igreja na árvore: ela passa a ser vista por outro pastor. */
+    async sendChurchLinkMoved(input: {
+      to: string[];
+      parentName: string;
+      childName: string;
+      tipo: ChurchLinkTipo;
+    }): Promise<void> {
+      if (input.to.length === 0) return;
+      const painel = `${base}/dashboard/settings/vinculos`;
+      const resumo = `A função de ${input.childName} na rede mudou: ${describeApproved({
+        parentName: input.parentName,
+        childName: input.childName,
+        tipo: input.tipo,
+      })}`;
+      const aviso = "A igreja-mãe dela passa a ver a contagem de pedidos de oração e de visitas. Você pode desfazer o vínculo quando quiser.";
+
+      await Promise.all(
+        input.to.map((to) =>
+          provider.send({
+            to,
+            subject: "A função da sua igreja na rede mudou",
+            text: `${resumo}\n\n${aviso}\n\nVeja no painel: ${painel}`,
+            html: [
+              `<p>${escapeHtml(resumo)}</p>`,
+              `<p>${escapeHtml(aviso)}</p>`,
+              `<p><a href="${painel}">Abrir vínculos no painel</a></p>`,
+            ].join("\n"),
+          }),
+        ),
+      );
+    },
+
+    /** Um dos lados desfez o vínculo: o outro precisa saber. */
+    async sendChurchLinkEnded(input: {
+      to: string[];
+      endedByName: string;
+      otherName: string;
+    }): Promise<void> {
+      if (input.to.length === 0) return;
+      const painel = `${base}/dashboard/settings/vinculos`;
+      const resumo = `${input.endedByName} desfez o vínculo com ${input.otherName}. A igreja voltou a ser independente.`;
+
+      await Promise.all(
+        input.to.map((to) =>
+          provider.send({
+            to,
+            subject: "Vínculo entre igrejas desfeito",
+            text: `${resumo}\n\nVeja no painel: ${painel}`,
+            html: `<p>${escapeHtml(resumo)}</p>\n<p><a href="${painel}">Abrir vínculos no painel</a></p>`,
           }),
         ),
       );

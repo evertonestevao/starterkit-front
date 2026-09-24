@@ -23,6 +23,7 @@ import {
 /** Rotas que exigem usuário logado. */
 const PROTECTED_PREFIXES = [
   "/dashboard",
+  "/vinculo",
   "/onboarding",
   "/invites",
   "/reset-password",

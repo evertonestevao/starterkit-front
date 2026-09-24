@@ -19,8 +19,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { createSupabaseBillingRepository } from "@/repositories/supabase/billingRepository";
+import { ChurchLinkNotices } from "@/features/church/components/church-link-notices";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
+import { getChurchLinkService } from "@/server/churchLinks";
 import { createMemoryRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant, getTenantService } from "@/server/tenant";
@@ -37,7 +38,8 @@ export default async function DashboardPage() {
   const tenant = await getTenantService();
   const isAdmin = permissionService.canManageMembers(active.role);
 
-  const [members, pendingInvites] = await Promise.all([
+  const { data: auth } = await client.auth.getUser();
+  const [members, pendingInvites, linkNotices] = await Promise.all([
     // pageSize mínimo: aqui só o total interessa (métrica), não as linhas.
     tenant.listMembers(active.id, { page: 1, pageSize: 1 }),
     isAdmin
@@ -49,6 +51,15 @@ export default async function DashboardPage() {
           }),
         }).listPending(active.id)
       : Promise.resolve([]),
+    // Respostas a convites de vínculo entre igrejas; falhar aqui não derruba o painel.
+    auth.user
+      ? getChurchLinkService()
+          .then((service) => service.listNotices({ companyId: active.id, role: active.role, userId: auth.user.id }))
+          .catch((err: unknown) => {
+            console.error("[dashboard] falha ao carregar avisos de vínculo", err);
+            return [];
+          })
+      : Promise.resolve([]),
   ]);
 
   const roleLabel = { owner: "Owner", admin: "Admin", member: "Member" }[
@@ -57,6 +68,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <ChurchLinkNotices notices={linkNotices} />
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-medium text-primary">Bom ter você aqui</p>

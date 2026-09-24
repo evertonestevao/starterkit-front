@@ -47,7 +47,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function createCommunityService(repo: CommunityRepository) {
   function requireCompany(companyId: string): string {
     if (!companyId) {
-      throw new AppError("unauthorized", "Selecione uma empresa para continuar.");
+      throw new AppError("unauthorized", "Selecione uma igreja para continuar.");
     }
     return companyId;
   }

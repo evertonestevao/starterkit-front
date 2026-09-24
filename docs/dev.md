@@ -27,7 +27,7 @@ vai para produção.
 
 | Conta | Papel | Para quê |
 | --- | --- | --- |
-| `pastor.sede@dev.local` | owner da sede | Vê a árvore inteira: contagem de pedidos de oração e visitantes de todas as igrejas abaixo |
+| `pastor.sede@dev.local` | owner da sede | Vê a árvore inteira: contagem de pedidos de oração e visitantes de todas as igrejas ligadas |
 | `pastor.zonanorte@dev.local` | owner de subsede | Vê a subsede e as 4 congregações dela; não vê as outras subsedes |
 | `pastor.zonanorte.vilanova@dev.local` | owner de congregação | Vê só a própria igreja |
 | `auxiliar.zonanorte@dev.local` | member de subsede | Não lê pedido de oração nem patrocinador, e não troca a chave PIX |
@@ -66,6 +66,12 @@ propósito, para exercitar a página sem dízimo configurado.
 - `/dashboard/settings/pix` — chave PIX dos dízimos
 - `/dashboard/settings/recebimento` — cadastro opcional da subconta e o cartão
 - `/plataforma` — moderação (entre com `plataforma@dev.local`)
+- `/dashboard/settings/vinculos` — vínculo entre igrejas (a "rede"): a igreja-mãe gera um link (a validade — 7, 15,
+  30 dias ou sem validade — e o número de pedidos — de 1 a 1000 ou sem limite — são escolhidos na hora, sem
+  padrão), decide os pedidos, muda a função de quem está ligada a ela e desfaz vínculos
+- `/vinculo/<token>` — página de quem recebe o link: lê como funciona e pede o vínculo (ou não). O link não liga
+  nada: a rede só muda quando a igreja-mãe aprova o pedido. Exige login; quem não tem conta cria a conta e a igreja
+  por ali e volta ao link
 
 ## Recebimento por cartão (opcional)
 

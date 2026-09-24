@@ -6,7 +6,7 @@ import { PaginationControls } from "@/components/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarkPrayerRequestsSeen } from "@/features/church/components/mark-prayer-requests-seen";
-import { getCommunityService, getPrayerCountsTree } from "@/server/community";
+import { getCommunityService } from "@/server/community";
 import { getActiveTenant } from "@/server/tenant";
 
 export const metadata: Metadata = { title: "Pedidos de oração" };
@@ -46,12 +46,11 @@ export default async function PrayersPage({
 
   const { page } = await searchParams;
   const community = await getCommunityService();
-  const [requests, counts, contagens, seenAt] = await Promise.all([
+  // Pedido de oração é só da igreja que recebeu, mesmo para quem administra
+  // uma igreja acima dela na rede: nem a contagem é mostrada fora daqui.
+  const [requests, counts, seenAt] = await Promise.all([
     community.listPrayerRequests(active.id, { page: Number(page) || 1 }),
     community.getCounts(active.id),
-    // Contagem das igrejas ABAIXO desta na árvore: quem lidera acima sabe
-    // quantos pedidos cada congregação recebeu, e nunca o que dizem.
-    getPrayerCountsTree(30).catch(() => []),
     // Buscado ANTES de marcar como visto: o selo "Novo" usa o que já estava
     // gravado quando a página carregou, não o valor que está prestes a virar.
     community.getPrayerSeenAt(active.id).catch(() => null),
@@ -98,27 +97,6 @@ export default async function PrayersPage({
           hint={`de ${requests.total}`}
         />
       </div>
-
-      {/* Com mais de uma igreja na árvore, vale mostrar a divisão. Com uma
-          só, o número já está nos cartões acima. */}
-      {contagens.length > 1 ? (
-        <Card>
-          <CardContent className="flex flex-col gap-2">
-            <p className="text-sm font-medium">Pedidos por igreja da sua árvore (30 dias)</p>
-            <p className="text-xs text-muted-foreground">
-              Só a quantidade. O que foi escrito fica com a igreja que recebeu.
-            </p>
-            <ul className="mt-1 flex flex-col gap-1.5">
-              {contagens.map((c) => (
-                <li key={c.churchId} className="flex justify-between gap-4 text-sm">
-                  <span className="min-w-0 truncate">{c.churchName}</span>
-                  <span className="font-medium tabular-nums">{c.total}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      ) : null}
 
       {requests.items.length === 0 ? (
         <EmptyState

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { brand } from "@/config/brand";
 import { CreateCompanyForm } from "@/features/companies/components/create-company-form";
+import { safeChurchLinkPath } from "@/lib/churchLinks";
 import { isPlatformStaff } from "@/server/platform";
 import { getActiveTenant } from "@/server/tenant";
 import { getTermsService } from "@/server/terms";
@@ -20,10 +21,16 @@ export const metadata: Metadata = { title: "Criar igreja" };
  * Onboarding: caminho crítico signup → aceitar termos → criar empresa →
  * virar owner. Quem já tem empresa não passa por aqui.
  */
-export default async function OnboardingPage() {
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  // Quem chegou por um link de vínculo volta a ele depois de cadastrar a igreja.
+  const next = safeChurchLinkPath((await searchParams).next);
   const { companies } = await getActiveTenant();
   if (companies.length > 0) {
-    redirect("/dashboard");
+    redirect(next ?? "/dashboard");
   }
 
   // Quem modera a plataforma não é uma igreja sem cadastro. O cadastro público
@@ -51,7 +58,7 @@ export default async function OnboardingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CreateCompanyForm requireTerms={requireTerms} />
+          <CreateCompanyForm requireTerms={requireTerms} next={next ?? undefined} />
         </CardContent>
       </Card>
     </div>

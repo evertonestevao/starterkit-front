@@ -1,0 +1,91 @@
+import { formatChurchName } from "@/lib/churchName";
+import { normalizeSearch } from "@/lib/search";
+import type { ChurchLinkNode } from "@/types/churchLinks";
+
+/**
+ * A rede de uma igreja para ser lida de relance, sem I/O: cada igreja ligada
+ * diretamente, com as congregações que ela mesma tem. Com 100 subsedes de 3
+ * congregações cada, a tela precisa de contagem, busca e ordenação — não de um
+ * desenho com 400 caixas.
+ */
+
+export interface NetworkEntry {
+  church: ChurchLinkNode;
+  /** Congregações ligadas a esta igreja (só uma subsede tem). */
+  congregacoes: ChurchLinkNode[];
+}
+
+export type NetworkSort = "nome" | "congregacoes";
+
+/** Uma linha por igreja ligada diretamente, na ordem em que vieram (já por nome). */
+export function buildNetwork(
+  children: ChurchLinkNode[],
+  congregacoesPorIgreja: Record<string, ChurchLinkNode[]>,
+): NetworkEntry[] {
+  return children.map((church) => ({ church, congregacoes: congregacoesPorIgreja[church.id] ?? [] }));
+}
+
+function plural(n: number, singular: string, pluralForm: string): string {
+  return `${n} ${n === 1 ? singular : pluralForm}`;
+}
+
+/** "3 congregações", "1 congregação" ou "Sem congregações": o texto da badge da subsede. */
+export function describeCongregations(n: number): string {
+  return n === 0 ? "Sem congregações" : plural(n, "congregação", "congregações");
+}
+
+/** Totais da rede: as subsedes, e todas as congregações (as ligadas direto e as de cada subsede). */
+export function summarizeNetwork(entries: NetworkEntry[]): { subsedes: number; congregacoes: number; text: string } {
+  let subsedes = 0;
+  let congregacoes = 0;
+  for (const { church, congregacoes: filhas } of entries) {
+    if (church.tipo === "subsede") subsedes += 1;
+    else congregacoes += 1;
+    congregacoes += filhas.length;
+  }
+  const partes: string[] = [];
+  if (subsedes > 0) partes.push(plural(subsedes, "subsede", "subsedes"));
+  if (congregacoes > 0) partes.push(plural(congregacoes, "congregação", "congregações"));
+  return { subsedes, congregacoes, text: partes.join(" · ") };
+}
+
+function matches(church: ChurchLinkNode, query: string): boolean {
+  return normalizeSearch(formatChurchName(church.name, church.sobrenome)).includes(query);
+}
+
+export interface NetworkMatch {
+  entry: NetworkEntry;
+  /** Congregações que bateram com a busca (quando o nome da própria igreja não bateu). */
+  nested: ChurchLinkNode[];
+}
+
+/** Busca pelo nome da igreja ou de qualquer congregação dela. Busca vazia devolve tudo. */
+export function filterNetwork(entries: NetworkEntry[], rawQuery: string): NetworkMatch[] {
+  const query = normalizeSearch(rawQuery);
+  if (query === "") return entries.map((entry) => ({ entry, nested: [] }));
+
+  const result: NetworkMatch[] = [];
+  for (const entry of entries) {
+    if (matches(entry.church, query)) {
+      result.push({ entry, nested: [] });
+      continue;
+    }
+    const nested = entry.congregacoes.filter((c) => matches(c, query));
+    if (nested.length > 0) result.push({ entry, nested });
+  }
+  return result;
+}
+
+/** Por nome (o padrão) ou pelas que têm mais congregações primeiro, desempatando por nome. */
+export function sortNetwork(matches: NetworkMatch[], sort: NetworkSort): NetworkMatch[] {
+  const porNome = (a: NetworkMatch, b: NetworkMatch) =>
+    formatChurchName(a.entry.church.name, a.entry.church.sobrenome).localeCompare(
+      formatChurchName(b.entry.church.name, b.entry.church.sobrenome),
+      "pt-BR",
+    );
+  return [...matches].sort(
+    sort === "congregacoes"
+      ? (a, b) => b.entry.congregacoes.length - a.entry.congregacoes.length || porNome(a, b)
+      : porNome,
+  );
+}

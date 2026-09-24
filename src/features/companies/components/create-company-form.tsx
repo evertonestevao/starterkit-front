@@ -1,30 +1,30 @@
 "use client";
 
 import { useActionState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TermsCheckboxes } from "@/features/terms/components/terms-checkboxes";
+import { useActionToast } from "@/hooks/useActionToast";
 import { createCompanyAction } from "@/server/actions/tenant";
 
 export function CreateCompanyForm({
   requireTerms = false,
+  next,
 }: {
   requireTerms?: boolean;
+  /** Para onde voltar depois de criar a igreja (só um link de vínculo; o servidor confere). */
+  next?: string;
 }) {
   const [state, formAction, pending] = useActionState(
     createCompanyAction,
     undefined,
   );
+  useActionToast(state);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <div className="flex flex-col gap-2">
         <Label htmlFor="name">Nome da igreja</Label>
         <Input

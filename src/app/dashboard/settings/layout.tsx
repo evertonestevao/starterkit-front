@@ -21,6 +21,7 @@ export default async function SettingsLayout({
   // service e na RLS, que recusam member mesmo com a URL na mão.
   if (active && permissionService.canEditCompany(active.role)) {
     tabs.push({ href: "/dashboard/settings/igreja", label: "Página da igreja" });
+    tabs.push({ href: "/dashboard/settings/vinculos", label: "Vínculos" });
     tabs.push({ href: "/dashboard/settings/domain", label: "Domínio próprio" });
     tabs.push({ href: "/dashboard/settings/pix", label: "Dízimos (PIX)" });
     tabs.push({ href: "/dashboard/settings/recebimento", label: "Cartão" });
@@ -31,7 +32,7 @@ export default async function SettingsLayout({
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Configurações</h2>
         <p className="text-sm text-muted-foreground">
-          Seu perfil, a empresa ativa e o endereço público da igreja
+          Seu perfil, a igreja ativa e o endereço público dela
         </p>
       </div>
 
