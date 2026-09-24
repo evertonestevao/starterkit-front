@@ -108,8 +108,11 @@ export function getReceivingProvider(name?: string | null): ReceivingProvider {
     case "asaas":
       return createAsaasReceivingProvider({
         // A chave da conta-MÃE: é ela que abre subcontas. As cobranças, essas,
-        // nascem com a chave da subconta da igreja.
-        apiKey: requireServerEnv("ASAAS_API_KEY"),
+        // nascem com a chave da subconta da igreja. O Asaas só deixa conta
+        // pessoa jurídica (CNPJ) abrir subconta — ASAAS_RECEIVING_API_KEY
+        // existe para quando essa conta precisa ser diferente da usada no
+        // patrocínio (ASAAS_API_KEY); sem ela, cai na mesma.
+        apiKey: env.ASAAS_RECEIVING_API_KEY ?? requireServerEnv("ASAAS_API_KEY"),
         baseUrl: env.ASAAS_API_URL,
       });
     case "fake":

@@ -67,6 +67,14 @@ const serverEnvSchema = z.object({
    */
   RECEIVING_PROVIDER: z.enum(["asaas", "fake"]).default("fake"),
   /**
+   * Chave da conta-MÃE que abre as subcontas das igrejas. Só existe porque o
+   * Asaas exige conta pessoa jurídica (CNPJ) para criar subconta — e a conta
+   * sandbox já usada em ASAAS_API_KEY (patrocínio) pode ser pessoa física.
+   * Em produção, se a conta da plataforma já for CNPJ, pode apontar as duas
+   * para a mesma chave; sem esta variável, cai em ASAAS_API_KEY.
+   */
+  ASAAS_RECEIVING_API_KEY: z.string().min(1).optional(),
+  /**
    * Chave de 32 bytes (64 hex ou 44 base64) que cifra a chave de API de cada
    * subconta. Perder esta chave é perder o acesso às subcontas; trocá-la
    * exige recifrar todas.
