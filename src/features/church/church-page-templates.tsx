@@ -559,33 +559,38 @@ export function ChurchPageRenderer({
 
       {/* Quem sustenta a página, logo abaixo dos atalhos. Sem caixa em volta:
           é uma faixa leve de "quem apoia", não mais um card — dentro de uma
-          faixa que já é um bloco, a borda virava card dentro de card. */}
-      <section id="apoio" className="border-t border-[var(--pg-border)] bg-[var(--pg-bg)]">
-        <div className="mx-auto w-full max-w-xl px-5 py-10 text-center">
-          <h2 className="text-xs font-semibold tracking-[0.14em] text-[var(--pg-muted)] uppercase">
-            Quem apoia esta página
-          </h2>
-          {sponsors.length > 0 ? (
-            <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-left sm:flex sm:flex-wrap sm:justify-center sm:gap-x-6 sm:gap-y-4">
-              {sponsors.map((sponsor) => (
-                <li key={sponsor.id}>
-                  <SponsorBadge sponsor={sponsor} />
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <p className="mx-auto mt-5 max-w-sm text-sm leading-6 text-[var(--pg-muted)]">
-            Negócios e pessoas da comunidade mantêm esta página no ar, sem custo para a igreja.{" "}
-            <a
-              href={sponsorshipPath(church.public_code)}
-              className="inline-flex items-center gap-1 font-semibold whitespace-nowrap text-[var(--pg-accent)]"
-            >
-              Quero apoiar
-              <ArrowRight className="size-3.5" aria-hidden />
-            </a>
-          </p>
-        </div>
-      </section>
+          faixa que já é um bloco, a borda virava card dentro de card.
+          A igreja pode fechar a porta pra patrocinador (Configurações):
+          sem `aceita_patrocinio`, o espaço nem existe aqui — não é uma
+          lista vazia, a seção some por inteiro. */}
+      {church.aceita_patrocinio ? (
+        <section id="apoio" className="border-t border-[var(--pg-border)] bg-[var(--pg-bg)]">
+          <div className="mx-auto w-full max-w-xl px-5 py-10 text-center">
+            <h2 className="text-xs font-semibold tracking-[0.14em] text-[var(--pg-muted)] uppercase">
+              Quem apoia esta página
+            </h2>
+            {sponsors.length > 0 ? (
+              <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-left sm:flex sm:flex-wrap sm:justify-center sm:gap-x-6 sm:gap-y-4">
+                {sponsors.map((sponsor) => (
+                  <li key={sponsor.id}>
+                    <SponsorBadge sponsor={sponsor} />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <p className="mx-auto mt-5 max-w-sm text-sm leading-6 text-[var(--pg-muted)]">
+              Negócios e pessoas da comunidade mantêm esta página no ar, sem custo para a igreja.{" "}
+              <a
+                href={sponsorshipPath(church.public_code)}
+                className="inline-flex items-center gap-1 font-semibold whitespace-nowrap text-[var(--pg-accent)]"
+              >
+                Quero apoiar
+                <ArrowRight className="size-3.5" aria-hidden />
+              </a>
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {secoes.map((s, i) => (
         <Faixa key={s.id} id={s.id} alternada={i % 2 === 0}>

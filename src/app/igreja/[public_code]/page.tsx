@@ -28,10 +28,13 @@ export default async function PublicChurchPage({
   // Nenhuma das duas listas pode derrubar a página da igreja: vazia é melhor
   // do que tela de erro para quem veio pelo QR Code.
   const [sponsors, eventos, campanhas, programacao, linkCartao] = await Promise.all([
-    repo.listPublicSponsors(church.id).catch((err: unknown) => {
-      console.error("[church-page] falha ao carregar patrocinadores", err);
-      return [];
-    }),
+    // Porta fechada pra patrocinador: nem consulta — a seção nem aparece.
+    !church.aceita_patrocinio
+      ? Promise.resolve([])
+      : repo.listPublicSponsors(church.id).catch((err: unknown) => {
+          console.error("[church-page] falha ao carregar patrocinadores", err);
+          return [];
+        }),
     repo.listUpcomingEvents(church.id, EVENTOS_NA_PREVIA).catch((err: unknown) => {
       console.error("[church-page] falha ao carregar eventos", err);
       return [];

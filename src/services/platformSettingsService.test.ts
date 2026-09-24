@@ -11,6 +11,7 @@ const ATUAL: PlatformSettings = {
   vagasSubsede: null,
   vagasCongregacao: null,
   carenciaMarcaDias: 15,
+  autopatrocinioAmountCents: 3990,
   updatedAt: "2026-09-20T12:00:00Z",
 };
 
@@ -18,6 +19,7 @@ function build() {
   const repo: PlatformSettingsRepository = {
     get: vi.fn(async () => ATUAL),
     update: vi.fn(async () => ATUAL),
+    updateAutopatrocinioAmount: vi.fn(async (cents: number) => cents),
   };
   return { repo, service: createPlatformSettingsService(repo) };
 }
@@ -83,5 +85,22 @@ describe("update", () => {
       expect(isAppError(err) && err.code).toBe("validation_error");
     }
     expect(repo.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateAutopatrocinioAmount", () => {
+  it("converte o texto em reais para centavos", async () => {
+    const { repo, service } = build();
+    await service.updateAutopatrocinioAmount("49,90");
+    expect(repo.updateAutopatrocinioAmount).toHaveBeenCalledWith(4990);
+  });
+
+  it("recusa valor zero, negativo ou ilegível", async () => {
+    const { repo, service } = build();
+    for (const ruim of ["0", "-5", "abc", ""]) {
+      const err = await erroDe(service.updateAutopatrocinioAmount(ruim));
+      expect(isAppError(err) && err.code).toBe("validation_error");
+    }
+    expect(repo.updateAutopatrocinioAmount).not.toHaveBeenCalled();
   });
 });

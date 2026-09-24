@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { toValidationError } from "@/lib/errors";
+import { toValidationError, AppError } from "@/lib/errors";
+import { parseBrlToCents } from "@/lib/churchEvents";
 import type { PlatformSettings } from "@/types/platform";
 
 /**
@@ -20,6 +21,8 @@ export interface PlatformSettingsRepository {
     vagasCongregacao: number | null;
     carenciaMarcaDias: number;
   }): Promise<PlatformSettings>;
+  /** RPC própria (não mistura com `update`): não muda a assinatura de uma função já publicada. */
+  updateAutopatrocinioAmount(amountCents: number): Promise<number>;
 }
 
 /** "" ou ausente = ilimitado (null). Senão, inteiro >= 0. */
@@ -52,6 +55,15 @@ export function createPlatformSettingsService(repo: PlatformSettingsRepository) 
       const parsed = platformSettingsSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
       return repo.update(parsed.data);
+    },
+
+    /** `raw` é texto de formulário ("39,90"), igual ao preço por posição. */
+    async updateAutopatrocinioAmount(raw: string): Promise<number> {
+      const cents = parseBrlToCents(raw);
+      if (cents === null || cents <= 0) {
+        throw new AppError("validation_error", "O valor precisa ser maior que zero.");
+      }
+      return repo.updateAutopatrocinioAmount(cents);
     },
   };
 }

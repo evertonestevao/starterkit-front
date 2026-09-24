@@ -5,12 +5,17 @@ import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
 import { createSupabaseChurchHierarchyRepository } from "@/repositories/supabase/churchHierarchyRepository";
 import { createSupabasePlatformModerationRepository } from "@/repositories/supabase/platformModerationRepository";
+import { createSupabasePlatformPricingRepository } from "@/repositories/supabase/platformPricingRepository";
 import { createSupabasePlatformSettingsRepository } from "@/repositories/supabase/platformSettingsRepository";
 import {
   createChurchHierarchyService,
   type ChurchHierarchyService,
 } from "@/services/churchHierarchyService";
 import { createEmailService } from "@/services/emailService";
+import {
+  createPlatformPricingService,
+  type PlatformPricingService,
+} from "@/services/platformPricingService";
 import {
   createPlatformSettingsService,
   type PlatformSettingsService,
@@ -91,4 +96,10 @@ export async function getChurchHierarchyService(): Promise<ChurchHierarchyServic
 export async function getPlatformSettingsService(): Promise<PlatformSettingsService> {
   const client = await getSupabaseServerClient();
   return createPlatformSettingsService(createSupabasePlatformSettingsRepository(client));
+}
+
+/** Tabela de preço do patrocínio, por posição. */
+export async function getPlatformPricingService(): Promise<PlatformPricingService> {
+  const client = await getSupabaseServerClient();
+  return createPlatformPricingService(createSupabasePlatformPricingRepository(client));
 }

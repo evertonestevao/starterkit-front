@@ -220,6 +220,8 @@ export interface SponsorServiceDeps {
   defaultProviderName: () => string;
   /** URL pública da app, usada nos retornos do provedor de pagamento. */
   appUrl: string;
+  /** Só necessária se alguma conta puder ser de autopatrocínio (ver resolveTiersFor). */
+  getAutopatrocinioAmountCents?: () => Promise<number>;
   audit?: (entry: SponsorAuditEntry) => Promise<void>;
   /** Só o fluxo público precisa; ausente = página pública desabilitada. */
   identity?: SponsorIdentityProvider;
@@ -256,6 +258,21 @@ export function createSponsorService(deps: SponsorServiceDeps) {
     return account;
   }
 
+  /**
+   * Preço de uma conta de autopatrocínio: sempre um "tier" único de posição
+   * 1, com o valor fixo configurado — não a tabela por posição de verdade.
+   * A conta tem sempre exatamente UM patrocínio (ela mesma), então isto
+   * basta para `totalForCount`/`allocatePositions` calcularem certo sem
+   * precisar saber que é autopatrocínio.
+   */
+  async function resolveTiersFor(account: SponsorAccount): Promise<PriceTier[]> {
+    if (!account.is_self_payment) return store.listPriceTiers();
+    if (!deps.getAutopatrocinioAmountCents) {
+      throw new AppError("internal_error", "Valor do autopatrocínio não configurado.");
+    }
+    return [{ position: 1, amountCents: await deps.getAutopatrocinioAmountCents() }];
+  }
+
   async function recordAudit(entry: SponsorAuditEntry): Promise<void> {
     if (!deps.audit) return;
     try {
@@ -288,7 +305,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
 
     const [billable, tiers] = await Promise.all([
       store.listBillableSponsorships(accountId),
-      store.listPriceTiers(),
+      resolveTiersFor(account),
     ]);
     const total = totalForCount(billable.length, tiers);
     const syncedAt = now().toISOString();
@@ -345,9 +362,11 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         customerId,
         amountCents: total,
         nextDueDate: dueDate,
-        // Nome da marca configurado: é o que o patrocinador lê na fatura do
-        // cartão, e precisa ser reconhecível.
-        description: `Patrocínio ${brand.name} — ${billable.length} igreja(s)`,
+        // Nome da marca configurado: é o que aparece na fatura do cartão, e
+        // precisa ser reconhecível.
+        description: account.is_self_payment
+          ? `Mensalidade ${brand.name}`
+          : `Patrocínio ${brand.name} — ${billable.length} igreja(s)`,
         externalReference: account.id,
         successUrl: options.successUrl,
       });
@@ -438,7 +457,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
 
     const [billable, tiers] = await Promise.all([
       store.listBillableSponsorships(account.id),
-      store.listPriceTiers(),
+      resolveTiersFor(account),
     ]);
 
     const { charge: saved } = await store.upsertCharge({

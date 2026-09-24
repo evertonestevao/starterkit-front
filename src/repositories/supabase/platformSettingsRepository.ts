@@ -8,6 +8,7 @@ interface SettingsRow {
   vagas_primeiro_subsede: number | null;
   vagas_primeiro_congregacao: number | null;
   carencia_marca_dias: number;
+  autopatrocinio_amount_cents: number;
   updated_at: string;
 }
 
@@ -17,6 +18,7 @@ function toSettings(row: SettingsRow): PlatformSettings {
     vagasSubsede: row.vagas_primeiro_subsede,
     vagasCongregacao: row.vagas_primeiro_congregacao,
     carenciaMarcaDias: row.carencia_marca_dias,
+    autopatrocinioAmountCents: row.autopatrocinio_amount_cents,
     updatedAt: row.updated_at,
   };
 }
@@ -54,6 +56,19 @@ export function createSupabasePlatformSettingsRepository(
         throw new AppError("internal_error", "Falha ao salvar as configurações", error);
       }
       return toSettings(data);
+    },
+
+    async updateAutopatrocinioAmount(amountCents): Promise<number> {
+      const { data, error } = await client.rpc("platform_update_autopatrocinio_amount", {
+        p_amount_cents: amountCents,
+      });
+      if (error?.code === "42501") {
+        throw new AppError("forbidden", "Esta área é da moderação da plataforma.", error);
+      }
+      if (error || data === null) {
+        throw new AppError("internal_error", "Falha ao salvar o valor do autopatrocínio", error);
+      }
+      return data as number;
     },
   };
 }

@@ -17,7 +17,13 @@ export type SponsorChargeStatus = "pending" | "paid" | "overdue" | "refunded" | 
 
 export interface SponsorAccount {
   id: string;
-  user_id: string;
+  /** Null só em conta de autopatrocínio (dona é a igreja, não uma pessoa). */
+  user_id: string | null;
+  /** Só em conta de autopatrocínio: a igreja e a empresa dela. */
+  church_id: string | null;
+  company_id: string | null;
+  /** true = a própria igreja se mantendo, sem patrocinador de verdade. */
+  is_self_payment: boolean;
   kind: SponsorKind;
   display_name: string;
   email: string;

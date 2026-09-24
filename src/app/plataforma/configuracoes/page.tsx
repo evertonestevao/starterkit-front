@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
-import { PlatformSettingsForm } from "@/features/platform/components/platform-settings-form";
-import { getPlatformSettingsService } from "@/server/platform";
+import { AutopatrocinioForm, PlatformSettingsForm } from "@/features/platform/components/platform-settings-form";
+import { SponsorPricingForm } from "@/features/platform/components/sponsor-pricing-form";
+import { getPlatformPricingService, getPlatformSettingsService } from "@/server/platform";
 
 export const metadata: Metadata = { title: "Configurações" };
 
 /**
  * Configurações da plataforma. Só a moderação chega aqui (o layout barra), e
- * o banco confere de novo: a tabela não tem policy nenhuma e as duas RPCs
- * exigem `platform_staff`, registrando cada alteração na trilha.
+ * o banco confere de novo: as tabelas não têm policy de escrita nenhuma e as
+ * RPCs exigem `platform_staff`, registrando cada alteração na trilha.
  */
 export default async function PlatformSettingsPage() {
-  const settings = await (await getPlatformSettingsService()).get();
+  const [settings, tiers] = await Promise.all([
+    (await getPlatformSettingsService()).get(),
+    (await getPlatformPricingService()).getTiers(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -20,6 +24,8 @@ export default async function PlatformSettingsPage() {
           Regras que valem para todas as igrejas. Cada alteração fica registrada com quem fez.
         </p>
       </div>
+      <SponsorPricingForm tiers={tiers} />
+      <AutopatrocinioForm amountCents={settings.autopatrocinioAmountCents} />
       <PlatformSettingsForm settings={settings} />
       <p className="text-xs text-muted-foreground">
         Última alteração em{" "}

@@ -203,6 +203,8 @@ export interface Church {
   dominio_verificado_em: string | null;
   dominio_ultimo_erro: string | null;
   dominio_solicitado_em: string | null;
+  /** false = a igreja fechou a porta pra patrocinador (some da LP). Só editável sem patrocinador ativo. */
+  aceita_patrocinio: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

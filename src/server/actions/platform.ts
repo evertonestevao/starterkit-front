@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   getChurchHierarchyService,
   getPlatformModerationService,
+  getPlatformPricingService,
   getPlatformSettingsService,
   requirePlatformStaff,
 } from "@/server/platform";
@@ -146,6 +147,47 @@ export async function updatePlatformSettingsAction(
     });
     revalidatePath("/plataforma/configuracoes");
     return { success: "Configurações salvas." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/**
+ * Salva a tabela de preço do patrocínio inteira. Os campos chegam como
+ * `amount_1`, `amount_2`... — um por posição, na ordem em que o formulário
+ * os desenhou (adicionar/remover posição só muda quantos campos existem).
+ */
+export async function updateSponsorPricingAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await requirePlatformStaff();
+    const service = await getPlatformPricingService();
+
+    const tiers: { position: number; amountRaw: string }[] = [];
+    for (let position = 1; formData.has(`amount_${position}`); position += 1) {
+      tiers.push({ position, amountRaw: String(formData.get(`amount_${position}`) ?? "") });
+    }
+
+    await service.updateTiers(tiers);
+    revalidatePath("/plataforma/configuracoes");
+    return { success: "Preços salvos." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export async function updateAutopatrocinioAmountAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await requirePlatformStaff();
+    const service = await getPlatformSettingsService();
+    await service.updateAutopatrocinioAmount(String(formData.get("amount") ?? ""));
+    revalidatePath("/plataforma/configuracoes");
+    return { success: "Valor do autopatrocínio salvo." };
   } catch (err) {
     return toActionError(err);
   }

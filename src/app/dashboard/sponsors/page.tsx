@@ -6,9 +6,12 @@ import { MetricCard } from "@/components/metric-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SelfPaymentCard } from "@/features/church/components/self-payment-card";
 import { SponsorCardActions } from "@/features/church/components/sponsor-card-actions";
 import { getChurchDomainService } from "@/server/churchDomain";
+import { getChurchSelfPaymentService } from "@/server/churchSelfPayment";
 import { getChurchSponsorsService } from "@/server/churchSponsors";
+import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant } from "@/server/tenant";
 import type { CompanySponsor } from "@/services/churchSponsorsService";
 
@@ -84,12 +87,25 @@ export default async function SponsorsPage() {
   const { active } = await getActiveTenant();
   if (!active) return null; // layout já redirecionou
 
-  const [summary, domains] = await Promise.all([
+  const client = await getSupabaseServerClient();
+  const [summary, domains, { data: userData }] = await Promise.all([
     (await getChurchSponsorsService()).getSummary(active.id),
     (await getChurchDomainService()).listForCompany({ companyId: active.id, role: active.role }),
+    client.auth.getUser(),
   ]);
   const inviteUrl = domains[0]?.sponsorInviteUrl ?? null;
   const showChurch = domains.length > 1;
+
+  // Uma por igreja da empresa: cada uma pode estar num estado diferente
+  // (com patrocinador, autopatrocinando, ou sem nenhum dos dois).
+  const selfPaymentService = await getChurchSelfPaymentService();
+  const selfPaymentByChurch = await Promise.all(
+    domains.map(async (d) => ({
+      churchId: d.churchId,
+      churchName: d.churchName,
+      status: await selfPaymentService.getStatus(d.churchId),
+    })),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -133,6 +149,16 @@ export default async function SponsorsPage() {
           />
         ) : null}
       </div>
+
+      {selfPaymentByChurch.map(({ churchId, churchName, status }) => (
+        <SelfPaymentCard
+          key={churchId}
+          churchId={churchId}
+          churchName={showChurch ? churchName : "sua igreja"}
+          status={status}
+          defaultEmail={userData.user?.email ?? ""}
+        />
+      ))}
 
       {inviteUrl ? (
         <Card className="border-primary/20 bg-primary/5">

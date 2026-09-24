@@ -2299,6 +2299,77 @@ end $$;
 
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Preço do patrocínio, editável pela plataforma (migration 20260926150000)
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000004","email":"rls-conga@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  begin
+    perform public.platform_update_sponsor_price_tiers(
+      '[{"position":1,"amount_cents":100}]'::jsonb);
+    raise exception 'FALHA preco: igreja alterou o preco do patrocinio';
+  exception when sqlstate '42501' then null;
+  end;
+  -- Nem com GRANT: a tabela não tem policy de escrita nenhuma.
+  begin
+    update public.sponsor_price_tiers set amount_cents = 100 where position = 1;
+    raise exception 'FALHA preco: igreja escreveu na tabela direto';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- Lista vazia, posição fora de sequência e valor zero/negativo são recusados.
+  begin
+    perform public.platform_update_sponsor_price_tiers('[]'::jsonb);
+    raise exception 'FALHA preco: lista vazia foi aceita';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.platform_update_sponsor_price_tiers(
+      '[{"position":1,"amount_cents":100},{"position":3,"amount_cents":100}]'::jsonb);
+    raise exception 'FALHA preco: posicao fora de sequencia foi aceita';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.platform_update_sponsor_price_tiers(
+      '[{"position":1,"amount_cents":0}]'::jsonb);
+    raise exception 'FALHA preco: valor zero foi aceito';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- A staff troca a tabela inteira, e a leitura pública (já existente) reflete na hora.
+  perform public.platform_update_sponsor_price_tiers(
+    '[{"position":1,"amount_cents":5000},{"position":2,"amount_cents":4000}]'::jsonb);
+end $$;
+
+reset role;
+
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+set local role anon;
+do $$
+declare n int;
+begin
+  select count(*) into n from public.sponsor_price_tiers;
+  if n <> 2 then raise exception 'FALHA preco: leitura publica nao refletiu a troca (tem %)', n; end if;
+end $$;
+reset role;
+
+-- Devolve a tabela ao estado de exemplo, para não confundir outros blocos
+-- (reset role já volta ao superusuário da sessão do script).
+truncate public.sponsor_price_tiers;
+insert into public.sponsor_price_tiers (position, amount_cents) values
+  (1, 3990), (2, 3490), (3, 2990), (4, 2790);
+
 -- A trilha é conferida fora da sessão do staff: nem ele lê a tabela direto.
 do $$
 declare n int;
@@ -2307,6 +2378,132 @@ begin
   where action = 'platform.settings.update';
   if n <> 1 then raise exception 'FALHA settings: alteracao sem registro na trilha'; end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Autopatrocínio: igreja sem patrocinador assume a própria mensalidade
+-- (migration 20260926160000)
+-- ---------------------------------------------------------------------------
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('5e5e5e5e-0000-4000-8000-00000000000a', 'rls-selfpay-a@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Igreja A"}'),
+  ('5e5e5e5e-0000-4000-8000-00000000000b', 'rls-selfpay-b@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Igreja B"}');
+insert into public.companies (id, name, slug, created_by) values
+  ('6c6c6c6c-0000-4000-8000-00000000000a', 'Igreja Autopatrocinio A', 'rls-selfpay-a', '5e5e5e5e-0000-4000-8000-00000000000a'),
+  ('6c6c6c6c-0000-4000-8000-00000000000b', 'Igreja Autopatrocinio B', 'rls-selfpay-b', '5e5e5e5e-0000-4000-8000-00000000000b');
+insert into public.company_members (company_id, user_id, role) values
+  ('6c6c6c6c-0000-4000-8000-00000000000a', '5e5e5e5e-0000-4000-8000-00000000000a', 'owner'),
+  ('6c6c6c6c-0000-4000-8000-00000000000b', '5e5e5e5e-0000-4000-8000-00000000000b', 'owner');
+insert into public.churches (id, company_id, name, slug, public_code) values
+  ('7d7d7d7d-0000-4000-8000-00000000000a', '6c6c6c6c-0000-4000-8000-00000000000a', 'Igreja A', 'rls-selfpay-a', 'rls-selfpay-a'),
+  ('7d7d7d7d-0000-4000-8000-00000000000b', '6c6c6c6c-0000-4000-8000-00000000000b', 'Igreja B', 'rls-selfpay-b', 'rls-selfpay-b');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000000a","email":"rls-selfpay-a@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_acc record; n int;
+begin
+  -- Igreja de fora: nem ligar autopatrocínio, nem fechar a porta.
+  begin
+    perform public.enable_church_self_payment(
+      '7d7d7d7d-0000-4000-8000-00000000000b', 'person', 'Invasor', 'x@x.com', null, '11144477735');
+    raise exception 'FALHA autopat: ligou autopatrocinio de igreja alheia';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.set_church_aceita_patrocinio('7d7d7d7d-0000-4000-8000-00000000000b', false);
+    raise exception 'FALHA autopat: fechou a porta de igreja alheia';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Na própria igreja, sem patrocinador: liga.
+  select * into v_acc from public.enable_church_self_payment(
+    '7d7d7d7d-0000-4000-8000-00000000000a', 'person', 'Pastor A', 'rls-selfpay-a@test.local', null, '11144477735');
+  if v_acc.id is null or not v_acc.is_self_payment or v_acc.user_id is not null then
+    raise exception 'FALHA autopat: conta nao nasceu como autopatrocinio sem dono pessoal';
+  end if;
+
+  -- Repetir reaproveita a mesma conta e não duplica a sponsorship.
+  perform public.enable_church_self_payment(
+    '7d7d7d7d-0000-4000-8000-00000000000a', 'person', 'Pastor A', 'rls-selfpay-a@test.local', null, '11144477735');
+  select count(*) into n from public.sponsorships where sponsor_id = v_acc.id;
+  if n <> 1 then raise exception 'FALHA autopat: religar duplicou a sponsorship (tem %)', n; end if;
+
+  -- Sem patrocinador de verdade, fecha a porta (conferido no próximo bloco).
+  perform public.set_church_aceita_patrocinio('7d7d7d7d-0000-4000-8000-00000000000a', false);
+end $$;
+
+do $$
+begin
+  if (select aceita_patrocinio from public.churches where id = '7d7d7d7d-0000-4000-8000-00000000000a') then
+    raise exception 'FALHA autopat: fechar a porta nao gravou';
+  end if;
+  -- Escrita direta na coluna (sem passar pela RPC) tem que ser recusada: o
+  -- GRANT de update de churches para authenticated não inclui esta coluna.
+  begin
+    update public.churches set aceita_patrocinio = true where id = '7d7d7d7d-0000-4000-8000-00000000000a';
+    raise exception 'FALHA autopat: escreveu aceita_patrocinio sem passar pela RPC';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+reset role;
+
+-- Igreja B não enxerga a conta de autopatrocínio de A.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000000b","email":"rls-selfpay-b@test.local","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from public.sponsor_accounts
+  where church_id = '7d7d7d7d-0000-4000-8000-00000000000a';
+  if n <> 0 then raise exception 'FALHA autopat: igreja B leu a conta de autopatrocinio de A'; end if;
+end $$;
+reset role;
+
+-- Um patrocinador de VERDADE entra: o gatilho cancela o autopatrocínio na
+-- hora (nunca foi cobrado — pending_payment vira canceled, sem "fim de
+-- ciclo"). Depois, nem religar nem fechar a porta são mais permitidos.
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('5e5e5e5e-0000-4000-8000-00000000000c', 'rls-selfpay-real@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Patrocinador de A"}');
+insert into public.sponsor_accounts (id, user_id, kind, display_name, email, document, billing_status)
+values ('8a8a8a8a-0000-4000-8000-00000000000a', '5e5e5e5e-0000-4000-8000-00000000000c',
+        'business', 'Patrocinador de A', 'rls-selfpay-real@test.local', '11222333000181', 'active');
+insert into public.sponsorships (sponsor_id, church_id, company_id, status)
+values ('8a8a8a8a-0000-4000-8000-00000000000a', '7d7d7d7d-0000-4000-8000-00000000000a',
+        '6c6c6c6c-0000-4000-8000-00000000000a', 'pending_payment');
+
+do $$
+declare v_status text;
+begin
+  select s.status into v_status
+  from public.sponsorships s
+  join public.sponsor_accounts a on a.id = s.sponsor_id
+  where a.is_self_payment and a.church_id = '7d7d7d7d-0000-4000-8000-00000000000a';
+  if v_status <> 'canceled' then
+    raise exception 'FALHA autopat: patrocinador de verdade nao cancelou o autopatrocinio (status %)', v_status;
+  end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000000a","email":"rls-selfpay-a@test.local","role":"authenticated"}', true);
+do $$
+begin
+  begin
+    perform public.enable_church_self_payment(
+      '7d7d7d7d-0000-4000-8000-00000000000a', 'person', 'Pastor A', 'rls-selfpay-a@test.local', null, '11144477735');
+    raise exception 'FALHA autopat: religou com patrocinador de verdade ativo';
+  exception when sqlstate 'P0001' then null;
+  end;
+  begin
+    perform public.set_church_aceita_patrocinio('7d7d7d7d-0000-4000-8000-00000000000a', false);
+    raise exception 'FALHA autopat: fechou a porta com patrocinador de verdade ativo';
+  exception when sqlstate 'P0001' then null;
+  end;
+end $$;
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Vagas de primeiro patrocínio (migration 20260922110000)

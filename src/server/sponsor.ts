@@ -50,6 +50,17 @@ async function auditToChurch(entry: SponsorAuditEntry): Promise<void> {
  */
 const publicSponsorshipLimiter = createRateLimiter({ limit: 5, windowMs: 60 * 60_000 });
 
+/** Único ponto de leitura do valor do autopatrocínio, para não repetir a RPC. */
+async function getAutopatrocinioAmountCents(
+  client: Parameters<typeof createSupabaseSponsorRepository>[0],
+): Promise<number> {
+  const { data, error } = await client.rpc("get_autopatrocinio_amount_cents");
+  if (error || data === null) {
+    throw new AppError("internal_error", "Falha ao carregar o valor do autopatrocínio", error);
+  }
+  return data as number;
+}
+
 function build(repoClient: Parameters<typeof createSupabaseSponsorRepository>[0]): SponsorService {
   const env = getServerEnv();
   const email = createEmailService({ provider: getEmailProvider(), appUrl: env.APP_URL });
@@ -66,6 +77,7 @@ function build(repoClient: Parameters<typeof createSupabaseSponsorRepository>[0]
       sendAccessLink: (input) => email.sendSponsorAccessLink(input),
     },
     publicRateLimiter: publicSponsorshipLimiter,
+    getAutopatrocinioAmountCents: () => getAutopatrocinioAmountCents(repoClient),
   });
 }
 

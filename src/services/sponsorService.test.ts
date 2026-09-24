@@ -138,6 +138,9 @@ function makeWorld(
       account = {
         id: "acc-1",
         user_id: input.userId,
+        church_id: null,
+        company_id: null,
+        is_self_payment: false,
         kind: input.kind,
         display_name: input.displayName,
         email: input.email,
@@ -353,6 +356,9 @@ function makeWorld(
       account = {
         id: "acc-1",
         user_id: input.userId,
+        church_id: null,
+        company_id: null,
+        is_self_payment: false,
         kind: input.kind,
         display_name: input.displayName,
         email: input.email,
@@ -1122,5 +1128,88 @@ describe("webhook fora de ordem", () => {
     );
 
     expect(world.account?.billing_status).toBe("overdue");
+  });
+});
+
+describe("autopatrocínio: conta com is_self_payment usa valor fixo, não a tabela por posição", () => {
+  const SELF_ACCOUNT: SponsorAccount = {
+    id: "self-1",
+    user_id: null,
+    church_id: "church-1",
+    company_id: "co-1",
+    is_self_payment: true,
+    kind: "person",
+    display_name: "Igreja X",
+    email: "igreja-x@exemplo.com",
+    phone: null,
+    document: "11144477735",
+    logo_url: null,
+    link_tipo: null,
+    link_valor: null,
+    gateway: null,
+    gateway_customer_id: null,
+    gateway_subscription_id: null,
+    billing_status: "none",
+    billed_amount_cents: null,
+    billing_sync_status: "synced",
+    billing_synced_at: null,
+    next_due_date: null,
+    security_hold_at: null,
+    deleted_at: null,
+    created_at: "2026-09-24T00:00:00Z",
+    updated_at: "2026-09-24T00:00:00Z",
+  };
+
+  function buildMinimal(getAutopatrocinioAmountCents?: () => Promise<number>) {
+    const billable = [{ id: "sp-1", church_id: "church-1", company_id: "co-1", status: "pending_payment" as const, created_at: "2026-09-24T00:00:00Z" }];
+    const provider: RecurringBillingProvider = {
+      name: "fake",
+      createCustomer: vi.fn(async () => ({ customerId: "cus-1" })),
+      createSubscription: vi.fn(async (input) => ({
+        subscriptionId: "sub-1",
+        firstInvoiceUrl: null,
+        immediateEvents: [],
+        _input: input,
+      })) as unknown as RecurringBillingProvider["createSubscription"],
+      updateSubscriptionAmount: vi.fn(async () => {}),
+      cancelSubscription: vi.fn(async () => {}),
+      parseWebhook: vi.fn(async () => {
+        throw new Error("não usado neste teste");
+      }),
+    };
+    const store: Partial<SponsorBillingStore> = {
+      getAccount: vi.fn(async () => SELF_ACCOUNT),
+      listBillableSponsorships: vi.fn(async () => billable),
+      listPriceTiers: vi.fn(async () => TIERS),
+      updateAccountBilling: vi.fn(async () => {}),
+    };
+    const service = createSponsorService({
+      repo: {} as SponsorRepository,
+      store: store as SponsorBillingStore,
+      resolveProvider: () => provider,
+      defaultProviderName: () => "fake",
+      appUrl: "https://app.exemplo.com",
+      getAutopatrocinioAmountCents,
+    });
+    return { service, provider, store };
+  }
+
+  it("cobra o valor fixo do autopatrocínio, não a soma dos tiers", async () => {
+    const { service, provider } = buildMinimal(async () => 1990);
+
+    await service.syncBilling("self-1", { createIfMissing: true });
+
+    expect(provider.createSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 1990, description: "Mensalidade Conecta Igreja" }),
+    );
+  });
+
+  it("sem a dependência configurada, falha claramente em vez de cobrar a tabela por posição", async () => {
+    const { service, provider } = buildMinimal(undefined);
+
+    const err = await service.syncBilling("self-1", { createIfMissing: true }).catch((e: unknown) => e);
+
+    expect(isAppError(err) && err.code).toBe("internal_error");
+    expect(provider.createSubscription).not.toHaveBeenCalled();
   });
 });

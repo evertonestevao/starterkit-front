@@ -9,5 +9,7 @@ export interface PlatformSettings {
   vagasCongregacao: number | null;
   /** Dias de atraso até a marca sair da vitrine. */
   carenciaMarcaDias: number;
+  /** Mensalidade fixa quando a própria igreja assume o pagamento (sem patrocinador). */
+  autopatrocinioAmountCents: number;
   updatedAt: string;
 }

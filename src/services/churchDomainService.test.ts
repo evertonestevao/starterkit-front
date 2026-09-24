@@ -51,6 +51,7 @@ function makeChurch(overrides: Partial<Church> = {}): Church {
     dominio_verificado_em: null,
     dominio_ultimo_erro: null,
     dominio_solicitado_em: null,
+    aceita_patrocinio: true,
     deleted_at: null,
     created_at: "2026-09-01T00:00:00.000Z",
     updated_at: "2026-09-01T00:00:00.000Z",

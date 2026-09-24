@@ -6,8 +6,39 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
-import { updatePlatformSettingsAction } from "@/server/actions/platform";
+import { useMoneyInput } from "@/hooks/useMoneyInput";
+import { updateAutopatrocinioAmountAction, updatePlatformSettingsAction } from "@/server/actions/platform";
 import type { PlatformSettings } from "@/types/platform";
+
+/** Card à parte: valor único, RPC própria (não mistura com o resto das configurações). */
+export function AutopatrocinioForm({ amountCents }: { amountCents: number }) {
+  const [state, formAction, pending] = useActionState(updateAutopatrocinioAmountAction, undefined);
+  useActionToast(state);
+  const { value, onChange } = useMoneyInput(amountCents);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Autopatrocínio</CardTitle>
+        <CardDescription>
+          Quanto a própria igreja paga por mês quando assume a mensalidade dela, por falta de
+          patrocinador. Só é oferecido a igreja sem nenhum patrocinador ativo.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={formAction} className="flex flex-wrap items-end gap-3">
+          <div className="flex max-w-[12rem] flex-col gap-1.5">
+            <Label htmlFor="autopatrocinio-amount">Valor mensal</Label>
+            <Input id="autopatrocinio-amount" name="amount" value={value} onChange={onChange} inputMode="numeric" required />
+          </div>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Salvando..." : "Salvar"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
 
 /** `null` vira campo vazio, que é como "ilimitado" se escreve na tela. */
 function valor(n: number | null): string {
