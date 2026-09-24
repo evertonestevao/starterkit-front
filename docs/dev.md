@@ -27,7 +27,7 @@ vai para produção.
 
 | Conta | Papel | Para quê |
 | --- | --- | --- |
-| `pastor.sede@dev.local` | owner da sede | Vê a árvore inteira: contagem de pedidos de oração e visitantes de todas as igrejas ligadas |
+| `pastor.sede@dev.local` | owner da sede | Vê a rede inteira em Configurações → Vínculos (com busca/paginação); pedido de oração continua só da própria igreja |
 | `pastor.zonanorte@dev.local` | owner de subsede | Vê a subsede e as 4 congregações dela; não vê as outras subsedes |
 | `pastor.zonanorte.vilanova@dev.local` | owner de congregação | Vê só a própria igreja |
 | `auxiliar.zonanorte@dev.local` | member de subsede | Não lê pedido de oração nem patrocinador, e não troca a chave PIX |
