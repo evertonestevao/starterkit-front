@@ -68,4 +68,23 @@ describe("buildPixPayload", () => {
     expect(campo["62"]).toBe("0503***"); // txid "***" = sem identificador fixo
     expect(campo["53"]).toBe("986");
   });
+
+  it("com valorCents, embute o campo 54 formatado com duas casas", () => {
+    const campo = campos(buildPixPayload({ ...base, valorCents: 15050 }));
+    expect(campo["54"]).toBe("150.50");
+  });
+
+  it("com txid, sanitiza para alfanumérico maiúsculo até 25 caracteres", () => {
+    const campo = campos(
+      buildPixPayload({ ...base, txid: "campanha-Reforma_2026!!!ExtraLongo" }),
+    );
+    // hífen, underscore e pontuação saem; o resto vira maiúsculo e corta em 25.
+    expect(campo["62"]).toBe(`0525${"CAMPANHAREFORMA2026EXTRAL"}`);
+  });
+
+  it("continua fechando com um CRC que confere, com valor e txid juntos", () => {
+    const payload = buildPixPayload({ ...base, valorCents: 5000, txid: "CAMP1" });
+    const semCrc = payload.slice(0, -4);
+    expect(crc16(semCrc)).toBe(payload.slice(-4));
+  });
 });

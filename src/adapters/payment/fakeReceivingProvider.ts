@@ -36,6 +36,13 @@ export function createFakeReceivingProvider(): ReceivingProvider {
       };
     },
 
+    async createDonationCharge({ amountCents, externalReference }) {
+      return {
+        checkoutUrl: `https://pagamento.exemplo/cobranca/${encodeURIComponent(externalReference)}?valor=${amountCents}`,
+        externalId: `fake_pay_${externalReference}`,
+      };
+    },
+
     readAccountReference(rawBody) {
       try {
         return (JSON.parse(rawBody) as { accountReference?: string }).accountReference ?? null;
@@ -53,9 +60,11 @@ export function createFakeReceivingProvider(): ReceivingProvider {
         event?: string;
         paymentId?: string;
         amountCents?: number;
+        netAmountCents?: number;
         metodo?: "cartao" | "pix" | "boleto" | "outro";
         status?: "pendente" | "recebida" | "estornada" | "cancelada";
         pagaEm?: string | null;
+        externalReference?: string | null;
       };
       try {
         payload = JSON.parse(rawBody) as typeof payload;
@@ -76,6 +85,8 @@ export function createFakeReceivingProvider(): ReceivingProvider {
           metodo: payload.metodo ?? "cartao",
           status: payload.status ?? "recebida",
           pagaEm: payload.pagaEm ?? new Date().toISOString(),
+          externalReference: payload.externalReference ?? null,
+          netAmountCents: typeof payload.netAmountCents === "number" ? payload.netAmountCents : null,
         },
       };
     },

@@ -350,6 +350,8 @@ describe("webhook de doação", () => {
       metodo: "cartao" as const,
       status: "recebida" as const,
       pagaEm: "2026-09-24T12:00:00.000Z",
+      externalReference: null,
+      netAmountCents: null,
     },
   };
 

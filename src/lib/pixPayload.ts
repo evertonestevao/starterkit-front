@@ -7,9 +7,12 @@
  * titular vai junto porque é o que o app do banco mostra antes de confirmar —
  * é comparando esse nome que quem doa percebe uma chave trocada.
  *
- * Sem valor e sem txid fixo: dízimo e oferta são valores que quem doa
- * escolhe, e um txid repetido faria bancos tratarem doações diferentes como a
- * mesma cobrança.
+ * Dízimo e oferta (o uso original deste arquivo) não têm valor nem txid
+ * fixo: quem doa escolhe o valor, e um txid repetido faria bancos tratarem
+ * doações diferentes como a mesma cobrança. Campanha é o caso contrário — o
+ * valor É fixo (quem doa escolheu antes, na tela) e vale embuti-lo: o app do
+ * banco já mostra o valor certo, sem digitação manual. Por isso os dois
+ * campos abaixo são opcionais: ausentes, o payload sai como sempre saiu.
  */
 
 /** Um campo EMV: id + tamanho com 2 dígitos + valor. */
@@ -53,22 +56,37 @@ export interface PixPayloadInput {
   titular: string;
   /** Cidade do recebedor. O padrão serve quando a igreja não informou. */
   cidade?: string;
+  /** Valor fixo, em centavos. Ausente = quem doa escolhe (campo 54 de fora). */
+  valorCents?: number;
+  /**
+   * Identificador da cobrança (campo 62/05), até 25 caracteres alfanuméricos.
+   * Ausente = "***" (o padrão do BR Code para "sem txid"). É o que deixa a
+   * igreja achar, no extrato, a qual doação um PIX recebido corresponde.
+   */
+  txid?: string;
+}
+
+/** Só alfanumérico, maiúsculo, até 25 — é o que o campo 62/05 aceita. */
+function sanitizarTxid(txid: string): string {
+  return txid.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 25);
 }
 
 /** Monta o "copia e cola". */
-export function buildPixPayload({ chave, titular, cidade }: PixPayloadInput): string {
+export function buildPixPayload({ chave, titular, cidade, valorCents, txid }: PixPayloadInput): string {
   const chaveLimpa = chave.trim();
   const merchant = campo("00", "br.gov.bcb.pix") + campo("01", chaveLimpa);
+  const txidLimpo = txid ? sanitizarTxid(txid) : "";
 
   const semCrc =
     campo("00", "01") +
     campo("26", merchant) +
     campo("52", "0000") +
     campo("53", "986") +
+    (valorCents ? campo("54", (valorCents / 100).toFixed(2)) : "") +
     campo("58", "BR") +
     campo("59", ascii(titular, 25) || "RECEBEDOR") +
     campo("60", ascii(cidade ?? "CIDADE", 15) || "CIDADE") +
-    campo("62", campo("05", "***")) +
+    campo("62", campo("05", txidLimpo || "***")) +
     "6304";
 
   return semCrc + crc16(semCrc);

@@ -65,6 +65,19 @@ export interface DonationWebhookEvent {
     metodo: "cartao" | "pix" | "boleto" | "outro";
     status: "pendente" | "recebida" | "estornada" | "cancelada";
     pagaEm: string | null;
+    /**
+     * Referência que a plataforma mandou ao criar a cobrança (ver
+     * `createDonationCharge`). É por ela que o webhook decide para qual
+     * doação — dízimo avulso ou de uma campanha — o evento é.
+     */
+    externalReference: string | null;
+    /**
+     * Valor líquido (já descontada a taxa do provedor), quando ele informa.
+     * `null` quando o provedor não devolve isso no webhook — quem chama
+     * decide o que fazer (ex.: assumir bruto = líquido, registrando que a
+     * taxa é desconhecida).
+     */
+    netAmountCents: number | null;
   };
 }
 
@@ -89,6 +102,21 @@ export interface ReceivingProvider {
     churchName: string;
     successUrl: string;
   }): Promise<{ url: string }>;
+
+  /**
+   * Cobrança de VALOR FIXO dentro da subconta, para uma campanha (ou
+   * qualquer doação que precise de valor e referência amarrados — diferente
+   * do link reaproveitável de `ensureDonationLink`, esta nasce uma vez, para
+   * uma doação, e o `externalReference` é o que o webhook usa para achar a
+   * doação certa quando o pagamento confirmar.
+   */
+  createDonationCharge(input: {
+    apiKey: string;
+    amountCents: number;
+    externalReference: string;
+    description: string;
+    payer?: { name: string; phone?: string };
+  }): Promise<{ checkoutUrl: string; externalId: string }>;
 
   /**
    * Autentica e traduz o webhook da subconta.

@@ -17,10 +17,12 @@ import type { ActionState } from "@/server/actions/action-state";
 
 type BoundAction = (prev: ActionState | undefined, formData: FormData) => Promise<ActionState>;
 
-const campo =
+// Exportados: o formulário de doação de campanha (fora deste arquivo) usa os
+// mesmos tokens visuais, para ficar igual aos outros formulários públicos.
+export const campo =
   "h-12 w-full rounded-xl border border-[var(--pg-border)] bg-[var(--pg-surface-2)] px-3.5 text-base text-[var(--pg-text)] outline-none transition-shadow placeholder:text-[var(--pg-muted)] focus:ring-2 focus:ring-[var(--pg-accent)]";
 
-const rotulo = "text-sm font-medium text-[var(--pg-text)]";
+export const rotulo = "text-sm font-medium text-[var(--pg-text)]";
 
 function Enviar({ pending, children }: { pending: boolean; children: ReactNode }) {
   return (

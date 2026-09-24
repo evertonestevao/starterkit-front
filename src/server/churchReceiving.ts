@@ -6,6 +6,7 @@ import { AppError } from "@/lib/errors";
 import { openSecret, sealSecret } from "@/lib/secretBox";
 import { secretsMatch } from "@/lib/secrets";
 import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
+import { createSupabaseCampaignDonationStore } from "@/repositories/supabase/campaignDonationsRepository";
 import {
   createSupabaseChurchReceivingRepository,
   createSupabaseDonationsReader,
@@ -67,9 +68,13 @@ export async function getDonationsReader() {
  * Lado do webhook: sem sessão. Acha a igreja pela subconta que mandou o
  * evento e confere o token DAQUELA igreja antes de aplicar qualquer coisa.
  */
+/** Prefixo que marca uma doação de CAMPANHA na `externalReference` da cobrança. */
+const REFERENCIA_CAMPANHA = "campaign:";
+
 export function getDonationWebhookHandler(providerName: string) {
   const provider = getReceivingProvider(providerName);
   const store = createSupabaseDonationStore(getSupabaseAdminClient());
+  const campaignStore = createSupabaseCampaignDonationStore(getSupabaseAdminClient());
   const service = createDonationWebhookService({ store });
 
   return {
@@ -91,6 +96,23 @@ export function getDonationWebhookHandler(providerName: string) {
         verifyToken: (provided) =>
           provided.length > 0 && secretsMatch(hashToken(provided), conta.webhookTokenHash),
       });
+
+      // Mesma subconta, dois destinos possíveis: dízimo/oferta avulsa (sem
+      // referência, cai no fluxo de sempre) ou doação de uma CAMPANHA — a
+      // referência que a plataforma mandou ao criar a cobrança diz qual.
+      const referenciaExterna = event.kind === "donation" ? event.donation?.externalReference : null;
+      if (referenciaExterna?.startsWith(REFERENCIA_CAMPANHA)) {
+        const donationId = referenciaExterna.slice(REFERENCIA_CAMPANHA.length);
+        const donation = event.donation!;
+        return {
+          outcome: await campaignStore.applyGatewayConfirmation(donationId, {
+            status: donation.status,
+            amountCents: donation.amountCents,
+            netAmountCents: donation.netAmountCents,
+          }),
+        };
+      }
+
       return { outcome: await service.apply(event, conta.churchId) };
     },
   };

@@ -24,7 +24,12 @@ import type {
  *     recuperável depois — se não vier, o desenho do link de doação muda);
  *   - o status inicial e os valores de `status` em GET /accounts/{id};
  *   - se POST /paymentLinks aceita valor livre (doação sem valor fixo);
- *   - o header e o corpo do webhook da subconta.
+ *   - o header e o corpo do webhook da subconta;
+ *   - se POST /customers exige cpfCnpj mesmo para um cliente mínimo (o
+ *     formulário de doação de campanha não coleta documento);
+ *   - se o webhook de PAYMENT_RECEIVED/CONFIRMED traz `netValue` (valor já
+ *     líquido da taxa) — se não trouxer, o valor líquido de uma doação por
+ *     cartão fica desconhecido até ajustar isto.
  */
 
 export const ASAAS_SANDBOX_URL = "https://api-sandbox.asaas.com/v3";
@@ -200,6 +205,42 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
       return mapAsaasAccountStatus(data.accountStatus ?? data.status);
     },
 
+    async createDonationCharge({ apiKey, amountCents, externalReference, description, payer }) {
+      // A Asaas cobra em cima de um "customer". O formulário de doação não
+      // coleta CPF/CNPJ, então criamos um cliente mínimo (nome + telefone).
+      // NÃO TESTADO: se a conta exigir cpfCnpj mesmo assim, este passo falha
+      // e precisa de ajuste — ver a ressalva no topo do arquivo.
+      const cliente = await request<{ id?: string }>("/customers", "POST", apiKey, {
+        name: payer?.name ?? "Doador",
+        mobilePhone: payer?.phone,
+        externalReference,
+      });
+      if (!cliente.id) {
+        throw new AppError("payment_error", "O provedor não devolveu o cliente criado.");
+      }
+
+      // Cobrança de hoje, com o valor fixo: quem doa já escolheu o valor na
+      // tela, diferente do link reaproveitável de ensureDonationLink.
+      const hoje = new Date().toISOString().slice(0, 10);
+      const pagamento = await request<{ id?: string; invoiceUrl?: string }>(
+        "/payments",
+        "POST",
+        apiKey,
+        {
+          customer: cliente.id,
+          billingType: "CREDIT_CARD",
+          value: centsToReais(amountCents),
+          dueDate: hoje,
+          description,
+          externalReference,
+        },
+      );
+      if (!pagamento.id || !pagamento.invoiceUrl) {
+        throw new AppError("payment_error", "O provedor não devolveu a cobrança criada.");
+      }
+      return { checkoutUrl: pagamento.invoiceUrl, externalId: pagamento.id };
+    },
+
     async ensureDonationLink({ apiKey, churchName, successUrl }) {
       // Criado com a chave da SUBCONTA: o link pertence à igreja, e o dinheiro
       // dele cai lá dentro.
@@ -237,11 +278,13 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
         payment?: {
           id?: string;
           value?: number;
+          netValue?: number;
           status?: string;
           billingType?: string;
           paymentDate?: string | null;
           confirmedDate?: string | null;
           subscription?: string | null;
+          externalReference?: string | null;
         };
       };
       try {
@@ -267,6 +310,10 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
           metodo: mapAsaasBillingType(pagamento.billingType),
           status,
           pagaEm: status === "recebida" && data ? new Date(`${data}T12:00:00Z`).toISOString() : null,
+          externalReference: pagamento.externalReference ?? null,
+          // NÃO TESTADO: se a Asaas não mandar netValue neste evento, quem
+          // chama decide (ex.: tratar líquido = bruto, taxa desconhecida).
+          netAmountCents: typeof pagamento.netValue === "number" ? reaisToCents(pagamento.netValue) : null,
         },
       };
     },

@@ -2,6 +2,7 @@ import {
   CalendarClock,
   CalendarDays,
   CreditCard,
+  HandCoins,
   HandHeart,
   HeartHandshake,
   Landmark,
@@ -16,12 +17,11 @@ import type { RoleCode } from "@/types/database";
 /**
  * Navegação da sidebar — editar aqui ao adicionar módulos do seu produto.
  *
- * Campanhas, Financeiro e Presença digital existem como rota (/dashboard/
- * campaigns, /finance, /presence) mas estão FORA do menu: as três ainda são
- * maquete, com números fixos no arquivo. Um pastor que abre "Financeiro" e vê
- * lançamentos que não são da igreja dele perde a confiança no resto da tela
- * que é real. Voltam ao menu quando lerem o banco — é só devolver o item
- * aqui.
+ * Financeiro e Presença digital existem como rota (/dashboard/finance,
+ * /presence) mas estão FORA do menu: as duas ainda são maquete, com números
+ * fixos no arquivo. Um pastor que abre "Financeiro" e vê lançamentos que não
+ * são da igreja dele perde a confiança no resto da tela que é real. Voltam
+ * ao menu quando lerem o banco — é só devolver o item aqui.
  */
 
 export interface NavItem {
@@ -66,6 +66,12 @@ export const navItems: NavItem[] = [
     href: "/dashboard/events",
     icon: CalendarDays,
     roles: ["owner", "admin", "member"],
+  },
+  {
+    title: "Campanhas",
+    href: "/dashboard/campaigns",
+    icon: HandCoins,
+    roles: ["owner", "admin"],
   },
   {
     title: "Patrocinadores",
