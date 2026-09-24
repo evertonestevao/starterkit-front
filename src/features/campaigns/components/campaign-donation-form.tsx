@@ -211,6 +211,11 @@ function GatewayDonationForm({
           {state.error}
         </p>
       ) : null}
+      <p className="text-xs leading-5 text-[var(--pg-muted)]">
+        Você será levado à página segura do Asaas para pagar com cartão ou Pix. O provedor cobra
+        uma tarifa sobre o valor (não é taxa da igreja nem da plataforma), descontada antes do
+        valor chegar à conta dela.
+      </p>
       <Enviar pending={pending}>Continuar para o pagamento</Enviar>
     </form>
   );

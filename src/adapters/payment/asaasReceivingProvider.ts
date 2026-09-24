@@ -8,13 +8,19 @@ import type {
 } from "./ReceivingProvider";
 
 /**
- * Subconta Asaas ("conta filha") para a igreja receber por cartão.
+ * Subconta Asaas ("conta filha") para a igreja receber por cartão OU Pix
+ * automático (confirmação por webhook, diferente do Pix manual da chave
+ * própria da igreja).
  *
  * O desenho que importa: a conta é da IGREJA. A plataforma cria a subconta
  * com a chave dela (conta-mãe), recebe de volta a chave da subconta e, daí em
  * diante, TODA cobrança é criada com a chave da subconta. O dinheiro nasce
  * dentro da conta da igreja — não há split, não há repasse e não há um
  * instante sequer em que o valor esteja com a plataforma.
+ *
+ * `billingType: "UNDEFINED"` deixa quem paga escolher, na página do Asaas,
+ * entre cartão e Pix — em vez de travar em `CREDIT_CARD`. É o Asaas quem
+ * decide o que oferecer ali (depende de a subconta ter Pix habilitado).
  *
  * NADA AQUI FOI VALIDADO CONTRA UMA CONTA ASAAS REAL. Os campos e verbos
  * vieram da documentação; antes de ligar em produção é obrigatório rodar em
@@ -24,6 +30,9 @@ import type {
  *     recuperável depois — se não vier, o desenho do link de doação muda);
  *   - o status inicial e os valores de `status` em GET /accounts/{id};
  *   - se POST /paymentLinks aceita valor livre (doação sem valor fixo);
+ *   - se `billingType: "UNDEFINED"` realmente oferece Pix e cartão juntos na
+ *     página, e se a subconta recém-criada já nasce com Pix habilitado (pode
+ *     exigir passo extra, tipo cadastrar chave Pix da subconta);
  *   - o header e o corpo do webhook da subconta;
  *   - se POST /customers exige cpfCnpj mesmo para um cliente mínimo (o
  *     formulário de doação de campanha não coleta documento);
@@ -228,7 +237,8 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
         apiKey,
         {
           customer: cliente.id,
-          billingType: "CREDIT_CARD",
+          // UNDEFINED: quem doa escolhe cartão ou Pix na página do Asaas.
+          billingType: "UNDEFINED",
           value: centsToReais(amountCents),
           dueDate: hoje,
           description,
@@ -246,7 +256,8 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
       // dele cai lá dentro.
       const data = await request<{ id?: string; url?: string }>("/paymentLinks", "POST", apiKey, {
         name: `Dízimos e ofertas — ${churchName}`,
-        billingType: "CREDIT_CARD",
+        // UNDEFINED: quem doa escolhe cartão ou Pix na página do Asaas.
+        billingType: "UNDEFINED",
         chargeType: "DETACHED",
         // Sem valor: quem doa escolhe quanto.
         callback: { successUrl, autoRedirect: true },

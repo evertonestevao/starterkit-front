@@ -40,12 +40,22 @@ export default async function ReceivingSettingsPage() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Receber por cartão (opcional)</CardTitle>
-          <CardDescription>
-            A igreja já pode receber por PIX sem cadastrar nada além da chave. Este passo é só para
-            quem quer aceitar cartão também: a plataforma abre uma conta no provedor{" "}
-            <strong>em nome da igreja</strong>, e é nela que o dinheiro cai. Nada passa pela conta
-            da plataforma, e não há taxa nossa — as tarifas do provedor são entre ele e a igreja.
+          <CardTitle>Receber por cartão ou Pix automático (opcional)</CardTitle>
+          <CardDescription className="flex flex-col gap-2">
+            <span>
+              A igreja já pode receber por PIX sem cadastrar nada além da chave. Este passo é só
+              para quem quer aceitar cartão (ou Pix confirmado automaticamente) também: a
+              plataforma abre uma conta no provedor (Asaas) <strong>em nome da igreja</strong>, e é
+              nela que o dinheiro cai. Nada passa pela conta da plataforma, e não há taxa nossa —
+              a tarifa é só do provedor, descontada antes do valor cair na conta da igreja.
+            </span>
+            <span className="text-xs">
+              Tarifas padrão do Asaas hoje: cartão de crédito 1,99% + R$ 0,49 por venda nos 3
+              primeiros meses de conta, depois 2,99% + R$ 0,49; Pix R$ 0,99 por transação nos 3
+              primeiros meses, depois R$ 1,99 (as 100 primeiras transações Pix do mês costumam ser
+              isentas). Confira o valor exato válido para a conta da igreja direto no Asaas — o
+              contrato pode variar.
+            </span>
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -266,18 +266,24 @@ export function ChurchPageRenderer({
                 como quem vai receber.
               </p>
             ) : null}
-            {/* Cartão: leva para a página do provedor, onde a doação é paga.
-                O dinheiro cai na conta da própria igreja. */}
+            {/* Cartão/Pix automático: leva para a página do provedor, onde a
+                doação é paga. O dinheiro cai na conta da própria igreja. */}
             {linkCartao ? (
-              <a
-                href={linkCartao}
-                target="_blank"
-                rel="noreferrer"
-                className={`inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--pg-border)] font-semibold ${church.pix_chave ? "mt-4" : ""}`}
-              >
-                <CreditCard className="size-4" aria-hidden />
-                Doar com cartão
-              </a>
+              <div className={church.pix_chave ? "mt-4" : ""}>
+                <a
+                  href={linkCartao}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--pg-border)] font-semibold"
+                >
+                  <CreditCard className="size-4" aria-hidden />
+                  Doar com cartão ou Pix
+                </a>
+                <p className="mt-2 text-xs leading-5 text-[var(--pg-muted)]">
+                  Abre a página segura do Asaas. O provedor cobra uma tarifa sobre o valor (não é
+                  taxa da igreja), descontada antes de cair na conta dela.
+                </p>
+              </div>
             ) : null}
           </div>
         </>

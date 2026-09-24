@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useMoneyInput } from "@/hooks/useMoneyInput";
+import { GATEWAY_FEE_HINT, PIX_HINT } from "@/features/campaigns/paymentMethodCopy";
 import { createCampaignAction } from "@/server/actions/campaigns";
 
 /**
@@ -84,18 +85,14 @@ export function NewCampaignForm({ igrejas }: { igrejas: Array<{ id: string; name
           <input type="radio" name="metodoRecebimento" value="pix" defaultChecked required className="mt-0.5" />
           <span>
             PIX direto
-            <span className="block text-xs text-muted-foreground">
-              Sem taxa. Cada doação entra como pendente até a equipe conferir o comprovante.
-            </span>
+            <span className="block text-xs text-muted-foreground">{PIX_HINT}</span>
           </span>
         </label>
         <label className="flex items-start gap-2 text-sm">
           <input type="radio" name="metodoRecebimento" value="gateway" required className="mt-0.5" />
           <span>
-            Cartão (automático)
-            <span className="block text-xs text-muted-foreground">
-              Confirma sozinho. Exige a subconta de cartão já aprovada (Configurações › Cartão).
-            </span>
+            Cartão ou Pix automático
+            <span className="block text-xs text-muted-foreground">{GATEWAY_FEE_HINT}</span>
           </span>
         </label>
       </fieldset>

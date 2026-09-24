@@ -109,11 +109,12 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
           <CreditCard className="size-5 text-primary" aria-hidden />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
-              Cartão na página da igreja: {ativo ? "ligado" : "desligado"}
+              Cartão/Pix automático na página da igreja: {ativo ? "ligado" : "desligado"}
             </p>
             <p className="text-xs text-muted-foreground">
-              Quem doa por cartão paga na página do provedor, e o valor cai direto na conta da
-              igreja. A plataforma não recebe nem retém nada.
+              Quem doa paga na página do provedor (cartão ou Pix), e o valor cai direto na conta da
+              igreja, já descontada a tarifa do Asaas (cartão ~2-3% + R$ 0,49; Pix R$ 0,99 a
+              R$ 1,99 por transação). A plataforma não recebe nem retém nada.
             </p>
           </div>
           <Button type="submit" variant={ativo ? "outline" : "default"} disabled={switching}>
