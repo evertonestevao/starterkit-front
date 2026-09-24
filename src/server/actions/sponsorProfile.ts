@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSponsorProfileService } from "@/server/sponsorProfile";
 import { toActionError, type ActionState } from "./action-state";
 
-/** Server actions do perfil do patrocinador (nome, logo e telefone). */
+/** Server actions do perfil do patrocinador (nome, logo, link e telefone). */
 
 const PERFIL = "/patrocinador/perfil";
 
@@ -15,6 +15,7 @@ export async function requestProfileChangeAction(
   try {
     const service = await getSponsorProfileService();
     const displayName = formData.get("displayName");
+    const link = formData.get("link");
 
     // O arquivo vira bytes aqui e só. Quem decide se é imagem — e qual — é o
     // service, olhando a assinatura binária; o tipo que o navegador declara
@@ -29,7 +30,10 @@ export async function requestProfileChangeAction(
         : null;
 
     const pediu = await service.requestChange(
-      { displayName: typeof displayName === "string" ? displayName : undefined },
+      {
+        displayName: typeof displayName === "string" ? displayName : undefined,
+        link: typeof link === "string" ? link : undefined,
+      },
       logo,
     );
 

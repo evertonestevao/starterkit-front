@@ -3,6 +3,8 @@
  * os adapters traduzem para estes tipos antes de a regra de negócio ver.
  */
 
+import type { SponsorLinkKind } from "@/lib/sponsorLink";
+
 export type SponsorKind = "person" | "business";
 
 export type SponsorBillingStatus = "none" | "active" | "overdue" | "canceled";
@@ -22,6 +24,9 @@ export interface SponsorAccount {
   phone: string | null;
   document: string;
   logo_url: string | null;
+  /** Destino da logo na página pública (site ou WhatsApp). Só a moderação escreve. */
+  link_tipo: SponsorLinkKind | null;
+  link_valor: string | null;
   gateway: string | null;
   gateway_customer_id: string | null;
   gateway_subscription_id: string | null;
@@ -54,6 +59,10 @@ export interface SponsorProfileChange {
   novo_logo_path: string | null;
   anterior_display_name: string;
   anterior_logo_url: string | null;
+  /** false = o pedido não mexe no link; true com tipo/valor nulos = remover. */
+  novo_link_alterado: boolean;
+  novo_link_tipo: SponsorLinkKind | null;
+  novo_link_valor: string | null;
   status: SponsorProfileChangeStatus;
   motivo_recusa: string | null;
   created_at: string;
@@ -69,6 +78,11 @@ export interface PendingProfileChange {
   novoLogoPath: string | null;
   atualDisplayName: string;
   atualLogoUrl: string | null;
+  novoLinkAlterado: boolean;
+  novoLinkTipo: SponsorLinkKind | null;
+  novoLinkValor: string | null;
+  atualLinkTipo: SponsorLinkKind | null;
+  atualLinkValor: string | null;
   /** Quantas igrejas veriam a mudança se ela for aprovada. */
   igrejas: number;
   createdAt: string;
@@ -154,6 +168,9 @@ export interface PublicSponsor {
   id: string;
   name: string;
   logo_url: string | null;
+  /** Destino da logo (site ou WhatsApp) aprovado pela moderação; null = sem link. */
+  link_tipo: SponsorLinkKind | null;
+  link_valor: string | null;
 }
 
 /** Patrocínio com o nome da igreja, para tela. */

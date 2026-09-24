@@ -14,6 +14,11 @@ const PENDENTE: PendingProfileChange = {
   novoLogoPath: null,
   atualDisplayName: "Padaria do João",
   atualLogoUrl: null,
+  novoLinkAlterado: false,
+  novoLinkTipo: null,
+  novoLinkValor: null,
+  atualLinkTipo: null,
+  atualLinkValor: null,
   igrejas: 3,
   createdAt: "2026-09-18T10:00:00Z",
 };

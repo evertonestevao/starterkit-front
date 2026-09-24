@@ -12,6 +12,7 @@ const CONTA: SponsorProfileAccount = {
   userId: "user-1",
   displayName: "Padaria do João",
   logoUrl: null,
+  link: null,
   email: "padaria@exemplo.com",
   securityHoldAt: null,
 };
@@ -92,6 +93,109 @@ describe("requestChange", () => {
 
     expect(isAppError(err) && err.code).toBe("forbidden");
     expect(repo.requestChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("getMyProfile", () => {
+  it("devolve a URL do logo enviado que ainda espera conferência", async () => {
+    const { repo, service } = build();
+    vi.mocked(repo.getMyPendingChange).mockResolvedValueOnce({
+      id: "mudanca-1",
+      novo_display_name: null,
+      novo_logo_path: "pendente/user-1/arquivo-1.png",
+      novo_link_alterado: false,
+      novo_link_tipo: null,
+      novo_link_valor: null,
+      anterior_display_name: "Padaria do João",
+      anterior_logo_url: null,
+      status: "pendente",
+      motivo_recusa: null,
+      created_at: "2026-09-18T10:00:00Z",
+      decided_at: null,
+    });
+
+    const { pendingLogoUrl } = await service.getMyProfile();
+
+    expect(pendingLogoUrl).toBe("https://cdn.exemplo.com/pendente/user-1/arquivo-1.png");
+  });
+
+  it("sem logo pendente (ou pedido só de nome), não há URL pendente", async () => {
+    const { service } = build();
+
+    expect((await service.getMyProfile()).pendingLogoUrl).toBeNull();
+  });
+});
+
+describe("link da logo", () => {
+  it("WhatsApp digitado vira pedido com o número normalizado, e o email mostra o wa.me", async () => {
+    const { repo, notifier, service } = build();
+
+    const pediu = await service.requestChange({ link: "(11) 91234-5678" });
+
+    expect(pediu).toBe(true);
+    expect(repo.requestChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: null,
+        link: { value: { tipo: "whatsapp", valor: "5511912345678" } },
+      }),
+    );
+    expect(notifier.sendChangeRequested).toHaveBeenCalledWith(
+      expect.objectContaining({ linkChange: { href: "https://wa.me/5511912345678" } }),
+    );
+  });
+
+  it("site sem esquema ganha https e vai para a moderação, não direto para a conta", async () => {
+    const { repo, notifier, service } = build();
+
+    await service.requestChange({ link: "padaria.com.br" });
+
+    expect(repo.requestChange).toHaveBeenCalledWith(
+      expect.objectContaining({ link: { value: { tipo: "link", valor: "https://padaria.com.br/" } } }),
+    );
+    expect(notifier.sendStaffAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lines: expect.arrayContaining(["Link da logo: https://padaria.com.br/"]),
+      }),
+    );
+  });
+
+  it("recusa endereço perigoso antes de qualquer coisa ser gravada", async () => {
+    const { repo, service } = build();
+
+    const err = await service.requestChange({ link: "javascript:alert(1)" }).catch((e) => e);
+
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(repo.requestChange).not.toHaveBeenCalled();
+  });
+
+  it("repetir o link que já vale não vira fila", async () => {
+    const { repo, service } = build({ link: { tipo: "link", valor: "https://padaria.com.br/" } });
+
+    expect(await service.requestChange({ link: "https://padaria.com.br" })).toBe(false);
+    expect(repo.requestChange).not.toHaveBeenCalled();
+  });
+
+  it("campo vazio remove o link que existia; sem link e vazio não faz nada", async () => {
+    const comLink = build({ link: { tipo: "whatsapp", valor: "5511912345678" } });
+    expect(await comLink.service.requestChange({ link: "" })).toBe(true);
+    expect(comLink.repo.requestChange).toHaveBeenCalledWith(
+      expect.objectContaining({ link: { value: null } }),
+    );
+    expect(comLink.notifier.sendChangeRequested).toHaveBeenCalledWith(
+      expect.objectContaining({ linkChange: { href: null } }),
+    );
+
+    const semLink = build();
+    expect(await semLink.service.requestChange({ link: "" })).toBe(false);
+    expect(semLink.repo.requestChange).not.toHaveBeenCalled();
+  });
+
+  it("não mexer no campo deixa o link como está", async () => {
+    const { repo, service } = build({ link: { tipo: "link", valor: "https://padaria.com.br/" } });
+
+    await service.requestChange({ displayName: "Padaria São João" });
+
+    expect(repo.requestChange).toHaveBeenCalledWith(expect.objectContaining({ link: null }));
   });
 });
 

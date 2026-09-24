@@ -1,12 +1,13 @@
 import { phoneSchema, sponsorProfileChangeSchema } from "@/features/sponsor/schemas";
 import { AppError, toValidationError } from "@/lib/errors";
 import { EXTENSAO_POR_TIPO, MAX_LOGO_BYTES, sniffImageType } from "@/lib/imageValidation";
+import { sameSponsorLink, sponsorLinkHref, type SponsorLink } from "@/lib/sponsorLink";
 import type { SponsorProfileChange } from "@/types/sponsorship";
 
 /**
- * Alteração de perfil do patrocinador — nome e logo.
+ * Alteração de perfil do patrocinador — nome, logo e link.
  *
- * Esses dois campos aparecem na página PÚBLICA da igreja, então não podem ser
+ * Esses três campos aparecem na página PÚBLICA da igreja, então não podem ser
  * escritos direto pelo dono da conta: uma conta invadida trocaria o logo por
  * qualquer coisa e aquilo apareceria na hora na página que a igreja divulga.
  * O pedido fica parado até a moderação da plataforma decidir; a conta segue
@@ -21,6 +22,8 @@ export interface SponsorProfileAccount {
   userId: string;
   displayName: string;
   logoUrl: string | null;
+  /** Destino aprovado da logo (site ou WhatsApp); null = sem link. */
+  link: SponsorLink | null;
   email: string;
   securityHoldAt: string | null;
 }
@@ -31,6 +34,8 @@ export interface SponsorProfileRepository {
   requestChange(input: {
     displayName: string | null;
     logoPath: string | null;
+    /** null = não mexeu no link; `{ value: null }` = remover o link. */
+    link: { value: SponsorLink | null } | null;
     tokenHash: string;
     expiresAt: string;
   }): Promise<string>;
@@ -57,6 +62,8 @@ export interface SponsorProfileNotifier {
     displayNameBefore: string;
     displayNameAfter: string | null;
     logoChanged: boolean;
+    /** null = não mexeu; `href: null` = o link foi removido. */
+    linkChange: { href: string | null } | null;
     undoUrl: string;
   }): Promise<void>;
   /** Para a moderação: tem coisa na fila. */
@@ -129,9 +136,16 @@ export function createSponsorProfileService({
     async getMyProfile(): Promise<{
       account: SponsorProfileAccount;
       pending: SponsorProfileChange | null;
+      /** URL do logo enviado que espera conferência, para a pessoa ver o que mandou. */
+      pendingLogoUrl: string | null;
     }> {
       const account = await requireAccount();
-      return { account, pending: await repo.getMyPendingChange() };
+      const pending = await repo.getMyPendingChange();
+      return {
+        account,
+        pending,
+        pendingLogoUrl: pending?.novo_logo_path ? storage.publicUrl(pending.novo_logo_path) : null,
+      };
     },
 
     /**
@@ -161,13 +175,21 @@ export function createSponsorProfileService({
         logoPath = await guardarLogo(account, logo);
       }
 
-      if (!nomeMudou && !logoPath) return false;
+      // `undefined` = o formulário nem trouxe o campo; string vazia = remover.
+      const linkPedido = parsed.data.link;
+      const linkMudou = linkPedido !== undefined && !sameSponsorLink(linkPedido, account.link);
+
+      if (!nomeMudou && !logoPath && !linkMudou) return false;
+      const linkChange = linkMudou
+        ? { href: linkPedido ? sponsorLinkHref(linkPedido) : null }
+        : null;
 
       const token = makeToken();
       const expiresAt = new Date(now().getTime() + TOKEN_TTL_MS).toISOString();
       await repo.requestChange({
         displayName: nomeMudou ? nome : null,
         logoPath,
+        link: linkMudou ? { value: linkPedido ?? null } : null,
         tokenHash: hashToken(token),
         expiresAt,
       });
@@ -180,6 +202,7 @@ export function createSponsorProfileService({
         displayNameBefore: account.displayName,
         displayNameAfter: nomeMudou ? nome : null,
         logoChanged: Boolean(logoPath),
+        linkChange,
         undoUrl: `${base}/patrocinador/alteracao/${token}`,
       });
 
@@ -189,6 +212,9 @@ export function createSponsorProfileService({
           `Patrocinador: ${account.displayName} (${account.email})`,
           nomeMudou ? `Novo nome: ${nome}` : "Nome: sem alteração",
           logoPath ? "Logo: novo arquivo enviado" : "Logo: sem alteração",
+          linkChange
+            ? `Link da logo: ${linkChange.href ?? "removido"}`
+            : "Link da logo: sem alteração",
           `Aprovar ou recusar: ${base}/plataforma/alteracoes`,
         ],
       });

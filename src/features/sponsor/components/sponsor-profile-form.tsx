@@ -1,11 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useActionState, useState } from "react";
+import { Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
+import { parseSponsorLink, sponsorLinkHref } from "@/lib/sponsorLink";
 import { requestProfileChangeAction } from "@/server/actions/sponsorProfile";
+import { SponsorLogoPreview } from "./sponsor-logo-preview";
 
 /**
  * Edição do perfil do patrocinador.
@@ -20,28 +23,28 @@ export function SponsorProfileForm({
   displayName,
   phone,
   logoUrl,
+  pendingLogoUrl,
+  linkInicial,
   bloqueada,
 }: {
   displayName: string;
   phone: string | null;
   logoUrl: string | null;
+  /** O logo já enviado que espera conferência; aparece mesmo sem aprovação. */
+  pendingLogoUrl: string | null;
+  /** O link aprovado hoje, já no formato de digitação (site ou telefone). */
+  linkInicial: string;
   bloqueada: boolean;
 }) {
   const [state, formAction, pending] = useActionState(requestProfileChangeAction, undefined);
+  useActionToast(state);
+  const [linkDigitado, setLinkDigitado] = useState(linkInicial);
+  const linkInterpretado = parseSponsorLink(linkDigitado);
+  const destino =
+    linkInterpretado.ok && linkInterpretado.link ? sponsorLinkHref(linkInterpretado.link) : null;
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success ? (
-        <Alert>
-          <AlertDescription>{state.success}</AlertDescription>
-        </Alert>
-      ) : null}
-
       <div className="flex flex-col gap-2">
         <Label htmlFor="displayName">Nome exibido</Label>
         <Input
@@ -62,18 +65,7 @@ export function SponsorProfileForm({
       <div className="flex flex-col gap-2">
         <Label htmlFor="logo">Logo</Label>
         <div className="flex items-center gap-3">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
-            <img
-              src={logoUrl}
-              alt="Logo que aparece hoje nas páginas das igrejas"
-              className="size-14 shrink-0 rounded-lg border object-contain"
-            />
-          ) : (
-            <span className="flex size-14 shrink-0 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
-              sem logo
-            </span>
-          )}
+          <SponsorLogoPreview logoUrl={logoUrl} pendingLogoUrl={pendingLogoUrl} />
           <Input
             id="logo"
             name="logo"
@@ -84,6 +76,35 @@ export function SponsorProfileForm({
         </div>
         <p className="text-xs text-muted-foreground">
           PNG, JPG ou WebP, até 1 MB. Como o nome, o logo passa pela conferência antes de aparecer.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="link">Link da sua logo (opcional)</Label>
+        <Input
+          id="link"
+          name="link"
+          inputMode="url"
+          autoComplete="off"
+          value={linkDigitado}
+          onChange={(event) => setLinkDigitado(event.target.value)}
+          maxLength={300}
+          placeholder="meusite.com.br ou (11) 91234-5678"
+          aria-invalid={!linkInterpretado.ok}
+          disabled={bloqueada}
+        />
+        {!linkInterpretado.ok ? (
+          <p className="text-xs text-destructive">{linkInterpretado.message}</p>
+        ) : destino ? (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Link2 className="size-3.5 shrink-0" aria-hidden />
+            <span className="min-w-0 break-all">Quem clicar na sua logo vai abrir {destino}</span>
+          </p>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          Cole o endereço do seu site ou digite o número do seu WhatsApp — com o número, o link
+          para conversar é criado sozinho. Deixe vazio para a logo não ser clicável. Passa pela
+          conferência, como o nome e o logo.
         </p>
       </div>
 

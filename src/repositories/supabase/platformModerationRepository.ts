@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
+import type { SponsorLinkKind } from "@/lib/sponsorLink";
 import type { PlatformModerationRepository } from "@/services/platformModerationService";
 import type {
   AbuseReport,
@@ -17,6 +18,11 @@ interface PendingRow {
   novo_logo_path: string | null;
   atual_display_name: string;
   atual_logo_url: string | null;
+  novo_link_alterado: boolean;
+  novo_link_tipo: SponsorLinkKind | null;
+  novo_link_valor: string | null;
+  atual_link_tipo: SponsorLinkKind | null;
+  atual_link_valor: string | null;
   igrejas: number;
   created_at: string;
 }
@@ -47,6 +53,11 @@ export function createSupabasePlatformModerationRepository(
         novoLogoPath: row.novo_logo_path,
         atualDisplayName: row.atual_display_name,
         atualLogoUrl: row.atual_logo_url,
+        novoLinkAlterado: row.novo_link_alterado,
+        novoLinkTipo: row.novo_link_tipo,
+        novoLinkValor: row.novo_link_valor,
+        atualLinkTipo: row.atual_link_tipo,
+        atualLinkValor: row.atual_link_valor,
         igrejas: row.igrejas,
         createdAt: row.created_at,
       }));

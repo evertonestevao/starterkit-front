@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidDocumentFor, onlyDigits } from "@/lib/brDocument";
+import { parseSponsorLink, type SponsorLink } from "@/lib/sponsorLink";
 
 /**
  * Schemas do patrocinador, compartilhados entre client (feedback imediato) e
@@ -47,6 +48,22 @@ export const sponsorProfileUpdateSchema = z.object({
  * em nada — quem decide se há mudança de verdade é o service, comparando com
  * o que já está valendo.
  */
+/**
+ * Campo único "link ou WhatsApp". Vazio vira `null` (remover o link); o
+ * resultado já é o par (tipo, valor) normalizado, nunca o texto digitado.
+ */
+export const sponsorLinkSchema = z
+  .string()
+  .max(400, "Link muito longo")
+  .transform((texto, ctx): SponsorLink | null => {
+    const parsed = parseSponsorLink(texto);
+    if (!parsed.ok) {
+      ctx.addIssue({ code: "custom", message: parsed.message });
+      return z.NEVER;
+    }
+    return parsed.link;
+  });
+
 export const sponsorProfileChangeSchema = z.object({
   displayName: z
     .string()
@@ -55,6 +72,8 @@ export const sponsorProfileChangeSchema = z.object({
     .max(120)
     .optional(),
   logoPath: z.string().trim().min(1).max(400).optional(),
+  /** Ausente = não mexeu; string vazia = remover; senão, site ou WhatsApp. */
+  link: sponsorLinkSchema.optional(),
 });
 
 /**

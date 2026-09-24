@@ -3,13 +3,14 @@ import { Clock3, Lock, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SponsorProfileForm } from "@/features/sponsor/components/sponsor-profile-form";
+import { sponsorLinkToInput } from "@/lib/sponsorLink";
 import { getSponsorService } from "@/server/sponsor";
 import { getSponsorProfileService } from "@/server/sponsorProfile";
 
 export const metadata: Metadata = { title: "Meu perfil" };
 
 export default async function SponsorProfilePage() {
-  const [{ account, pending }, sponsorAccount] = await Promise.all([
+  const [{ account, pending, pendingLogoUrl }, sponsorAccount] = await Promise.all([
     (await getSponsorProfileService()).getMyProfile(),
     (await getSponsorService()).getMyAccount(),
   ]);
@@ -39,7 +40,13 @@ export default async function SponsorProfilePage() {
           <AlertDescription>
             Você já tem uma alteração esperando conferência
             {pending.novo_display_name ? ` (novo nome: “${pending.novo_display_name}”)` : ""}
-            {pending.novo_logo_path ? " (logo novo enviado)" : ""}. Até
+            {pending.novo_logo_path ? " (logo novo enviado)" : ""}
+            {pending.novo_link_alterado
+              ? pending.novo_link_valor
+                ? " (novo link da logo)"
+                : " (link da logo removido)"
+              : ""}
+            . Até
             ela ser aprovada, as igrejas seguem exibindo o perfil atual. Enviar outra substitui
             esta.
           </AlertDescription>
@@ -60,6 +67,10 @@ export default async function SponsorProfilePage() {
             displayName={account.displayName}
             phone={sponsorAccount?.phone ?? null}
             logoUrl={account.logoUrl}
+            pendingLogoUrl={pendingLogoUrl}
+            linkInicial={
+              account.link ? sponsorLinkToInput({ tipo: account.link.tipo, valor: account.link.valor }) : ""
+            }
             bloqueada={Boolean(account.securityHoldAt)}
           />
         </CardContent>
@@ -70,11 +81,12 @@ export default async function SponsorProfilePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <ShieldCheck className="size-4 text-primary" aria-hidden />
-            Por que o nome demora para mudar
+            Por que o nome, o logo e o link demoram para mudar
           </CardTitle>
           <CardDescription>
-            Ele aparece em páginas públicas de igrejas. Se qualquer um pudesse trocar na hora,
-            bastaria uma conta invadida para pôr algo indevido no ar. Por isso a equipe confere
+            Eles aparecem em páginas públicas de igrejas — e o link leva quem clica para fora
+            delas. Se qualquer um pudesse trocar na hora, bastaria uma conta invadida para pôr algo
+            indevido no ar. Por isso a equipe confere
             antes — e avisamos você por email a cada pedido, com um botão para desfazer caso não
             tenha sido você.
           </CardDescription>

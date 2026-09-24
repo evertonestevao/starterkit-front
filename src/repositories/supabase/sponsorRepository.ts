@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { formatChurchName } from "@/lib/churchName";
 import { AppError } from "@/lib/errors";
 import type { PriceTier } from "@/services/sponsorPricing";
 import type {
@@ -121,7 +122,7 @@ export function createSupabaseSponsorRepository(client: SupabaseClient): Sponsor
       if (!account) return [];
       const { data, error } = await client
         .from("sponsorships")
-        .select("*, church:churches(name, public_code)")
+        .select("*, church:churches(name, sobrenome, public_code)")
         // Não basta a RLS: a policy de admin de igreja também devolveria
         // patrocínios de OUTROS patrocinadores para quem é pastor e
         // patrocinador ao mesmo tempo.
@@ -131,12 +132,13 @@ export function createSupabaseSponsorRepository(client: SupabaseClient): Sponsor
         throw new AppError("internal_error", "Falha ao listar patrocínios", error);
       }
       return (data ?? []).map((row) => {
-        const church = row.church as { name: string; public_code: string } | null;
+        const church = row.church as { name: string; sobrenome: string | null; public_code: string } | null;
         const sponsorship = { ...row } as Sponsorship & { church?: unknown };
         delete sponsorship.church;
         return {
           ...sponsorship,
-          church_name: church?.name ?? "Igreja",
+          // Nome + sobrenome: várias igrejas do ministério dividem o mesmo nome.
+          church_name: church ? formatChurchName(church.name, church.sobrenome) : "Igreja",
           church_public_code: church?.public_code ?? "",
         } satisfies SponsorshipWithChurch;
       });
@@ -185,7 +187,7 @@ export function createSupabaseSponsorRepository(client: SupabaseClient): Sponsor
     async findPublicChurch(publicCode) {
       const { data, error } = await client
         .from("churches")
-        .select("id, name, public_code, company_id")
+        .select("id, name, sobrenome, public_code, company_id")
         .eq("public_code", publicCode)
         .is("deleted_at", null)
         .maybeSingle();
@@ -195,7 +197,7 @@ export function createSupabaseSponsorRepository(client: SupabaseClient): Sponsor
       if (!data) return null;
       return {
         id: data.id as string,
-        name: data.name as string,
+        name: formatChurchName(data.name as string, data.sobrenome as string | null),
         publicCode: data.public_code as string,
         hasOwner: Boolean(data.company_id),
       };
@@ -413,7 +415,7 @@ export function createSupabaseSponsorBillingStore(adminClient: SupabaseClient): 
     async findChurchByPublicCode(publicCode) {
       const { data, error } = await adminClient
         .from("churches")
-        .select("id, name, public_code, address, logo_url, company_id")
+        .select("id, name, sobrenome, public_code, address, logo_url, company_id")
         .eq("public_code", publicCode)
         .is("deleted_at", null)
         .maybeSingle();
@@ -421,7 +423,7 @@ export function createSupabaseSponsorBillingStore(adminClient: SupabaseClient): 
       if (!data) return null;
       return {
         id: data.id as string,
-        name: data.name as string,
+        name: formatChurchName(data.name as string, data.sobrenome as string | null),
         publicCode: data.public_code as string,
         address: (data.address as string | null) ?? null,
         logoUrl: (data.logo_url as string | null) ?? null,

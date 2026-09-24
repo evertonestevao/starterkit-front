@@ -48,3 +48,26 @@ export function isValidCnpj(value: string): boolean {
 export function isValidDocumentFor(kind: "person" | "business", value: string): boolean {
   return kind === "person" ? isValidCpf(value) : isValidCnpj(value);
 }
+
+/** Máscara de CPF enquanto digita: 000.000.000-00. Ignora o que passar de 11 dígitos. */
+export function formatCpf(value: string): string {
+  const digits = onlyDigits(value).slice(0, 11);
+  return digits
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
+}
+
+/** Máscara de CNPJ enquanto digita: 00.000.000/0000-00. Ignora o que passar de 14 dígitos. */
+export function formatCnpj(value: string): string {
+  const digits = onlyDigits(value).slice(0, 14);
+  return digits
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
+    .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
+}
+
+export function formatDocumentFor(kind: "person" | "business", value: string): string {
+  return kind === "person" ? formatCpf(value) : formatCnpj(value);
+}

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfileChangeReview } from "@/features/platform/components/profile-change-review";
 import { SecurityHoldList } from "@/features/platform/components/security-hold-list";
+import { sponsorLinkHref } from "@/lib/sponsorLink";
 import { getPendingLogoUrl, getPlatformModerationService } from "@/server/platform";
 import type { PendingProfileChange } from "@/types/sponsorship";
 
@@ -30,6 +31,30 @@ function NameDiff({ change }: { change: PendingProfileChange }) {
   );
 }
 
+/**
+ * Destino da logo, antes e depois. O endereço aparece POR EXTENSO e não é um
+ * link clicável: quem modera precisa ler para onde aponta (e reparar em
+ * `paypa1.com`), e abrir um endereço suspeito não deve estar a um clique.
+ */
+function LinkDiff({ change }: { change: PendingProfileChange }) {
+  if (!change.novoLinkAlterado) return null;
+  const atual = sponsorLinkHref({ tipo: change.atualLinkTipo, valor: change.atualLinkValor });
+  const novo = sponsorLinkHref({ tipo: change.novoLinkTipo, valor: change.novoLinkValor });
+  const rotulo = (tipo: string | null) => (tipo === "whatsapp" ? "WhatsApp" : "site");
+  return (
+    <div className="flex flex-col gap-1 text-sm">
+      <span className="text-xs font-medium text-muted-foreground">Link da logo</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-muted-foreground line-through break-all">{atual ?? "sem link"}</span>
+        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="font-medium break-all">
+          {novo ? `${novo} (${rotulo(change.novoLinkTipo)})` : "remover o link"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default async function PlatformChangesPage() {
   const service = await getPlatformModerationService();
   const [pendentes, travadas] = await Promise.all([
@@ -42,7 +67,7 @@ export default async function PlatformChangesPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Alterações pendentes</h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Nome e logo de patrocinadores aparecem nas páginas públicas das igrejas. Nada entra no ar
+          Nome, logo e link de patrocinadores aparecem nas páginas públicas das igrejas. Nada entra no ar
           sem passar por aqui — até a decisão, as igrejas seguem exibindo o perfil anterior.
         </p>
       </div>
@@ -55,7 +80,7 @@ export default async function PlatformChangesPage() {
         <EmptyState
           icon={Inbox}
           title="Nada esperando"
-          description="Quando um patrocinador pedir alteração de nome ou logo, ela aparece aqui e você recebe um email."
+          description="Quando um patrocinador pedir alteração de nome, logo ou link, ela aparece aqui e você recebe um email."
         />
       ) : (
         <div className="flex flex-col gap-4">
@@ -75,6 +100,7 @@ export default async function PlatformChangesPage() {
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <NameDiff change={change} />
+                <LinkDiff change={change} />
                 {change.novoLogoPath ? (
                   <div className="flex flex-wrap items-center gap-4">
                     {change.atualLogoUrl ? (
