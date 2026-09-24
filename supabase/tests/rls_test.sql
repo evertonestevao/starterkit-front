@@ -369,12 +369,12 @@ begin
 
   -- Coluna liberada segue editável pelo admin da empresa (não quebramos o CRUD).
   update public.churches
-  set name = 'Igreja Alice Renomeada'
+  set nome_proprio = 'Igreja Alice Renomeada'
   where id = 'd1d1d1d1-0000-4000-8000-000000000001';
 
   -- Mas não na igreja do outro tenant.
   update public.churches
-  set name = 'invadida'
+  set nome_proprio = 'invadida'
   where id = 'd2d2d2d2-0000-4000-8000-000000000002';
   if found then
     raise exception 'FALHA dominio: alice renomeou a igreja do bob';
@@ -1103,6 +1103,145 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Link do patrocinador (migration 20260926100000).
+--
+-- O link leva quem clica para fora da plataforma a partir de uma página
+-- pública: tem o mesmo tratamento do nome e do logo. O que está sendo provado:
+-- o dono da conta não escreve o link direto, o banco só aceita http(s)/número
+-- de WhatsApp, só a moderação publica, a vitrine devolve o link aprovado e o
+-- "não fui eu" desfaz o link.
+-- ---------------------------------------------------------------------------
+reset role;
+
+-- O CHECK vale até para quem tem service_role: nada de javascript: no banco.
+do $$
+begin
+  begin
+    update public.sponsor_accounts
+    set link_tipo = 'link', link_valor = 'javascript:alert(1)'
+    where id = '5a5a5a5a-0000-4000-8000-000000000001';
+    raise exception 'FALHA sponsor_accounts: aceitou link javascript:';
+  exception when check_violation then null; -- esperado
+  end;
+
+  begin
+    update public.sponsor_accounts
+    set link_tipo = 'whatsapp', link_valor = '(11) 91234-5678'
+    where id = '5a5a5a5a-0000-4000-8000-000000000001';
+    raise exception 'FALHA sponsor_accounts: aceitou WhatsApp fora do formato';
+  exception when check_violation then null; -- esperado
+  end;
+
+  begin
+    insert into public.sponsor_profile_changes
+      (sponsor_account_id, anterior_display_name, cancel_token_hash, token_expira_em,
+       novo_link_alterado, novo_link_tipo, novo_link_valor)
+    values ('5a5a5a5a-0000-4000-8000-000000000001', 'Padaria da Alice', 'hash-js', now() + interval '30 days',
+            true, 'link', 'javascript:alert(1)');
+    raise exception 'FALHA sponsor_profile_changes: aceitou pedido com link javascript:';
+  exception when check_violation then null; -- esperado
+  end;
+end $$;
+
+-- Pedido de link do Bob (a conta dele nao tem pendente: o de nome ja foi aprovado).
+insert into public.sponsor_profile_changes
+  (id, sponsor_account_id, anterior_display_name, cancel_token_hash, token_expira_em,
+   novo_link_alterado, novo_link_tipo, novo_link_valor)
+values
+  ('c0c0c0c0-0000-4000-8000-00000000000c', '5b5b5b5b-0000-4000-8000-000000000002',
+   'Mercado Novo', 'hash-bob-link', now() + interval '30 days',
+   true, 'whatsapp', '5511912345678');
+
+-- Dono da conta (Alice, patrocinadora 5a): nao escreve o link direto.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  begin
+    update public.sponsor_accounts set link_tipo = 'link', link_valor = 'https://malicioso.example/'
+    where id = '5a5a5a5a-0000-4000-8000-000000000001';
+    raise exception 'FALHA sponsor_accounts: dono ainda escreve o link direto';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  begin
+    update public.sponsor_accounts set link_valor = null
+    where id = '5a5a5a5a-0000-4000-8000-000000000001';
+    raise exception 'FALHA sponsor_accounts: dono ainda escreve link_valor direto';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- Como moderacao (Alice tambem e staff), aprovar e o unico caminho que publica.
+do $$
+declare ok boolean;
+begin
+  select public.review_profile_change('c0c0c0c0-0000-4000-8000-00000000000c', true) into ok;
+  if not ok then raise exception 'FALHA review_profile_change: aprovacao do link nao aplicou'; end if;
+end $$;
+
+reset role;
+
+do $$
+declare tipo text; valor text; nome text;
+begin
+  select link_tipo, link_valor, display_name into tipo, valor, nome
+  from public.sponsor_accounts where id = '5b5b5b5b-0000-4000-8000-000000000002';
+  if tipo is distinct from 'whatsapp' or valor is distinct from '5511912345678' then
+    raise exception 'FALHA review_profile_change: link publico ficou %/%', coalesce(tipo, '<null>'), coalesce(valor, '<null>');
+  end if;
+  -- Pedido so de link nao mexe no nome.
+  if nome is distinct from 'Mercado Novo' then
+    raise exception 'FALHA review_profile_change: pedido de link alterou o nome (%)', nome;
+  end if;
+end $$;
+
+-- A vitrine publica (anon) devolve o link aprovado da conta do patrocinador.
+update public.sponsor_accounts
+set link_tipo = 'link', link_valor = 'https://loja-do-dave.example/'
+where id = 'a0000000-0000-4000-8000-00000000000d';
+
+set local role anon;
+
+do $$
+declare n int; tipo text; valor text;
+begin
+  select count(*), max(link_tipo), max(link_valor) into n, tipo, valor
+  from public.list_church_sponsors('d2d2d2d2-0000-4000-8000-000000000002');
+  if n <> 1 or tipo is distinct from 'link' or valor is distinct from 'https://loja-do-dave.example/' then
+    raise exception 'FALHA vitrine: link nao veio na vitrine publica (% linhas, %/%)', n, tipo, valor;
+  end if;
+end $$;
+
+-- "Nao fui eu" (sem sessao): desfaz o link ja aprovado e tranca a conta.
+do $$
+declare ok boolean;
+begin
+  select public.cancel_profile_change_by_token('hash-bob-link') into ok;
+  if not ok then raise exception 'FALHA cancel_profile_change_by_token: nao desfez o pedido do link'; end if;
+end $$;
+
+reset role;
+
+do $$
+declare tipo text; valor text;
+begin
+  select link_tipo, link_valor into tipo, valor
+  from public.sponsor_accounts where id = '5b5b5b5b-0000-4000-8000-000000000002';
+  if tipo is not null or valor is not null then
+    raise exception 'FALHA cancel_profile_change_by_token: link continuou publicado (%/%)', tipo, valor;
+  end if;
+end $$;
+
+-- Destrava a conta e limpa o link do Dave: o que segue nao depende disto.
+update public.sponsor_accounts set security_hold_at = null
+where id = '5b5b5b5b-0000-4000-8000-000000000002';
+update public.sponsor_accounts set link_tipo = null, link_valor = null
+where id = 'a0000000-0000-4000-8000-00000000000d';
+
+-- ---------------------------------------------------------------------------
 -- Esconder patrocinador e denunciar (migration 20260918140000).
 --
 -- Esconder é decisão SÓ da igreja e tira a marca da vitrine pública sem tocar
@@ -1427,6 +1566,79 @@ begin
   select public.resolve_template('d1d1d1d1-0000-4000-8000-000000000001') into v;
   if v is distinct from (select id from public.templates where slug = 'classico') then
     raise exception 'FALHA resolve_template: anon nao recebeu o tema escolhido (%)', coalesce(v::text, '<null>');
+  end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Cor de destaque da página (migration 20260926110000).
+--
+-- A cor vira atributo `style` numa página pública, então o banco só aceita
+-- #rrggbb; quem escreve é o admin da própria igreja, nunca o de outra; e o
+-- visitante (anon) lê a cor junto com o tema.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  -- CHECK vale até para superuser: nada de CSS solto no banco.
+  begin
+    update public.churches set accent_color = 'red' where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+    raise exception 'FALHA accent_color: aceitou nome de cor';
+  exception when check_violation then null; -- esperado
+  end;
+  begin
+    update public.churches set accent_color = '#2563eb;background:url(//x)'
+    where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+    raise exception 'FALHA accent_color: aceitou CSS injetado';
+  exception when check_violation then null; -- esperado
+  end;
+  begin
+    update public.churches set accent_color = '#2563EB' where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+    raise exception 'FALHA accent_color: aceitou maiusculas (o service normaliza antes)';
+  exception when check_violation then null; -- esperado
+  end;
+end $$;
+
+-- Alice administra a igreja d1: muda a cor dela; a da igreja do Bob (d2), não.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+update public.churches set accent_color = '#2563eb' where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+update public.churches set accent_color = '#be123c' where id = 'd2d2d2d2-0000-4000-8000-000000000002';
+
+reset role;
+
+do $$
+declare cor_alice text; cor_bob text;
+begin
+  select accent_color into cor_alice from public.churches where id = 'd1d1d1d1-0000-4000-8000-000000000001';
+  select accent_color into cor_bob   from public.churches where id = 'd2d2d2d2-0000-4000-8000-000000000002';
+  if cor_alice is distinct from '#2563eb' then
+    raise exception 'FALHA accent_color: admin nao gravou a cor da propria igreja (%)', coalesce(cor_alice, '<null>');
+  end if;
+  if cor_bob is not null then
+    raise exception 'FALHA accent_color: admin mudou a cor da igreja de OUTRA empresa (%)', cor_bob;
+  end if;
+end $$;
+
+-- O visitante lê tema e cor juntos.
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+declare v_tema uuid; v_cor text; n int;
+begin
+  select template_id, accent_color into v_tema, v_cor
+  from public.resolve_church_appearance('d1d1d1d1-0000-4000-8000-000000000001');
+  if v_tema is distinct from (select id from public.templates where slug = 'classico') or v_cor is distinct from '#2563eb' then
+    raise exception 'FALHA resolve_church_appearance: anon recebeu tema/cor inesperados (%/%)', coalesce(v_tema::text, '<null>'), coalesce(v_cor, '<null>');
+  end if;
+
+  -- Igreja sem tema próprio e sem mãe: nenhuma linha (a página usa o padrão).
+  select count(*) into n from public.resolve_church_appearance('d2d2d2d2-0000-4000-8000-000000000002');
+  if n <> 0 then
+    raise exception 'FALHA resolve_church_appearance: igreja sem tema devolveu % linha(s)', n;
   end if;
 end $$;
 
@@ -2387,7 +2599,7 @@ declare n int;
 begin
   -- A própria igreja: nome, endereço, redes e endereço público.
   update public.churches
-  set name = 'Sub X Renomeada',
+  set nome_proprio = 'Sub X Renomeada',
       address = 'Rua Nova, 100',
       social_links = '{"instagram":"@subx"}'::jsonb,
       public_code = 'rls-arv-subx-novo'
@@ -2396,7 +2608,7 @@ begin
   if n <> 1 then raise exception 'FALHA perfil: dona nao editou a propria pagina'; end if;
 
   -- A da congregação abaixo dela: a árvore dá leitura, não escrita.
-  update public.churches set name = 'Invadida'
+  update public.churches set nome_proprio = 'Invadida'
   where id = '7d7d7d7d-0000-4000-8000-000000000004';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'FALHA perfil: subsede editou a pagina da congregacao'; end if;
@@ -2741,6 +2953,826 @@ begin
   perform public.mark_prayer_requests_seen('6c6c6c6c-0000-4000-8000-000000000002', now());
   select count(*) into n from public.prayer_requests_last_seen;
   if n <> 1 then raise exception 'FALHA visto: segundo admin nao conseguiu marcar a propria'; end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Campanhas: rascunho não é público, dono edita, outro tenant não alcança,
+-- doação nasce só pela função, e a confirmação PIX soma o total uma vez só.
+-- ---------------------------------------------------------------------------
+-- Fixture com id explícito: roda antes do role switch (mesmo motivo das
+-- igrejas no topo do arquivo — o GRANT de insert de authenticated não inclui
+-- `id`, só o superuser desta seção de setup escreve id escolhido).
+insert into public.campaigns (id, church_id, titulo, historia, meta_cents, metodo_recebimento) values
+  ('7a7a7a7a-0000-4000-8000-000000000001', 'd1d1d1d1-0000-4000-8000-000000000001', 'Reforma do telhado', 'Precisamos trocar o telhado antes das chuvas.', 500000, 'pix'),
+  ('7a7a7a7a-0000-4000-8000-000000000002', 'd1d1d1d1-0000-4000-8000-000000000001', 'Cartão da campanha', 'Campanha para testar o caminho do cartão.', 300000, 'gateway');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  if (select status from public.campaigns where id = '7a7a7a7a-0000-4000-8000-000000000001') <> 'rascunho' then
+    raise exception 'FALHA campanha: deveria nascer em rascunho';
+  end if;
+end $$;
+
+-- Bob (outra empresa) não cria campanha na igreja da Alice, nem vê o rascunho.
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+do $$
+begin
+  begin
+    insert into public.campaigns (church_id, titulo, historia, meta_cents, metodo_recebimento)
+    values ('d1d1d1d1-0000-4000-8000-000000000001', 'Invasão', 'Tentativa de outro tenant.', 100, 'pix');
+    raise exception 'FALHA campanha: bob criou campanha na igreja da alice';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  perform 1 from public.campaigns where id = '7a7a7a7a-0000-4000-8000-000000000001';
+  if found then
+    raise exception 'FALHA campanha: bob enxergou rascunho de outro tenant';
+  end if;
+end $$;
+
+-- Alice ativa as duas campanhas.
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+update public.campaigns set status = 'ativa'
+where id in ('7a7a7a7a-0000-4000-8000-000000000001', '7a7a7a7a-0000-4000-8000-000000000002');
+
+-- Ninguém escreve o total direto: a coluna nem está no GRANT de authenticated.
+do $$
+begin
+  begin
+    update public.campaigns set total_arrecadado_liquido_cents = 999999
+    where id = '7a7a7a7a-0000-4000-8000-000000000001';
+    raise exception 'FALHA campanha: alice escreveu o total direto pela coluna';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- Bob não edita a campanha ativa da Alice.
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+do $$
+begin
+  update public.campaigns set titulo = 'sequestrada' where id = '7a7a7a7a-0000-4000-8000-000000000001';
+  if found then
+    raise exception 'FALHA campanha: bob editou campanha ativa de outro tenant';
+  end if;
+end $$;
+
+-- Anônimo enxerga a campanha ativa (é para isso que ela existe), mas não
+-- alcança a tabela de doações de jeito nenhum — nem GRANT de select existe
+-- para o papel, então nem precisa de doação de verdade para provar isso.
+set local role anon;
+do $$
+begin
+  perform 1 from public.campaigns where id = '7a7a7a7a-0000-4000-8000-000000000001';
+  if not found then
+    raise exception 'FALHA campanha: anon nao viu campanha ativa';
+  end if;
+
+  begin
+    perform 1 from public.campaign_donations where id = '00000000-0000-0000-0000-000000000000';
+    raise exception 'FALHA doacao: anon leu a tabela de doacoes';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- Doação: só pela função, nunca INSERT direto; validação de nome/valor
+-- acontece antes de tocar o banco; e a função recusa método fora do
+-- combinado pela campanha (pix numa campanha de cartão, e vice-versa).
+-- Volta para `authenticated`: o bloco anterior deixou a sessão como `anon`,
+-- e a tabela temporária abaixo precisa ficar com um dono que a sessão
+-- seguinte (também `authenticated`) ainda consiga ler.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+do $$
+declare
+  v_doacao_pix uuid;
+  v_doacao_gateway uuid;
+begin
+  begin
+    insert into public.campaign_donations (campaign_id, doador_nome, doador_telefone, valor_bruto_cents, metodo)
+    values ('7a7a7a7a-0000-4000-8000-000000000001', 'Fulano', '11999999999', 1000, 'pix');
+    raise exception 'FALHA doacao: insert direto na tabela foi aceito';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  begin
+    perform public.criar_doacao_pix_campanha('7a7a7a7a-0000-4000-8000-000000000001', 'A', '11999999999', 1000);
+    raise exception 'FALHA doacao: nome de 1 letra foi aceito';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  begin
+    perform public.criar_doacao_pix_campanha('7a7a7a7a-0000-4000-8000-000000000002', 'Fulano de Tal', '11999999999', 1000);
+    raise exception 'FALHA doacao: pix aceito numa campanha de cartao';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  begin
+    perform public.registrar_doacao_gateway_campanha('7a7a7a7a-0000-4000-8000-000000000001', 'Fulano de Tal', null, 1000);
+    raise exception 'FALHA doacao: cartao aceito numa campanha pix';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  v_doacao_pix := public.criar_doacao_pix_campanha(
+    '7a7a7a7a-0000-4000-8000-000000000001', 'Fulano de Tal', '11999999999', 15000);
+  v_doacao_gateway := public.registrar_doacao_gateway_campanha(
+    '7a7a7a7a-0000-4000-8000-000000000002', 'Ciclana', null, 8000);
+  if v_doacao_pix is null or v_doacao_gateway is null then
+    raise exception 'FALHA doacao: funcao nao devolveu id';
+  end if;
+
+  -- Guarda os ids numa tabela temporária: DO blocks não compartilham escopo.
+  create temp table if not exists rls_tmp_campanha_ids (chave text primary key, valor uuid);
+  insert into rls_tmp_campanha_ids values ('pix', v_doacao_pix), ('gateway', v_doacao_gateway)
+  on conflict (chave) do update set valor = excluded.valor;
+end $$;
+
+-- Bob (outra empresa) não confirma a doação PIX da campanha da Alice.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+do $$
+declare v_doacao_pix uuid;
+begin
+  select valor into v_doacao_pix from rls_tmp_campanha_ids where chave = 'pix';
+  begin
+    perform public.confirmar_doacao_pix(v_doacao_pix);
+    raise exception 'FALHA doacao: bob confirmou doacao de outro tenant';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- Alice confirma a própria doação PIX: soma no total, e confirmar de novo
+-- (duplo clique, ou corrida entre duas abas) não soma outra vez.
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+do $$
+declare
+  v_doacao_pix uuid;
+  v_doacao_gateway uuid;
+  v_total int;
+  v_status text;
+begin
+  select valor into v_doacao_pix from rls_tmp_campanha_ids where chave = 'pix';
+  select valor into v_doacao_gateway from rls_tmp_campanha_ids where chave = 'gateway';
+
+  -- Confirmar uma doação de cartão pela função de PIX é recusado: são
+  -- caminhos diferentes de propósito (cartão confirma sozinho, no webhook).
+  begin
+    perform public.confirmar_doacao_pix(v_doacao_gateway);
+    raise exception 'FALHA doacao: confirmar_doacao_pix aceitou uma doacao de cartao';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  perform public.confirmar_doacao_pix(v_doacao_pix);
+  select total_arrecadado_liquido_cents into v_total
+  from public.campaigns where id = '7a7a7a7a-0000-4000-8000-000000000001';
+  if v_total <> 15000 then
+    raise exception 'FALHA doacao: total nao subiu o valor da doacao confirmada (veio %)', v_total;
+  end if;
+
+  select status into v_status from public.campaign_donations where id = v_doacao_pix;
+  if v_status <> 'confirmada' then
+    raise exception 'FALHA doacao: status nao virou confirmada (veio %)', v_status;
+  end if;
+
+  -- Confirmar de novo: idempotente, o total não muda.
+  perform public.confirmar_doacao_pix(v_doacao_pix);
+  select total_arrecadado_liquido_cents into v_total
+  from public.campaigns where id = '7a7a7a7a-0000-4000-8000-000000000001';
+  if v_total <> 15000 then
+    raise exception 'FALHA doacao: confirmar duas vezes somou o valor duas vezes (veio %)', v_total;
+  end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Herança do tema E da cor pela árvore (migration 20260926110000).
+--
+-- Quem herda usa tema e cor da igreja-mãe mais próxima que personalizou.
+-- Herdar só o tema deixaria a congregação com a cor errada.
+-- ---------------------------------------------------------------------------
+reset role;
+
+update public.churches
+set template_mode = 'custom',
+    template_id = (select id from public.templates where slug = 'clean'),
+    accent_color = '#be123c'
+where id = '7d7d7d7d-0000-4000-8000-000000000001'; -- Sede
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+declare v_tema uuid; v_cor text;
+begin
+  -- Sub Y e Cong B (Sede > Sub Y > Cong B) herdam da Sede.
+  select template_id, accent_color into v_tema, v_cor
+  from public.resolve_church_appearance('7d7d7d7d-0000-4000-8000-000000000005');
+  if v_tema is distinct from (select id from public.templates where slug = 'clean') or v_cor is distinct from '#be123c' then
+    raise exception 'FALHA herdar aparencia: Cong B nao herdou tema+cor da Sede (%/%)', coalesce(v_tema::text, '<null>'), coalesce(v_cor, '<null>');
+  end if;
+
+  -- Cong A (Sede > Sub X > Cong A, ligada mais acima neste teste) herda
+  -- da Sede por DOIS níveis.
+  select template_id, accent_color into v_tema, v_cor
+  from public.resolve_church_appearance('7d7d7d7d-0000-4000-8000-000000000004');
+  if v_tema is distinct from (select id from public.templates where slug = 'clean') or v_cor is distinct from '#be123c' then
+    raise exception 'FALHA herdar aparencia: Cong A nao herdou da Sede por dois niveis (%/%)', coalesce(v_tema::text, '<null>'), coalesce(v_cor, '<null>');
+  end if;
+end $$;
+
+reset role;
+
+-- Quem personaliza (custom) ganha os próprios; cor nula = cor padrão do tema.
+update public.churches
+set template_mode = 'custom',
+    template_id = (select id from public.templates where slug = 'dark'),
+    accent_color = null
+where id = '7d7d7d7d-0000-4000-8000-000000000003'; -- Sub Y
+
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+declare v_tema uuid; v_cor text;
+begin
+  select template_id, accent_color into v_tema, v_cor
+  from public.resolve_church_appearance('7d7d7d7d-0000-4000-8000-000000000005'); -- Cong B, agora herda da Sub Y
+  if v_tema is distinct from (select id from public.templates where slug = 'dark') or v_cor is not null then
+    raise exception 'FALHA herdar aparencia: Cong B nao seguiu a Sub Y mais proxima (%/%)', coalesce(v_tema::text, '<null>'), coalesce(v_cor, '<null>');
+  end if;
+
+  -- A outra ramificação não muda: Cong A segue herdando da Sede.
+  select template_id, accent_color into v_tema, v_cor
+  from public.resolve_church_appearance('7d7d7d7d-0000-4000-8000-000000000004');
+  if v_tema is distinct from (select id from public.templates where slug = 'clean') or v_cor is distinct from '#be123c' then
+    raise exception 'FALHA herdar aparencia: personalizar a Sub Y mexeu na ramificacao da Sub X';
+  end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Nome e sobrenome (migration 20260926120000).
+--
+-- `name` (o que aparece) deixou de ser escrito pelo client: quem escreve é
+-- `nome_proprio`, e um trigger deriva `name` — do próprio, ou do da igreja
+-- superior quando `herdar_nome`. Sobrenome é individual.
+-- ---------------------------------------------------------------------------
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  -- `name` é derivado: o GRANT de escrita saiu.
+  begin
+    update public.churches set name = 'Direto' where id = '7d7d7d7d-0000-4000-8000-000000000003';
+    raise exception 'FALHA nome: client ainda escreve name direto';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  update public.churches
+  set nome_proprio = 'Sub Y Novo', sobrenome = 'Norte'
+  where id = '7d7d7d7d-0000-4000-8000-000000000003';
+
+  -- Outra empresa: a policy esconde a linha (0 linhas afetadas).
+  update public.churches set nome_proprio = 'Invadida' where id = '7d7d7d7d-0000-4000-8000-000000000004';
+end $$;
+
+reset role;
+
+do $$
+declare v_nome text; v_sob text; v_outra text;
+begin
+  select name, sobrenome into v_nome, v_sob from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000003';
+  if v_nome is distinct from 'Sub Y Novo' or v_sob is distinct from 'Norte' then
+    raise exception 'FALHA nome: name nao acompanhou nome_proprio (%/%)', v_nome, v_sob;
+  end if;
+  select name into v_outra from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000004';
+  if v_outra = 'Invadida' then
+    raise exception 'FALHA nome: admin renomeou a igreja de OUTRA empresa';
+  end if;
+end $$;
+
+-- Cong B (abaixo de Sub Y) passa a herdar o nome; o sobrenome dela continua dela.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+
+update public.churches set herdar_nome = true, sobrenome = 'Prainha'
+where id = '7d7d7d7d-0000-4000-8000-000000000005';
+
+reset role;
+
+do $$
+declare v_nome text; v_sob text;
+begin
+  select name, sobrenome into v_nome, v_sob from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if v_nome is distinct from 'Sub Y Novo' or v_sob is distinct from 'Prainha' then
+    raise exception 'FALHA nome: Cong B nao herdou o nome da Sub Y (%/%)', v_nome, v_sob;
+  end if;
+end $$;
+
+-- A superior muda o nome: quem herda acompanha (o gatilho por coluna nao dispararia
+-- aqui, porque `name` muda dentro de outro trigger — por isso o gatilho e por linha).
+update public.churches set nome_proprio = 'Sub Y Final' where id = '7d7d7d7d-0000-4000-8000-000000000003';
+
+do $$
+declare v_nome text; v_proprio text;
+begin
+  select name, nome_proprio into v_nome, v_proprio from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if v_nome is distinct from 'Sub Y Final' then
+    raise exception 'FALHA nome: mudanca da superior nao chegou em quem herda (%)', v_nome;
+  end if;
+  if v_proprio is distinct from 'Cong B' then
+    raise exception 'FALHA nome: o nome proprio de quem herda foi sobrescrito (%)', v_proprio;
+  end if;
+end $$;
+
+-- Sem igreja superior nao ha o que herdar: o trigger derruba a marca.
+update public.churches set herdar_nome = true where id = '7d7d7d7d-0000-4000-8000-000000000001';
+
+do $$
+declare v_herda boolean;
+begin
+  select herdar_nome into v_herda from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000001';
+  if v_herda then raise exception 'FALHA nome: igreja sem superior ficou com herdar_nome'; end if;
+end $$;
+
+-- O visitante lê o sobrenome e monta o nome completo.
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+declare v_sob text;
+begin
+  select sobrenome into v_sob from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if v_sob is distinct from 'Prainha' then
+    raise exception 'FALHA nome: anon nao le o sobrenome (%)', coalesce(v_sob, '<null>');
+  end if;
+  if public.church_full_name('AD Ipiranga', 'Prainha') <> 'AD Ipiranga · Prainha'
+     or public.church_full_name('AD Ipiranga', '  ') <> 'AD Ipiranga' then
+    raise exception 'FALHA nome: church_full_name inesperado';
+  end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Vínculo entre igrejas: link da superior + pedido aprovado por ela
+-- (migration 20260926130000).
+--
+-- O link NÃO liga nada: gera um pedido, e só a aprovação da superior muda a
+-- árvore. O que está sendo provado: quem pode gerar link; que pedir não muda
+-- a árvore; que só a superior decide; que terceiros não leem link nem pedido
+-- alheios; que a superior só move igrejas dentro da árvore dela; e que cada
+-- passo avisa a outra ponta.
+-- ---------------------------------------------------------------------------
+reset role;
+
+-- Cong B (abaixo de Sub Y) sai da árvore e fica independente.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+
+do $$
+declare r record;
+begin
+  select * into r from public.end_church_link('7d7d7d7d-0000-4000-8000-000000000005');
+  if r.other_company_id is distinct from '6c6c6c6c-0000-4000-8000-000000000003' then
+    raise exception 'FALHA vinculo: end_church_link nao apontou a outra empresa (%)', r.other_company_id;
+  end if;
+  begin
+    perform public.end_church_link('7d7d7d7d-0000-4000-8000-000000000005');
+    raise exception 'FALHA vinculo: desfez vinculo que nao existia';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+end $$;
+
+reset role;
+
+do $$
+declare v_pai uuid; v_tipo text; v_herda boolean; v_nome text; n int;
+begin
+  select parent_id, tipo, herdar_nome, name into v_pai, v_tipo, v_herda, v_nome
+  from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if v_pai is not null or v_tipo <> 'subsede' then
+    raise exception 'FALHA vinculo: Cong B nao ficou independente (%/%)', v_pai, v_tipo;
+  end if;
+  -- Sem superior, volta ao nome proprio.
+  if v_herda or v_nome <> 'Cong B' then
+    raise exception 'FALHA vinculo: nome nao voltou ao proprio ao sair (%)', v_nome;
+  end if;
+  select count(*) into n from public.church_link_notices
+  where company_id = '6c6c6c6c-0000-4000-8000-000000000003' and kind = 'encerrado';
+  if n <> 1 then raise exception 'FALHA vinculo: a outra ponta nao recebeu o aviso (% avisos)', n; end if;
+end $$;
+
+-- ------------------------- quem pode gerar link ----------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_id uuid;
+begin
+  -- Subsede que já tem superior só convida congregações.
+  begin
+    perform public.create_church_link_invite('7d7d7d7d-0000-4000-8000-000000000003', 'subsede',
+      repeat('a', 64), now() + interval '30 days', 5);
+    raise exception 'FALHA vinculo: subsede com superior gerou link de subsede';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+  -- Em nome de igreja de OUTRA empresa: barrado.
+  begin
+    perform public.create_church_link_invite('7d7d7d7d-0000-4000-8000-000000000005', 'congregacao',
+      repeat('b', 64), now() + interval '30 days', 5);
+    raise exception 'FALHA vinculo: admin gerou link em nome de igreja alheia';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+  -- Validade no passado e limite de usos absurdo.
+  begin
+    perform public.create_church_link_invite('7d7d7d7d-0000-4000-8000-000000000003', 'congregacao',
+      repeat('d', 64), now() - interval '1 day', 5);
+    raise exception 'FALHA vinculo: aceitou link ja vencido';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+  begin
+    perform public.create_church_link_invite('7d7d7d7d-0000-4000-8000-000000000003', 'congregacao',
+      repeat('d', 64), now() + interval '30 days', 500);
+    raise exception 'FALHA vinculo: aceitou limite de usos absurdo';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  -- O link valido: 1 uso, para congregacoes.
+  v_id := public.create_church_link_invite('7d7d7d7d-0000-4000-8000-000000000003', 'congregacao',
+    repeat('c', 64), now() + interval '30 days', 1);
+  if v_id is null then raise exception 'FALHA vinculo: link nao foi criado'; end if;
+end $$;
+
+-- Member não gera link.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000006","email":"rls-membx@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  begin
+    perform public.create_church_link_invite('7d7d7d7d-0000-4000-8000-000000000002', 'congregacao',
+      repeat('e', 64), now() + interval '30 days', 5);
+    raise exception 'FALHA vinculo: member gerou link';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- Congregação não gera link, e um terceiro (Cong A) não lê link nem pedido alheio.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000004","email":"rls-conga@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  begin
+    perform public.create_church_link_invite('7d7d7d7d-0000-4000-8000-000000000004', 'congregacao',
+      repeat('f', 64), now() + interval '30 days', 5);
+    raise exception 'FALHA vinculo: congregacao gerou link';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  select count(*) into n from public.church_link_invites;
+  if n <> 0 then raise exception 'FALHA vinculo: terceiro leu % link(s) alheio(s)', n; end if;
+  select count(*) into n from public.church_link_requests;
+  if n <> 0 then raise exception 'FALHA vinculo: terceiro leu % pedido(s) alheio(s)', n; end if;
+  begin
+    perform token_hash from public.church_link_invites;
+    raise exception 'FALHA vinculo: authenticated le token_hash';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- Nem pede em nome de uma igreja que nao e dele.
+  begin
+    perform public.request_church_link(repeat('c', 64), '7d7d7d7d-0000-4000-8000-000000000005');
+    raise exception 'FALHA vinculo: terceiro pediu por igreja alheia';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- ---------------------- a igreja de baixo abre e PEDE -----------------------
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int; r record;
+begin
+  select count(*) into n from public.get_church_link_invite(repeat('c', 64)) where status = 'ativo' and not is_mine;
+  if n <> 1 then raise exception 'FALHA vinculo: preview do link nao abriu para o destinatario'; end if;
+
+  select * into r from public.request_church_link(repeat('c', 64), '7d7d7d7d-0000-4000-8000-000000000005');
+  if r.parent_company_id is distinct from '6c6c6c6c-0000-4000-8000-000000000003' or r.tipo_solicitado <> 'congregacao' then
+    raise exception 'FALHA vinculo: pedido com dados inesperados';
+  end if;
+
+  -- Um pedido pendente por igreja.
+  begin
+    perform public.request_church_link(repeat('c', 64), '7d7d7d7d-0000-4000-8000-000000000005');
+    raise exception 'FALHA vinculo: segundo pedido pendente foi aceito';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  -- O link de 1 uso, ja usado, aparece esgotado.
+  select count(*) into n from public.get_church_link_invite(repeat('c', 64)) where status = 'esgotado';
+  if n <> 1 then raise exception 'FALHA vinculo: link esgotado nao foi reconhecido'; end if;
+
+  -- Quem pediu enxerga o proprio pedido.
+  select count(*) into n from public.church_link_requests where status = 'pendente';
+  if n <> 1 then raise exception 'FALHA vinculo: quem pediu nao ve o proprio pedido'; end if;
+end $$;
+
+-- Anônimo não abre link.
+set local role anon;
+select set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+do $$
+begin
+  begin
+    perform public.get_church_link_invite(repeat('c', 64));
+    raise exception 'FALHA vinculo: anon abriu o link';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+reset role;
+
+do $$
+declare v_pai uuid; n int;
+begin
+  -- Pedir NAO muda a arvore, e a superior e avisada.
+  select parent_id into v_pai from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if v_pai is not null then raise exception 'FALHA vinculo: pedir ja ligou a igreja'; end if;
+  select count(*) into n from public.church_link_notices
+  where company_id = '6c6c6c6c-0000-4000-8000-000000000003' and kind = 'pedido';
+  if n <> 1 then raise exception 'FALHA vinculo: a superior nao foi avisada do pedido'; end if;
+end $$;
+
+-- ------------------------- a superior DECIDE ------------------------------
+-- A Sede (fora do pedido) não o enxerga; quem pediu não o aprova.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-sede@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_link_requests;
+  if n <> 0 then raise exception 'FALHA vinculo: a sede leu % pedido(s) entre outras igrejas', n; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_req uuid;
+begin
+  select id into v_req from public.church_link_requests where status = 'pendente';
+  begin
+    perform public.decide_church_link_request(v_req, true);
+    raise exception 'FALHA vinculo: quem pediu aprovou o proprio pedido';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_req uuid; r record; v_pedidos int;
+begin
+  select id into v_req from public.church_link_requests where status = 'pendente';
+  select count(*) into v_pedidos from public.church_link_requests where status = 'pendente';
+  if v_pedidos <> 1 or v_req is null then raise exception 'FALHA vinculo: a superior nao ve o pedido'; end if;
+
+  -- Ajustar a posicao para uma que a estrutura nao comporta: recusa clara, e nada muda.
+  begin
+    perform public.decide_church_link_request(v_req, true, 'subsede');
+    raise exception 'FALHA vinculo: aprovou como subsede uma igreja cuja superior ja tem superior';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  select * into r from public.decide_church_link_request(v_req, true);
+  if not r.aprovado or r.tipo <> 'congregacao' or r.child_company_id is distinct from '6c6c6c6c-0000-4000-8000-000000000005' then
+    raise exception 'FALHA vinculo: aprovacao com dados inesperados';
+  end if;
+
+  -- Decidido uma vez so.
+  begin
+    perform public.decide_church_link_request(v_req, true);
+    raise exception 'FALHA vinculo: pedido foi decidido duas vezes';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+end $$;
+
+reset role;
+
+do $$
+declare v_pai uuid; v_tipo text; n int;
+begin
+  select parent_id, tipo into v_pai, v_tipo from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if v_pai is distinct from '7d7d7d7d-0000-4000-8000-000000000003' or v_tipo <> 'congregacao' then
+    raise exception 'FALHA vinculo: a aprovacao nao religou a Cong B (%/%)', v_pai, v_tipo;
+  end if;
+  select count(*) into n from public.church_link_notices
+  where company_id = '6c6c6c6c-0000-4000-8000-000000000005' and kind = 'aprovado';
+  if n <> 1 then raise exception 'FALHA vinculo: quem pediu nao recebeu o aviso de aprovacao'; end if;
+  select count(*) into n from public.audit_logs where action = 'church.link.approved' and entity_id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if n <> 1 then raise exception 'FALHA vinculo: aprovacao sem auditoria'; end if;
+end $$;
+
+-- ----------------------- revogar e mudar a posição -------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_id uuid;
+begin
+  v_id := public.create_church_link_invite('7d7d7d7d-0000-4000-8000-000000000003', 'congregacao',
+    repeat('9', 64), now() + interval '30 days', 5);
+  -- Outra empresa nao revoga; a dona revoga.
+  perform set_config('request.jwt.claims',
+    '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+  begin
+    perform public.revoke_church_link_invite(v_id);
+    raise exception 'FALHA vinculo: outra empresa revogou link alheio';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+  perform set_config('request.jwt.claims',
+    '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+  if not public.revoke_church_link_invite(v_id) then raise exception 'FALHA vinculo: a dona nao revogou o link'; end if;
+  if (select status from public.get_church_link_invite(repeat('9', 64))) <> 'revogado' then
+    raise exception 'FALHA vinculo: link revogado nao aparece como revogado';
+  end if;
+end $$;
+
+-- A Sede move a Cong B (que esta sob a Sub Y) para debaixo dela: e a arvore dela.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-sede@test.local","role":"authenticated"}', true);
+
+do $$
+declare r record;
+begin
+  -- Nao coloca uma igreja abaixo de si mesma (ou de uma das suas).
+  begin
+    perform public.change_church_position('7d7d7d7d-0000-4000-8000-000000000003', 'subsede', '7d7d7d7d-0000-4000-8000-000000000005');
+    raise exception 'FALHA vinculo: moveu uma igreja para baixo de uma das suas filhas';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+  -- Subsede com congregacoes abaixo nao vira congregacao.
+  begin
+    perform public.change_church_position('7d7d7d7d-0000-4000-8000-000000000002', 'congregacao');
+    raise exception 'FALHA vinculo: subsede com filhas virou congregacao';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+
+  select * into r from public.change_church_position('7d7d7d7d-0000-4000-8000-000000000005', 'congregacao', '7d7d7d7d-0000-4000-8000-000000000001');
+  if r.child_company_id is distinct from '6c6c6c6c-0000-4000-8000-000000000005' then
+    raise exception 'FALHA vinculo: a igreja movida nao seria avisada (%)', r.child_company_id;
+  end if;
+end $$;
+
+reset role;
+
+do $$
+declare v_pai uuid; n int;
+begin
+  select parent_id into v_pai from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if v_pai is distinct from '7d7d7d7d-0000-4000-8000-000000000001' then
+    raise exception 'FALHA vinculo: a igreja nao foi movida para a sede (%)', v_pai;
+  end if;
+  select count(*) into n from public.church_link_notices
+  where company_id = '6c6c6c6c-0000-4000-8000-000000000005' and kind = 'movida';
+  if n <> 1 then raise exception 'FALHA vinculo: aviso de mudanca de posicao nao foi criado'; end if;
+end $$;
+
+-- A Sub Y (que perdeu a filha) NÃO mexe numa igreja que já não é da árvore dela,
+-- e não move ninguém para fora da árvore que administra.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  begin
+    perform public.change_church_position('7d7d7d7d-0000-4000-8000-000000000005', 'congregacao', '7d7d7d7d-0000-4000-8000-000000000003');
+    raise exception 'FALHA vinculo: subsede mexeu numa igreja que esta direto sob a sede';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- A Sede devolve a Cong B para a Sub Y (dentro da árvore dela).
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-sede@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  perform public.change_church_position('7d7d7d7d-0000-4000-8000-000000000005', 'congregacao', '7d7d7d7d-0000-4000-8000-000000000003');
+  begin
+    perform public.change_church_position('7d7d7d7d-0000-4000-8000-000000000005', 'congregacao', '7d7d7d7d-0000-4000-8000-000000000003');
+    raise exception 'FALHA vinculo: mover para onde ja esta foi aceito';
+  exception when sqlstate 'P0001' then null; -- esperado
+  end;
+end $$;
+
+-- ------------------------- recusa, com devolutiva --------------------------
+-- A Sub Y solta a Cong B, gera outro link, e recusa o pedido dela.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  perform public.end_church_link('7d7d7d7d-0000-4000-8000-000000000005');
+  perform public.create_church_link_invite('7d7d7d7d-0000-4000-8000-000000000003', 'congregacao',
+    repeat('8', 64), now() + interval '30 days', 5);
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  perform public.request_church_link(repeat('8', 64), '7d7d7d7d-0000-4000-8000-000000000005');
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000003","email":"rls-suby@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_req uuid; r record;
+begin
+  select id into v_req from public.church_link_requests where status = 'pendente';
+  select * into r from public.decide_church_link_request(v_req, false, null, 'Ainda vamos conversar.');
+  if r.aprovado then raise exception 'FALHA vinculo: a recusa virou aprovacao'; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_motivo text;
+begin
+  -- Quem pediu le a devolutiva.
+  select motivo_recusa into v_motivo from public.church_link_requests where status = 'recusado';
+  if v_motivo is distinct from 'Ainda vamos conversar.' then
+    raise exception 'FALHA vinculo: quem pediu nao leu o motivo da recusa (%)', coalesce(v_motivo, '<null>');
+  end if;
+end $$;
+
+reset role;
+
+do $$
+declare v_pai uuid; n int; v_notice uuid;
+begin
+  select parent_id into v_pai from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
+  if v_pai is not null then raise exception 'FALHA vinculo: recusar religou a igreja'; end if;
+  select count(*) into n from public.church_link_notices
+  where company_id = '6c6c6c6c-0000-4000-8000-000000000005' and kind = 'recusado' and detalhe like 'Ainda%';
+  if n <> 1 then raise exception 'FALHA vinculo: aviso de recusa com motivo nao foi criado'; end if;
+end $$;
+
+-- "Entendi": só o dono do aviso o dispensa.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+
+do $$
+declare v_id uuid;
+begin
+  select id into v_id from public.church_link_notices where seen_at is null limit 1;
+  if v_id is null then raise exception 'FALHA vinculo: dono nao ve o proprio aviso'; end if;
+
+  perform set_config('request.jwt.claims',
+    '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-sede@test.local","role":"authenticated"}', true);
+  begin
+    perform public.dismiss_church_link_notice(v_id);
+    raise exception 'FALHA vinculo: outro tenant dispensou aviso alheio';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  perform set_config('request.jwt.claims',
+    '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
+  if not public.dismiss_church_link_notice(v_id) then raise exception 'FALHA vinculo: dono nao dispensou o aviso'; end if;
 end $$;
 
 reset role;
