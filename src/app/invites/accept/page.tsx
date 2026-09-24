@@ -22,9 +22,9 @@ export default async function AcceptInvitePage({
       </Link>
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Convite para uma empresa</CardTitle>
+          <CardTitle>Convite para uma igreja</CardTitle>
           <CardDescription>
-            Ao aceitar, você entra na empresa com o papel definido no convite.
+            Ao aceitar, você entra na igreja com o papel definido no convite.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">

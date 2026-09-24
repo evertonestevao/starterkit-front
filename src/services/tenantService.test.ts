@@ -55,7 +55,7 @@ describe("slugify", () => {
   it("converte nome com acentos e espaços em slug válido", () => {
     expect(slugify("Minha Empresa Ltda")).toBe("minha-empresa-ltda");
     expect(slugify("Ação & Cia!")).toBe("acao-cia");
-    expect(slugify("---")).toBe("empresa");
+    expect(slugify("---")).toBe("igreja");
   });
 });
 

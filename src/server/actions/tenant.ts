@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getServerEnv } from "@/config/env";
 import { getEmailProvider } from "@/adapters/email";
+import { safeChurchLinkPath } from "@/lib/churchLinks";
 import { AppError } from "@/lib/errors";
 import { recordAudit } from "@/server/audit";
 import { syncCompanySeats } from "@/server/billing";
@@ -67,7 +68,8 @@ export async function createCompanyAction(
   } catch (err) {
     return toActionError(err);
   }
-  redirect("/dashboard");
+  // Quem chegou por um link de vínculo volta a ele (só esse caminho é aceito).
+  redirect(safeChurchLinkPath(formData.get("next")) ?? "/dashboard");
 }
 
 // Nota: actions chamadas imperativamente (fora de <form action>) NÃO usam
@@ -101,7 +103,7 @@ export async function updateCompanyAction(
       metadata: { name: String(formData.get("name") ?? "") },
     });
     revalidatePath("/dashboard", "layout");
-    return { success: "Empresa atualizada" };
+    return { success: "Igreja atualizada" };
   } catch (err) {
     return toActionError(err);
   }

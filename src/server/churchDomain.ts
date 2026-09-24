@@ -58,7 +58,7 @@ export async function getChurchDomainVerifyService(): Promise<ChurchDomainServic
 export async function getDomainActor(): Promise<DomainActor> {
   const { active } = await getActiveTenant();
   if (!active) {
-    throw new AppError("unauthorized", "Selecione uma empresa para continuar.");
+    throw new AppError("unauthorized", "Selecione uma igreja para continuar.");
   }
   return { companyId: active.id, role: active.role };
 }

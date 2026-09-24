@@ -66,7 +66,7 @@ export function slugify(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 50) || "empresa";
+    .slice(0, 50) || "igreja";
 }
 
 export function createTenantService(repo: TenantRepository) {
@@ -105,7 +105,7 @@ export function createTenantService(repo: TenantRepository) {
     }
     const role = await requireMembership(companyId);
     if (!permissionService.canEditCompany(role)) {
-      throw new AppError("forbidden", "Sem permissão para editar a empresa");
+      throw new AppError("forbidden", "Sem permissão para editar a igreja");
     }
     await repo.updateCompany(companyId, { name: parsed.data });
   }
@@ -114,7 +114,7 @@ export function createTenantService(repo: TenantRepository) {
   async function requireMembership(companyId: string): Promise<RoleCode> {
     const role = await repo.getMyRole(companyId);
     if (!role) {
-      throw new AppError("forbidden", "Você não é membro desta empresa");
+      throw new AppError("forbidden", "Você não é membro desta igreja");
     }
     return role;
   }
@@ -171,7 +171,7 @@ export function createTenantService(repo: TenantRepository) {
   async function leaveCompany(companyId: string): Promise<void> {
     const role = await requireMembership(companyId);
     if (role === "owner") {
-      throw new AppError("forbidden", "O owner não pode sair da própria empresa");
+      throw new AppError("forbidden", "O owner não pode sair da própria igreja");
     }
     await repo.leaveCompany(companyId);
   }

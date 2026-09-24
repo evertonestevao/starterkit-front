@@ -1,33 +1,24 @@
 "use client";
 
 import { useActionState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import { useTenant } from "@/providers/tenant-provider";
 import { inviteMemberAction } from "@/server/actions/tenant";
 
 export function InviteMemberForm() {
   const { active } = useTenant();
   const [state, formAction, pending] = useActionState(inviteMemberAction, undefined);
+  useActionToast(state);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success ? (
-        <Alert>
-          <AlertDescription>{state.success}</AlertDescription>
-        </Alert>
-      ) : null}
       <input type="hidden" name="companyId" value={active.id} />
       <div className="flex flex-col gap-2">
         <Label htmlFor="invite-email">Email</Label>
-        <Input id="invite-email" name="email" type="email" placeholder="pessoa@empresa.com" required />
+        <Input id="invite-email" name="email" type="email" placeholder="pessoa@igreja.com" required />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="invite-role">Papel</Label>

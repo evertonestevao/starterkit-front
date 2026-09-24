@@ -75,7 +75,7 @@ export function createChurchSponsorsService({ repo, notifier, appUrl }: Deps) {
   return {
     async getSummary(companyId: string): Promise<CompanySponsorsSummary> {
       if (!companyId) {
-        throw new AppError("unauthorized", "Selecione uma empresa para continuar.");
+        throw new AppError("unauthorized", "Selecione uma igreja para continuar.");
       }
       const sponsors = await repo.listByCompany(companyId);
 

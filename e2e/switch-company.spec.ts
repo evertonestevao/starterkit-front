@@ -12,7 +12,7 @@ test("usuário com duas empresas alterna a ativa pelo switcher", async ({ page }
 
   // cria a segunda empresa pelo switcher do header
   await page.getByRole("button", { name: /Primeira Empresa E2E/ }).click();
-  await page.getByRole("menuitem", { name: "Nova empresa" }).click();
+  await page.getByRole("menuitem", { name: "Nova igreja" }).click();
   await page.getByLabel("Nome da igreja").fill("Segunda Empresa E2E");
   await page.getByRole("button", { name: "Criar igreja" }).click();
 

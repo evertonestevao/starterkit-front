@@ -49,7 +49,7 @@ export default async function SettingsPage() {
               <Badge>{myInvites.length}</Badge>
             </CardTitle>
             <CardDescription>
-              Você foi convidado para outras empresas. Aceite para entrar nelas.
+              Você foi convidado para outras igrejas. Aceite para entrar nelas.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -77,7 +77,7 @@ export default async function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Perfil</CardTitle>
-          <CardDescription>Como seu nome aparece para colegas de empresa</CardDescription>
+          <CardDescription>Como seu nome aparece para colegas de igreja</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           <AvatarForm
@@ -91,7 +91,7 @@ export default async function SettingsPage() {
       {canEditCompany ? (
         <Card>
           <CardHeader>
-            <CardTitle>Empresa</CardTitle>
+            <CardTitle>Igreja</CardTitle>
             <CardDescription>Dados de {active.name}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -105,7 +105,7 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle>Zona de perigo</CardTitle>
             <CardDescription>
-              Você perde o acesso aos dados desta empresa ao sair.
+              Você perde o acesso aos dados desta igreja ao sair.
             </CardDescription>
           </CardHeader>
           <CardContent>

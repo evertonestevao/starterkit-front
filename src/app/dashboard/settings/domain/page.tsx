@@ -25,7 +25,7 @@ export default async function ChurchDomainPage() {
       <EmptyState
         icon={Church}
         title="Nenhuma igreja cadastrada ainda"
-        description="Cadastre a igreja desta empresa para configurar o endereço público e, se quiser, um domínio próprio."
+        description="Cadastre a igreja para configurar o endereço público e, se quiser, um domínio próprio."
       />
     );
   }

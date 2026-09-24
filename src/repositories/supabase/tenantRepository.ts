@@ -18,7 +18,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         .is("deleted_at", null)
         .order("created_at", { ascending: true });
       if (error) {
-        throw new AppError("internal_error", "Falha ao listar empresas", error);
+        throw new AppError("internal_error", "Falha ao listar igrejas", error);
       }
       const companies = (data ?? [])
         .filter((row) => row.company && !(row.company as unknown as Company).deleted_at)
@@ -42,9 +42,9 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         .single<Company>();
       if (error || !data) {
         if (error?.code === "23505") {
-          throw new AppError("conflict", "Já existe uma empresa com esse identificador");
+          throw new AppError("conflict", "Já existe uma igreja com esse identificador");
         }
-        throw new AppError("internal_error", "Falha ao criar empresa", error);
+        throw new AppError("internal_error", "Falha ao criar igreja", error);
       }
       return { ...data, role: "owner" as const };
     },
@@ -57,10 +57,10 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         .is("deleted_at", null)
         .select("id");
       if (error) {
-        throw new AppError("internal_error", "Falha ao atualizar empresa", error);
+        throw new AppError("internal_error", "Falha ao atualizar igreja", error);
       }
       if (!data || data.length === 0) {
-        throw new AppError("not_found", "Empresa não encontrada");
+        throw new AppError("not_found", "Igreja não encontrada");
       }
     },
 
@@ -150,7 +150,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
     async leaveCompany(companyId) {
       const { error } = await client.rpc("leave_company", { p_company_id: companyId });
       if (error) {
-        throw new AppError("internal_error", "Falha ao sair da empresa", error);
+        throw new AppError("internal_error", "Falha ao sair da igreja", error);
       }
     },
   };

@@ -168,7 +168,7 @@ function MemberActions({ member }: { member: MemberWithProfile }) {
             }
           >
             <UserMinus className="size-4" />
-            Remover da empresa
+            Remover da igreja
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
