@@ -6,11 +6,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import {
   saveChurchProfileAction,
   uploadChurchLogoAction,
 } from "@/server/actions/churchProfile";
 import type { ChurchProfile } from "@/services/churchProfileService";
+import { ChurchAppearanceForm } from "./church-appearance-form";
 
 const selectClasses =
   "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
@@ -20,12 +22,78 @@ function rede(igreja: ChurchProfile, chave: string): string {
 }
 
 /**
+ * Nome e sobrenome. O nome pode seguir o da igreja superior (o padrão do
+ * ministério); o sobrenome é sempre da igreja e distingue as irmãs de mesmo
+ * nome. Fica DENTRO do <form key=...>, então o estado recomeça a cada troca de
+ * igreja ou salvamento.
+ */
+function ChurchNameFields({ igreja }: { igreja: ChurchProfile }) {
+  const [herdar, setHerdar] = useState(igreja.herdarNome && igreja.hasParent);
+  const [nomeProprio, setNomeProprio] = useState(igreja.nomeProprio);
+  const usandoDaSuperior = herdar && igreja.parentName !== null;
+
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="name">Nome da igreja</Label>
+        <Input
+          id="name"
+          required
+          minLength={2}
+          maxLength={120}
+          value={usandoDaSuperior ? (igreja.parentName ?? "") : nomeProprio}
+          onChange={(e) => setNomeProprio(e.target.value)}
+          disabled={usandoDaSuperior}
+        />
+        {/* Campo desabilitado não é enviado: o nome próprio segue aqui, guardado
+            mesmo enquanto a igreja usa o da superior. */}
+        <input type="hidden" name="name" value={nomeProprio} />
+        {igreja.hasParent ? (
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="herdarNome"
+              checked={herdar}
+              onChange={(e) => setHerdar(e.target.checked)}
+              className="mt-0.5 size-4 accent-primary"
+            />
+            <span>
+              Usar o nome de <strong>{igreja.parentName ?? "a igreja-mãe"}</strong>
+              <span className="block text-xs text-muted-foreground">
+                Mantém o padrão do ministério: se ela mudar o nome, o seu muda junto.
+              </span>
+            </span>
+          </label>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="sobrenome">Sobrenome (opcional)</Label>
+        <Input
+          id="sobrenome"
+          name="sobrenome"
+          defaultValue={igreja.sobrenome ?? ""}
+          maxLength={120}
+          placeholder="Prainha - Promissão"
+        />
+        <p className="text-xs text-muted-foreground">
+          Distingue esta igreja das irmãs de mesmo nome. Aparece logo abaixo do nome na página; sem ele, nada
+          aparece. É sempre só desta igreja.
+        </p>
+      </div>
+    </>
+  );
+}
+
+/**
  * Tudo o que aparece na página pública da igreja, no lugar onde quem cuida
  * dela consegue mexer. Antes isso só entrava por SQL.
  */
 export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[]; appUrl: string }) {
   const [state, formAction, pending] = useActionState(saveChurchProfileAction, undefined);
+  useActionToast(state);
   const [logoState, logoAction, enviandoLogo] = useActionState(uploadChurchLogoAction, undefined);
+  useActionToast(logoState);
   const [churchId, setChurchId] = useState(igrejas[0]?.id ?? "");
   const igreja = igrejas.find((i) => i.id === churchId) ?? igrejas[0];
   const [publicCode, setPublicCode] = useState(igreja?.publicCode ?? "");
@@ -34,6 +102,32 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
 
   const enderecoMudou = publicCode.trim().toLowerCase() !== igreja.publicCode;
   const base = appUrl.replace(/\/+$/, "");
+
+  // Os campos abaixo são não controlados (defaultValue): depois de salvar
+  // com sucesso, o servidor devolve a igreja com os dados novos, e sem isto
+  // o MESMO <input> já montado receberia um defaultValue diferente — o Base
+  // UI reage com "changing the default value state of an uncontrolled
+  // FieldControl after being initialized", e o Next mostra isso como um erro
+  // em tela cheia. Uma key derivada de TODOS os valores que alimentam
+  // defaultValue força a remontagem exatamente quando algum deles muda de
+  // verdade (troca de igreja, ou um salvamento que persistiu algo novo) —
+  // nunca enquanto a pessoa só está digitando, porque aí `igreja` ainda é o
+  // valor antigo.
+  const versaoDosCampos = [
+    igreja.id,
+    igreja.name,
+    igreja.nomeProprio,
+    igreja.sobrenome ?? "",
+    String(igreja.herdarNome),
+    igreja.parentName ?? "",
+    igreja.address ?? "",
+    igreja.publicCode,
+    rede(igreja, "instagram"),
+    rede(igreja, "whatsapp"),
+    rede(igreja, "youtube"),
+    rede(igreja, "facebook"),
+    rede(igreja, "site"),
+  ].join("\u0000");
 
   function trocarIgreja(id: string) {
     const alvo = igrejas.find((i) => i.id === id);
@@ -61,25 +155,12 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
         </div>
       ) : null}
 
-      {/* key: trocar de igreja recria o formulário com os valores dela. */}
-      <form key={igreja.id} action={formAction} className="flex flex-col gap-4">
+      {/* key: remonta ao trocar de igreja OU quando um salvamento troca algum
+          valor de verdade — ver o comentário de versaoDosCampos acima. */}
+      <form key={versaoDosCampos} action={formAction} className="flex flex-col gap-4">
         <input type="hidden" name="churchId" value={igreja.id} />
 
-        {state?.error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{state.error}</AlertDescription>
-          </Alert>
-        ) : null}
-        {state?.success ? (
-          <Alert>
-            <AlertDescription>{state.success}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nome da igreja</Label>
-          <Input id="name" name="name" required defaultValue={igreja.name} />
-        </div>
+        <ChurchNameFields igreja={igreja} />
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="address">Endereço</Label>
@@ -186,16 +267,6 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
 
       <form action={logoAction} className="flex flex-col gap-3 border-t pt-6">
         <input type="hidden" name="churchId" value={igreja.id} />
-        {logoState?.error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{logoState.error}</AlertDescription>
-          </Alert>
-        ) : null}
-        {logoState?.success ? (
-          <Alert>
-            <AlertDescription>{logoState.success}</AlertDescription>
-          </Alert>
-        ) : null}
 
         <div className="flex items-center gap-4">
           {igreja.logoUrl ? (
@@ -222,6 +293,13 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
           </Button>
         </div>
       </form>
+
+      {/* key: o estado do formulário nasce das props; troca de igreja ou um
+          salvamento que mudou a escolha remonta com os valores novos. */}
+      <ChurchAppearanceForm
+        key={[igreja.id, igreja.appearanceMode, igreja.own.theme, igreja.own.accent ?? ""].join(" ")}
+        igreja={igreja}
+      />
     </div>
   );
 }

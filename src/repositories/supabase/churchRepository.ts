@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
-import type { ChurchEvent, ChurchScheduleItem, PublicChurch } from "@/types/database";
+import type { SponsorLinkKind } from "@/lib/sponsorLink";
+import type { Campaign, ChurchEvent, ChurchScheduleItem, PublicChurch } from "@/types/database";
 import type { PublicSponsor } from "@/types/sponsorship";
 
 /**
@@ -12,7 +13,7 @@ import type { PublicSponsor } from "@/types/sponsorship";
  * permission denied — que é exatamente o comportamento desejado.
  */
 export const PUBLIC_CHURCH_COLUMNS =
-  "id, parent_id, name, slug, logo_url, address, service_times, social_links, path, template_mode, template_id, public_code, pix_chave, pix_titular, created_at, updated_at";
+  "id, parent_id, name, sobrenome, slug, logo_url, address, service_times, social_links, path, template_mode, template_id, public_code, pix_chave, pix_titular, created_at, updated_at";
 
 export function createSupabasePublicChurchRepository(client: SupabaseClient) {
   return {
@@ -33,7 +34,7 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
       return data;
     },
 
-    /** Vitrine: só nome e logo de quem patrocina agora (RPC security definer). */
+    /** Vitrine: nome, logo e destino de quem patrocina agora (RPC security definer). */
     async listPublicSponsors(churchId: string): Promise<PublicSponsor[]> {
       const { data, error } = await client.rpc("list_church_sponsors", {
         p_church_id: churchId,
@@ -45,28 +46,36 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
         sponsorship_id: string;
         display_name: string;
         logo_url: string | null;
+        link_tipo: SponsorLinkKind | null;
+        link_valor: string | null;
       }>).map((row) => ({
         id: row.sponsorship_id,
         name: row.display_name,
         logo_url: row.logo_url,
+        link_tipo: row.link_tipo,
+        link_valor: row.link_valor,
       }));
     },
 
     /**
-     * Tema escolhido pela igreja (ou herdado da sede). Null = padrão. A RPC
-     * resolve a herança; a tabela de templates dá o slug.
+     * Tema e cor de destaque da igreja (ou herdados da mãe). Nulos = padrão.
+     * A RPC resolve a herança dos dois juntos; a tabela de templates dá o slug.
      */
-    async resolveTemplateSlug(churchId: string): Promise<string | null> {
-      const { data: templateId, error } = await client.rpc("resolve_template", {
+    async resolveAppearance(
+      churchId: string,
+    ): Promise<{ slug: string | null; accent: string | null }> {
+      const semTema = { slug: null, accent: null };
+      const { data: linhas, error } = await client.rpc("resolve_church_appearance", {
         p_church_id: churchId,
       });
-      if (error || !templateId) return null;
+      const resolvida = ((linhas ?? []) as Array<{ template_id: string; accent_color: string | null }>)[0];
+      if (error || !resolvida) return semTema;
       const { data } = await client
         .from("templates")
         .select("slug")
-        .eq("id", templateId as string)
+        .eq("id", resolvida.template_id)
         .maybeSingle<{ slug: string }>();
-      return data?.slug ?? null;
+      return { slug: data?.slug ?? null, accent: resolvida.accent_color };
     },
 
     /**
@@ -117,6 +126,33 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
       }
       return data;
     },
+
+    /** Campanhas visíveis ao público (ativa ou encerrada), mais recente primeiro. */
+    async listActiveCampaigns(churchId: string): Promise<Campaign[]> {
+      const { data, error } = await client
+        .from("campaigns")
+        .select(CAMPAIGN_COLUMNS)
+        .eq("church_id", churchId)
+        .order("created_at", { ascending: false });
+      if (error) {
+        throw new AppError("internal_error", "Falha ao carregar as campanhas", error);
+      }
+      return (data ?? []) as Campaign[];
+    },
+
+    /** Uma campanha, só se for DESTA igreja e estiver visível ao público. */
+    async findCampaign(churchId: string, campaignId: string): Promise<Campaign | null> {
+      const { data, error } = await client
+        .from("campaigns")
+        .select(CAMPAIGN_COLUMNS)
+        .eq("church_id", churchId)
+        .eq("id", campaignId)
+        .maybeSingle<Campaign>();
+      if (error) {
+        throw new AppError("internal_error", "Falha ao carregar a campanha", error);
+      }
+      return data;
+    },
   };
 }
 
@@ -136,3 +172,6 @@ export async function listPublicSchedule(
 
 const EVENT_COLUMNS =
   "id, church_id, titulo, descricao, inicio, fim, local, preco_cents, inscricoes_abertas";
+
+const CAMPAIGN_COLUMNS =
+  "id, church_id, titulo, foto_capa_url, historia, meta_cents, total_arrecadado_liquido_cents, metodo_recebimento, mostrar_progresso, valores_sugeridos, valor_padrao_cents, permitir_valor_livre, status, feedback_texto, feedback_foto_url, encerrada_at, created_at";

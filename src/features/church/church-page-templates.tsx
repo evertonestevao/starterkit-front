@@ -31,11 +31,12 @@ import {
   normalizeSocialLinks,
   orderServiceTimes,
 } from "@/lib/churchPublicPage";
+import { sponsorLinkHref } from "@/lib/sponsorLink";
 import { sponsorshipPath } from "@/lib/sponsorPaths";
 // PublicChurch, e não Church: esta página renderiza só o que o `anon` pode
 // ler (as colunas de domínio próprio ficam de fora).
-import type { ChurchEvent, ChurchScheduleItem, PublicChurch as ChurchRecord } from "@/types/database";
-import type { ChurchTheme } from "@/server/publicChurch";
+import type { Campaign, ChurchEvent, ChurchScheduleItem, PublicChurch as ChurchRecord } from "@/types/database";
+import type { ChurchTheme } from "@/lib/pageAppearance";
 import type { PublicSponsor as Sponsor } from "@/types/sponsorship";
 
 /**
@@ -58,6 +59,8 @@ export type ChurchPageTemplateProps = {
   sponsors: Sponsor[];
   /** Próximos eventos (poucos): a página mostra uma prévia e leva à lista. */
   eventos: ChurchEvent[];
+  /** Campanhas ativas ou encerradas — só para saber se o atalho aparece. */
+  campanhas: Campaign[];
   /** Programação publicada: cultos semanais e especiais. */
   programacao: ChurchScheduleItem[];
   /** BR Code do PIX e o QR dele, montados no servidor a partir da chave. */
@@ -69,6 +72,8 @@ export type ChurchPageTemplateProps = {
    */
   linkCartao?: string | null;
   templateSlug: ChurchTheme;
+  /** Cor de destaque escolhida pela igreja; null usa a do tema. */
+  accent?: string | null;
 };
 
 interface Atalho {
@@ -133,15 +138,57 @@ function iniciais(nome: string): string {
     .join("");
 }
 
+/**
+ * Logo + nome de um patrocinador. Com link aprovado pela moderação, o conjunto
+ * vira um link externo: `noopener` para a aba nova não controlar esta página,
+ * `sponsored`/`nofollow` porque é destino pago, escolhido por terceiro.
+ */
+function SponsorBadge({ sponsor }: { sponsor: Sponsor }) {
+  const href = sponsorLinkHref({ tipo: sponsor.link_tipo, valor: sponsor.link_valor }, { comMensagem: true });
+  const conteudo = (
+    <>
+      {sponsor.logo_url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
+        <img src={sponsor.logo_url} alt="" className="size-9 shrink-0 rounded-lg bg-white object-contain" />
+      ) : (
+        <span
+          aria-hidden
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--pg-accent-soft)] text-xs font-semibold text-[var(--pg-accent)]"
+        >
+          {iniciais(sponsor.name)}
+        </span>
+      )}
+      <span className="min-w-0 text-sm leading-5 font-medium">{sponsor.name}</span>
+    </>
+  );
+
+  if (!href) {
+    return <div className="flex items-center gap-2.5">{conteudo}</div>;
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer nofollow sponsored"
+      aria-label={`${sponsor.name} (abre em uma nova aba)`}
+      className="flex items-center gap-2.5 rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--pg-accent)]"
+    >
+      {conteudo}
+    </a>
+  );
+}
+
 export function ChurchPageRenderer({
   church,
   sponsors,
   eventos,
+  campanhas,
   programacao,
   pixCopiaECola = null,
   pixQrDataUrl = null,
   linkCartao = null,
   templateSlug,
+  accent = null,
 }: ChurchPageTemplateProps) {
   const horarios = orderServiceTimes(church.service_times);
   const redes = normalizeSocialLinks(church.social_links);
@@ -167,10 +214,14 @@ export function ChurchPageRenderer({
     : null;
   const pares: Atalho[] = [
     { rotulo: "Pedido de oração", icone: Heart, href: "#oracao" },
-    { rotulo: "Sou visitante", icone: UserPlus, href: "#visita" },
+    { rotulo: "Quero visitar", icone: UserPlus, href: "#visita" },
     // Eventos abre a tela de eventos — e só aparece com evento agendado.
     ...(eventos.length > 0
       ? [{ rotulo: "Eventos", icone: CalendarCheck, href: `/igreja/${church.public_code}/eventos` }]
+      : []),
+    // Campanhas só aparece com pelo menos uma (ativa ou encerrada) publicada.
+    ...(campanhas.length > 0
+      ? [{ rotulo: "Campanhas", icone: HandCoins, href: `/igreja/${church.public_code}/campanhas` }]
       : []),
     ...(temCultos ? [{ rotulo: "Programação", icone: Clock3, href: "#programacao" }] : []),
     ...(whatsapp
@@ -257,9 +308,9 @@ export function ChurchPageRenderer({
         <>
           <TituloSecao
             icone={UserPlus}
-            antes="Sou"
-            destaque="visitante"
-            subtitulo="Que alegria ter você aqui! Deixe seu contato e a gente te recebe."
+            antes="Quero"
+            destaque="visitar"
+            subtitulo="Quer conhecer a igreja? Deixe seu contato e a gente te recebe."
           />
           <div className={cartao}>
             <VisitorForm churchId={church.id} />
@@ -445,7 +496,7 @@ export function ChurchPageRenderer({
   }
 
   return (
-    <PublicShell theme={templateSlug}>
+    <PublicShell theme={templateSlug} accent={accent}>
       <header className="bg-[var(--pg-hero)]">
         <div className="mx-auto flex w-full max-w-xl flex-col items-center px-5 pt-14 pb-10 text-center">
           {church.logo_url ? (
@@ -464,6 +515,13 @@ export function ChurchPageRenderer({
           >
             {church.name}
           </h1>
+          {church.sobrenome ? (
+            <p
+              className={`${titulos.className} mt-1.5 text-xl leading-snug font-semibold text-balance text-[var(--pg-hero-muted)]`}
+            >
+              {church.sobrenome}
+            </p>
+          ) : null}
           {church.address ? (
             <p className="mt-2 text-base text-[var(--pg-hero-muted)]">{church.address}</p>
           ) : null}
@@ -510,19 +568,8 @@ export function ChurchPageRenderer({
           {sponsors.length > 0 ? (
             <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-left sm:flex sm:flex-wrap sm:justify-center sm:gap-x-6 sm:gap-y-4">
               {sponsors.map((sponsor) => (
-                <li key={sponsor.id} className="flex items-center gap-2.5">
-                  {sponsor.logo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- logo em storage externo
-                    <img src={sponsor.logo_url} alt="" className="size-9 shrink-0 rounded-lg bg-white object-contain" />
-                  ) : (
-                    <span
-                      aria-hidden
-                      className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--pg-accent-soft)] text-xs font-semibold text-[var(--pg-accent)]"
-                    >
-                      {iniciais(sponsor.name)}
-                    </span>
-                  )}
-                  <span className="min-w-0 text-sm leading-5 font-medium">{sponsor.name}</span>
+                <li key={sponsor.id}>
+                  <SponsorBadge sponsor={sponsor} />
                 </li>
               ))}
             </ul>
@@ -554,9 +601,3 @@ export function ChurchPageRenderer({
     </PublicShell>
   );
 }
-
-export const templatePreviewOptions = [
-  { slug: "classico", label: "Clássico", hint: "Navy + vinho" },
-  { slug: "clean", label: "Clean", hint: "Claro + sálvia" },
-  { slug: "dark", label: "Dark", hint: "Grafite + verde" },
-] as const;

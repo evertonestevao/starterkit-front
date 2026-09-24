@@ -19,7 +19,7 @@ export default async function PublicChurchPage({
   const [{ public_code }, query] = await Promise.all([params, searchParams]);
   const carregado = await loadPublicChurch(public_code);
   if (!carregado) notFound();
-  const { church, theme } = carregado;
+  const { church, theme, accent } = carregado;
 
   // Conta a abertura (link, QR ou NFC) depois da resposta; nunca bloqueia.
   await trackChurchVisit(church.id, query[VISIT_ORIGIN_PARAM]);
@@ -27,13 +27,17 @@ export default async function PublicChurchPage({
   const repo = await getPublicChurchRepository();
   // Nenhuma das duas listas pode derrubar a página da igreja: vazia é melhor
   // do que tela de erro para quem veio pelo QR Code.
-  const [sponsors, eventos, programacao, linkCartao] = await Promise.all([
+  const [sponsors, eventos, campanhas, programacao, linkCartao] = await Promise.all([
     repo.listPublicSponsors(church.id).catch((err: unknown) => {
       console.error("[church-page] falha ao carregar patrocinadores", err);
       return [];
     }),
     repo.listUpcomingEvents(church.id, EVENTOS_NA_PREVIA).catch((err: unknown) => {
       console.error("[church-page] falha ao carregar eventos", err);
+      return [];
+    }),
+    repo.listActiveCampaigns(church.id).catch((err: unknown) => {
+      console.error("[church-page] falha ao carregar campanhas", err);
       return [];
     }),
     repo.listSchedule(church.id).catch((err: unknown) => {
@@ -71,11 +75,13 @@ export default async function PublicChurchPage({
       church={church}
       sponsors={sponsors}
       eventos={eventos}
+      campanhas={campanhas}
       programacao={programacao}
       pixCopiaECola={pixCopiaECola}
       pixQrDataUrl={pixQrDataUrl}
       linkCartao={linkCartao}
       templateSlug={theme}
+      accent={accent}
     />
   );
 }

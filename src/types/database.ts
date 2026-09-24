@@ -173,7 +173,14 @@ export interface Church {
   company_id: string;
   parent_id: string | null;
   tipo: ChurchTipo;
+  /** Nome EFETIVO (o que aparece): o próprio, ou o da igreja superior se herdar_nome. */
   name: string;
+  /** O nome que a própria igreja escolheu. Quem escreve é ele; `name` é derivado por trigger. */
+  nome_proprio: string;
+  /** Sobrenome opcional ("Prainha - Promissão"): distingue igrejas de mesmo nome. Sempre individual. */
+  sobrenome: string | null;
+  /** Usa o nome da igreja superior. */
+  herdar_nome: boolean;
   slug: string;
   logo_url: string | null;
   address: string | null;
@@ -233,6 +240,29 @@ export interface ChurchEvent {
   inscricoes_abertas: boolean;
 }
 
+/** Campanha de arrecadação, como aparece na página pública (ativa ou encerrada). */
+export interface Campaign {
+  id: string;
+  church_id: string;
+  titulo: string;
+  foto_capa_url: string | null;
+  historia: string;
+  meta_cents: number;
+  /** Só o valor líquido (já sem taxa do provedor, quando for cartão). */
+  total_arrecadado_liquido_cents: number;
+  metodo_recebimento: "pix" | "gateway";
+  mostrar_progresso: boolean;
+  /** Até 3 valores sugeridos, em centavos. */
+  valores_sugeridos: number[];
+  valor_padrao_cents: number | null;
+  permitir_valor_livre: boolean;
+  status: "rascunho" | "ativa" | "encerrada";
+  feedback_texto: string | null;
+  feedback_foto_url: string | null;
+  encerrada_at: string | null;
+  created_at: string;
+}
+
 export type PublicChurch = Omit<
   Church,
   | "company_id"
@@ -245,6 +275,8 @@ export type PublicChurch = Omit<
   | "dominio_solicitado_em"
   | "deleted_at"
   | "tipo"
+  | "nome_proprio"
+  | "herdar_nome"
 >;
 
 export interface PrayerRequest {

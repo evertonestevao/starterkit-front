@@ -38,6 +38,9 @@ export async function saveChurchProfileAction(
     await service.save(actor, {
       churchId: texto(formData, "churchId"),
       name: texto(formData, "name"),
+      sobrenome: texto(formData, "sobrenome"),
+      // Checkbox nativo: marcado posta "on".
+      herdarNome: texto(formData, "herdarNome") === "on",
       address: texto(formData, "address"),
       publicCode: texto(formData, "publicCode"),
       instagram: texto(formData, "instagram"),
@@ -51,6 +54,32 @@ export async function saveChurchProfileAction(
     // A página pública muda junto: sem isto, a igreja salva e não vê efeito.
     revalidatePath(`/igreja/${texto(formData, "publicCode").trim().toLowerCase()}`);
     return { success: "Página da igreja atualizada." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/**
+ * Tema e cor de destaque da página. A cor é validada (e limitada a #rrggbb)
+ * no service: ela vira atributo `style` numa página pública.
+ */
+export async function saveChurchAppearanceAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const actor = await ator();
+    await (await getChurchProfileService()).saveAppearance(actor, {
+      churchId: texto(formData, "churchId"),
+      mode: texto(formData, "mode"),
+      theme: texto(formData, "theme"),
+      accentColor: texto(formData, "accentColor"),
+    });
+
+    revalidatePath(PAGINA);
+    // Só para a página mostrar o novo visual; o valor não é confiado para mais nada.
+    revalidatePath(`/igreja/${texto(formData, "publicCode").trim().toLowerCase()}`);
+    return { success: "Aparência da página atualizada." };
   } catch (err) {
     return toActionError(err);
   }

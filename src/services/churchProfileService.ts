@@ -1,11 +1,13 @@
 import { z } from "zod";
+import { CHURCH_SURNAME_MAX_LENGTH, normalizeSurname } from "@/lib/churchName";
 import { normalizeSocialLinks, type SocialKind } from "@/lib/churchPublicPage";
 import { AppError, toValidationError } from "@/lib/errors";
+import { isChurchTheme, parseAccentColor, type ChurchTheme } from "@/lib/pageAppearance";
 import type { RoleCode } from "@/types/database";
 
 /**
- * A igreja editando a própria página: nome, endereço, redes sociais, logo e o
- * endereço público (`public_code`).
+ * A igreja editando a própria página: nome, endereço, redes sociais, logo, o
+ * endereço público (`public_code`) e a aparência (tema e cor de destaque).
  *
  * Isso NÃO passa por moderação, ao contrário do nome e do logo do
  * patrocinador. A diferença é de quem é o conteúdo: o patrocinador escreve na
@@ -16,13 +18,37 @@ import type { RoleCode } from "@/types/database";
 
 export const REDES: SocialKind[] = ["instagram", "whatsapp", "youtube", "facebook", "site"];
 
+/** Tema e cor de destaque, como a página pública os desenha. */
+export interface PageAppearance {
+  theme: ChurchTheme;
+  /** #rrggbb; null = a cor padrão do tema. */
+  accent: string | null;
+}
+
+export type AppearanceMode = "inherit" | "custom";
+
 export interface ChurchProfile {
   id: string;
+  /** Nome EFETIVO: o próprio, ou o da igreja superior quando `herdarNome`. */
   name: string;
+  /** O nome que esta igreja escolheu (guardado mesmo enquanto ela herda o da superior). */
+  nomeProprio: string;
+  /** Opcional; sempre individual (nunca herdado). */
+  sobrenome: string | null;
+  herdarNome: boolean;
+  /** Nome da igreja superior direta, para o "usar o nome de ...". Null sem superior. */
+  parentName: string | null;
   publicCode: string;
   address: string | null;
   logoUrl: string | null;
   socialLinks: Record<string, string>;
+  /** Tem igreja-mãe? Só quem tem pode herdar a aparência dela. */
+  hasParent: boolean;
+  /** A escolha desta igreja. Em `inherit`, `own` guarda o que valia por último e não é usado. */
+  appearanceMode: AppearanceMode;
+  own: PageAppearance;
+  /** O que a igreja-mãe (ou a mais próxima que personalizou) mostra; null sem mãe. */
+  inherited: PageAppearance | null;
 }
 
 export interface ChurchProfileRepository {
@@ -30,12 +56,23 @@ export interface ChurchProfileRepository {
   updateProfile(input: {
     churchId: string;
     companyId: string;
-    name: string;
+    /** O nome PRÓPRIO: o efetivo (`name`) é derivado pelo banco. */
+    nomeProprio: string;
+    sobrenome: string | null;
+    herdarNome: boolean;
     address: string | null;
     publicCode: string;
     socialLinks: Record<string, string>;
   }): Promise<void>;
   updateLogo(input: { churchId: string; companyId: string; logoUrl: string }): Promise<void>;
+  /** `theme`/`accent` são ignorados em `inherit`: a igreja passa a usar os da mãe. */
+  updateAppearance(input: {
+    churchId: string;
+    companyId: string;
+    mode: AppearanceMode;
+    theme: ChurchTheme;
+    accent: string | null;
+  }): Promise<void>;
 }
 
 export interface ProfileAuditRecorder {
@@ -79,6 +116,11 @@ export const publicCodeSchema = z
 const profileSchema = z.object({
   churchId: z.uuid("Igreja inválida"),
   name: z.string().trim().min(2, "Informe o nome da igreja").max(120, "Nome muito longo"),
+  sobrenome: z
+    .string()
+    .max(CHURCH_SURNAME_MAX_LENGTH, "Sobrenome muito longo")
+    .transform((v) => normalizeSurname(v)),
+  herdarNome: z.boolean(),
   address: z
     .string()
     .trim()
@@ -91,6 +133,29 @@ const profileSchema = z.object({
   facebook: z.string().trim().max(200, "Valor muito longo"),
   site: z.string().trim().max(200, "Valor muito longo"),
 });
+
+const appearanceSchema = z
+  .object({
+    churchId: z.uuid("Igreja inválida"),
+    mode: z.enum(["inherit", "custom"], { error: "Escolha como a página vai ficar" }),
+    theme: z.string().trim(),
+    accentColor: z.string(),
+  })
+  .transform((v, ctx) => {
+    if (v.mode === "inherit") {
+      return { churchId: v.churchId, mode: v.mode, theme: null, accent: null };
+    }
+    if (!isChurchTheme(v.theme)) {
+      ctx.addIssue({ code: "custom", path: ["theme"], message: "Escolha um dos temas" });
+      return z.NEVER;
+    }
+    const cor = parseAccentColor(v.accentColor);
+    if (!cor.ok) {
+      ctx.addIssue({ code: "custom", path: ["accentColor"], message: cor.message });
+      return z.NEVER;
+    }
+    return { churchId: v.churchId, mode: v.mode, theme: v.theme, accent: cor.color };
+  });
 
 /**
  * Cada rede é validada pelo MESMO caminho que a página pública usa para
@@ -146,6 +211,9 @@ export function createChurchProfileService(deps: {
       const igrejas = await deps.repo.listCompanyChurches(actor.companyId);
       const igreja = igrejas.find((c) => c.id === dados.churchId);
       if (!igreja) throw new AppError("not_found", "Igreja não encontrada.");
+      if (dados.herdarNome && !igreja.hasParent) {
+        throw new AppError("validation_error", "Esta igreja não tem uma igreja-mãe cujo nome herdar.");
+      }
 
       const socialLinks = validarRedes({
         instagram: dados.instagram,
@@ -158,7 +226,9 @@ export function createChurchProfileService(deps: {
       await deps.repo.updateProfile({
         churchId: dados.churchId,
         companyId: actor.companyId,
-        name: dados.name,
+        nomeProprio: dados.name,
+        sobrenome: dados.sobrenome,
+        herdarNome: dados.herdarNome,
         address: dados.address,
         publicCode: dados.publicCode,
         socialLinks,
@@ -176,7 +246,46 @@ export function createChurchProfileService(deps: {
             // fica registrada com o valor antigo, não só com o novo.
             igreja.publicCode !== dados.publicCode
               ? { public_code_anterior: igreja.publicCode, public_code_novo: dados.publicCode }
-              : { nome: dados.name },
+              : { nome: dados.name, sobrenome: dados.sobrenome, herdar_nome: dados.herdarNome },
+        })
+        .catch((err) => log.error("[church-profile] falha ao registrar auditoria", err));
+    },
+
+    /**
+     * Tema e cor de destaque. `inherit` devolve a igreja à aparência da mãe;
+     * `custom` grava a escolha desta. A cor chega já validada como #rrggbb —
+     * ela vira atributo `style` na página pública.
+     */
+    async saveAppearance(actor: ProfileActor, input: unknown): Promise<void> {
+      exigePermissao(actor);
+
+      const parsed = appearanceSchema.safeParse(input);
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      const dados = parsed.data;
+
+      const igrejas = await deps.repo.listCompanyChurches(actor.companyId);
+      const igreja = igrejas.find((c) => c.id === dados.churchId);
+      if (!igreja) throw new AppError("not_found", "Igreja não encontrada.");
+      if (dados.mode === "inherit" && !igreja.hasParent) {
+        throw new AppError("validation_error", "Esta igreja não tem uma igreja-mãe para herdar.");
+      }
+
+      await deps.repo.updateAppearance({
+        churchId: dados.churchId,
+        companyId: actor.companyId,
+        mode: dados.mode,
+        theme: dados.theme ?? igreja.own.theme,
+        accent: dados.accent,
+      });
+
+      await deps.audit
+        ?.record({
+          companyId: actor.companyId,
+          userId: actor.userId,
+          action: "church.appearance.updated",
+          entityType: "church",
+          entityId: dados.churchId,
+          metadata: { modo: dados.mode, tema: dados.theme, cor: dados.accent },
         })
         .catch((err) => log.error("[church-profile] falha ao registrar auditoria", err));
     },

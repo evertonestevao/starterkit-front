@@ -3,6 +3,7 @@ import { isAppError } from "@/lib/errors";
 import {
   createChurchProfileService,
   publicCodeSchema,
+  type ChurchProfile,
   type ChurchProfileRepository,
   type ProfileActor,
 } from "./churchProfileService";
@@ -17,20 +18,30 @@ const ADMIN: ProfileActor = {
   userId: "55555555-5555-4555-8555-555555555555",
 };
 
-function build() {
+function build(sobrescrever: Partial<ChurchProfile> = {}) {
   const repo: ChurchProfileRepository = {
     listCompanyChurches: vi.fn(async () => [
       {
         id: IGREJA,
         name: "Igreja Betel",
+        nomeProprio: "Igreja Betel",
+        sobrenome: null,
+        herdarNome: false,
+        parentName: null,
         publicCode: "betel",
         address: "Rua A, 10",
         logoUrl: null,
         socialLinks: {},
+        hasParent: false,
+        appearanceMode: "inherit" as const,
+        own: { theme: "dark" as const, accent: null },
+        inherited: null,
+        ...sobrescrever,
       },
     ]),
     updateProfile: vi.fn(async () => undefined),
     updateLogo: vi.fn(async () => undefined),
+    updateAppearance: vi.fn(async () => undefined),
   };
   const audit = { record: vi.fn(async () => undefined) };
   return { repo, audit, service: createChurchProfileService({ repo, audit, log: { error: vi.fn() } }) };
@@ -39,6 +50,8 @@ function build() {
 const base = {
   churchId: IGREJA,
   name: "Igreja Betel",
+  sobrenome: "",
+  herdarNome: false,
   address: "Rua das Flores, 540 - Centro",
   publicCode: "betel-lins",
   instagram: "",
@@ -163,5 +176,135 @@ describe("setLogo", () => {
 
     expect(isAppError(err) && err.code).toBe("not_found");
     expect(repo.updateLogo).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveAppearance", () => {
+  const custom = { churchId: IGREJA, mode: "custom", theme: "clean", accentColor: "#2563EB" };
+
+  it("grava o tema e a cor normalizada (#rrggbb minúsculo)", async () => {
+    const { repo, audit, service } = build();
+
+    await service.saveAppearance(ADMIN, custom);
+
+    expect(repo.updateAppearance).toHaveBeenCalledWith({
+      churchId: IGREJA,
+      companyId: EMPRESA,
+      mode: "custom",
+      theme: "clean",
+      accent: "#2563eb",
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "church.appearance.updated" }),
+    );
+  });
+
+  it("cor vazia grava sem destaque próprio (usa a cor do tema)", async () => {
+    const { repo, service } = build();
+
+    await service.saveAppearance(ADMIN, { ...custom, accentColor: "" });
+
+    expect(repo.updateAppearance).toHaveBeenCalledWith(expect.objectContaining({ accent: null }));
+  });
+
+  it("recusa cor que não é hexadecimal e tema que não existe, sem gravar nada", async () => {
+    const { repo, service } = build();
+
+    for (const ruim of [
+      { ...custom, accentColor: "red" },
+      { ...custom, accentColor: "#2563eb;background:url(//x)" },
+      { ...custom, theme: "neon" },
+      { ...custom, mode: "qualquer" },
+      { ...custom, churchId: "nao-e-uuid" },
+    ]) {
+      const err = await erroDe(service.saveAppearance(ADMIN, ruim));
+      expect(isAppError(err) && err.code).toBe("validation_error");
+    }
+    expect(repo.updateAppearance).not.toHaveBeenCalled();
+  });
+
+  it("member não muda a aparência", async () => {
+    const { repo, service } = build();
+
+    const err = await erroDe(service.saveAppearance({ ...ADMIN, role: "member" }, custom));
+
+    expect(isAppError(err) && err.code).toBe("forbidden");
+    expect(repo.updateAppearance).not.toHaveBeenCalled();
+  });
+
+  it("não mexe em igreja que não é da empresa do usuário", async () => {
+    const { repo, service } = build();
+
+    const err = await erroDe(service.saveAppearance(ADMIN, { ...custom, churchId: OUTRA }));
+
+    expect(isAppError(err) && err.code).toBe("not_found");
+    expect(repo.updateAppearance).not.toHaveBeenCalled();
+  });
+
+  it("só herda quem tem igreja-mãe; e ao herdar, tema e cor enviados são descartados", async () => {
+    const semMae = build();
+    const err = await erroDe(
+      semMae.service.saveAppearance(ADMIN, { churchId: IGREJA, mode: "inherit", theme: "", accentColor: "" }),
+    );
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(semMae.repo.updateAppearance).not.toHaveBeenCalled();
+
+    const comMae = build({ hasParent: true });
+    await comMae.service.saveAppearance(ADMIN, {
+      churchId: IGREJA,
+      mode: "inherit",
+      theme: "clean",
+      accentColor: "#2563eb",
+    });
+    expect(comMae.repo.updateAppearance).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "inherit", accent: null }),
+    );
+  });
+});
+
+describe("nome e sobrenome", () => {
+  it("grava o nome próprio e o sobrenome normalizado (espaços aparados)", async () => {
+    const { repo, service } = build();
+
+    await service.save(ADMIN, { ...base, name: "Assembleia de Deus Ministério no Ipiranga", sobrenome: "  Prainha   - Promissão " });
+
+    expect(repo.updateProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nomeProprio: "Assembleia de Deus Ministério no Ipiranga",
+        sobrenome: "Prainha - Promissão",
+        herdarNome: false,
+      }),
+    );
+  });
+
+  it("sobrenome em branco é gravado como nenhum", async () => {
+    const { repo, service } = build();
+
+    await service.save(ADMIN, { ...base, sobrenome: "   " });
+
+    expect(repo.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ sobrenome: null }));
+  });
+
+  it("recusa sobrenome grande demais", async () => {
+    const { repo, service } = build();
+
+    const err = await erroDe(service.save(ADMIN, { ...base, sobrenome: "x".repeat(121) }));
+
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(repo.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it("só herda o nome quem tem igreja superior", async () => {
+    const semMae = build();
+    const err = await erroDe(semMae.service.save(ADMIN, { ...base, herdarNome: true }));
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(semMae.repo.updateProfile).not.toHaveBeenCalled();
+
+    const comMae = build({ hasParent: true, parentName: "Comunidade da Graça" });
+    await comMae.service.save(ADMIN, { ...base, herdarNome: true, sobrenome: "Prainha" });
+    expect(comMae.repo.updateProfile).toHaveBeenCalledWith(
+      // O nome próprio segue gravado (volta a valer se ela deixar de herdar); o sobrenome é só dela.
+      expect.objectContaining({ herdarNome: true, nomeProprio: "Igreja Betel", sobrenome: "Prainha" }),
+    );
   });
 });
