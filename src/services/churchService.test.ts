@@ -15,13 +15,6 @@ const child = {
   template_id: null,
 };
 
-const branch = {
-  id: "branch",
-  parent_id: "child",
-  template_mode: "inherit" as const,
-  template_id: null,
-};
-
 const customParent = {
   id: "mid",
   parent_id: "root",

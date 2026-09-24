@@ -2,10 +2,10 @@
 
 import { useActionState, useState } from "react";
 import { Check, X } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import { reviewProfileChangeAction } from "@/server/actions/platform";
 import type { PendingProfileChange } from "@/types/sponsorship";
 
@@ -18,15 +18,11 @@ import type { PendingProfileChange } from "@/types/sponsorship";
  */
 export function ProfileChangeReview({ change }: { change: PendingProfileChange }) {
   const [state, formAction, pending] = useActionState(reviewProfileChangeAction, undefined);
+  useActionToast(state);
   const [recusando, setRecusando] = useState(false);
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
       <input type="hidden" name="changeId" value={change.id} />
 
       {recusando ? (

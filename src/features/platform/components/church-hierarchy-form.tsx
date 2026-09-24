@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useActionToast } from "@/hooks/useActionToast";
 import { setChurchHierarchyAction } from "@/server/actions/platform";
 import {
   allowedParents,
@@ -28,6 +28,7 @@ export function ChurchHierarchyForm({
   all: ChurchTreeNode[];
 }) {
   const [state, formAction, pending] = useActionState(setChurchHierarchyAction, undefined);
+  useActionToast(state);
   const [tipo, setTipo] = useState<ChurchTipo>(church.tipo);
   const opcoes = allowedParents(church, tipo, all);
   const parentAtualValido = opcoes.some((c) => c.id === church.parentId);
@@ -69,12 +70,6 @@ export function ChurchHierarchyForm({
           Salvar
         </Button>
       </div>
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success ? <p className="text-xs text-primary">{state.success}</p> : null}
     </form>
   );
 }

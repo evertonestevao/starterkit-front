@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarDays, CalendarPlus, CheckCircle2, ListChecks, Users } from "lucide-react";
+import { CalendarDays, CalendarPlus, ListChecks, Users } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { FlashToast } from "@/components/flash-toast";
 import { MetricCard } from "@/components/metric-card";
 import { EventAdminForms } from "@/features/church/components/event-admin-forms";
 import { PaginationControls } from "@/components/pagination-controls";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -139,12 +139,7 @@ export default async function EventsPage({
       </div>
 
       {criado && selecionado ? (
-        <Alert>
-          <CheckCircle2 className="size-4" />
-          <AlertDescription>
-            “{selecionado.titulo}” publicado. Ele já aparece na página da igreja.
-          </AlertDescription>
-        </Alert>
+        <FlashToast message={`“${selecionado.titulo}” publicado. Ele já aparece na página da igreja.`} />
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

@@ -1,3 +1,4 @@
+import { formatChurchName } from "@/lib/churchName";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -35,10 +36,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const dados = await carregar(public_code, eventId);
   if (!dados) return { title: "Evento" };
   return {
-    title: `${dados.evento.titulo} · ${dados.church.name}`,
+    title: `${dados.evento.titulo} · ${formatChurchName(dados.church.name, dados.church.sobrenome)}`,
     description:
       eventSummary(dados.evento.descricao, 160) ??
-      `${eventWhen(dados.evento.inicio, dados.evento.fim)} — ${dados.church.name}`,
+      `${eventWhen(dados.evento.inicio, dados.evento.fim)} — ${formatChurchName(dados.church.name, dados.church.sobrenome)}`,
   };
 }
 
@@ -46,7 +47,7 @@ export default async function ChurchEventPage({ params }: Params) {
   const { public_code, eventId } = await params;
   const dados = await carregar(public_code, eventId);
   if (!dados) notFound();
-  const { church, theme, evento, jaComecou } = dados;
+  const { church, theme, accent, evento, jaComecou } = dados;
 
   const base = `/igreja/${church.public_code}`;
   const selo = eventDateBadge(evento.inicio);
@@ -82,7 +83,7 @@ export default async function ChurchEventPage({ params }: Params) {
   ) : null;
 
   return (
-    <PublicShell theme={theme}>
+    <PublicShell theme={theme} accent={accent}>
       <header className="bg-[var(--pg-hero)]">
         <div className="mx-auto w-full max-w-xl px-5 pt-6 pb-10">
           <Link
@@ -99,7 +100,7 @@ export default async function ChurchEventPage({ params }: Params) {
               <span className="mt-1 text-xs font-semibold tracking-wider">{selo.mes}</span>
             </span>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-[var(--pg-hero-muted)]">{church.name}</p>
+              <p className="text-sm font-medium text-[var(--pg-hero-muted)]">{formatChurchName(church.name, church.sobrenome)}</p>
               <h1
                 className={`${fonteTitulos.className} mt-1 text-3xl leading-tight font-bold text-balance text-[var(--pg-hero-text)]`}
               >

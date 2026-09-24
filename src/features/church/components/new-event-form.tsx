@@ -1,10 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import { createChurchEventAction } from "@/server/actions/churchEvents";
 
 /**
@@ -21,16 +21,11 @@ export function NewEventForm({
   endereco: string | null;
 }) {
   const [state, formAction, pending] = useActionState(createChurchEventAction, undefined);
+  useActionToast(state);
   const unica = igrejas.length === 1 ? igrejas[0] : null;
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-
       {unica ? (
         <input type="hidden" name="churchId" value={unica.id} />
       ) : (

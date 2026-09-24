@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import { saveChurchPixAction } from "@/server/actions/churchPix";
 
 const selectClasses =
@@ -28,6 +29,7 @@ export interface PixChurch {
  */
 export function PixForm({ igrejas }: { igrejas: PixChurch[] }) {
   const [state, formAction, pending] = useActionState(saveChurchPixAction, undefined);
+  useActionToast(state);
   const [churchId, setChurchId] = useState(igrejas[0]?.id ?? "");
   const [chave, setChave] = useState(igrejas[0]?.pixChave ?? "");
   const [titular, setTitular] = useState(igrejas[0]?.pixTitular ?? "");
@@ -48,17 +50,6 @@ export function PixForm({ igrejas }: { igrejas: PixChurch[] }) {
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="churchId" value={churchId} />
       <input type="hidden" name="confirmado" value={confirmando ? "true" : "false"} />
-
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success ? (
-        <Alert>
-          <AlertDescription>{state.success}</AlertDescription>
-        </Alert>
-      ) : null}
 
       {igrejas.length > 1 ? (
         <div className="flex flex-col gap-1.5">

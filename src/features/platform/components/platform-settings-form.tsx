@@ -1,11 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import { updatePlatformSettingsAction } from "@/server/actions/platform";
 import type { PlatformSettings } from "@/types/platform";
 
@@ -16,20 +16,10 @@ function valor(n: number | null): string {
 
 export function PlatformSettingsForm({ settings }: { settings: PlatformSettings }) {
   const [state, formAction, pending] = useActionState(updatePlatformSettingsAction, undefined);
+  useActionToast(state);
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success ? (
-        <Alert>
-          <AlertDescription>{state.success}</AlertDescription>
-        </Alert>
-      ) : null}
-
       <Card>
         <CardHeader>
           <CardTitle>Vagas de primeiro patrocínio</CardTitle>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { CheckCircle2, HandHeart } from "lucide-react";
+import { HandHeart } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FlashToast } from "@/components/flash-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -62,12 +62,7 @@ export default async function SponsorshipsPage({
         </p>
       </div>
 
-      {novo ? (
-        <Alert>
-          <CheckCircle2 className="size-4" />
-          <AlertDescription>Patrocínio registrado. Obrigado pelo seu apoio!</AlertDescription>
-        </Alert>
-      ) : null}
+      {novo ? <FlashToast message="Patrocínio registrado. Obrigado pelo seu apoio!" /> : null}
 
       {sponsorships.length === 0 ? (
         <EmptyState

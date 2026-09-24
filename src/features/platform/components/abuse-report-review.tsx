@@ -2,10 +2,10 @@
 
 import { useActionState } from "react";
 import { Check, X } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import { reviewAbuseReportAction } from "@/server/actions/platform";
 import type { AbuseReport } from "@/types/sponsorship";
 
@@ -19,14 +19,10 @@ import type { AbuseReport } from "@/types/sponsorship";
  */
 export function AbuseReportReview({ report }: { report: AbuseReport }) {
   const [state, formAction, pending] = useActionState(reviewAbuseReportAction, undefined);
+  useActionToast(state);
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
       <input type="hidden" name="reportId" value={report.id} />
 
       <div className="flex flex-col gap-2">

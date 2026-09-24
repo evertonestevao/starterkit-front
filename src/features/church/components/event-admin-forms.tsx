@@ -2,10 +2,10 @@
 
 import { useActionState } from "react";
 import { Trash2 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import { centsToBrl, isoToBrasiliaLocal } from "@/lib/churchEvents";
 import { removeChurchEventAction, updateChurchEventAction } from "@/server/actions/churchEvents";
 
@@ -30,22 +30,29 @@ export interface EditableEvent {
  */
 export function EventAdminForms({ evento }: { evento: EditableEvent }) {
   const [state, formAction, pending] = useActionState(updateChurchEventAction, undefined);
+  useActionToast(state);
   const [removeState, removeAction, removing] = useActionState(removeChurchEventAction, undefined);
+  useActionToast(removeState);
+
+  // Mesmo problema do formulário de perfil da igreja e do de programação:
+  // campos não controlados (defaultValue) dentro de um item cujo <li key=...>
+  // não muda ao editar. Uma key no <form> derivada de tudo que alimenta
+  // defaultValue força a remontagem só quando um salvamento troca algo de
+  // verdade, evitando o aviso do Base UI sobre FieldControl não controlado.
+  const versaoDoEvento = [
+    evento.id,
+    evento.titulo,
+    evento.inicio,
+    evento.fim ?? "",
+    evento.local ?? "",
+    evento.precoCents,
+    evento.descricao ?? "",
+    evento.inscricoesAbertas,
+  ].join("\u0000");
 
   return (
     <div className="flex flex-col gap-3 border-t px-3 py-3">
-      {state?.error || removeState?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state?.error ?? removeState?.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success || removeState?.success ? (
-        <Alert>
-          <AlertDescription>{state?.success ?? removeState?.success}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      <form action={formAction} className="flex flex-col gap-3">
+      <form key={versaoDoEvento} action={formAction} className="flex flex-col gap-3">
         <input type="hidden" name="eventId" value={evento.id} />
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5 sm:col-span-2">

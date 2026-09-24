@@ -1,3 +1,4 @@
+import { formatChurchName } from "@/lib/churchName";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,8 +14,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const carregado = await loadPublicChurch((await params).public_code);
   if (!carregado) return { title: "Eventos" };
   return {
-    title: `Eventos · ${carregado.church.name}`,
-    description: `Próximos eventos da ${carregado.church.name}. Veja os detalhes e faça sua inscrição.`,
+    title: `Eventos · ${formatChurchName(carregado.church.name, carregado.church.sobrenome)}`,
+    description: `Próximos eventos da ${formatChurchName(carregado.church.name, carregado.church.sobrenome)}. Veja os detalhes e faça sua inscrição.`,
   };
 }
 
@@ -26,13 +27,13 @@ export default async function ChurchEventsPage({ params }: Params) {
   const { public_code } = await params;
   const carregado = await loadPublicChurch(public_code);
   if (!carregado) notFound();
-  const { church, theme } = carregado;
+  const { church, theme, accent } = carregado;
 
   const eventos = await (await getPublicChurchRepository()).listUpcomingEvents(church.id);
   const base = `/igreja/${church.public_code}`;
 
   return (
-    <PublicShell theme={theme}>
+    <PublicShell theme={theme} accent={accent}>
       <header className="bg-[var(--pg-hero)]">
         <div className="mx-auto w-full max-w-xl px-5 pt-6 pb-10">
           <Link
@@ -40,7 +41,7 @@ export default async function ChurchEventsPage({ params }: Params) {
             className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--pg-hero-muted)] hover:text-[var(--pg-hero-text)]"
           >
             <ArrowLeft className="size-4" aria-hidden />
-            {church.name}
+            {formatChurchName(church.name, church.sobrenome)}
           </Link>
           <h1
             className={`${fonteTitulos.className} mt-8 flex items-center gap-2.5 text-3xl font-bold text-[var(--pg-hero-text)]`}

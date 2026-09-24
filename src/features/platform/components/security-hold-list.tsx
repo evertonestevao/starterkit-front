@@ -2,9 +2,9 @@
 
 import { useActionState } from "react";
 import { LockOpen } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useActionToast } from "@/hooks/useActionToast";
 import { releaseSecurityHoldAction } from "@/server/actions/platform";
 import type { SecurityHold } from "@/types/sponsorship";
 
@@ -27,6 +27,7 @@ function formatDateTime(iso: string | null): string {
  */
 export function SecurityHoldList({ holds }: { holds: SecurityHold[] }) {
   const [state, formAction, pending] = useActionState(releaseSecurityHoldAction, undefined);
+  useActionToast(state);
 
   if (holds.length === 0) return null;
 
@@ -44,17 +45,6 @@ export function SecurityHoldList({ holds }: { holds: SecurityHold[] }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {state?.error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{state.error}</AlertDescription>
-          </Alert>
-        ) : null}
-        {state?.success ? (
-          <Alert>
-            <AlertDescription>{state.success}</AlertDescription>
-          </Alert>
-        ) : null}
-
         {holds.map((hold) => (
           <div
             key={hold.sponsorAccountId}

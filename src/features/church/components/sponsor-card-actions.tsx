@@ -2,10 +2,10 @@
 
 import { useActionState, useState } from "react";
 import { Eye, EyeOff, Flag } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import {
   reportSponsorAbuseAction,
   setSponsorHiddenAction,
@@ -29,22 +29,16 @@ export function SponsorCardActions({
   denunciaAberta: boolean;
 }) {
   const [hideState, hideAction, hidePending] = useActionState(setSponsorHiddenAction, undefined);
+  useActionToast(hideState);
   const [reportState, reportAction, reportPending] = useActionState(
     reportSponsorAbuseAction,
     undefined,
   );
+  useActionToast(reportState);
   const [denunciando, setDenunciando] = useState(false);
-
-  const erro = hideState?.error ?? reportState?.error;
 
   return (
     <div className="flex flex-col gap-3">
-      {erro ? (
-        <Alert variant="destructive">
-          <AlertDescription>{erro}</AlertDescription>
-        </Alert>
-      ) : null}
-
       {denunciando ? (
         <form action={reportAction} className="flex flex-col gap-2">
           <input type="hidden" name="sponsorshipId" value={sponsorshipId} />

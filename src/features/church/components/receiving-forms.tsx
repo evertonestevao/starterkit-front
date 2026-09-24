@@ -2,11 +2,11 @@
 
 import { useActionState, useState } from "react";
 import { CreditCard, ShieldCheck } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import {
   setCardEnabledAction,
   submitReceivingRegistrationAction,
@@ -36,25 +36,6 @@ export interface ReceivingChurch {
   conta: ChurchReceivingAccount | null;
 }
 
-/** Erro ou sucesso de UMA ação, ao lado do formulário que a disparou. */
-function Resposta({ estado }: { estado: { error?: string; success?: string } | undefined }) {
-  if (estado?.error) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>{estado.error}</AlertDescription>
-      </Alert>
-    );
-  }
-  if (estado?.success) {
-    return (
-      <Alert>
-        <AlertDescription>{estado.success}</AlertDescription>
-      </Alert>
-    );
-  }
-  return null;
-}
-
 /**
  * Cadastro opcional da subconta e o interruptor do cartão.
  *
@@ -65,8 +46,11 @@ function Resposta({ estado }: { estado: { error?: string; success?: string } | u
  */
 export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
   const [state, formAction, pending] = useActionState(submitReceivingRegistrationAction, undefined);
+  useActionToast(state);
   const [syncState, syncAction, syncing] = useActionState(syncReceivingStatusAction, undefined);
+  useActionToast(syncState);
   const [cardState, cardAction, switching] = useActionState(setCardEnabledAction, undefined);
+  useActionToast(cardState);
   const [churchId, setChurchId] = useState(igrejas[0]?.id ?? "");
   const igreja = igrejas.find((i) => i.id === churchId) ?? igrejas[0];
   const conta = igreja?.conta ?? null;
@@ -101,8 +85,6 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
         </div>
       ) : null}
 
-      <Resposta estado={syncState} />
-
       <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
         <ShieldCheck className="size-4 text-primary" aria-hidden />
         <span className="text-sm font-medium">Situação da conta:</span>
@@ -122,9 +104,6 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
 
       {status === "aprovada" ? (
         <form action={cardAction} className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
-          <div className="w-full">
-            <Resposta estado={cardState} />
-          </div>
           <input type="hidden" name="churchId" value={igreja.id} />
           <input type="hidden" name="aceita" value={ativo ? "false" : "true"} />
           <CreditCard className="size-5 text-primary" aria-hidden />
@@ -144,7 +123,6 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
       ) : null}
 
       <form action={formAction} key={igreja.id} className="flex flex-col gap-4 border-t pt-6">
-        <Resposta estado={state} />
         <input type="hidden" name="churchId" value={igreja.id} />
         <div>
           <h3 className="text-sm font-semibold">Dados para abrir a conta</h3>

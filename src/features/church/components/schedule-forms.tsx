@@ -2,10 +2,10 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import { DIAS_DA_SEMANA } from "@/lib/churchSchedule";
 import { cn } from "@/lib/utils";
 import {
@@ -24,18 +24,10 @@ const selectClasses =
  */
 export function AddScheduleItemForm({ igrejas }: { igrejas: Array<{ id: string; name: string }> }) {
   const [state, formAction, pending] = useActionState(addScheduleItemAction, undefined);
+  useActionToast(state);
   const [tipo, setTipo] = useState<"semanal" | "especial">("semanal");
   const form = useRef<HTMLFormElement>(null);
   const unica = igrejas.length === 1 ? igrejas[0] : null;
-
-  // Em qual modo o envio em exibição (state) foi feito. Comparado com `tipo`
-  // atual na hora de renderizar: sem isso, um erro de quando o modo era
-  // "semanal" (ex.: "Escolha o dia da semana") continuaria na tela depois de
-  // trocar para "especial", parecendo um problema do modo atual — que nem
-  // chegou a ser testado ainda. Atualizado no onSubmit (handler de evento,
-  // não efeito): é normal estado nascer do evento de envio.
-  const [tipoDoEnvio, setTipoDoEnvio] = useState(tipo);
-  const mensagemDoModoAtual = tipoDoEnvio === tipo;
 
   // Depois de adicionar, o formulário volta limpo para o próximo item.
   useEffect(() => {
@@ -43,23 +35,7 @@ export function AddScheduleItemForm({ igrejas }: { igrejas: Array<{ id: string; 
   }, [state]);
 
   return (
-    <form
-      ref={form}
-      action={formAction}
-      onSubmit={() => setTipoDoEnvio(tipo)}
-      className="flex flex-col gap-4"
-    >
-      {state?.error && mensagemDoModoAtual ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success && mensagemDoModoAtual ? (
-        <Alert>
-          <AlertDescription>{state.success}</AlertDescription>
-        </Alert>
-      ) : null}
-
+    <form action={formAction} ref={form} className="flex flex-col gap-4">
       {unica ? (
         <input type="hidden" name="churchId" value={unica.id} />
       ) : (
@@ -167,10 +143,10 @@ export function AddScheduleItemForm({ igrejas }: { igrejas: Array<{ id: string; 
 
 export function RemoveScheduleItemButton({ itemId, titulo }: { itemId: string; titulo: string }) {
   const [state, formAction, pending] = useActionState(removeScheduleItemAction, undefined);
+  useActionToast(state);
   return (
     <form action={formAction} className="flex shrink-0 items-center gap-2">
       <input type="hidden" name="itemId" value={itemId} />
-      {state?.error ? <span className="text-xs text-destructive">{state.error}</span> : null}
       <Button
         type="submit"
         variant="ghost"
@@ -204,31 +180,30 @@ export function EditScheduleItemForm({
   };
 }) {
   const [state, formAction, pending] = useActionState(updateScheduleItemAction, undefined);
+  useActionToast(state);
   const [tipo, setTipo] = useState<"semanal" | "especial">(item.tipo);
-  // Mesmo cuidado do formulário de adicionar: em qual modo o envio em
-  // exibição foi feito, comparado com o modo atual — sem isto, um erro de
-  // quando o item ainda era "semanal" ficaria na tela depois de trocar para
-  // "especial".
-  const [tipoDoEnvio, setTipoDoEnvio] = useState(tipo);
-  const mensagemDoModoAtual = tipoDoEnvio === tipo;
+
+  // Os campos abaixo são não controlados (defaultValue). Como este componente
+  // é renderizado dentro de um <li key={item.id}> que não muda depois de
+  // editar, um salvamento bem-sucedido troca item.titulo/hora/etc. sem
+  // desmontar nada — e o Base UI acusa "changing the default value state of
+  // an uncontrolled FieldControl after being initialized". Uma key no <form>
+  // derivada de tudo que alimenta defaultValue força a remontagem só quando
+  // algo muda de verdade (nunca durante a digitação, porque aí `item` ainda é
+  // o valor antigo vindo do servidor).
+  const versaoDoItem = [
+    item.id,
+    item.titulo,
+    item.hora,
+    String(item.dia_semana ?? ""),
+    item.data ?? "",
+    item.local ?? "",
+    item.descricao ?? "",
+  ].join("\u0000");
 
   return (
-    <form
-      action={formAction}
-      onSubmit={() => setTipoDoEnvio(tipo)}
-      className="flex flex-col gap-3 border-t px-3 py-3"
-    >
+    <form key={versaoDoItem} action={formAction} className="flex flex-col gap-3 border-t px-3 py-3">
       <input type="hidden" name="itemId" value={item.id} />
-      {state?.error && mensagemDoModoAtual ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success && mensagemDoModoAtual ? (
-        <Alert>
-          <AlertDescription>{state.success}</AlertDescription>
-        </Alert>
-      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">

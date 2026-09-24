@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useActionToast } from "@/hooks/useActionToast";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { cn } from "@/lib/utils";
 import {
@@ -175,6 +176,7 @@ export function CustomDomainSection({
   canManage: boolean;
 }) {
   const [state, formAction, pending] = useActionState(claimCustomDomainAction, undefined);
+  useActionToast(state);
   const [busy, startTransition] = useTransition();
   const presentation = STATUS_PRESENTATION[view.status];
   const hasDomain = Boolean(view.domain);
@@ -296,17 +298,6 @@ export function CustomDomainSection({
 
           {canManage ? (
             <form action={formAction} className="flex flex-col gap-3">
-              {state?.error ? (
-                <Alert variant="destructive">
-                  <AlertDescription>{state.error}</AlertDescription>
-                </Alert>
-              ) : null}
-              {state?.success ? (
-                <Alert>
-                  <AlertDescription>{state.success}</AlertDescription>
-                </Alert>
-              ) : null}
-
               <input type="hidden" name="churchId" value={view.churchId} />
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`domain-${view.churchId}`}>
