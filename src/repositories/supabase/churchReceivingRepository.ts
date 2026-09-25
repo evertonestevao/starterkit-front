@@ -4,6 +4,7 @@ import type {
   ChurchReceivingAccount,
   ChurchReceivingRepository,
   DonationStore,
+  PixFonte,
   ReceivingStatus,
 } from "@/services/churchReceivingService";
 
@@ -19,7 +20,7 @@ import type {
 
 /** Colunas que o client pode ler (a chave cifrada e o hash do token ficam fora). */
 const COLUNAS =
-  "id, church_id, razao_social, documento, email, telefone, cep, endereco, endereco_numero, bairro, cidade, uf, nascimento, renda_mensal_cents, provider, status, external_account_id, link_doacao, motivo_recusa, aceita_cartao";
+  "id, church_id, razao_social, documento, email, telefone, cep, endereco, endereco_numero, bairro, cidade, uf, nascimento, renda_mensal_cents, provider, status, external_account_id, link_doacao_cartao, link_doacao_pix, motivo_recusa, aceita_cartao";
 
 interface AccountRow {
   id: string;
@@ -39,16 +40,21 @@ interface AccountRow {
   provider: string | null;
   status: ReceivingStatus;
   external_account_id: string | null;
-  link_doacao: string | null;
+  link_doacao_cartao: string | null;
+  link_doacao_pix: string | null;
   motivo_recusa: string | null;
   aceita_cartao: boolean;
 }
 
-function toAccount(row: AccountRow, churchName: string): ChurchReceivingAccount {
+function toAccount(
+  row: AccountRow,
+  igreja: { name: string; publicCode: string; pixFonte: PixFonte },
+): ChurchReceivingAccount {
   return {
     id: row.id,
     churchId: row.church_id,
-    churchName,
+    churchName: igreja.name,
+    churchPublicCode: igreja.publicCode,
     razaoSocial: row.razao_social,
     documento: row.documento,
     email: row.email,
@@ -64,9 +70,11 @@ function toAccount(row: AccountRow, churchName: string): ChurchReceivingAccount 
     provider: row.provider,
     status: row.status,
     externalAccountId: row.external_account_id,
-    linkDoacao: row.link_doacao,
+    linkDoacaoCartao: row.link_doacao_cartao,
+    linkDoacaoPix: row.link_doacao_pix,
     motivoRecusa: row.motivo_recusa,
     aceitaCartao: row.aceita_cartao,
+    pixFonte: igreja.pixFonte,
   };
 }
 
@@ -74,37 +82,50 @@ export function createSupabaseChurchReceivingRepository(
   client: SupabaseClient,
   adminClient: SupabaseClient,
 ): ChurchReceivingRepository {
-  async function churchNames(companyId: string): Promise<Map<string, string>> {
+  async function churchInfo(
+    companyId: string,
+  ): Promise<Map<string, { name: string; publicCode: string; pixFonte: PixFonte }>> {
     const { data, error } = await client
       .from("churches")
-      .select("id, name")
+      .select("id, name, public_code, pix_fonte")
       .eq("company_id", companyId)
       .is("deleted_at", null);
     if (error) throw new AppError("internal_error", "Falha ao carregar as igrejas", error);
-    return new Map((data ?? []).map((c) => [c.id as string, c.name as string]));
+    return new Map(
+      (data ?? []).map((c) => [
+        c.id as string,
+        {
+          name: c.name as string,
+          publicCode: c.public_code as string,
+          pixFonte: c.pix_fonte as PixFonte,
+        },
+      ]),
+    );
   }
+
+  const IGREJA_VAZIA = { name: "", publicCode: "", pixFonte: "propria" as const };
 
   return {
     async listCompanyChurches(companyId) {
-      const nomes = await churchNames(companyId);
-      return [...nomes.entries()].map(([id, name]) => ({ id, name }));
+      const igrejas = await churchInfo(companyId);
+      return [...igrejas.entries()].map(([id, { name, publicCode }]) => ({ id, name, publicCode }));
     },
 
     async listByCompany(companyId) {
-      const nomes = await churchNames(companyId);
+      const igrejas = await churchInfo(companyId);
       const { data, error } = await client
         .from("church_payment_accounts")
         .select(COLUNAS)
         .eq("company_id", companyId);
       if (error) throw new AppError("internal_error", "Falha ao carregar o recebimento", error);
       return ((data ?? []) as AccountRow[]).map((row) =>
-        toAccount(row, nomes.get(row.church_id) ?? ""),
+        toAccount(row, igrejas.get(row.church_id) ?? IGREJA_VAZIA),
       );
     },
 
     async findByChurch(companyId, churchId) {
-      const nomes = await churchNames(companyId);
-      if (!nomes.has(churchId)) return null;
+      const igrejas = await churchInfo(companyId);
+      if (!igrejas.has(churchId)) return null;
       const { data, error } = await client
         .from("church_payment_accounts")
         .select(COLUNAS)
@@ -112,11 +133,11 @@ export function createSupabaseChurchReceivingRepository(
         .eq("church_id", churchId)
         .maybeSingle<AccountRow>();
       if (error) throw new AppError("internal_error", "Falha ao carregar o recebimento", error);
-      return data ? toAccount(data, nomes.get(churchId) ?? "") : null;
+      return data ? toAccount(data, igrejas.get(churchId) ?? IGREJA_VAZIA) : null;
     },
 
     async saveRegistration(input) {
-      const nomes = await churchNames(input.companyId);
+      const igrejas = await churchInfo(input.companyId);
       const payload = {
         church_id: input.churchId,
         razao_social: input.razaoSocial,
@@ -154,7 +175,7 @@ export function createSupabaseChurchReceivingRepository(
       if (error || !data) {
         throw new AppError("internal_error", "Falha ao salvar o cadastro de recebimento", error);
       }
-      return toAccount(data, nomes.get(input.churchId) ?? "");
+      return toAccount(data, igrejas.get(input.churchId) ?? IGREJA_VAZIA);
     },
 
     async setAceitaCartao(companyId, churchId, aceita) {
@@ -165,6 +186,17 @@ export function createSupabaseChurchReceivingRepository(
         .eq("church_id", churchId)
         .select("id");
       if (error) throw new AppError("internal_error", "Falha ao salvar a escolha do cartão", error);
+      return (data ?? []).length > 0;
+    },
+
+    async setPixFonte(companyId, churchId, fonte) {
+      const { data, error } = await client
+        .from("churches")
+        .update({ pix_fonte: fonte })
+        .eq("company_id", companyId)
+        .eq("id", churchId)
+        .select("id");
+      if (error) throw new AppError("internal_error", "Falha ao salvar a fonte do Pix", error);
       return (data ?? []).length > 0;
     },
 
@@ -200,12 +232,20 @@ export function createSupabaseChurchReceivingRepository(
       if (error) throw new AppError("internal_error", "Falha ao atualizar o status", error);
     },
 
-    async setDonationLink(churchId, url) {
+    async setCardDonationLink(churchId, url) {
       const { error } = await adminClient
         .from("church_payment_accounts")
-        .update({ link_doacao: url })
+        .update({ link_doacao_cartao: url })
         .eq("church_id", churchId);
-      if (error) throw new AppError("internal_error", "Falha ao gravar o link de doação", error);
+      if (error) throw new AppError("internal_error", "Falha ao gravar o link de doação (cartão)", error);
+    },
+
+    async setPixDonationLink(churchId, url) {
+      const { error } = await adminClient
+        .from("church_payment_accounts")
+        .update({ link_doacao_pix: url })
+        .eq("church_id", churchId);
+      if (error) throw new AppError("internal_error", "Falha ao gravar o link de doação (Pix)", error);
     },
 
     async getSealedApiKey(churchId) {

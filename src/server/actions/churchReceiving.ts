@@ -106,3 +106,29 @@ export async function setCardEnabledAction(
     return toActionError(err);
   }
 }
+
+/** Escolhe qual Pix aparece na vitrine: chave própria ou o da subconta Asaas. */
+export async function setPixSourceAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const actor = await ator();
+    const fonte = texto(formData, "fonte");
+    if (fonte !== "propria" && fonte !== "asaas") {
+      throw new AppError("validation_error", "Escolha inválida.");
+    }
+    const service = await getChurchReceivingService();
+    await service.setPixSource(actor, texto(formData, "churchId"), fonte);
+
+    revalidatePath(PAGINA);
+    return {
+      success:
+        fonte === "asaas"
+          ? "Pix pela Asaas ligado. A página passa a mostrar esse Pix, não mais a chave própria."
+          : "Pix pela chave própria da igreja ligado de novo.",
+    };
+  } catch (err) {
+    return toActionError(err);
+  }
+}

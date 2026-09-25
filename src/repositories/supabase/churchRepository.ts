@@ -13,7 +13,7 @@ import type { PublicSponsor } from "@/types/sponsorship";
  * permission denied — que é exatamente o comportamento desejado.
  */
 export const PUBLIC_CHURCH_COLUMNS =
-  "id, parent_id, name, sobrenome, slug, logo_url, address, service_times, social_links, path, template_mode, template_id, public_code, pix_chave, pix_titular, aceita_patrocinio, created_at, updated_at";
+  "id, parent_id, name, sobrenome, slug, logo_url, address, service_times, social_links, path, template_mode, template_id, public_code, pix_chave, pix_titular, pix_fonte, aceita_patrocinio, created_at, updated_at";
 
 export function createSupabasePublicChurchRepository(client: SupabaseClient) {
   return {
@@ -89,6 +89,18 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
       });
       if (error) {
         console.error("[church-page] falha ao carregar o link de cartão", error);
+        return null;
+      }
+      return (data as string | null) ?? null;
+    },
+
+    /** Mesma ideia, para o Pix pela subconta Asaas (quando a igreja escolheu essa fonte). */
+    async getPixDonationLink(churchId: string): Promise<string | null> {
+      const { data, error } = await client.rpc("church_pix_donation_link", {
+        p_church_id: churchId,
+      });
+      if (error) {
+        console.error("[church-page] falha ao carregar o link de pix", error);
         return null;
       }
       return (data as string | null) ?? null;

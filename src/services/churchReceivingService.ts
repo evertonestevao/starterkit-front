@@ -30,10 +30,14 @@ export type ReceivingStatus =
   | "recusada"
   | "suspensa";
 
+export type PixFonte = "propria" | "asaas";
+
 export interface ChurchReceivingAccount {
   id: string;
   churchId: string;
   churchName: string;
+  /** Para montar a URL pública da igreja (/igreja/{publicCode}), não o id. */
+  churchPublicCode: string;
   razaoSocial: string | null;
   documento: string | null;
   email: string | null;
@@ -49,13 +53,17 @@ export interface ChurchReceivingAccount {
   provider: string | null;
   status: ReceivingStatus;
   externalAccountId: string | null;
-  linkDoacao: string | null;
+  linkDoacaoCartao: string | null;
+  /** Só é usado de verdade quando churches.pix_fonte = "asaas". */
+  linkDoacaoPix: string | null;
   motivoRecusa: string | null;
   aceitaCartao: boolean;
+  /** De churches.pix_fonte — vive na igreja, não na subconta. */
+  pixFonte: PixFonte;
 }
 
 export interface ChurchReceivingRepository {
-  listCompanyChurches(companyId: string): Promise<Array<{ id: string; name: string }>>;
+  listCompanyChurches(companyId: string): Promise<Array<{ id: string; name: string; publicCode: string }>>;
   findByChurch(companyId: string, churchId: string): Promise<ChurchReceivingAccount | null>;
   listByCompany(companyId: string): Promise<ChurchReceivingAccount[]>;
   /** Cria ou atualiza os dados do cadastro (escrita da igreja). */
@@ -76,6 +84,8 @@ export interface ChurchReceivingRepository {
     rendaMensalCents: number;
   }): Promise<ChurchReceivingAccount>;
   setAceitaCartao(companyId: string, churchId: string, aceita: boolean): Promise<boolean>;
+  /** churches.pix_fonte — troca sozinha, sem mexer em sponsor/church_payment_accounts. */
+  setPixFonte(companyId: string, churchId: string, fonte: PixFonte): Promise<boolean>;
   /** Escrita do SERVIDOR: status, ids do provedor e segredos. */
   saveProviderResult(input: {
     churchId: string;
@@ -87,7 +97,8 @@ export interface ChurchReceivingRepository {
     webhookTokenHash: string;
   }): Promise<void>;
   updateStatus(churchId: string, status: ReceivingStatus): Promise<void>;
-  setDonationLink(churchId: string, url: string): Promise<void>;
+  setCardDonationLink(churchId: string, url: string): Promise<void>;
+  setPixDonationLink(churchId: string, url: string): Promise<void>;
   /**
    * Chave de API da subconta, ainda cifrada. Sai do banco só por aqui, e
    * quem chama é o servidor — a coluna nem tem GRANT de leitura para o
@@ -112,9 +123,17 @@ export function canConfigureReceiving(role: RoleCode): boolean {
 export function cartaoAtivo(conta: {
   status: ReceivingStatus;
   aceitaCartao: boolean;
-  linkDoacao: string | null;
+  linkDoacaoCartao: string | null;
 }): boolean {
-  return conta.status === "aprovada" && conta.aceitaCartao && Boolean(conta.linkDoacao);
+  return conta.status === "aprovada" && conta.aceitaCartao && Boolean(conta.linkDoacaoCartao);
+}
+
+export function pixAsaasAtivo(conta: {
+  status: ReceivingStatus;
+  pixFonte: PixFonte;
+  linkDoacaoPix: string | null;
+}): boolean {
+  return conta.status === "aprovada" && conta.pixFonte === "asaas" && Boolean(conta.linkDoacaoPix);
 }
 
 /** CPF (11) ou CNPJ (14). */
@@ -209,6 +228,7 @@ export interface ReceivingProviderPort {
     apiKey: string;
     churchName: string;
     successUrl: string;
+    metodo: "cartao" | "pix";
   }): Promise<{ url: string }>;
 }
 
@@ -247,11 +267,20 @@ export function createChurchReceivingService(deps: {
     }
   }
 
-  /** Cria (uma vez) o link de doação DENTRO da subconta da igreja. */
-  async function ensureLink(companyId: string, churchId: string): Promise<string | null> {
+  /**
+   * Cria (uma vez) o link de doação DENTRO da subconta da igreja, para o
+   * método pedido. Cartão e Pix nunca dividem link — cada um com o seu,
+   * criado só quando a igreja realmente ligou aquele método.
+   */
+  async function ensureLink(
+    companyId: string,
+    churchId: string,
+    metodo: "cartao" | "pix",
+  ): Promise<string | null> {
     const conta = await deps.repo.findByChurch(companyId, churchId);
     if (!conta) throw new AppError("not_found", "Igreja não encontrada.");
-    if (conta.linkDoacao) return conta.linkDoacao;
+    const linkAtual = metodo === "cartao" ? conta.linkDoacaoCartao : conta.linkDoacaoPix;
+    if (linkAtual) return linkAtual;
     if (conta.status !== "aprovada") return null;
 
     const cifrada = await deps.repo.getSealedApiKey(churchId);
@@ -265,9 +294,14 @@ export function createChurchReceivingService(deps: {
     const { url } = await deps.provider.ensureDonationLink({
       apiKey: deps.secrets.open(cifrada),
       churchName: conta.churchName,
-      successUrl: `${base}/igreja/${conta.churchId}`,
+      successUrl: `${base}/igreja/${conta.churchPublicCode}`,
+      metodo,
     });
-    await deps.repo.setDonationLink(churchId, url);
+    if (metodo === "cartao") {
+      await deps.repo.setCardDonationLink(churchId, url);
+    } else {
+      await deps.repo.setPixDonationLink(churchId, url);
+    }
     return url;
   }
 
@@ -297,7 +331,8 @@ export function createChurchReceivingService(deps: {
       const dados = parsed.data;
 
       const igrejas = await deps.repo.listCompanyChurches(actor.companyId);
-      if (!igrejas.some((c) => c.id === dados.churchId)) {
+      const igreja = igrejas.find((c) => c.id === dados.churchId);
+      if (!igreja) {
         throw new AppError("not_found", "Igreja não encontrada.");
       }
 
@@ -347,7 +382,9 @@ export function createChurchReceivingService(deps: {
         rendaMensalCents,
         webhookUrl: `${base}/api/webhooks/donations/${deps.provider.name}`,
         webhookToken: token,
-        site: base,
+        // A página da igreja, não a raiz — assim quem paga vê de qual igreja
+        // é, em vez do domínio genérico da plataforma.
+        site: `${base}/igreja/${igreja.publicCode}`,
       });
 
       await deps.repo.saveProviderResult({
@@ -374,8 +411,10 @@ export function createChurchReceivingService(deps: {
         .catch((err) => log.error("[receiving] falha ao registrar auditoria", err));
 
       if (criada.status === "aprovada") {
-        await ensureLink(actor.companyId, dados.churchId).catch((err) =>
-          log.error("[receiving] falha ao criar o link de doação", err),
+        // Só o de cartão aqui: Pix pela Asaas é opt-in (setPixSource), a
+        // maioria das igrejas fica na chave própria.
+        await ensureLink(actor.companyId, dados.churchId, "cartao").catch((err) =>
+          log.error("[receiving] falha ao criar o link de doação (cartão)", err),
         );
       }
 
@@ -401,9 +440,14 @@ export function createChurchReceivingService(deps: {
       if (status !== conta.status) {
         await deps.repo.updateStatus(churchId, status);
       }
-      if (status === "aprovada" && !conta.linkDoacao) {
-        await ensureLink(actor.companyId, churchId).catch((err) =>
-          log.error("[receiving] falha ao criar o link de doação", err),
+      if (status === "aprovada" && !conta.linkDoacaoCartao) {
+        await ensureLink(actor.companyId, churchId, "cartao").catch((err) =>
+          log.error("[receiving] falha ao criar o link de doação (cartão)", err),
+        );
+      }
+      if (status === "aprovada" && conta.pixFonte === "asaas" && !conta.linkDoacaoPix) {
+        await ensureLink(actor.companyId, churchId, "pix").catch((err) =>
+          log.error("[receiving] falha ao criar o link de doação (pix)", err),
         );
       }
       return status;
@@ -423,7 +467,7 @@ export function createChurchReceivingService(deps: {
           "O cartão só pode ser ligado depois que o provedor aprovar a conta da igreja.",
         );
       }
-      if (aceita && !conta.linkDoacao) {
+      if (aceita && !conta.linkDoacaoCartao) {
         throw new AppError(
           "validation_error",
           "A conta está aprovada, mas o link de doação ainda não ficou pronto. Tente de novo em instantes.",
@@ -444,6 +488,30 @@ export function createChurchReceivingService(deps: {
           metadata: {},
         })
         .catch((err) => log.error("[receiving] falha ao registrar auditoria", err));
+    },
+
+    /**
+     * Escolhe qual Pix aparece na vitrine: chave própria ou o da subconta
+     * Asaas — nunca os dois (duas opções de Pix na mesma tela confundiria
+     * quem doa). Trocar para "asaas" tenta criar o link na hora; se a
+     * subconta ainda não puder gerar Pix (aprovação e "prova de vida" no
+     * Asaas são passos separados), o erro do provedor chega até quem clicou.
+     */
+    async setPixSource(actor: ReceivingActor, churchId: string, fonte: PixFonte): Promise<void> {
+      exigePermissao(actor);
+      if (!(await deps.repo.setPixFonte(actor.companyId, churchId, fonte))) {
+        throw new AppError("not_found", "Igreja não encontrada.");
+      }
+      if (fonte !== "asaas") return;
+
+      const conta = await deps.repo.findByChurch(actor.companyId, churchId);
+      if (conta?.status !== "aprovada") {
+        throw new AppError(
+          "validation_error",
+          "O Pix pela Asaas só pode ser ligado depois que o provedor aprovar a conta da igreja.",
+        );
+      }
+      await ensureLink(actor.companyId, churchId, "pix");
     },
   };
 }

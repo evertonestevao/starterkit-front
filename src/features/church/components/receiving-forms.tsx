@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
 import {
   setCardEnabledAction,
+  setPixSourceAction,
   submitReceivingRegistrationAction,
   syncReceivingStatusAction,
 } from "@/server/actions/churchReceiving";
@@ -52,6 +53,8 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
   useActionToast(syncState);
   const [cardState, cardAction, switching] = useActionState(setCardEnabledAction, undefined);
   useActionToast(cardState);
+  const [pixState, pixAction, changingPix] = useActionState(setPixSourceAction, undefined);
+  useActionToast(pixState);
   const [churchId, setChurchId] = useState(igrejas[0]?.id ?? "");
   const igreja = igrejas.find((i) => i.id === churchId) ?? igrejas[0];
   const conta = igreja?.conta ?? null;
@@ -145,24 +148,55 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
       </div>
 
       {status === "aprovada" ? (
-        <form action={cardAction} className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
-          <input type="hidden" name="churchId" value={igreja.id} />
-          <input type="hidden" name="aceita" value={ativo ? "false" : "true"} />
-          <CreditCard className="size-5 text-primary" aria-hidden />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">
-              Cartão/Pix automático na página da igreja: {ativo ? "ligado" : "desligado"}
-            </p>
+        <>
+          <form action={cardAction} className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
+            <input type="hidden" name="churchId" value={igreja.id} />
+            <input type="hidden" name="aceita" value={ativo ? "false" : "true"} />
+            <CreditCard className="size-5 text-primary" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Cartão na página da igreja: {ativo ? "ligado" : "desligado"}</p>
+              <p className="text-xs text-muted-foreground">
+                Quem doa paga na página do provedor, e o valor cai direto na conta da igreja, já
+                descontada a tarifa do Asaas (~2-3% + R$ 0,49). A plataforma não recebe nem retém
+                nada. Independente da escolha de Pix abaixo.
+              </p>
+            </div>
+            <Button type="submit" variant={ativo ? "outline" : "default"} disabled={switching}>
+              {ativo ? "Desligar cartão" : "Ligar cartão"}
+            </Button>
+          </form>
+
+          <div className="flex flex-col gap-2 rounded-lg border p-4">
+            <p className="text-sm font-medium">Qual Pix aparece na página</p>
             <p className="text-xs text-muted-foreground">
-              Quem doa paga na página do provedor (cartão ou Pix), e o valor cai direto na conta da
-              igreja, já descontada a tarifa do Asaas (cartão ~2-3% + R$ 0,49; Pix R$ 0,99 a
-              R$ 1,99 por transação). A plataforma não recebe nem retém nada.
+              Só um dos dois por vez — mostrar as duas opções de Pix juntas confunde quem doa.
             </p>
+            <form action={pixAction} className="mt-1 flex flex-wrap gap-2">
+              <input type="hidden" name="churchId" value={igreja.id} />
+              <input type="hidden" name="fonte" value="propria" />
+              <Button
+                type="submit"
+                size="sm"
+                variant={conta?.pixFonte === "propria" ? "default" : "outline"}
+                disabled={changingPix || conta?.pixFonte === "propria"}
+              >
+                Chave própria da igreja
+              </Button>
+            </form>
+            <form action={pixAction} className="flex flex-wrap gap-2">
+              <input type="hidden" name="churchId" value={igreja.id} />
+              <input type="hidden" name="fonte" value="asaas" />
+              <Button
+                type="submit"
+                size="sm"
+                variant={conta?.pixFonte === "asaas" ? "default" : "outline"}
+                disabled={changingPix || conta?.pixFonte === "asaas"}
+              >
+                Pix pela Asaas (confirma sozinho)
+              </Button>
+            </form>
           </div>
-          <Button type="submit" variant={ativo ? "outline" : "default"} disabled={switching}>
-            {ativo ? "Desligar cartão" : "Ligar cartão"}
-          </Button>
-        </form>
+        </>
       ) : null}
 
       <form

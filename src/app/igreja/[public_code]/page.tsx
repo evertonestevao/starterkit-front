@@ -27,7 +27,7 @@ export default async function PublicChurchPage({
   const repo = await getPublicChurchRepository();
   // Nenhuma das duas listas pode derrubar a página da igreja: vazia é melhor
   // do que tela de erro para quem veio pelo QR Code.
-  const [sponsors, eventos, campanhas, programacao, linkCartao] = await Promise.all([
+  const [sponsors, eventos, campanhas, programacao, linkCartao, linkPix] = await Promise.all([
     // Porta fechada pra patrocinador: nem consulta — a seção nem aparece.
     !church.aceita_patrocinio
       ? Promise.resolve([])
@@ -51,14 +51,23 @@ export default async function PublicChurchPage({
       console.error("[church-page] falha ao carregar o link de cartão", err);
       return null;
     }),
+    // Só consulta se a igreja realmente escolheu Pix pela Asaas — economiza
+    // uma chamada para o caso comum (chave própria).
+    church.pix_fonte !== "asaas"
+      ? Promise.resolve(null)
+      : repo.getPixDonationLink(church.id).catch((err: unknown) => {
+          console.error("[church-page] falha ao carregar o link de pix", err);
+          return null;
+        }),
   ]);
 
   // O QR do PIX sai da chave da própria igreja e aponta direto para ela: a
   // plataforma não entra no caminho do dinheiro. Falhar aqui não pode
-  // derrubar a página — a chave copiável continua valendo.
+  // derrubar a página — a chave copiável continua valendo. Só gera quando a
+  // fonte é "propria": com "asaas", quem doa usa o link da Asaas, não a chave.
   let pixCopiaECola: string | null = null;
   let pixQrDataUrl: string | null = null;
-  if (church.pix_chave) {
+  if (church.pix_fonte === "propria" && church.pix_chave) {
     try {
       pixCopiaECola = buildPixPayload({
         chave: church.pix_chave,
@@ -83,6 +92,7 @@ export default async function PublicChurchPage({
       pixCopiaECola={pixCopiaECola}
       pixQrDataUrl={pixQrDataUrl}
       linkCartao={linkCartao}
+      linkPix={linkPix}
       templateSlug={theme}
       accent={accent}
     />

@@ -71,6 +71,11 @@ export type ChurchPageTemplateProps = {
    * E escolheu ligar o cartão. Null é o caso comum: PIX sozinho basta.
    */
   linkCartao?: string | null;
+  /**
+   * Link de doação por Pix pela subconta Asaas — só preenchido quando
+   * church.pix_fonte = "asaas". Nunca aparece junto com a chave própria.
+   */
+  linkPix?: string | null;
   templateSlug: ChurchTheme;
   /** Cor de destaque escolhida pela igreja; null usa a do tema. */
   accent?: string | null;
@@ -187,6 +192,7 @@ export function ChurchPageRenderer({
   pixCopiaECola = null,
   pixQrDataUrl = null,
   linkCartao = null,
+  linkPix = null,
   templateSlug,
   accent = null,
 }: ChurchPageTemplateProps) {
@@ -202,9 +208,12 @@ export function ChurchPageRenderer({
   const temCultos =
     semana.length > 0 || especiais.length > 0 || horarios.length > 0 || Boolean(church.address);
 
-  const temPix = Boolean(church.pix_chave);
-  // A seção de doação existe com PIX, com cartão, ou com os dois.
-  const temDoacao = temPix || Boolean(linkCartao);
+  // Só um Pix por vez: chave própria OU o da subconta Asaas, nunca os dois —
+  // duas opções de Pix juntas confundiriam quem doa.
+  const temPixPropria = church.pix_fonte === "propria" && Boolean(church.pix_chave);
+  const temPixAsaas = church.pix_fonte === "asaas" && Boolean(linkPix);
+  // A seção de doação existe com Pix (de um jeito ou de outro), com cartão, ou com os dois.
+  const temDoacao = temPixPropria || temPixAsaas || Boolean(linkCartao);
 
   // Ordem definida pelo dono do produto: Dízimos em destaque no topo; depois
   // oração + visitante; depois eventos + cultos. WhatsApp e redes só entram,
@@ -248,28 +257,46 @@ export function ChurchPageRenderer({
             subtitulo="Sua contribuição sustenta a obra desta igreja. A doação vai direto para a conta dela."
           />
           <div className={cartao}>
-            {church.pix_chave ? (
+            {temPixPropria ? (
               <>
                 <p className="mb-2 text-sm font-medium">Chave PIX</p>
                 <CopyPix
-                  chave={church.pix_chave}
+                  chave={church.pix_chave as string}
                   churchId={church.id}
                   copiaECola={pixCopiaECola}
                   qrDataUrl={pixQrDataUrl}
                 />
               </>
             ) : null}
-            {church.pix_chave && church.pix_titular ? (
+            {temPixPropria && church.pix_titular ? (
               <p className="mt-4 text-sm leading-6 text-[var(--pg-muted)]">
                 Antes de confirmar, veja se o app do seu banco mostra{" "}
                 <strong className="font-semibold text-[var(--pg-text)]">{church.pix_titular}</strong>{" "}
                 como quem vai receber.
               </p>
             ) : null}
-            {/* Cartão/Pix automático: leva para a página do provedor, onde a
-                doação é paga. O dinheiro cai na conta da própria igreja. */}
+            {/* Pix pela Asaas: link próprio, nunca junto com o de cartão. */}
+            {temPixAsaas ? (
+              <div className={temPixPropria ? "mt-4" : ""}>
+                <a
+                  href={linkPix as string}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--pg-border)] font-semibold"
+                >
+                  <HandCoins className="size-4" aria-hidden />
+                  Doar com Pix
+                </a>
+                <p className="mt-2 text-xs leading-5 text-[var(--pg-muted)]">
+                  Abre a página segura do Asaas. O provedor cobra uma tarifa sobre o valor (não é
+                  taxa da igreja), descontada antes de cair na conta dela.
+                </p>
+              </div>
+            ) : null}
+            {/* Cartão: leva para a página do provedor, onde a doação é paga.
+                O dinheiro cai na conta da própria igreja. */}
             {linkCartao ? (
-              <div className={church.pix_chave ? "mt-4" : ""}>
+              <div className={temPixPropria || temPixAsaas ? "mt-4" : ""}>
                 <a
                   href={linkCartao}
                   target="_blank"
@@ -277,7 +304,7 @@ export function ChurchPageRenderer({
                   className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--pg-border)] font-semibold"
                 >
                   <CreditCard className="size-4" aria-hidden />
-                  Doar com cartão ou Pix
+                  Doar com cartão
                 </a>
                 <p className="mt-2 text-xs leading-5 text-[var(--pg-muted)]">
                   Abre a página segura do Asaas. O provedor cobra uma tarifa sobre o valor (não é

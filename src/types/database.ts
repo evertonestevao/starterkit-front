@@ -194,6 +194,8 @@ export interface Church {
   pix_chave: string | null;
   /** Titular da chave, para quem doa conferir no app do banco. */
   pix_titular: string | null;
+  /** Qual Pix aparece na vitrine: chave própria ou o da subconta Asaas. Nunca os dois. */
+  pix_fonte: "propria" | "asaas";
   /** Host próprio da igreja, minúsculo e sem protocolo. Null = só o padrão. */
   dominio_customizado: string | null;
   dominio_status: ChurchDomainStatus;

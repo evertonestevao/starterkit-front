@@ -277,17 +277,25 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
       return { checkoutUrl: pagamento.invoiceUrl, externalId: pagamento.id };
     },
 
-    async ensureDonationLink({ apiKey, churchName, successUrl }) {
+    async ensureDonationLink({ apiKey, churchName, successUrl, metodo }) {
       // Criado com a chave da SUBCONTA: o link pertence à igreja, e o dinheiro
-      // dele cai lá dentro.
+      // dele cai lá dentro. billingType travado no método escolhido — nunca
+      // "UNDEFINED": é o único jeito de garantir que boleto nunca aparece, e a
+      // igreja escolhe cartão e Pix (Asaas) de forma independente, cada um
+      // com seu próprio link.
+      // NÃO TESTADO (Pix): a subconta só pode gerar cobrança Pix depois de
+      // aprovada E com a "prova de vida" concluída, e a chave Pix precisa
+      // existir antes — nenhum dos dois passos está automatizado aqui ainda.
+      // Se faltar, o Asaas deve recusar com uma mensagem própria; ela chega
+      // ao usuário porque request() nunca engole o motivo.
+      const billingType = metodo === "cartao" ? "CREDIT_CARD" : "PIX";
       const data = await request<{ id?: string; url?: string }>("/paymentLinks", "POST", apiKey, {
-        name: `Dízimos e ofertas — ${churchName}`,
-        // UNDEFINED: quem doa escolhe cartão ou Pix na página do Asaas.
-        billingType: "UNDEFINED",
+        name:
+          metodo === "cartao"
+            ? `Dízimos e ofertas (cartão) — ${churchName}`
+            : `Dízimos e ofertas (Pix) — ${churchName}`,
+        billingType,
         chargeType: "DETACHED",
-        // Exigido pelo Asaas em DETACHED (prazo do boleto, quando a pessoa
-        // escolher essa forma); não afeta cartão nem Pix.
-        dueDateLimitDays: 3,
         // Sem valor: quem doa escolhe quanto.
         callback: { successUrl, autoRedirect: true },
       });

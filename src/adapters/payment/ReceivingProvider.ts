@@ -105,15 +105,21 @@ export interface ReceivingProvider {
   getAccountStatus(subApiKey: string): Promise<ReceivingAccountStatus>;
 
   /**
-   * Link de doação por cartão da igreja, criado dentro da SUBCONTA (por isso
-   * recebe a chave dela). Reaproveitado: um link por igreja, não um por
+   * Link de doação da igreja, criado dentro da SUBCONTA (por isso recebe a
+   * chave dela). Reaproveitado: um link por igreja e por método, não um por
    * doação — quem doa informa o valor na página do provedor, e nenhum dado
    * pessoal de quem doa passa pela plataforma.
+   *
+   * Cartão e Pix nunca vêm juntos no mesmo link — o Asaas não permite excluir
+   * só o boleto de um checkout com os dois; `metodo` decide o billingType do
+   * lado do adapter. A igreja escolhe cartão, Pix (Asaas) ou os dois soltos,
+   * cada escolha vira uma chamada com o `metodo` correspondente.
    */
   ensureDonationLink(input: {
     apiKey: string;
     churchName: string;
     successUrl: string;
+    metodo: "cartao" | "pix";
   }): Promise<{ url: string }>;
 
   /**

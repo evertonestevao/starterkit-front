@@ -43,6 +43,7 @@ function conta(over: Partial<ChurchReceivingAccount> = {}): ChurchReceivingAccou
     id: "conta-1",
     churchId: IGREJA,
     churchName: "Igreja Betel",
+    churchPublicCode: "betel",
     razaoSocial: "Associação Igreja Betel",
     documento: "11222333000181",
     email: "tesouraria@betel.org.br",
@@ -58,9 +59,11 @@ function conta(over: Partial<ChurchReceivingAccount> = {}): ChurchReceivingAccou
     provider: "fake",
     status: "em_analise",
     externalAccountId: "acc_1",
-    linkDoacao: null,
+    linkDoacaoCartao: null,
+    linkDoacaoPix: null,
     motivoRecusa: null,
     aceitaCartao: false,
+    pixFonte: "propria",
     ...over,
   };
 }
@@ -84,7 +87,7 @@ function build({
 } = {}) {
   let armazenada = atual;
   const repo: ChurchReceivingRepository = {
-    listCompanyChurches: vi.fn(async () => [{ id: IGREJA, name: "Igreja Betel" }]),
+    listCompanyChurches: vi.fn(async () => [{ id: IGREJA, name: "Igreja Betel", publicCode: "betel" }]),
     findByChurch: vi.fn(async () => armazenada),
     listByCompany: vi.fn(async () => (armazenada ? [armazenada] : [])),
     saveRegistration: vi.fn(async (input) => {
@@ -108,8 +111,15 @@ function build({
     updateStatus: vi.fn(async (_id, status) => {
       if (armazenada) armazenada = { ...armazenada, status };
     }),
-    setDonationLink: vi.fn(async (_id, url) => {
-      if (armazenada) armazenada = { ...armazenada, linkDoacao: url };
+    setCardDonationLink: vi.fn(async (_id, url) => {
+      if (armazenada) armazenada = { ...armazenada, linkDoacaoCartao: url };
+    }),
+    setPixDonationLink: vi.fn(async (_id, url) => {
+      if (armazenada) armazenada = { ...armazenada, linkDoacaoPix: url };
+    }),
+    setPixFonte: vi.fn(async (_c, _i, fonte) => {
+      if (armazenada) armazenada = { ...armazenada, pixFonte: fonte };
+      return true;
     }),
     getSealedApiKey: vi.fn(async () => (apiKey ? selar(apiKey) : null)),
   };
@@ -169,10 +179,10 @@ describe("documentoValido", () => {
 
 describe("cartaoAtivo", () => {
   it("exige conta aprovada, escolha da igreja E link pronto", () => {
-    expect(cartaoAtivo({ status: "aprovada", aceitaCartao: true, linkDoacao: "x" })).toBe(true);
-    expect(cartaoAtivo({ status: "em_analise", aceitaCartao: true, linkDoacao: "x" })).toBe(false);
-    expect(cartaoAtivo({ status: "aprovada", aceitaCartao: false, linkDoacao: "x" })).toBe(false);
-    expect(cartaoAtivo({ status: "aprovada", aceitaCartao: true, linkDoacao: null })).toBe(false);
+    expect(cartaoAtivo({ status: "aprovada", aceitaCartao: true, linkDoacaoCartao: "x" })).toBe(true);
+    expect(cartaoAtivo({ status: "em_analise", aceitaCartao: true, linkDoacaoCartao: "x" })).toBe(false);
+    expect(cartaoAtivo({ status: "aprovada", aceitaCartao: false, linkDoacaoCartao: "x" })).toBe(false);
+    expect(cartaoAtivo({ status: "aprovada", aceitaCartao: true, linkDoacaoCartao: null })).toBe(false);
   });
 });
 
@@ -232,9 +242,9 @@ describe("submitRegistration", () => {
     await service.submitRegistration(ADMIN, CADASTRO);
 
     expect(provider.ensureDonationLink).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: "chave-da-subconta" }),
+      expect.objectContaining({ apiKey: "chave-da-subconta", metodo: "cartao" }),
     );
-    expect(repo.setDonationLink).toHaveBeenCalled();
+    expect(repo.setCardDonationLink).toHaveBeenCalled();
   });
 
   it("recusa documento inválido antes de qualquer chamada de rede", async () => {
@@ -287,7 +297,7 @@ describe("submitRegistration", () => {
 describe("setCardEnabled", () => {
   it("liga o cartão quando a conta está aprovada e o link existe", async () => {
     const { repo, service } = build({
-      atual: conta({ status: "aprovada", linkDoacao: "https://pagamento.exemplo/doar" }),
+      atual: conta({ status: "aprovada", linkDoacaoCartao: "https://pagamento.exemplo/doar" }),
     });
 
     await service.setCardEnabled(ADMIN, IGREJA, true);
@@ -321,7 +331,7 @@ describe("syncStatus", () => {
 
     expect(status).toBe("aprovada");
     expect(repo.updateStatus).toHaveBeenCalledWith(IGREJA, "aprovada");
-    expect(repo.setDonationLink).toHaveBeenCalled();
+    expect(repo.setCardDonationLink).toHaveBeenCalled();
   });
 
   it("sem cadastro enviado, não há o que sincronizar", async () => {
