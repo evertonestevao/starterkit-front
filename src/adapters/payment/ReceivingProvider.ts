@@ -42,6 +42,13 @@ export interface ReceivingAccountInput {
   webhookUrl: string;
   /** Token que o provedor deve devolver nos webhooks desta subconta. */
   webhookToken: string;
+  /**
+   * Site da igreja — na prática, a URL da própria plataforma: a subconta é
+   * "Cliente Baas" (sem acesso ao painel do Asaas), então ninguém cadastraria
+   * um site por lá depois. Sem isso, o Asaas recusa qualquer cobrança com
+   * `callback` (usado no link de doação) com "Não há domínio configurado".
+   */
+  site: string;
 }
 
 export interface ReceivingAccount {

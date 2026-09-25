@@ -196,6 +196,7 @@ export interface ReceivingProviderPort {
     rendaMensalCents: number;
     webhookUrl: string;
     webhookToken: string;
+    site: string;
   }): Promise<{
     accountId: string;
     walletId: string | null;
@@ -346,6 +347,7 @@ export function createChurchReceivingService(deps: {
         rendaMensalCents,
         webhookUrl: `${base}/api/webhooks/donations/${deps.provider.name}`,
         webhookToken: token,
+        site: base,
       });
 
       await deps.repo.saveProviderResult({

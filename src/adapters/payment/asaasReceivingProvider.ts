@@ -193,6 +193,9 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
         postalCode: input.cep,
         // Sem isso o Asaas recusa com "É necessário informar a renda/faturamento".
         incomeValue: centsToReais(input.rendaMensalCents),
+        // Sem isso, qualquer cobrança com `callback` (o link de doação) recusa
+        // com "Não há domínio configurado em sua conta".
+        site: input.site,
         // Conta de pessoa exige nascimento; a de empresa, o tipo.
         ...(pessoaFisica
           ? { birthDate: input.nascimento ?? undefined }
@@ -282,6 +285,9 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
         // UNDEFINED: quem doa escolhe cartão ou Pix na página do Asaas.
         billingType: "UNDEFINED",
         chargeType: "DETACHED",
+        // Exigido pelo Asaas em DETACHED (prazo do boleto, quando a pessoa
+        // escolher essa forma); não afeta cartão nem Pix.
+        dueDateLimitDays: 3,
         // Sem valor: quem doa escolhe quanto.
         callback: { successUrl, autoRedirect: true },
       });
