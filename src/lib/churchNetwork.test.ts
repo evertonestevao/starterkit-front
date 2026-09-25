@@ -69,6 +69,22 @@ describe("filterNetwork", () => {
     const comSobrenome = buildNetwork([igreja("x", "Igreja X", "subsede", "Prainha")], {});
     expect(filterNetwork(comSobrenome, "prainha")).toHaveLength(1);
   });
+
+  it("acha a igreja pelo nome do Pastor, e a subsede pelo Pastor de uma congregação dela", () => {
+    const pastores = { litoral: "João Batista", ponte: "Márcia Lopes" };
+
+    expect(filterNetwork(rede, "joao", pastores).map((m) => m.entry.church.id)).toEqual(["litoral"]);
+
+    const [achada, ...resto] = filterNetwork(rede, "marcia", pastores);
+    expect(resto).toEqual([]);
+    expect(achada.entry.church.id).toBe("sul");
+    expect(achada.nested.map((c) => c.id)).toEqual(["ponte"]);
+  });
+
+  it("sem pastores registrados a busca é só pelo nome das igrejas", () => {
+    expect(filterNetwork(rede, "joao")).toEqual([]);
+    expect(filterNetwork(rede, "joao", {})).toEqual([]);
+  });
 });
 
 describe("sortNetwork", () => {

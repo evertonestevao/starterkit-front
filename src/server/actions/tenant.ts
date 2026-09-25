@@ -3,28 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getServerEnv } from "@/config/env";
-import { getEmailProvider } from "@/adapters/email";
 import { safeChurchLinkPath } from "@/lib/churchLinks";
 import { AppError } from "@/lib/errors";
 import { recordAudit } from "@/server/audit";
 import { syncCompanySeats } from "@/server/billing";
 import { getRequestEvidence, getTermsService } from "@/server/terms";
-import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
-import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
-import { createRateLimiter } from "@/server/rateLimit";
+import { getInviteService } from "@/server/invites";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { ACTIVE_COMPANY_COOKIE, getTenantService } from "@/server/tenant";
-import { createAuditService } from "@/services/auditService";
-import { createEmailService } from "@/services/emailService";
-import { createInviteService } from "@/services/inviteService";
 import { permissionService } from "@/services/permissionService";
 import type { RoleCode } from "@/types/database";
 import { toActionError, type ActionState } from "./action-state";
 
 /** Server actions de empresas, membros e convites. */
-
-const inviteLimiter = createRateLimiter({ limit: 20, windowMs: 60 * 60_000 });
 
 async function setActiveCompanyCookie(companyId: string) {
   const cookieStore = await cookies();
@@ -107,19 +98,6 @@ export async function updateCompanyAction(
   } catch (err) {
     return toActionError(err);
   }
-}
-
-async function getInviteService() {
-  const client = await getSupabaseServerClient();
-  return createInviteService({
-    repo: createSupabaseInviteRepository(client),
-    rateLimiter: inviteLimiter,
-    notifier: createEmailService({
-      provider: getEmailProvider(),
-      appUrl: getServerEnv().APP_URL,
-    }),
-    audit: createAuditService(createSupabaseAuditRepository(client)),
-  });
 }
 
 export async function inviteMemberAction(

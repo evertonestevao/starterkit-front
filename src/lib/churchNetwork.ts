@@ -49,8 +49,13 @@ export function summarizeNetwork(entries: NetworkEntry[]): { subsedes: number; c
   return { subsedes, congregacoes, text: partes.join(" · ") };
 }
 
-function matches(church: ChurchLinkNode, query: string): boolean {
-  return normalizeSearch(formatChurchName(church.name, church.sobrenome)).includes(query);
+/** Nome do Pastor por id de igreja (cargos registrados). */
+export type PastorsByChurch = Record<string, string>;
+
+function matches(church: ChurchLinkNode, query: string, pastores: PastorsByChurch): boolean {
+  if (normalizeSearch(formatChurchName(church.name, church.sobrenome)).includes(query)) return true;
+  const pastor = pastores[church.id];
+  return pastor !== undefined && normalizeSearch(pastor).includes(query);
 }
 
 export interface NetworkMatch {
@@ -59,18 +64,21 @@ export interface NetworkMatch {
   nested: ChurchLinkNode[];
 }
 
-/** Busca pelo nome da igreja ou de qualquer congregação dela. Busca vazia devolve tudo. */
-export function filterNetwork(entries: NetworkEntry[], rawQuery: string): NetworkMatch[] {
+/**
+ * Busca pelo nome da igreja, de qualquer congregação dela ou do Pastor de
+ * cada uma ("onde está o pastor João?"). Busca vazia devolve tudo.
+ */
+export function filterNetwork(entries: NetworkEntry[], rawQuery: string, pastores: PastorsByChurch = {}): NetworkMatch[] {
   const query = normalizeSearch(rawQuery);
   if (query === "") return entries.map((entry) => ({ entry, nested: [] }));
 
   const result: NetworkMatch[] = [];
   for (const entry of entries) {
-    if (matches(entry.church, query)) {
+    if (matches(entry.church, query, pastores)) {
       result.push({ entry, nested: [] });
       continue;
     }
-    const nested = entry.congregacoes.filter((c) => matches(c, query));
+    const nested = entry.congregacoes.filter((c) => matches(c, query, pastores));
     if (nested.length > 0) result.push({ entry, nested });
   }
   return result;

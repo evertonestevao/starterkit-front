@@ -3975,6 +3975,255 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Cargos da igreja (migration 20260927130000): quem é o pastor, o secretário...
+--
+--     S (sede, owner "lsede")
+--     └── B (subsede, owner "lsub" + member "lmemb")
+--     O (subsede solta de OUTRO tenant, owner "lout")
+--
+-- Provas: só owner/admin da própria igreja escreve; a sede LÊ os cargos da
+-- subsede mas não os altera; member e outro tenant não leem nem escrevem;
+-- anon não lê; o client não consegue apontar user_id para a conta de ninguém;
+-- um Pastor por igreja; e o aceite do convite liga o registro — só o da
+-- empresa que convidou — à conta de quem aceitou.
+-- ---------------------------------------------------------------------------
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('9c9c9c9c-0000-4000-8000-000000000001', 'rls-lsede@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Lider Sede"}'),
+  ('9c9c9c9c-0000-4000-8000-000000000002', 'rls-lsub@test.local',   'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Lider Sub"}'),
+  ('9c9c9c9c-0000-4000-8000-000000000003', 'rls-lmemb@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Lider Member"}'),
+  ('9c9c9c9c-0000-4000-8000-000000000004', 'rls-lout@test.local',   'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Lider Outro"}'),
+  ('9c9c9c9c-0000-4000-8000-000000000005', 'rls-convlider@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Convidado"}');
+
+insert into public.companies (id, name, slug, created_by) values
+  ('9d9d9d9d-0000-4000-8000-000000000001', 'Lid Sede', 'rls-lid-sede', '9c9c9c9c-0000-4000-8000-000000000001'),
+  ('9d9d9d9d-0000-4000-8000-000000000002', 'Lid Sub',  'rls-lid-sub',  '9c9c9c9c-0000-4000-8000-000000000002'),
+  ('9d9d9d9d-0000-4000-8000-000000000003', 'Lid Out',  'rls-lid-out',  '9c9c9c9c-0000-4000-8000-000000000004');
+
+insert into public.company_members (company_id, user_id, role) values
+  ('9d9d9d9d-0000-4000-8000-000000000001', '9c9c9c9c-0000-4000-8000-000000000001', 'owner'),
+  ('9d9d9d9d-0000-4000-8000-000000000002', '9c9c9c9c-0000-4000-8000-000000000002', 'owner'),
+  ('9d9d9d9d-0000-4000-8000-000000000002', '9c9c9c9c-0000-4000-8000-000000000003', 'member'),
+  ('9d9d9d9d-0000-4000-8000-000000000003', '9c9c9c9c-0000-4000-8000-000000000004', 'owner');
+
+insert into public.churches (id, company_id, name, slug, public_code, tipo, parent_id) values
+  ('9e9e9e9e-0000-4000-8000-000000000001', '9d9d9d9d-0000-4000-8000-000000000001', 'Lid Sede', 'rls-lid-sede', 'rls-lid-sede', 'sede',    null),
+  ('9e9e9e9e-0000-4000-8000-000000000002', '9d9d9d9d-0000-4000-8000-000000000002', 'Lid Sub',  'rls-lid-sub',  'rls-lid-sub',  'subsede', '9e9e9e9e-0000-4000-8000-000000000001'),
+  ('9e9e9e9e-0000-4000-8000-000000000003', '9d9d9d9d-0000-4000-8000-000000000003', 'Lid Out',  'rls-lid-out',  'rls-lid-out',  'subsede', null);
+
+-- Um líder do OUTRO tenant, com o mesmo e-mail que será convidado na subsede:
+-- o aceite não pode ligá-lo à conta de quem aceitou.
+insert into public.church_leaders (id, church_id, cargo, nome, email) values
+  ('9f9f9f9f-0000-4000-8000-000000000009', '9e9e9e9e-0000-4000-8000-000000000003', 'secretario', 'Secretario Outro', 'rls-convlider@test.local');
+
+-- ------------------------- owner da subsede B ------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"9c9c9c9c-0000-4000-8000-000000000002","email":"rls-lsub@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- Registra o Pastor da própria igreja.
+  insert into public.church_leaders (id, church_id, cargo, nome, email)
+  values ('9f9f9f9f-0000-4000-8000-000000000001', '9e9e9e9e-0000-4000-8000-000000000002', 'pastor', 'Pastor Sub', 'pastor@test.local');
+
+  select count(*) into n from public.church_leaders where church_id = '9e9e9e9e-0000-4000-8000-000000000002';
+  if n <> 1 then raise exception 'FALHA cargos: owner nao ve o proprio pastor (%)', n; end if;
+
+  -- Um Pastor ativo por igreja.
+  begin
+    insert into public.church_leaders (church_id, cargo, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', 'pastor', 'Segundo Pastor');
+    raise exception 'FALHA cargos: a igreja aceitou dois pastores ativos';
+  exception when unique_violation then null; -- esperado
+  end;
+
+  -- Outros cargos aceitam varias pessoas.
+  insert into public.church_leaders (church_id, cargo, nome)
+  values ('9e9e9e9e-0000-4000-8000-000000000002', 'diacono', 'Diacono Um'),
+         ('9e9e9e9e-0000-4000-8000-000000000002', 'diacono', 'Diacono Dois');
+
+  -- Cargo fora do catalogo e recusado (FK).
+  begin
+    insert into public.church_leaders (church_id, cargo, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', 'bispo', 'Nome');
+    raise exception 'FALHA cargos: cargo fora do catalogo foi aceito';
+  exception when foreign_key_violation then null; -- esperado
+  end;
+
+  -- Nao escreve na igreja de outro tenant, nem na sede acima.
+  begin
+    insert into public.church_leaders (church_id, cargo, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000003', 'diacono', 'Invasor');
+    raise exception 'FALHA cargos: owner escreveu na igreja de outro tenant';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+  begin
+    insert into public.church_leaders (church_id, cargo, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000001', 'diacono', 'Invasor');
+    raise exception 'FALHA cargos: subsede escreveu na sede acima';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- O client nao aponta o registro para a conta de ninguem (sem GRANT em user_id).
+  begin
+    update public.church_leaders set user_id = '9c9c9c9c-0000-4000-8000-000000000001'
+    where id = '9f9f9f9f-0000-4000-8000-000000000001';
+    raise exception 'FALHA cargos: client alterou user_id';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+  begin
+    insert into public.church_leaders (church_id, cargo, nome, user_id)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', 'presbitero', 'Fantasma', '9c9c9c9c-0000-4000-8000-000000000001');
+    raise exception 'FALHA cargos: client inseriu com user_id';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  -- O catalogo e legivel, mas nao escrevivel.
+  select count(*) into n from public.church_cargos;
+  if n <> 5 then raise exception 'FALHA cargos: catalogo com % cargos (esperado 5)', n; end if;
+  begin
+    insert into public.church_cargos (slug, label, ordem) values ('bispo', 'Bispo', 9);
+    raise exception 'FALHA cargos: client escreveu no catalogo';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- ---------------------- owner da SEDE (igreja acima) ------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"9c9c9c9c-0000-4000-8000-000000000001","email":"rls-lsede@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- A sede LE o Pastor da subsede (e so o que esta abaixo dela).
+  select count(*) into n from public.church_leaders where church_id = '9e9e9e9e-0000-4000-8000-000000000002';
+  if n <> 3 then raise exception 'FALHA cargos: sede ve % cargos da subsede (esperado 3)', n; end if;
+  select count(*) into n from public.church_leaders where church_id = '9e9e9e9e-0000-4000-8000-000000000003';
+  if n <> 0 then raise exception 'FALHA cargos: sede ve cargos de igreja fora da arvore dela'; end if;
+
+  -- ... mas nao escreve na subsede.
+  begin
+    insert into public.church_leaders (church_id, cargo, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', 'presbitero', 'Imposto pela sede');
+    raise exception 'FALHA cargos: sede inseriu cargo na subsede';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+
+  update public.church_leaders set nome = 'Sequestrado' where id = '9f9f9f9f-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA cargos: sede alterou cargo da subsede'; end if;
+end $$;
+
+-- ------------------------- member da subsede B ------------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"9c9c9c9c-0000-4000-8000-000000000003","email":"rls-lmemb@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- Nome, e-mail e telefone de lider sao so de owner/admin.
+  select count(*) into n from public.church_leaders where church_id = '9e9e9e9e-0000-4000-8000-000000000002';
+  if n <> 0 then raise exception 'FALHA cargos: member ve % cargos', n; end if;
+
+  begin
+    insert into public.church_leaders (church_id, cargo, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', 'secretario', 'Por member');
+    raise exception 'FALHA cargos: member registrou cargo';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+-- ------------------------- owner de OUTRO tenant ----------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"9c9c9c9c-0000-4000-8000-000000000004","email":"rls-lout@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_leaders where church_id = '9e9e9e9e-0000-4000-8000-000000000002';
+  if n <> 0 then raise exception 'FALHA cargos: outro tenant ve cargos da subsede'; end if;
+
+  update public.church_leaders set nome = 'Sequestrado' where id = '9f9f9f9f-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA cargos: outro tenant alterou cargo alheio'; end if;
+end $$;
+
+reset role;
+
+-- --------------------------------- anon -------------------------------------
+set local role anon;
+do $$
+begin
+  begin
+    perform 1 from public.church_leaders;
+    raise exception 'FALHA cargos: anon leu church_leaders';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+reset role;
+
+-- --------- tirar do cargo: soft delete, e o Pastor pode ser trocado ---------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"9c9c9c9c-0000-4000-8000-000000000002","email":"rls-lsub@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  update public.church_leaders set deleted_at = now(), ate = current_date
+  where id = '9f9f9f9f-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALHA cargos: owner nao conseguiu tirar o pastor do cargo'; end if;
+
+  -- O registro fica no historico e o cargo volta a ficar livre.
+  select count(*) into n from public.church_leaders where id = '9f9f9f9f-0000-4000-8000-000000000001';
+  if n <> 1 then raise exception 'FALHA cargos: historico do pastor sumiu'; end if;
+
+  insert into public.church_leaders (church_id, cargo, nome)
+  values ('9e9e9e9e-0000-4000-8000-000000000002', 'pastor', 'Novo Pastor');
+end $$;
+
+reset role;
+
+-- ----- aceite do convite liga o registro a conta (so o da empresa certa) ----
+insert into public.church_leaders (id, church_id, cargo, nome, email)
+values ('9f9f9f9f-0000-4000-8000-000000000002', '9e9e9e9e-0000-4000-8000-000000000002', 'presbitero',
+        'Presbitero Convidado', 'rls-convlider@test.local');
+
+insert into public.company_invites (company_id, email, role, invited_by)
+values ('9d9d9d9d-0000-4000-8000-000000000002', 'rls-convlider@test.local', 'member', '9c9c9c9c-0000-4000-8000-000000000002');
+
+select set_config('test.lider_invite_token', token::text, true)
+from public.company_invites
+where company_id = '9d9d9d9d-0000-4000-8000-000000000002' and email = 'rls-convlider@test.local';
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"9c9c9c9c-0000-4000-8000-000000000005","email":"rls-convlider@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  perform public.accept_company_invite(current_setting('test.lider_invite_token')::uuid);
+end $$;
+
+reset role;
+
+do $$
+declare v_user uuid; v_outro uuid;
+begin
+  select user_id into v_user from public.church_leaders where id = '9f9f9f9f-0000-4000-8000-000000000002';
+  if v_user is distinct from '9c9c9c9c-0000-4000-8000-000000000005' then
+    raise exception 'FALHA cargos: aceitar o convite nao ligou o registro a conta (%)', coalesce(v_user::text, '<null>');
+  end if;
+
+  select user_id into v_outro from public.church_leaders where id = '9f9f9f9f-0000-4000-8000-000000000009';
+  if v_outro is not null then
+    raise exception 'FALHA cargos: aceite ligou registro de OUTRA empresa com o mesmo e-mail';
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useToastedAction } from "@/hooks/useToastedAction";
+import { pastorLabel } from "@/lib/churchLeaders";
 import { formatChurchName } from "@/lib/churchName";
 import {
   CHURCH_LINK_MAX_USES_LIMIT,
@@ -456,12 +457,15 @@ function NetworkNode({
   church,
   label,
   current = false,
+  pastor,
   children,
 }: {
   church: ChurchLinkNode;
   /** Legenda pequena acima do nome: "Igreja-mãe", "Esta igreja". */
   label?: string;
   current?: boolean;
+  /** "Pastor: João", quando a igreja tem Pastor registrado e quem olha pode ver. */
+  pastor?: string | null;
   children?: React.ReactNode;
 }) {
   const Icon = TIPO_ICON[church.tipo];
@@ -485,6 +489,7 @@ function NetworkNode({
         <div className="min-w-0">
           {label ? <p className="text-xs text-muted-foreground">{label}</p> : null}
           <p className="text-sm font-medium break-words">{formatChurchName(church.name, church.sobrenome)}</p>
+          {pastor ? <p className="text-xs text-muted-foreground">{pastor}</p> : null}
           <Badge variant="outline" className="mt-1">
             {TIPO_LABEL[church.tipo]}
           </Badge>
@@ -529,6 +534,7 @@ export function ChurchLinksManager({
   churches,
   parent,
   entries,
+  pastores,
   invites,
   incomingPending,
   myPending,
@@ -539,6 +545,8 @@ export function ChurchLinksManager({
   churches: ChurchLinkChurch[];
   parent: ChurchLinkNode | null;
   entries: NetworkEntry[];
+  /** Nome do Pastor por id de igreja (cargos registrados), para a igreja superior reconhecer quem cuida de cada uma. */
+  pastores: Record<string, string>;
   invites: ChurchLinkInvite[];
   incomingPending: ChurchLinkRequest[];
   myPending: ChurchLinkRequest | null;
@@ -623,10 +631,10 @@ export function ChurchLinksManager({
           ) : null}
 
           <div className={cn(parent && "ml-4 border-l-2 pl-4 sm:ml-6 sm:pl-6")}>
-            <NetworkNode church={church} label="Esta igreja" current />
+            <NetworkNode church={church} label="Esta igreja" current pastor={pastorLabel(pastores[church.id])} />
           </div>
 
-          <ChurchNetworkList church={church} entries={entries} />
+          <ChurchNetworkList church={church} entries={entries} pastores={pastores} />
 
           {semLigacao ? (
             <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">

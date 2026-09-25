@@ -13,7 +13,9 @@ import {
   summarizeNetwork,
   type NetworkEntry,
   type NetworkSort,
+  type PastorsByChurch,
 } from "@/lib/churchNetwork";
+import { pastorLabel } from "@/lib/churchLeaders";
 import { cn } from "@/lib/utils";
 import type { ChurchTipo } from "@/types/database";
 import type { ChurchLinkChurch, ChurchLinkNode } from "@/types/churchLinks";
@@ -50,12 +52,14 @@ function CongregationRow({
   entry,
   destinos,
   destacada,
+  pastor,
 }: {
   church: ChurchLinkChurch;
   congregation: ChurchLinkNode;
   entry: NetworkEntry;
   destinos: ChurchLinkNode[];
   destacada: boolean;
+  pastor: string | null;
 }) {
   return (
     <li
@@ -66,7 +70,10 @@ function CongregationRow({
     >
       <span className="flex min-w-0 items-center gap-2 text-sm">
         <TipoIcon tipo={congregation.tipo} />
-        <span className="min-w-0 break-words">{formatChurchName(congregation.name, congregation.sobrenome)}</span>
+        <span className="min-w-0">
+          <span className="block break-words">{formatChurchName(congregation.name, congregation.sobrenome)}</span>
+          {pastor ? <span className="block text-xs text-muted-foreground">{pastor}</span> : null}
+        </span>
       </span>
       <span className="flex flex-wrap items-center gap-2">
         <MovePositionForm church={church} filhas={destinos} moving={congregation} currentParentId={entry.church.id} />
@@ -86,12 +93,14 @@ function NetworkRow({
   entry,
   nested,
   destinos,
+  pastores,
 }: {
   church: ChurchLinkChurch;
   entry: NetworkEntry;
   /** Congregações que bateram com a busca, para avisar por que esta subsede apareceu. */
   nested: ChurchLinkNode[];
   destinos: ChurchLinkNode[];
+  pastores: PastorsByChurch;
 }) {
   const [aberta, setAberta] = useState(false);
   const igreja = entry.church;
@@ -117,6 +126,9 @@ function NetworkRow({
           <span className="block text-sm font-medium break-words">
             {formatChurchName(igreja.name, igreja.sobrenome)}
           </span>
+          {pastorLabel(pastores[igreja.id]) ? (
+            <span className="block text-xs text-muted-foreground">{pastorLabel(pastores[igreja.id])}</span>
+          ) : null}
           {nested.length > 0 ? (
             <span className="block text-xs text-muted-foreground">
               Achada em: {nested.map((c) => formatChurchName(c.name, c.sobrenome)).join(", ")}
@@ -153,6 +165,7 @@ function NetworkRow({
                       entry={entry}
                       destinos={destinos}
                       destacada={achadas.has(congregacao.id)}
+                      pastor={pastorLabel(pastores[congregacao.id])}
                     />
                   ))}
                 </ul>
@@ -175,7 +188,15 @@ function NetworkRow({
  * quem tem mais congregações, e a lista em páginas de 10 (padrão; a pessoa pode
  * escolher 25, 50 ou 100 por página).
  */
-export function ChurchNetworkList({ church, entries }: { church: ChurchLinkChurch; entries: NetworkEntry[] }) {
+export function ChurchNetworkList({
+  church,
+  entries,
+  pastores,
+}: {
+  church: ChurchLinkChurch;
+  entries: NetworkEntry[];
+  pastores: PastorsByChurch;
+}) {
   const [busca, setBusca] = useState("");
   const [ordem, setOrdem] = useState<NetworkSort>("nome");
   const [tamanhoPagina, setTamanhoPagina] = useState<PageSize>(PAGE_SIZE_PADRAO);
@@ -183,7 +204,7 @@ export function ChurchNetworkList({ church, entries }: { church: ChurchLinkChurc
 
   if (entries.length === 0) return null;
 
-  const resultado = sortNetwork(filterNetwork(entries, busca), ordem);
+  const resultado = sortNetwork(filterNetwork(entries, busca, pastores), ordem);
   // A página é o que garante a altura: 70 ou 700 igrejas mostram, no máximo, o tamanho escolhido de cada vez.
   const totalPaginas = Math.max(1, Math.ceil(resultado.length / tamanhoPagina));
   const paginaAtual = Math.min(pagina, totalPaginas);
@@ -215,8 +236,8 @@ export function ChurchNetworkList({ church, entries }: { church: ChurchLinkChurc
                 setBusca(e.target.value);
                 setPagina(1);
               }}
-              aria-label="Buscar igreja ou congregação"
-              placeholder="Buscar igreja ou congregação"
+              aria-label="Buscar igreja, congregação ou pastor"
+              placeholder="Buscar igreja, congregação ou pastor"
               className="h-9 w-full rounded-md border border-input bg-transparent pr-2.5 pl-8 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
           </div>
@@ -252,7 +273,14 @@ export function ChurchNetworkList({ church, entries }: { church: ChurchLinkChurc
       ) : (
         <ul className="flex flex-col gap-2">
           {mostradas.map(({ entry, nested }) => (
-            <NetworkRow key={entry.church.id} church={church} entry={entry} nested={nested} destinos={destinos} />
+            <NetworkRow
+              key={entry.church.id}
+              church={church}
+              entry={entry}
+              nested={nested}
+              destinos={destinos}
+              pastores={pastores}
+            />
           ))}
         </ul>
       )}
