@@ -62,11 +62,17 @@ interface AsaasAccount {
   id?: string;
   walletId?: string;
   apiKey?: string;
-  accountStatus?: string;
-  status?: string;
 }
 
-/** Status do Asaas -> nosso. Desconhecido vira "em_analise" (conservador). */
+/**
+ * Status do Asaas -> nosso. Desconhecido vira "em_analise" (conservador).
+ *
+ * CONFIRMADO EM SANDBOX: o campo de aprovação não vem em POST/GET /accounts
+ * (nenhum dos dois devolve status nenhum) — é `general` de
+ * GET /myAccount/status, consultado com a chave da PRÓPRIA subconta, não a
+ * da conta-mãe. Valores vistos: "APPROVED". Os outros (pendente/recusado)
+ * não foram confirmados; ficam cobertos pelo default conservador.
+ */
 export function mapAsaasAccountStatus(status: string | undefined): ReceivingAccountStatus {
   switch ((status ?? "").toUpperCase()) {
     case "APPROVED":
@@ -162,6 +168,15 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
     return data;
   }
 
+  /**
+   * Consulta com a chave da PRÓPRIA subconta (não a da conta-mãe) — é assim
+   * que o Asaas expõe aprovação, ver comment de mapAsaasAccountStatus.
+   */
+  async function checkAccountStatus(subApiKey: string): Promise<ReceivingAccountStatus> {
+    const data = await request<{ general?: string }>("/myAccount/status", "GET", subApiKey);
+    return mapAsaasAccountStatus(data.general);
+  }
+
   return {
     name: "asaas",
 
@@ -211,17 +226,15 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
         // Sem a chave, nenhuma cobrança nasce dentro da subconta: o service
         // trata isso como cadastro incompleto em vez de seguir quebrado.
         apiKey: data.apiKey ?? null,
-        status: mapAsaasAccountStatus(data.accountStatus ?? data.status),
+        // POST /accounts não devolve status nenhum — sem a chave recém-criada
+        // não tem como checar (fica "em_analise", conservador; o próximo
+        // "Atualizar situação" resolve).
+        status: data.apiKey ? await checkAccountStatus(data.apiKey) : "em_analise",
       };
     },
 
-    async getAccountStatus(accountId) {
-      const data = await request<AsaasAccount>(
-        `/accounts/${encodeURIComponent(accountId)}`,
-        "GET",
-        config.apiKey,
-      );
-      return mapAsaasAccountStatus(data.accountStatus ?? data.status);
+    async getAccountStatus(subApiKey) {
+      return checkAccountStatus(subApiKey);
     },
 
     async createDonationCharge({ apiKey, amountCents, externalReference, description, payer }) {

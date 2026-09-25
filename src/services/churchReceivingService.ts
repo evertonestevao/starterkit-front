@@ -202,7 +202,8 @@ export interface ReceivingProviderPort {
     apiKey: string | null;
     status: ReceivingAccountStatus;
   }>;
-  getAccountStatus(accountId: string): Promise<ReceivingAccountStatus>;
+  /** Recebe a chave da PRÓPRIA subconta, não o id (ver ReceivingProvider.ts). */
+  getAccountStatus(subApiKey: string): Promise<ReceivingAccountStatus>;
   ensureDonationLink(input: {
     apiKey: string;
     churchName: string;
@@ -387,7 +388,14 @@ export function createChurchReceivingService(deps: {
         throw new AppError("not_found", "Esta igreja ainda não tem cadastro enviado.");
       }
 
-      const status = await deps.provider.getAccountStatus(conta.externalAccountId);
+      const sealed = await deps.repo.getSealedApiKey(churchId);
+      if (!sealed) {
+        throw new AppError(
+          "internal_error",
+          "A chave desta subconta não foi salva. Fale com o suporte.",
+        );
+      }
+      const status = await deps.provider.getAccountStatus(deps.secrets.open(sealed));
       if (status !== conta.status) {
         await deps.repo.updateStatus(churchId, status);
       }

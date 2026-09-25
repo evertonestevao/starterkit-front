@@ -90,8 +90,12 @@ export interface ReceivingProvider {
   /** Abre a subconta em nome da igreja. */
   createAccount(input: ReceivingAccountInput): Promise<ReceivingAccount>;
 
-  /** Situação atual da subconta no provedor (a análise leva horas ou dias). */
-  getAccountStatus(accountId: string): Promise<ReceivingAccountStatus>;
+  /**
+   * Situação atual da subconta no provedor (a análise leva horas ou dias).
+   * Recebe a chave da PRÓPRIA subconta — no Asaas, é assim que a aprovação é
+   * exposta, não pelo id consultado com a chave da conta-mãe.
+   */
+  getAccountStatus(subApiKey: string): Promise<ReceivingAccountStatus>;
 
   /**
    * Link de doação por cartão da igreja, criado dentro da SUBCONTA (por isso
