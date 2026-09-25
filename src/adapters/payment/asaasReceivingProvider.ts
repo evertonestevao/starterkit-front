@@ -22,12 +22,20 @@ import type {
  * entre cartão e Pix — em vez de travar em `CREDIT_CARD`. É o Asaas quem
  * decide o que oferecer ali (depende de a subconta ter Pix habilitado).
  *
- * NADA AQUI FOI VALIDADO CONTRA UMA CONTA ASAAS REAL. Os campos e verbos
- * vieram da documentação; antes de ligar em produção é obrigatório rodar em
- * sandbox e conferir, no mínimo:
- *   - o corpo aceito por POST /accounts e o formato de `birthDate`/`companyType`;
- *   - se a chave da subconta volta em `apiKey` na criação (ela não é
- *     recuperável depois — se não vier, o desenho do link de doação muda);
+ * CONFIRMADO EM SANDBOX (2026-09-24, conta pessoa jurídica com o modelo
+ * "Cliente Baas" habilitado — ver docs.asaas.com/docs/criação-de-subcontas-baas):
+ * o corpo de POST /accounts abaixo cria a subconta de verdade e devolve
+ * `apiKey`, `walletId` e número de agência/conta na resposta. Duas
+ * descobertas que não estavam nem na documentação lida antes:
+ *   - conta pessoa física NÃO pode criar subconta, nem em sandbox com o modo
+ *     de teste ligado — é regra fixa (confirmado com o Asaas recusando 403
+ *     mesmo com "Cliente Baas" configurado). Por isso `ASAAS_RECEIVING_API_KEY`
+ *     existe: a conta-mãe do patrocínio pode ser pessoa física, a de subconta
+ *     tem que ser CNPJ;
+ *   - `incomeValue` é obrigatório (senão: "É necessário informar a
+ *     renda/faturamento"), por isso `ReceivingAccountInput.rendaMensalCents`.
+ *
+ * AINDA NÃO VALIDADO — falta rodar em sandbox e conferir:
  *   - o status inicial e os valores de `status` em GET /accounts/{id};
  *   - se POST /paymentLinks aceita valor livre (doação sem valor fixo);
  *   - se `billingType: "UNDEFINED"` realmente oferece Pix e cartão juntos na
@@ -168,6 +176,8 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
         addressNumber: input.enderecoNumero,
         province: input.bairro,
         postalCode: input.cep,
+        // Sem isso o Asaas recusa com "É necessário informar a renda/faturamento".
+        incomeValue: centsToReais(input.rendaMensalCents),
         // Conta de pessoa exige nascimento; a de empresa, o tipo.
         ...(pessoaFisica
           ? { birthDate: input.nascimento ?? undefined }

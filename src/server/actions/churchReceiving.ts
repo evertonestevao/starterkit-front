@@ -47,6 +47,7 @@ export async function submitReceivingRegistrationAction(
       cidade: texto(formData, "cidade"),
       uf: texto(formData, "uf"),
       nascimento: texto(formData, "nascimento"),
+      rendaMensal: texto(formData, "rendaMensal"),
     });
 
     revalidatePath(PAGINA);

@@ -19,7 +19,7 @@ import type {
 
 /** Colunas que o client pode ler (a chave cifrada e o hash do token ficam fora). */
 const COLUNAS =
-  "id, church_id, razao_social, documento, email, telefone, cep, endereco, endereco_numero, bairro, cidade, uf, nascimento, provider, status, external_account_id, link_doacao, motivo_recusa, aceita_cartao";
+  "id, church_id, razao_social, documento, email, telefone, cep, endereco, endereco_numero, bairro, cidade, uf, nascimento, renda_mensal_cents, provider, status, external_account_id, link_doacao, motivo_recusa, aceita_cartao";
 
 interface AccountRow {
   id: string;
@@ -35,6 +35,7 @@ interface AccountRow {
   cidade: string | null;
   uf: string | null;
   nascimento: string | null;
+  renda_mensal_cents: number | null;
   provider: string | null;
   status: ReceivingStatus;
   external_account_id: string | null;
@@ -59,6 +60,7 @@ function toAccount(row: AccountRow, churchName: string): ChurchReceivingAccount 
     cidade: row.cidade,
     uf: row.uf,
     nascimento: row.nascimento,
+    rendaMensalCents: row.renda_mensal_cents,
     provider: row.provider,
     status: row.status,
     externalAccountId: row.external_account_id,
@@ -128,6 +130,7 @@ export function createSupabaseChurchReceivingRepository(
         cidade: input.cidade,
         uf: input.uf,
         nascimento: input.nascimento,
+        renda_mensal_cents: input.rendaMensalCents,
       };
 
       // A igreja pode refazer o cadastro depois de uma recusa; por isso é

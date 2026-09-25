@@ -35,6 +35,7 @@ const CADASTRO = {
   cidade: "Lins",
   uf: "sp",
   nascimento: "",
+  rendaMensal: "R$ 5.000,00",
 };
 
 function conta(over: Partial<ChurchReceivingAccount> = {}): ChurchReceivingAccount {
@@ -53,6 +54,7 @@ function conta(over: Partial<ChurchReceivingAccount> = {}): ChurchReceivingAccou
     cidade: "Lins",
     uf: "SP",
     nascimento: null,
+    rendaMensalCents: 500000,
     provider: "fake",
     status: "em_analise",
     externalAccountId: "acc_1",

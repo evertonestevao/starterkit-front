@@ -17,6 +17,7 @@ import {
   type ChurchReceivingAccount,
   type ReceivingStatus,
 } from "@/services/churchReceivingService";
+import { formatCents } from "@/services/sponsorPricing";
 
 const selectClasses =
   "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
@@ -56,6 +57,7 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
   const conta = igreja?.conta ?? null;
   const [documento, setDocumento] = useState(conta?.documento ?? "");
   const pessoaFisica = documento.replace(/\D/g, "").length === 11;
+  const [renda, setRenda] = useState(conta?.rendaMensalCents ? formatCents(conta.rendaMensalCents) : "");
 
   if (!igreja) return <p className="text-sm text-muted-foreground">Nenhuma igreja nesta conta.</p>;
 
@@ -72,8 +74,10 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
             className={selectClasses}
             value={churchId}
             onChange={(e) => {
+              const novaConta = igrejas.find((i) => i.id === e.target.value)?.conta ?? null;
               setChurchId(e.target.value);
-              setDocumento(igrejas.find((i) => i.id === e.target.value)?.conta?.documento ?? "");
+              setDocumento(novaConta?.documento ?? "");
+              setRenda(novaConta?.rendaMensalCents ? formatCents(novaConta.rendaMensalCents) : "");
             }}
           >
             {igrejas.map((i) => (
@@ -174,6 +178,22 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="telefoneRecebimento">Telefone com DDD</Label>
             <Input id="telefoneRecebimento" name="telefone" required defaultValue={conta?.telefone ?? ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="rendaMensal">Renda/faturamento mensal</Label>
+            <Input
+              id="rendaMensal"
+              name="rendaMensal"
+              required
+              inputMode="decimal"
+              placeholder="R$ 0,00"
+              value={renda}
+              onChange={(e) => {
+                const digitos = e.target.value.replace(/\D/g, "");
+                setRenda(digitos ? formatCents(Number(digitos)) : "");
+              }}
+            />
+            <p className="text-xs text-muted-foreground">Exigido pelo provedor para abrir a conta.</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cep">CEP</Label>

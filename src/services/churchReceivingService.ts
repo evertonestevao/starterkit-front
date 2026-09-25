@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidCnpj, isValidCpf, onlyDigits } from "@/lib/brDocument";
+import { parseBrlToCents } from "@/lib/churchEvents";
 import { AppError, toValidationError } from "@/lib/errors";
 import type { RoleCode } from "@/types/database";
 import type {
@@ -44,6 +45,7 @@ export interface ChurchReceivingAccount {
   cidade: string | null;
   uf: string | null;
   nascimento: string | null;
+  rendaMensalCents: number | null;
   provider: string | null;
   status: ReceivingStatus;
   externalAccountId: string | null;
@@ -71,6 +73,7 @@ export interface ChurchReceivingRepository {
     cidade: string;
     uf: string;
     nascimento: string | null;
+    rendaMensalCents: number;
   }): Promise<ChurchReceivingAccount>;
   setAceitaCartao(companyId: string, churchId: string, aceita: boolean): Promise<boolean>;
   /** Escrita do SERVIDOR: status, ids do provedor e segredos. */
@@ -145,6 +148,8 @@ const registrationSchema = z
       .regex(/^[A-Z]{2}$/, "UF inválida"),
     /** "1980-05-02"; o provedor exige quando o documento é CPF. */
     nascimento: z.string().trim(),
+    /** Texto livre tipo "R$ 5.000,00"; parseado para centavos abaixo. */
+    rendaMensal: z.string().trim().max(20, "Valor inválido"),
   })
   .transform((v) => ({ ...v, documento: onlyDigits(v.documento), cep: onlyDigits(v.cep) }))
   .superRefine((v, ctx) => {
@@ -160,6 +165,15 @@ const registrationSchema = z
         code: "custom",
         path: ["nascimento"],
         message: "Informe a data de nascimento do responsável",
+      });
+    }
+    // O Asaas exige (incomeValue); sem valor válido, a criação da subconta falha lá na frente.
+    const rendaCents = parseBrlToCents(v.rendaMensal);
+    if (!rendaCents) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["rendaMensal"],
+        message: "Informe a renda/faturamento mensal — o provedor exige para abrir a conta",
       });
     }
   });
@@ -179,6 +193,7 @@ export interface ReceivingProviderPort {
     cidade: string;
     uf: string;
     nascimento: string | null;
+    rendaMensalCents: number;
     webhookUrl: string;
     webhookToken: string;
   }): Promise<{
@@ -294,6 +309,9 @@ export function createChurchReceivingService(deps: {
         );
       }
 
+      // Já validado no superRefine acima (schema recusa antes de chegar aqui).
+      const rendaMensalCents = parseBrlToCents(dados.rendaMensal) ?? 0;
+
       const conta = await deps.repo.saveRegistration({
         companyId: actor.companyId,
         churchId: dados.churchId,
@@ -308,6 +326,7 @@ export function createChurchReceivingService(deps: {
         cidade: dados.cidade,
         uf: dados.uf,
         nascimento: dados.nascimento || null,
+        rendaMensalCents,
       });
 
       const { token, hash } = deps.secrets.newWebhookToken();
@@ -323,6 +342,7 @@ export function createChurchReceivingService(deps: {
         cidade: dados.cidade,
         uf: dados.uf,
         nascimento: dados.nascimento || null,
+        rendaMensalCents,
         webhookUrl: `${base}/api/webhooks/donations/${deps.provider.name}`,
         webhookToken: token,
       });

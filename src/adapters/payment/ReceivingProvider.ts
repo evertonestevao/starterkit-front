@@ -36,6 +36,8 @@ export interface ReceivingAccountInput {
   uf: string;
   /** Exigido quando o documento é CPF. */
   nascimento: string | null;
+  /** Renda/faturamento mensal, em centavos. O Asaas exige (`incomeValue`). */
+  rendaMensalCents: number;
   /** Para onde o provedor manda os eventos desta subconta. */
   webhookUrl: string;
   /** Token que o provedor deve devolver nos webhooks desta subconta. */
