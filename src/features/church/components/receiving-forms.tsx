@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition, type FormEvent } from "react";
 import { CreditCard, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,18 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
   const [documento, setDocumento] = useState(conta?.documento ?? "");
   const pessoaFisica = documento.replace(/\D/g, "").length === 11;
   const [renda, setRenda] = useState(conta?.rendaMensalCents ? formatCents(conta.rendaMensalCents) : "");
+  const [submitting, startTransition] = useTransition();
+
+  // O React 19 dá form.reset() quando um <form action> termina, apagando tudo
+  // o que a pessoa digitou — inclusive quando o servidor recusa (CNPJ
+  // inválido, CEP errado etc.). Enviar o FormData numa transition evita o
+  // reset. O `action` fica no <form> só para o envio antes da hidratação;
+  // depois dela o React ignora o submit já cancelado aqui.
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startTransition(() => formAction(formData));
+  }
 
   if (!igreja) return <p className="text-sm text-muted-foreground">Nenhuma igreja nesta conta.</p>;
 
@@ -127,7 +139,12 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
         </form>
       ) : null}
 
-      <form action={formAction} key={igreja.id} className="flex flex-col gap-4 border-t pt-6">
+      <form
+        action={formAction}
+        onSubmit={handleSubmit}
+        key={igreja.id}
+        className="flex flex-col gap-4 border-t pt-6"
+      >
         <input type="hidden" name="churchId" value={igreja.id} />
         <div>
           <h3 className="text-sm font-semibold">Dados para abrir a conta</h3>
@@ -227,7 +244,10 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
         </div>
 
         <div>
-          <Button type="submit" disabled={pending || status === "em_analise" || status === "aprovada"}>
+          <Button
+            type="submit"
+            disabled={pending || submitting || status === "em_analise" || status === "aprovada"}
+          >
             {status === "recusada" ? "Reenviar cadastro" : "Enviar cadastro"}
           </Button>
         </div>
