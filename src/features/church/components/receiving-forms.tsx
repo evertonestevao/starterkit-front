@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition, type FormEvent } from "react";
+import { useActionState, useState, useTransition, type ChangeEvent, type FormEvent } from "react";
 import { CreditCard, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,31 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
   const [renda, setRenda] = useState(conta?.rendaMensalCents ? formatCents(conta.rendaMensalCents) : "");
   const [submitting, startTransition] = useTransition();
 
+  // Campos simples de texto, todos controlados: com `defaultValue`, o Base UI
+  // acusa "changing the default value state of an uncontrolled FieldControl"
+  // assim que o formulário re-renderiza depois de enviar (mesmo sem trocar
+  // de valor) — e não renderizar de novo era exatamente o que causava o
+  // problema anterior de perder o preenchimento no erro.
+  function contaInicial(c: ChurchReceivingAccount | null) {
+    return {
+      razaoSocial: c?.razaoSocial ?? "",
+      nascimento: c?.nascimento ?? "",
+      email: c?.email ?? "",
+      telefone: c?.telefone ?? "",
+      cep: c?.cep ?? "",
+      endereco: c?.endereco ?? "",
+      enderecoNumero: c?.enderecoNumero ?? "",
+      bairro: c?.bairro ?? "",
+      cidade: c?.cidade ?? "",
+      uf: c?.uf ?? "",
+    };
+  }
+  const [campos, setCampos] = useState(() => contaInicial(conta));
+  function campoOnChange(nome: keyof ReturnType<typeof contaInicial>) {
+    return (e: ChangeEvent<HTMLInputElement>) =>
+      setCampos((atual) => ({ ...atual, [nome]: e.target.value }));
+  }
+
   // O React 19 dá form.reset() quando um <form action> termina, apagando tudo
   // o que a pessoa digitou — inclusive quando o servidor recusa (CNPJ
   // inválido, CEP errado etc.). Enviar o FormData numa transition evita o
@@ -90,6 +115,7 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
               setChurchId(e.target.value);
               setDocumento(novaConta?.documento ?? "");
               setRenda(novaConta?.rendaMensalCents ? formatCents(novaConta.rendaMensalCents) : "");
+              setCampos(contaInicial(novaConta));
             }}
           >
             {igrejas.map((i) => (
@@ -157,7 +183,13 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5 sm:col-span-2">
             <Label htmlFor="razaoSocial">Nome da igreja como está no documento</Label>
-            <Input id="razaoSocial" name="razaoSocial" required defaultValue={conta?.razaoSocial ?? ""} />
+            <Input
+              id="razaoSocial"
+              name="razaoSocial"
+              required
+              value={campos.razaoSocial}
+              onChange={campoOnChange("razaoSocial")}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="documento">CNPJ ou CPF do responsável</Label>
@@ -176,7 +208,8 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
                 id="nascimento"
                 name="nascimento"
                 type="date"
-                defaultValue={conta?.nascimento ?? ""}
+                value={campos.nascimento}
+                onChange={campoOnChange("nascimento")}
               />
             </div>
           ) : (
@@ -189,12 +222,19 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
               name="email"
               type="email"
               required
-              defaultValue={conta?.email ?? ""}
+              value={campos.email}
+              onChange={campoOnChange("email")}
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="telefoneRecebimento">Telefone com DDD</Label>
-            <Input id="telefoneRecebimento" name="telefone" required defaultValue={conta?.telefone ?? ""} />
+            <Input
+              id="telefoneRecebimento"
+              name="telefone"
+              required
+              value={campos.telefone}
+              onChange={campoOnChange("telefone")}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="rendaMensal">Renda/faturamento mensal</Label>
@@ -214,11 +254,17 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cep">CEP</Label>
-            <Input id="cep" name="cep" required defaultValue={conta?.cep ?? ""} />
+            <Input id="cep" name="cep" required value={campos.cep} onChange={campoOnChange("cep")} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="enderecoRecebimento">Endereço</Label>
-            <Input id="enderecoRecebimento" name="endereco" required defaultValue={conta?.endereco ?? ""} />
+            <Input
+              id="enderecoRecebimento"
+              name="endereco"
+              required
+              value={campos.endereco}
+              onChange={campoOnChange("endereco")}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="enderecoNumero">Número</Label>
@@ -226,20 +272,40 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
               id="enderecoNumero"
               name="enderecoNumero"
               required
-              defaultValue={conta?.enderecoNumero ?? ""}
+              value={campos.enderecoNumero}
+              onChange={campoOnChange("enderecoNumero")}
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bairro">Bairro</Label>
-            <Input id="bairro" name="bairro" required defaultValue={conta?.bairro ?? ""} />
+            <Input
+              id="bairro"
+              name="bairro"
+              required
+              value={campos.bairro}
+              onChange={campoOnChange("bairro")}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cidade">Cidade</Label>
-            <Input id="cidade" name="cidade" required defaultValue={conta?.cidade ?? ""} />
+            <Input
+              id="cidade"
+              name="cidade"
+              required
+              value={campos.cidade}
+              onChange={campoOnChange("cidade")}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="uf">UF</Label>
-            <Input id="uf" name="uf" required maxLength={2} defaultValue={conta?.uf ?? ""} />
+            <Input
+              id="uf"
+              name="uf"
+              required
+              maxLength={2}
+              value={campos.uf}
+              onChange={campoOnChange("uf")}
+            />
           </div>
         </div>
 
