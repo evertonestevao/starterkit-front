@@ -156,4 +156,22 @@
   html {
     @apply font-sans;
   }
+  /*
+   * A lista aberta de um <select> nativo é desenhada pelo navegador: o campo
+   * herda o texto do tema, mas o fundo da lista vem do esquema de cores do
+   * sistema. No escuro isso dava texto claro sobre fundo claro (ilegível).
+   * Cor e fundo explícitos nas opções, dos mesmos tokens do resto da
+   * interface, fazem todo select seguir o tema sem mexer em cada formulário.
+   */
+  select {
+    color-scheme: light;
+  }
+  .dark select {
+    color-scheme: dark;
+  }
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
 }
