@@ -11,7 +11,7 @@ import {
   type ChurchTheme,
 } from "./pageAppearance";
 
-const TEMAS: ChurchTheme[] = ["classico", "clean", "dark"];
+const TEMAS: ChurchTheme[] = ["classico", "clean", "dark", "meia-noite", "lavanda", "terra"];
 
 describe("parseAccentColor", () => {
   it("vazio significa usar a cor do tema", () => {
@@ -102,10 +102,31 @@ describe("buildPageStyle", () => {
   });
 });
 
+describe("paletas", () => {
+  it("cada tema tem as mesmas variáveis e texto legível (AA) sobre os fundos", () => {
+    const chaves = Object.keys(THEME_PALETTES.dark).sort();
+    for (const tema of TEMAS) {
+      const p = THEME_PALETTES[tema];
+      expect(Object.keys(p).sort(), tema).toEqual(chaves);
+
+      for (const fundo of ["--pg-bg", "--pg-band", "--pg-surface", "--pg-surface-2"]) {
+        expect(contrastRatio(p["--pg-text"], p[fundo]), `${tema} texto/${fundo}`).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(p["--pg-muted"], p[fundo]), `${tema} apoio/${fundo}`).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(p["--pg-danger"], p[fundo]), `${tema} erro/${fundo}`).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrastRatio(p["--pg-hero-text"], p["--pg-hero"]), `${tema} cabeçalho`).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(p["--pg-hero-muted"], p["--pg-hero"]), `${tema} cabeçalho apoio`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 describe("isChurchTheme", () => {
-  it("só aceita os três temas", () => {
+  it("só aceita os temas da lista", () => {
     expect(isChurchTheme("dark")).toBe(true);
     expect(isChurchTheme("classico")).toBe(true);
+    expect(isChurchTheme("meia-noite")).toBe(true);
+    expect(isChurchTheme("lavanda")).toBe(true);
+    expect(isChurchTheme("terra")).toBe(true);
     expect(isChurchTheme("neon")).toBe(false);
     expect(isChurchTheme(null)).toBe(false);
   });

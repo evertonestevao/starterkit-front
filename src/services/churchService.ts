@@ -21,6 +21,21 @@ export const TEMPLATE_OPTIONS = [
     name: "Dark",
     description: "Tema grafite com contraste elegante e moderno.",
   },
+  {
+    slug: "meia-noite",
+    name: "Meia-noite",
+    description: "Azul profundo com destaque em azul-céu.",
+  },
+  {
+    slug: "lavanda",
+    name: "Lavanda",
+    description: "Claro e suave, com lilás e roxo.",
+  },
+  {
+    slug: "terra",
+    name: "Terra",
+    description: "Tons de areia e marrom com destaque terracota.",
+  },
 ] as const;
 
 export function pickTemplateIdForChurch(

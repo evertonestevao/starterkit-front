@@ -10,12 +10,15 @@
  * hora de desenhar, só o quanto precisa para ficar legível naquele fundo.
  */
 
-export type ChurchTheme = "classico" | "clean" | "dark";
+export type ChurchTheme = "classico" | "clean" | "dark" | "meia-noite" | "lavanda" | "terra";
 
 export const CHURCH_THEMES: ReadonlyArray<{ slug: ChurchTheme; label: string; hint: string }> = [
   { slug: "classico", label: "Clássico", hint: "Marinho e vinho, fundo creme" },
   { slug: "clean", label: "Clean", hint: "Claro, com verde sálvia" },
   { slug: "dark", label: "Dark", hint: "Grafite, com verde" },
+  { slug: "meia-noite", label: "Meia-noite", hint: "Azul profundo, com azul-céu" },
+  { slug: "lavanda", label: "Lavanda", hint: "Claro, com lilás e roxo" },
+  { slug: "terra", label: "Terra", hint: "Areia e marrom, com terracota" },
 ];
 
 /** Tema de quem nunca escolheu nada. */
@@ -79,13 +82,64 @@ export const THEME_PALETTES: Record<ChurchTheme, Record<string, string>> = {
     "--pg-accent-soft": "rgba(54, 104, 74, 0.1)",
     "--pg-danger": "#a3322a",
   },
+  "meia-noite": {
+    "--pg-bg": "#0f1b2d",
+    "--pg-band": "#13223a",
+    "--pg-hero": "#0a1424",
+    "--pg-hero-text": "#eaf2ff",
+    "--pg-hero-muted": "#9fb2cc",
+    "--pg-hero-accent": "#6cb6ff",
+    "--pg-surface": "#172a44",
+    "--pg-surface-2": "#1d334f",
+    "--pg-text": "#e8eef8",
+    "--pg-muted": "#9fb0c9",
+    "--pg-border": "rgba(255, 255, 255, 0.09)",
+    "--pg-accent": "#6cb6ff",
+    "--pg-accent-fg": "#06182b",
+    "--pg-accent-soft": "rgba(108, 182, 255, 0.14)",
+    "--pg-danger": "#f2a097",
+  },
+  lavanda: {
+    "--pg-bg": "#f8f6fc",
+    "--pg-band": "#efeaf8",
+    "--pg-hero": "#e6def5",
+    "--pg-hero-text": "#2a1f45",
+    "--pg-hero-muted": "#5b4f7a",
+    "--pg-hero-accent": "#5b3fb0",
+    "--pg-surface": "#ffffff",
+    "--pg-surface-2": "#faf8fd",
+    "--pg-text": "#2a1f45",
+    "--pg-muted": "#61587a",
+    "--pg-border": "rgba(42, 31, 69, 0.1)",
+    "--pg-accent": "#5b3fb0",
+    "--pg-accent-fg": "#ffffff",
+    "--pg-accent-soft": "rgba(91, 63, 176, 0.1)",
+    "--pg-danger": "#a3322a",
+  },
+  terra: {
+    "--pg-bg": "#faf3ea",
+    "--pg-band": "#f3e7d6",
+    "--pg-hero": "#3b2a20",
+    "--pg-hero-text": "#fbf1e3",
+    "--pg-hero-muted": "#d6c3ae",
+    "--pg-hero-accent": "#f0b878",
+    "--pg-surface": "#ffffff",
+    "--pg-surface-2": "#fdf8f1",
+    "--pg-text": "#3b2a20",
+    "--pg-muted": "#6d5a4b",
+    "--pg-border": "rgba(59, 42, 32, 0.12)",
+    "--pg-accent": "#b4501f",
+    "--pg-accent-fg": "#ffffff",
+    "--pg-accent-soft": "rgba(180, 80, 31, 0.1)",
+    "--pg-danger": "#a3322a",
+  },
 };
 
 export function isChurchTheme(value: unknown): value is ChurchTheme {
-  return value === "classico" || value === "clean" || value === "dark";
+  return CHURCH_THEMES.some((tema) => tema.slug === value);
 }
 
-/** Sugestões para quem não quer procurar uma cor. Todas legíveis nos três temas depois do ajuste. */
+/** Sugestões para quem não quer procurar uma cor. Todas legíveis em todos os temas depois do ajuste. */
 export const ACCENT_PRESETS: ReadonlyArray<{ hex: string; label: string }> = [
   { hex: "#059669", label: "Esmeralda" },
   { hex: "#2563eb", label: "Azul" },
