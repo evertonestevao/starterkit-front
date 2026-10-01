@@ -10,7 +10,7 @@ import {
 import type { ActionState } from "@/server/actions/action-state";
 
 /**
- * Os três formulários da página pública da igreja (oração, primeira visita e
+ * Os três formulários da página pública da igreja (oração, pedido de visita e
  * inscrição). Cada um mora na sua seção, aberto — a grade de atalhos do topo
  * leva direto a ele. As cores vêm das variáveis --pg-* do tema da igreja.
  */
@@ -148,12 +148,33 @@ export function PrayerForm({ churchId }: { churchId: string }) {
 
 export function VisitorForm({ churchId }: { churchId: string }) {
   return (
-    <FormularioComRetorno action={submitVisitorAction.bind(null, churchId)} botao="Quero ser recebido">
+    <FormularioComRetorno action={submitVisitorAction.bind(null, churchId)} botao="Pedir uma visita">
       <Campo rotulo="Seu nome">
         <input name="name" required autoComplete="name" maxLength={120} className={campo} />
       </Campo>
-      <Campo rotulo="WhatsApp, telefone ou email">
-        <input name="contact" required autoComplete="tel" maxLength={160} placeholder="(11) 99999-9999" className={campo} />
+      <Campo rotulo="Telefone ou WhatsApp (com DDD)">
+        <input
+          name="contact"
+          type="tel"
+          inputMode="tel"
+          required
+          autoComplete="tel"
+          maxLength={20}
+          placeholder="(11) 99999-9999"
+          className={campo}
+        />
+      </Campo>
+      <Campo rotulo="Endereço ou bairro (opcional)">
+        <input name="endereco" autoComplete="street-address" maxLength={300} className={campo} />
+      </Campo>
+      <Campo rotulo="Quer contar o motivo? (opcional)">
+        <textarea
+          name="mensagem"
+          maxLength={1000}
+          rows={3}
+          placeholder="Ex.: estou doente, perdi alguém, quero conversar sobre a fé..."
+          className={`${campo} h-auto min-h-24 py-3 leading-6`}
+        />
       </Campo>
     </FormularioComRetorno>
   );

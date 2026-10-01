@@ -1,6 +1,9 @@
 import {
+  BookOpen,
   CalendarClock,
   CalendarDays,
+  ClipboardCheck,
+  Contact,
   CreditCard,
   HandCoins,
   HandHeart,
@@ -9,10 +12,13 @@ import {
   LayoutDashboard,
   ScrollText,
   Settings,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleCode } from "@/types/database";
+import type { CompanyWithRole } from "@/types/tenant";
+
+/** Autorizações extras de um member que também abrem um item do menu. */
+type Autorizacao = "pode_acompanhar" | "pode_gerir_ebd" | "professor_ebd";
 
 /**
  * Navegação da sidebar — editar aqui ao adicionar módulos do seu produto.
@@ -30,6 +36,15 @@ export interface NavItem {
   icon: LucideIcon;
   /** Papéis que veem o item (autorização real fica no server/RLS). */
   roles: RoleCode[];
+  /** Também aparece para quem tem uma destas autorizações (mesmo sendo member). */
+  liberadoPara?: Autorizacao[];
+}
+
+/** Itens visíveis para a pessoa na empresa ativa. */
+export function visibleNavItems(active: Pick<CompanyWithRole, "role" | Autorizacao>): NavItem[] {
+  return navItems.filter(
+    (item) => item.roles.includes(active.role) || (item.liberadoPara ?? []).some((a) => active[a]),
+  );
 }
 
 export const navItems: NavItem[] = [
@@ -40,10 +55,31 @@ export const navItems: NavItem[] = [
     roles: ["owner", "admin", "member"],
   },
   {
-    title: "Pessoas",
-    href: "/dashboard/members",
-    icon: Users,
+    // Chamada nos cultos, justificativas e quem está faltando. Dado pessoal:
+    // só a própria igreja; a RLS repete a regra (can_acompanhar).
+    title: "Presença nos cultos",
+    href: "/dashboard/acompanhamento",
+    icon: ClipboardCheck,
     roles: ["owner", "admin"],
+    liberadoPara: ["pode_acompanhar"],
+  },
+  {
+    // As pessoas da igreja. Quem tem login aparece aqui com o papel; o acesso
+    // é gerenciado na ficha do membro. Mesmo acesso da Chamada.
+    title: "Membros",
+    href: "/dashboard/membros",
+    icon: Contact,
+    roles: ["owner", "admin"],
+    liberadoPara: ["pode_acompanhar"],
+  },
+  {
+    // Escola Bíblica Dominical: classes, matrícula e chamada própria. O
+    // professor vê só as classes dele (a RLS repete: can_ebd_classe).
+    title: "EBD",
+    href: "/dashboard/ebd",
+    icon: BookOpen,
+    roles: ["owner", "admin"],
+    liberadoPara: ["pode_gerir_ebd", "professor_ebd"],
   },
   {
     // Dado sensível (LGPD): o texto do pedido é só de quem lidera a igreja.
@@ -80,7 +116,7 @@ export const navItems: NavItem[] = [
     roles: ["owner", "admin"],
   },
   {
-    title: "Relacionamentos",
+    title: "Quem quer visita",
     href: "/dashboard/relationships",
     icon: HeartHandshake,
     roles: ["owner", "admin", "member"],

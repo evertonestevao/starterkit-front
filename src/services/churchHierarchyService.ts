@@ -30,6 +30,10 @@ export interface HierarchyChurch {
   /** ltree em texto: "sede.subsede.congregacao". */
   path: string;
   companyId: string | null;
+  /** Declarado no cadastro; não é vínculo na árvore. */
+  fazParteDeRede: boolean;
+  /** Rede/ministério declarado (opcional). */
+  redeNome: string | null;
 }
 
 export interface ChurchHierarchyRepository {

@@ -141,13 +141,17 @@ export function directionsUrl(churchName: string, address: string | null): strin
   return `https://www.google.com/maps/search/?api=1&query=${consulta}`;
 }
 
+// Só o tipo genérico do local ("igreja", "templo"...) e conectores entram
+// aqui. "assembleia" NÃO entra: em "Assembleia de Deus" ela é a denominação,
+// não um tipo genérico — igrejas assim devem virar "AD", não a cidade/bairro.
 const PALAVRAS_GENERICAS = new Set([
-  "igreja", "comunidade", "ministerio", "assembleia", "templo", "de", "da", "do", "das", "dos", "e",
+  "igreja", "comunidade", "ministerio", "templo",
+  "de", "da", "do", "das", "dos", "e", "no", "na", "nos", "nas", "em",
 ]);
 
 /** Monograma do cabeçalho quando a igreja não tem logo: "Igreja Vida Nova" → "VN". */
 export function churchInitials(nome: string): string {
-  const palavras = nome.split(/\s+/).filter(Boolean);
+  const palavras = nome.split(/\s+/).filter((p) => /\p{L}/u.test(p));
   const fortes = palavras.filter((p) => !PALAVRAS_GENERICAS.has(semAcento(p)));
   const base = fortes.length > 0 ? fortes : palavras;
   return base

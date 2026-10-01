@@ -21,6 +21,8 @@ export function createSupabaseChurchHierarchyRepository(client: SupabaseClient):
         parent_id: string | null;
         path: string;
         company_id: string | null;
+        faz_parte_de_rede: boolean;
+        rede_nome: string | null;
       }>).map((row) => ({
         id: row.id,
         name: row.name,
@@ -29,6 +31,8 @@ export function createSupabaseChurchHierarchyRepository(client: SupabaseClient):
         parentId: row.parent_id,
         path: row.path,
         companyId: row.company_id,
+        fazParteDeRede: row.faz_parte_de_rede,
+        redeNome: row.rede_nome,
       }));
     },
 

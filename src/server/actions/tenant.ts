@@ -13,6 +13,7 @@ import { getSupabaseServerClient } from "@/server/supabase-server";
 import { ACTIVE_COMPANY_COOKIE, getTenantService } from "@/server/tenant";
 import { permissionService } from "@/services/permissionService";
 import type { RoleCode } from "@/types/database";
+import { convidarParaSistema } from "@/server/conviteSistema";
 import { toActionError, type ActionState } from "./action-state";
 
 /** Server actions de empresas, membros e convites. */
@@ -53,7 +54,12 @@ export async function createCompanyAction(
     }
 
     const tenant = await getTenantService();
-    const company = await tenant.createCompany({ name: formData.get("name") });
+    const company = await tenant.createCompany({
+      name: formData.get("name"),
+      sobrenome: formData.get("sobrenome"),
+      fazParteDeRede: formData.get("faz_parte_de_rede") === "on",
+      redeNome: formData.get("rede_nome"),
+    });
     companyId = company.id;
     await setActiveCompanyCookie(companyId);
   } catch (err) {
@@ -106,27 +112,12 @@ export async function inviteMemberAction(
 ): Promise<ActionState> {
   try {
     const companyId = String(formData.get("companyId") ?? "");
-    const tenant = await getTenantService();
-    const role = await tenant.requireMembership(companyId);
-    if (!permissionService.canManageMembers(role)) {
-      throw new AppError("forbidden", "Sem permissão para convidar membros");
-    }
-    const client = await getSupabaseServerClient();
-    const { data } = await client.auth.getUser();
-    if (!data.user) {
-      throw new AppError("unauthorized", "Sessão expirada");
-    }
-    const invites = await getInviteService();
-    await invites.invite({
+    await convidarParaSistema({
       companyId,
       email: String(formData.get("email") ?? ""),
       role: formData.get("role") === "admin" ? "admin" : "member",
-      invitedBy: data.user.id,
     });
-    // Billing por seat: exceder o plano não bloqueia o convite — recalcula
-    // os extras e ajusta a cobrança no gateway.
-    await syncCompanySeats(companyId);
-    revalidatePath("/dashboard/members");
+    revalidatePath("/dashboard/membros", "layout");
     return { success: "Convite enviado" };
   } catch (err) {
     return toActionError(err);
@@ -148,7 +139,7 @@ export async function revokeInviteAction(
     const invites = await getInviteService();
     await invites.revoke(inviteId, companyId, data.user?.id ?? "");
     await syncCompanySeats(companyId);
-    revalidatePath("/dashboard/members");
+    revalidatePath("/dashboard/membros", "layout");
   } catch (err) {
     // Erro (incl. falha de auditoria, que desfaz a action) vira mensagem
     // segura para o client exibir — nunca falha silenciosa.
@@ -182,7 +173,52 @@ export async function changeMemberRoleAction(
       entityId: memberId,
       metadata: { previous_role: previousRole, new_role: newRole },
     });
-    revalidatePath("/dashboard/members");
+    revalidatePath("/dashboard/membros", "layout");
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Autoriza (ou não) um member a fazer chamada e acompanhamento. */
+export async function setMemberPodeAcompanharAction(
+  companyId: string,
+  memberId: string,
+  value: boolean,
+): Promise<ActionState | void> {
+  try {
+    const tenant = await getTenantService();
+    await tenant.setMemberPermissao(companyId, memberId, "pode_acompanhar", value);
+    await recordAudit({
+      companyId,
+      action: value ? "member.acompanhamento_granted" : "member.acompanhamento_revoked",
+      entityType: "company_member",
+      entityId: memberId,
+      metadata: {},
+    });
+    revalidatePath("/dashboard/membros", "layout");
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Autoriza (ou não) um member a cuidar da EBD (secretaria). */
+export async function setMemberPodeGerirEbdAction(
+  companyId: string,
+  memberId: string,
+  value: boolean,
+): Promise<ActionState | void> {
+  try {
+    const tenant = await getTenantService();
+    await tenant.setMemberPermissao(companyId, memberId, "pode_gerir_ebd", value);
+    await recordAudit({
+      companyId,
+      action: value ? "member.ebd_granted" : "member.ebd_revoked",
+      entityType: "company_member",
+      entityId: memberId,
+      metadata: {},
+    });
+    revalidatePath("/dashboard/membros", "layout");
+    revalidatePath("/dashboard/ebd", "layout");
   } catch (err) {
     return toActionError(err);
   }
@@ -203,7 +239,7 @@ export async function removeMemberAction(
       metadata: { removed_role: removedRole },
     });
     await syncCompanySeats(companyId);
-    revalidatePath("/dashboard/members");
+    revalidatePath("/dashboard/membros", "layout");
   } catch (err) {
     return toActionError(err);
   }

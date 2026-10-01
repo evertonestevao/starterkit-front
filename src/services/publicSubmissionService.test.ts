@@ -60,13 +60,28 @@ describe("submitPrayerRequest", () => {
 });
 
 describe("submitVisitor e submitEventSignup", () => {
-  it("visitante precisa de nome e de um contato para a igreja retornar", async () => {
+  it("pedido de visita exige telefone com DDD (email não serve)", async () => {
     const { repo, service } = build();
 
-    const err = await service.submitVisitor({ churchId: IGREJA, name: "Ana", contact: "" }).catch((e) => e);
-
-    expect(isAppError(err) && err.message).toBe("Deixe um WhatsApp, telefone ou email");
+    for (const contact of ["", "ana@email.com", "9999-8888"]) {
+      const err = await service.submitVisitor({ churchId: IGREJA, name: "Ana", contact }).catch((e) => e);
+      expect(isAppError(err) && err.message).toBe("Informe um telefone com DDD");
+    }
     expect(repo.insertVisitor).not.toHaveBeenCalled();
+  });
+
+  it("pedido de visita grava telefone e campos opcionais vazios como null", async () => {
+    const { repo, service } = build();
+
+    await service.submitVisitor({ churchId: IGREJA, name: " Ana ", contact: "(11) 98888-7777", endereco: " ", mensagem: "" });
+
+    expect(repo.insertVisitor).toHaveBeenCalledWith({
+      churchId: IGREJA,
+      name: "Ana",
+      contact: "(11) 98888-7777",
+      endereco: null,
+      mensagem: null,
+    });
   });
 
   it("inscrição aponta para o evento e limpa espaços antes de gravar", async () => {

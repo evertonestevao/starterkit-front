@@ -19,13 +19,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ResumoAcompanhamentoCard } from "@/features/acompanhamento/components/resumo-card";
 import { ChurchLinkNotices } from "@/features/church/components/church-link-notices";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
+import { getAcompanhamentoService } from "@/server/acompanhamento";
+import { PAPEL_LABEL } from "@/lib/papeis";
+import { getCargosService } from "@/server/cargos";
 import { getChurchLinkService } from "@/server/churchLinks";
 import { createMemoryRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant, getTenantService } from "@/server/tenant";
 import { createInviteService } from "@/services/inviteService";
+import { canAcompanhar } from "@/services/acompanhamentoService";
 import { permissionService } from "@/services/permissionService";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -39,7 +44,8 @@ export default async function DashboardPage() {
   const isAdmin = permissionService.canManageMembers(active.role);
 
   const { data: auth } = await client.auth.getUser();
-  const [members, pendingInvites, linkNotices] = await Promise.all([
+  const actor = { companyId: active.id, role: active.role, podeAcompanhar: active.pode_acompanhar };
+  const [members, pendingInvites, linkNotices, acompanhamento, meusCargos] = await Promise.all([
     // pageSize mínimo: aqui só o total interessa (métrica), não as linhas.
     tenant.listMembers(active.id, { page: 1, pageSize: 1 }),
     isAdmin
@@ -60,11 +66,26 @@ export default async function DashboardPage() {
             return [];
           })
       : Promise.resolve([]),
+    // Resumo da chamada para o pastor; falhar aqui não derruba o painel.
+    canAcompanhar(actor.role, actor.podeAcompanhar)
+      ? getAcompanhamentoService()
+          .then((service) => service.resumo(actor))
+          .catch((err: unknown) => {
+            console.error("[dashboard] falha ao carregar o resumo da chamada", err);
+            return null;
+          })
+      : Promise.resolve(null),
+    // O cargo da pessoa (Pastor, Secretário...); falhar aqui mostra só o acesso.
+    getCargosService()
+      .then((service) => service.meusCargos({ companyId: active.id, role: active.role }))
+      .catch((err: unknown) => {
+        console.error("[dashboard] falha ao carregar os cargos", err);
+        return [] as string[];
+      }),
   ]);
 
-  const roleLabel = { owner: "Owner", admin: "Admin", member: "Member" }[
-    active.role
-  ];
+  // Mostra o cargo (o que a pessoa conhece); o papel no sistema vai embaixo.
+  const papel = PAPEL_LABEL[active.role];
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,12 +108,17 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Sem o cartão de convites (só admin vê), são 3: a grade acompanha para não sobrar buraco. */}
+      <div
+        className={
+          isAdmin ? "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" : "grid grid-cols-1 gap-4 sm:grid-cols-3"
+        }
+      >
         <MetricCard
           icon={Users}
-          label="Membros da igreja"
+          label="Com acesso ao sistema"
           value={members.total}
-          hint="cadastros ativos"
+          hint="pessoas com login"
         />
         {isAdmin ? (
           <MetricCard
@@ -110,11 +136,13 @@ export default async function DashboardPage() {
         />
         <MetricCard
           icon={ChartNoAxesCombined}
-          label="Seu papel"
-          value={roleLabel}
-          hint="permissão no espaço"
+          label={meusCargos.length > 0 ? "Seu cargo" : "Seu acesso"}
+          value={meusCargos.length > 0 ? meusCargos.join(", ") : papel}
+          hint={meusCargos.length > 0 ? `acesso: ${papel}` : "no sistema"}
         />
       </div>
+
+      {acompanhamento ? <ResumoAcompanhamentoCard resumo={acompanhamento} /> : null}
 
       <section id="acoes" className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
         <Card className="overflow-hidden">
@@ -207,13 +235,13 @@ export default async function DashboardPage() {
         <CardContent>
           <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span>
-              Convide a equipe que ajuda a cuidar dos relacionamentos da igreja.
+              Convide quem ajuda a cuidar da igreja: na ficha de cada membro, em &ldquo;Acesso ao sistema&rdquo;.
             </span>
             <Link
-              href="/dashboard/members"
+              href="/dashboard/membros"
               className="inline-flex items-center gap-2 font-medium text-foreground hover:underline"
             >
-              Gerenciar equipe <ArrowRight className="size-4" />
+              Ver membros <ArrowRight className="size-4" />
             </Link>
           </div>
         </CardContent>

@@ -30,6 +30,17 @@ describe("addItem", () => {
     );
   });
 
+  it("registra chamada por padrão; desmarcado grava falso", async () => {
+    const { repo, service } = build();
+    const ator = { companyId: EMPRESA, role: "admin" as const };
+
+    await service.addItem(ator, { ...base, tipo: "semanal", diaSemana: "0", data: "" });
+    await service.addItem(ator, { ...base, tipo: "semanal", diaSemana: "3", data: "", registraChamada: false });
+
+    expect(repo.insertItem).toHaveBeenNthCalledWith(1, expect.objectContaining({ registraChamada: true }));
+    expect(repo.insertItem).toHaveBeenNthCalledWith(2, expect.objectContaining({ registraChamada: false }));
+  });
+
   it("especial grava a data e nenhum dia da semana", async () => {
     const { repo, service } = build();
 

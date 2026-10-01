@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useTenant } from "@/providers/tenant-provider";
 import { Breadcrumbs } from "./breadcrumbs";
 import { CompanySwitcher } from "./company-switcher";
-import { navItems, titleForPath } from "./nav-items";
+import { titleForPath, visibleNavItems } from "./nav-items";
 import { UserMenu, type UserMenuProps } from "./user-menu";
 
 /** Cookie lido pelo layout server para SSR sem "flash" do estado colapsado. */
@@ -151,7 +151,7 @@ function SidebarNav({
   onNavigate?: () => void;
 }) {
   const { active } = useTenant();
-  const visible = navItems.filter((item) => item.roles.includes(active.role));
+  const visible = visibleNavItems(active);
   const badges = badgesByHref(pendingInvitesCount, unseenPrayerRequestsCount);
 
   return (

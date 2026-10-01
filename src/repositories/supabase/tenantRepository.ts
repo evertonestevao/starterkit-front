@@ -11,20 +11,32 @@ import type { MemberWithProfile } from "@/types/tenant";
 export function createSupabaseTenantRepository(client: SupabaseClient): TenantRepository {
   return {
     async listMyCompanies() {
+      const { data: auth, error: authError } = await client.auth.getUser();
+      if (authError || !auth.user) return [];
       // Membership do usuário + empresa embutida (FK company_id -> companies).
+      // O filtro por user_id é obrigatório: a RLS de company_members deixa
+      // qualquer membro ler a equipe inteira, e sem ele o papel exibido podia
+      // ser o de outra pessoa da mesma empresa (o owner, que vem primeiro).
       const { data, error } = await client
         .from("company_members")
-        .select("role, company:companies(*)")
+        .select("role, pode_acompanhar, pode_gerir_ebd, company:companies(*)")
+        .eq("user_id", auth.user.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: true });
       if (error) {
         throw new AppError("internal_error", "Falha ao listar igrejas", error);
       }
+      // Onde a pessoa ensina na EBD (para o menu). Falhar aqui não derruba o painel.
+      const { data: professor } = await client.rpc("minhas_empresas_professor_ebd");
+      const ensinaEm = new Set(((professor ?? []) as unknown as string[]).map(String));
       const companies = (data ?? [])
         .filter((row) => row.company && !(row.company as unknown as Company).deleted_at)
         .map((row) => ({
           ...(row.company as unknown as Company),
           role: row.role as RoleCode,
+          pode_acompanhar: Boolean(row.pode_acompanhar),
+          pode_gerir_ebd: Boolean(row.pode_gerir_ebd),
+          professor_ebd: ensinaEm.has((row.company as unknown as Company).id),
         }));
       // Dedup defensivo por id: o índice único parcial de company_members já
       // impede membership dupla, mas a UI usa company.id como React key —
@@ -33,12 +45,18 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       return companies.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
     },
 
-    async createCompany(name, slug) {
+    async createCompany(name, slug, church) {
       // create_company_with_church: empresa + owner + IGREJA numa transação
       // só. Empresa sem igreja não tem página pública, QR Code, domínio nem
       // link de patrocínio — e não há tela que conserte isso depois.
       const { data, error } = await client
-        .rpc("create_company_with_church", { p_name: name, p_slug: slug })
+        .rpc("create_company_with_church", {
+          p_name: name,
+          p_slug: slug,
+          p_sobrenome: church.sobrenome,
+          p_faz_parte_de_rede: church.fazParteDeRede,
+          p_rede_nome: church.redeNome,
+        })
         .single<Company>();
       if (error || !data) {
         if (error?.code === "23505") {
@@ -46,7 +64,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         }
         throw new AppError("internal_error", "Falha ao criar igreja", error);
       }
-      return { ...data, role: "owner" as const };
+      return { ...data, role: "owner" as const, pode_acompanhar: false, pode_gerir_ebd: false, professor_ebd: false };
     },
 
     async updateCompany(companyId, { name }) {
@@ -125,6 +143,22 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         .select("id");
       if (error) {
         throw new AppError("internal_error", "Falha ao alterar papel", error);
+      }
+      if (!data || data.length === 0) {
+        throw new AppError("not_found", "Membro não encontrado");
+      }
+    },
+
+    async updateMemberPermissao(memberId, companyId, campo, value) {
+      const { data, error } = await client
+        .from("company_members")
+        .update({ [campo]: value })
+        .eq("id", memberId)
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .select("id");
+      if (error) {
+        throw new AppError("internal_error", "Falha ao alterar a autorização", error);
       }
       if (!data || data.length === 0) {
         throw new AppError("not_found", "Membro não encontrado");

@@ -1,4 +1,5 @@
-import { AppError } from "@/lib/errors";
+import { z } from "zod";
+import { AppError, toValidationError } from "@/lib/errors";
 import type { EventSignup, PrayerRequest, Visitor } from "@/types/database";
 import { normalizePageParams, type PageParams, type Paginated } from "./tenantService";
 
@@ -30,8 +31,12 @@ export interface CommunityRepository {
   ): Promise<{ items: EventSignup[]; total: number }>;
   listVisitors(
     companyId: string,
-    opts: { limit: number; offset: number },
+    opts: { limit: number; offset: number; situacao?: SituacaoVisita } & PeriodoPedidos,
   ): Promise<{ items: Visitor[]; total: number }>;
+  /** Quantos pedidos (do período) esperam visita e quantos já foram visitados. */
+  countVisitas(companyId: string, periodo: PeriodoPedidos): Promise<{ pendentes: number; feitas: number }>;
+  /** Pela RPC registrar_visita (só a equipe da própria igreja). Data null = desfaz. */
+  registrarVisita(input: RegistroVisita): Promise<void>;
   countAll(companyId: string, since: string): Promise<CommunityCounts>;
   /** Até quando a PRÓPRIA sessão já viu os pedidos desta empresa. Null = nunca viu. */
   getPrayerSeenAt(companyId: string): Promise<string | null>;
@@ -39,6 +44,52 @@ export interface CommunityRepository {
   /** Marca "vi tudo até este ponto" para o usuário logado (auth.uid() na RPC). */
   markPrayerRequestsSeen(companyId: string, seenAt: string): Promise<void>;
 }
+
+export type SituacaoVisita = "pendentes" | "feitas";
+
+/** Período pela data do PEDIDO (dias inteiros, YYYY-MM-DD). Vazio = sem limite. */
+export interface PeriodoPedidos {
+  de?: string;
+  ate?: string;
+}
+
+const DATA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Só datas bem formadas viram filtro; "de" depois de "ate" é trocado. */
+export function normalizarPeriodo(de?: string, ate?: string): PeriodoPedidos {
+  let d = de && DATA.test(de) && !Number.isNaN(Date.parse(de)) ? de : undefined;
+  let a = ate && DATA.test(ate) && !Number.isNaN(Date.parse(ate)) ? ate : undefined;
+  if (d && a && d > a) [d, a] = [a, d];
+  return { de: d, ate: a };
+}
+
+export interface RegistroVisita {
+  visitorId: string;
+  visitadoEm: string | null;
+  visitadoPor: string | null;
+  observacao: string | null;
+}
+
+const textoOpcional = (max: number, msg: string) =>
+  z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : (v ?? null)),
+    z.string().trim().max(max, msg).nullable(),
+  );
+
+const registroVisitaSchema = z
+  .object({
+    visitorId: z.uuid("Pedido inválido"),
+    visitadoEm: z.preprocess(
+      (v) => (v === "" || v === undefined ? null : v),
+      z.iso.date("Data inválida").nullable(),
+    ),
+    visitadoPor: textoOpcional(120, "Nome muito longo"),
+    observacao: textoOpcional(1000, "Observação muito longa"),
+  })
+  .refine((r) => r.visitadoEm === null || !!r.visitadoPor, {
+    message: "Informe quem fez a visita",
+    path: ["visitadoPor"],
+  });
 
 const PAGE_SIZE = 20;
 
@@ -82,13 +133,38 @@ export function createCommunityService(repo: CommunityRepository) {
       return { items, total, page, pageSize };
     },
 
-    async listVisitors(companyId: string, params?: PageParams): Promise<Paginated<Visitor>> {
+    async listVisitors(
+      companyId: string,
+      params?: PageParams & { situacao?: string; de?: string; ate?: string },
+    ): Promise<Paginated<Visitor>> {
       const { page, pageSize, offset } = normalizePageParams(params, PAGE_SIZE);
+      // Filtro da URL: valor desconhecido lista todos.
+      const situacao =
+        params?.situacao === "pendentes" || params?.situacao === "feitas" ? params.situacao : undefined;
       const { items, total } = await repo.listVisitors(requireCompany(companyId), {
         limit: pageSize,
         offset,
+        situacao,
+        ...normalizarPeriodo(params?.de, params?.ate),
       });
       return { items, total, page, pageSize };
+    },
+
+    async countVisitas(companyId: string, periodo?: { de?: string; ate?: string }) {
+      return repo.countVisitas(requireCompany(companyId), normalizarPeriodo(periodo?.de, periodo?.ate));
+    },
+
+    /** Marca a visita como feita (data + quem foi) ou desfaz (data vazia). */
+    async registrarVisita(input: unknown): Promise<void> {
+      const parsed = registroVisitaSchema.safeParse(input);
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      const r = parsed.data;
+      await repo.registrarVisita({
+        visitorId: r.visitorId,
+        visitadoEm: r.visitadoEm,
+        visitadoPor: r.visitadoEm ? r.visitadoPor : null,
+        observacao: r.observacao,
+      });
     },
 
     /** Totais para os cartões do topo. `now` injetável para teste. */

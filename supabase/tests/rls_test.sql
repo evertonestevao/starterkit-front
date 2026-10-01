@@ -793,6 +793,87 @@ begin
 end $$;
 reset role;
 
+-- Cadastro: complemento do nome e "faz parte de uma rede". A declaração nasce
+-- pela RPC; o client não a reescreve depois e o anônimo não a lê. O bloco todo
+-- é desfeito no fim (subtransação), para não mudar a contagem de igrejas dos
+-- testes seguintes.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare
+  v_company public.companies;
+  v_church public.churches;
+begin
+  begin
+    v_company := public.create_company_with_church(
+      'Igreja Rede RLS', 'rls-igreja-rede', '  Prainha - Promissão ', true, ' Ministério do Belém ');
+    select * into v_church from public.churches where company_id = v_company.id;
+    if v_church.sobrenome is distinct from 'Prainha - Promissão' then
+      raise exception 'FALHA cadastro: sobrenome nao gravado/aparado (%)', v_church.sobrenome;
+    end if;
+    if not v_church.faz_parte_de_rede or v_church.rede_nome is distinct from 'Ministério do Belém' then
+      raise exception 'FALHA cadastro: rede nao gravada (%, %)', v_church.faz_parte_de_rede, v_church.rede_nome;
+    end if;
+
+    -- Nome de rede sem marcar que faz parte de uma é descartado, não gravado torto.
+    v_company := public.create_company_with_church(
+      'Igreja Sem Rede RLS', 'rls-igreja-sem-rede', null, false, 'Rede Fantasma');
+    select * into v_church from public.churches where company_id = v_company.id;
+    if v_church.faz_parte_de_rede or v_church.rede_nome is not null or v_church.sobrenome is not null then
+      raise exception 'FALHA cadastro: igreja sem rede ficou com dado de rede';
+    end if;
+
+    -- O dono da igreja não reescreve a declaração pelo client (só a RPC grava).
+    begin
+      update public.churches set faz_parte_de_rede = true, rede_nome = 'Outra' where id = v_church.id;
+      raise exception 'FALHA cadastro: authenticated alterou a rede da igreja';
+    exception when sqlstate '42501' then null;
+    end;
+
+    -- Nome longo (slug de 50) e nome curtíssimo (slug de 2) precisam gerar um
+    -- endereço público válido (3 a 40 caracteres), e o desempate não estoura 40.
+    v_company := public.create_company_with_church(
+      'Igreja Longa RLS', 'rls-assembleia-de-deus-ministerio-no-ipiranga-zona-sul');
+    select * into v_church from public.churches where company_id = v_company.id;
+    if char_length(v_church.public_code) not between 3 and 40 then
+      raise exception 'FALHA cadastro: public_code de nome longo fora de 3-40 (%)', v_church.public_code;
+    end if;
+    v_company := public.create_company_with_church(
+      'Igreja Longa RLS', 'rls-assembleia-de-deus-ministerio-no-ipiranga-zona-sul-2');
+    select * into v_church from public.churches where company_id = v_company.id;
+    if char_length(v_church.public_code) not between 3 and 40 or v_church.public_code ~ '-$' then
+      raise exception 'FALHA cadastro: public_code de desempate invalido (%)', v_church.public_code;
+    end if;
+    v_company := public.create_company_with_church('Ab', 'ab');
+    select * into v_church from public.churches where company_id = v_company.id;
+    if char_length(v_church.public_code) not between 3 and 40 then
+      raise exception 'FALHA cadastro: public_code de nome curto fora de 3-40 (%)', v_church.public_code;
+    end if;
+
+    raise exception 'ROLLBACK_OK';
+  exception when others then
+    if sqlerrm <> 'ROLLBACK_OK' then
+      raise;
+    end if;
+  end;
+end $$;
+
+reset role;
+
+-- Página pública (anon) não enxerga a rede declarada.
+set local role anon;
+do $$
+begin
+  begin
+    perform rede_nome from public.churches limit 1;
+    raise exception 'FALHA cadastro: anon leu rede_nome';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
 -- ---------------------------------------------------------------------------
 -- Patrocinadores vistos PELA IGREJA: só os dela, e sem dado pessoal.
 -- ---------------------------------------------------------------------------
@@ -1993,6 +2074,40 @@ begin
   end;
 end $$;
 
+-- Pedido de visita: só a equipe da PRÓPRIA igreja marca a visita; o
+-- formulário público não consegue gravar "visita feita".
+do $$
+declare v uuid; n int;
+begin
+  select id into v from public.visitors where church_id = '7d7d7d7d-0000-4000-8000-000000000004';
+  perform public.registrar_visita(v, current_date, 'Pr. Teste', null);
+  select count(*) into n from public.visitors where id = v and visitado_por = 'Pr. Teste';
+  if n <> 1 then raise exception 'FALHA visita: congregacao nao registrou a propria visita'; end if;
+
+  -- Pedido de outra igreja (congregação B, mesma árvore): recusado.
+  select id into v from public.visitors where church_id = '7d7d7d7d-0000-4000-8000-000000000005';
+  begin
+    perform public.registrar_visita(v, current_date, 'Invasor', null);
+    raise exception 'FALHA visita: congregacao A marcou visita da congregacao B';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Sem GRANT de update: não altera a tabela direto.
+  begin
+    update public.visitors set visitado_por = 'x' where church_id = '7d7d7d7d-0000-4000-8000-000000000004';
+    raise exception 'FALHA visita: authenticated alterou visitors direto';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Insert público não grava os campos da visita.
+  begin
+    insert into public.visitors (church_id, name, contact, visitado_em)
+    values ('7d7d7d7d-0000-4000-8000-000000000004', 'x', '11999990000', current_date);
+    raise exception 'FALHA visita: insert publico gravou visitado_em';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
 -- ------------------------- subsede X (owner) ------------------------------
 select set_config('request.jwt.claims',
   '{"sub":"5e5e5e5e-0000-4000-8000-000000000002","email":"rls-subx@test.local","role":"authenticated"}', true);
@@ -2564,14 +2679,14 @@ end $$;
 
 reset role;
 insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
-  ('5e5e5e5e-0000-4000-8000-00000000000a', 'rls-patro4@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Patrocinador sem limite"}');
+  ('5e5e5e5e-0000-4000-8000-00000000002a', 'rls-patro4@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Patrocinador sem limite"}');
 insert into public.sponsor_accounts (id, user_id, kind, display_name, email, document, billing_status)
-values ('8a8a8a8a-0000-4000-8000-000000000003', '5e5e5e5e-0000-4000-8000-00000000000a',
+values ('8a8a8a8a-0000-4000-8000-000000000003', '5e5e5e5e-0000-4000-8000-00000000002a',
         'business', 'Sem Limite', 'rls-patro4@test.local', '55666777000125', 'active');
 
 set local role authenticated;
 select set_config('request.jwt.claims',
-  '{"sub":"5e5e5e5e-0000-4000-8000-00000000000a","email":"rls-patro4@test.local","role":"authenticated"}', true);
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000002a","email":"rls-patro4@test.local","role":"authenticated"}', true);
 do $$
 declare v_slots record;
 begin
@@ -2723,11 +2838,11 @@ reset role;
 -- Ela nasce `subsede` sem pai: não aparece para ninguém além dela mesma, e é
 -- a plataforma que depois a coloca no lugar certo.
 insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
-  ('5e5e5e5e-0000-4000-8000-00000000000b', 'rls-novo@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Pastor novo"}');
+  ('5e5e5e5e-0000-4000-8000-00000000002b', 'rls-novo@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Pastor novo"}');
 
 set local role authenticated;
 select set_config('request.jwt.claims',
-  '{"sub":"5e5e5e5e-0000-4000-8000-00000000000b","email":"rls-novo@test.local","role":"authenticated"}', true);
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000002b","email":"rls-novo@test.local","role":"authenticated"}', true);
 do $$
 begin
   perform public.create_company_with_church('Igreja da Arvore RLS', 'rls-onboarding-arvore');
@@ -2841,7 +2956,7 @@ select set_config('request.jwt.claims',
 do $$
 declare n int;
 begin
-  update public.churches set name = 'Member mandou'
+  update public.churches set nome_proprio = 'Member mandou'
   where id = '7d7d7d7d-0000-4000-8000-000000000002';
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'FALHA perfil: member editou a pagina da igreja'; end if;
@@ -2959,7 +3074,7 @@ reset role;
 -- O botão do cartão na página pública só existe com conta APROVADA, escolha
 -- da igreja e link pronto — as três coisas.
 update public.church_payment_accounts
-set status = 'aprovada', link_doacao = 'https://pagamento.exemplo/doar/subx'
+set status = 'aprovada', link_doacao_cartao = 'https://pagamento.exemplo/doar/subx'
 where church_id = '7d7d7d7d-0000-4000-8000-000000000002';
 
 insert into public.church_donations (church_id, provider, external_payment_id, amount_cents, metodo, status, paga_em)
@@ -3048,9 +3163,9 @@ reset role;
 -- member) e ganha um SEGUNDO admin, para provar que a marca é POR PESSOA.
 -- ---------------------------------------------------------------------------
 insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
-  ('5e5e5e5e-0000-4000-8000-00000000000c', 'rls-subx2@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Segundo admin de X"}');
+  ('5e5e5e5e-0000-4000-8000-00000000001c', 'rls-subx2@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Segundo admin de X"}');
 insert into public.company_members (company_id, user_id, role) values
-  ('6c6c6c6c-0000-4000-8000-000000000002', '5e5e5e5e-0000-4000-8000-00000000000c', 'admin');
+  ('6c6c6c6c-0000-4000-8000-000000000002', '5e5e5e5e-0000-4000-8000-00000000001c', 'admin');
 
 set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
@@ -3138,7 +3253,7 @@ end $$;
 -- não da empresa. Ele ainda não abriu a tela, então tudo conta como novo
 -- para ele.
 select set_config('request.jwt.claims',
-  '{"sub":"5e5e5e5e-0000-4000-8000-00000000000c","email":"rls-subx2@test.local","role":"authenticated"}', true);
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000001c","email":"rls-subx2@test.local","role":"authenticated"}', true);
 do $$
 declare n int;
 begin
@@ -4012,8 +4127,8 @@ insert into public.churches (id, company_id, name, slug, public_code, tipo, pare
 
 -- Um líder do OUTRO tenant, com o mesmo e-mail que será convidado na subsede:
 -- o aceite não pode ligá-lo à conta de quem aceitou.
-insert into public.church_leaders (id, church_id, cargo, nome, email) values
-  ('9f9f9f9f-0000-4000-8000-000000000009', '9e9e9e9e-0000-4000-8000-000000000003', 'secretario', 'Secretario Outro', 'rls-convlider@test.local');
+insert into public.church_leaders (id, church_id, cargo_id, nome, email) values
+  ('9f9f9f9f-0000-4000-8000-000000000009', '9e9e9e9e-0000-4000-8000-000000000003', (select id from public.cargos where slug = 'secretario'), 'Secretario Outro', 'rls-convlider@test.local');
 
 -- ------------------------- owner da subsede B ------------------------------
 set local role authenticated;
@@ -4024,43 +4139,45 @@ do $$
 declare n int;
 begin
   -- Registra o Pastor da própria igreja.
-  insert into public.church_leaders (id, church_id, cargo, nome, email)
-  values ('9f9f9f9f-0000-4000-8000-000000000001', '9e9e9e9e-0000-4000-8000-000000000002', 'pastor', 'Pastor Sub', 'pastor@test.local');
+  -- Sem `id`: o client não tem GRANT nele. O id fixo é posto logo abaixo,
+  -- como superuser, para os blocos seguintes acharem o registro.
+  insert into public.church_leaders (church_id, cargo_id, nome, email)
+  values ('9e9e9e9e-0000-4000-8000-000000000002', (select id from public.cargos where slug = 'pastor'), 'Pastor Sub', 'pastor@test.local');
 
   select count(*) into n from public.church_leaders where church_id = '9e9e9e9e-0000-4000-8000-000000000002';
   if n <> 1 then raise exception 'FALHA cargos: owner nao ve o proprio pastor (%)', n; end if;
 
   -- Um Pastor ativo por igreja.
   begin
-    insert into public.church_leaders (church_id, cargo, nome)
-    values ('9e9e9e9e-0000-4000-8000-000000000002', 'pastor', 'Segundo Pastor');
+    insert into public.church_leaders (church_id, cargo_id, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', (select id from public.cargos where slug = 'pastor'), 'Segundo Pastor');
     raise exception 'FALHA cargos: a igreja aceitou dois pastores ativos';
   exception when unique_violation then null; -- esperado
   end;
 
   -- Outros cargos aceitam varias pessoas.
-  insert into public.church_leaders (church_id, cargo, nome)
-  values ('9e9e9e9e-0000-4000-8000-000000000002', 'diacono', 'Diacono Um'),
-         ('9e9e9e9e-0000-4000-8000-000000000002', 'diacono', 'Diacono Dois');
+  insert into public.church_leaders (church_id, cargo_id, nome)
+  values ('9e9e9e9e-0000-4000-8000-000000000002', (select id from public.cargos where slug = 'diacono'), 'Diacono Um'),
+         ('9e9e9e9e-0000-4000-8000-000000000002', (select id from public.cargos where slug = 'diacono'), 'Diacono Dois');
 
   -- Cargo fora do catalogo e recusado (FK).
   begin
-    insert into public.church_leaders (church_id, cargo, nome)
-    values ('9e9e9e9e-0000-4000-8000-000000000002', 'bispo', 'Nome');
+    insert into public.church_leaders (church_id, cargo_id, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', 'acacacac-0000-4000-8000-00000000ffff', 'Nome');
     raise exception 'FALHA cargos: cargo fora do catalogo foi aceito';
-  exception when foreign_key_violation then null; -- esperado
+  exception when foreign_key_violation or check_violation then null; -- esperado
   end;
 
   -- Nao escreve na igreja de outro tenant, nem na sede acima.
   begin
-    insert into public.church_leaders (church_id, cargo, nome)
-    values ('9e9e9e9e-0000-4000-8000-000000000003', 'diacono', 'Invasor');
+    insert into public.church_leaders (church_id, cargo_id, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000003', (select id from public.cargos where slug = 'diacono'), 'Invasor');
     raise exception 'FALHA cargos: owner escreveu na igreja de outro tenant';
   exception when sqlstate '42501' then null; -- esperado
   end;
   begin
-    insert into public.church_leaders (church_id, cargo, nome)
-    values ('9e9e9e9e-0000-4000-8000-000000000001', 'diacono', 'Invasor');
+    insert into public.church_leaders (church_id, cargo_id, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000001', (select id from public.cargos where slug = 'diacono'), 'Invasor');
     raise exception 'FALHA cargos: subsede escreveu na sede acima';
   exception when sqlstate '42501' then null; -- esperado
   end;
@@ -4073,21 +4190,29 @@ begin
   exception when sqlstate '42501' then null; -- esperado
   end;
   begin
-    insert into public.church_leaders (church_id, cargo, nome, user_id)
-    values ('9e9e9e9e-0000-4000-8000-000000000002', 'presbitero', 'Fantasma', '9c9c9c9c-0000-4000-8000-000000000001');
+    insert into public.church_leaders (church_id, cargo_id, nome, user_id)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', (select id from public.cargos where slug = 'presbitero'), 'Fantasma', '9c9c9c9c-0000-4000-8000-000000000001');
     raise exception 'FALHA cargos: client inseriu com user_id';
   exception when sqlstate '42501' then null; -- esperado
   end;
 
-  -- O catalogo e legivel, mas nao escrevivel.
-  select count(*) into n from public.church_cargos;
-  if n <> 5 then raise exception 'FALHA cargos: catalogo com % cargos (esperado 5)', n; end if;
+  -- Os padrões da plataforma são legíveis, mas ninguém escreve neles.
+  select count(*) into n from public.cargos where church_id is null and deleted_at is null;
+  if n < 5 then raise exception 'FALHA cargos: catalogo da plataforma com % cargos', n; end if;
   begin
-    insert into public.church_cargos (slug, label, ordem) values ('bispo', 'Bispo', 9);
-    raise exception 'FALHA cargos: client escreveu no catalogo';
+    insert into public.cargos (church_id, nome) values (null, 'Bispo');
+    raise exception 'FALHA cargos: client criou cargo da plataforma';
   exception when sqlstate '42501' then null; -- esperado
   end;
+  update public.cargos set nome = 'Bispo' where slug = 'pastor';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA cargos: client editou cargo da plataforma'; end if;
 end $$;
+
+reset role;
+update public.church_leaders set id = '9f9f9f9f-0000-4000-8000-000000000001'
+where church_id = '9e9e9e9e-0000-4000-8000-000000000002' and cargo_id = (select id from public.cargos where slug = 'pastor') and deleted_at is null;
+set local role authenticated;
 
 -- ---------------------- owner da SEDE (igreja acima) ------------------------
 select set_config('request.jwt.claims',
@@ -4104,8 +4229,8 @@ begin
 
   -- ... mas nao escreve na subsede.
   begin
-    insert into public.church_leaders (church_id, cargo, nome)
-    values ('9e9e9e9e-0000-4000-8000-000000000002', 'presbitero', 'Imposto pela sede');
+    insert into public.church_leaders (church_id, cargo_id, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', (select id from public.cargos where slug = 'presbitero'), 'Imposto pela sede');
     raise exception 'FALHA cargos: sede inseriu cargo na subsede';
   exception when sqlstate '42501' then null; -- esperado
   end;
@@ -4127,8 +4252,8 @@ begin
   if n <> 0 then raise exception 'FALHA cargos: member ve % cargos', n; end if;
 
   begin
-    insert into public.church_leaders (church_id, cargo, nome)
-    values ('9e9e9e9e-0000-4000-8000-000000000002', 'secretario', 'Por member');
+    insert into public.church_leaders (church_id, cargo_id, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', (select id from public.cargos where slug = 'secretario'), 'Por member');
     raise exception 'FALHA cargos: member registrou cargo';
   exception when sqlstate '42501' then null; -- esperado
   end;
@@ -4180,15 +4305,15 @@ begin
   select count(*) into n from public.church_leaders where id = '9f9f9f9f-0000-4000-8000-000000000001';
   if n <> 1 then raise exception 'FALHA cargos: historico do pastor sumiu'; end if;
 
-  insert into public.church_leaders (church_id, cargo, nome)
-  values ('9e9e9e9e-0000-4000-8000-000000000002', 'pastor', 'Novo Pastor');
+  insert into public.church_leaders (church_id, cargo_id, nome)
+  values ('9e9e9e9e-0000-4000-8000-000000000002', (select id from public.cargos where slug = 'pastor'), 'Novo Pastor');
 end $$;
 
 reset role;
 
 -- ----- aceite do convite liga o registro a conta (so o da empresa certa) ----
-insert into public.church_leaders (id, church_id, cargo, nome, email)
-values ('9f9f9f9f-0000-4000-8000-000000000002', '9e9e9e9e-0000-4000-8000-000000000002', 'presbitero',
+insert into public.church_leaders (id, church_id, cargo_id, nome, email)
+values ('9f9f9f9f-0000-4000-8000-000000000002', '9e9e9e9e-0000-4000-8000-000000000002', (select id from public.cargos where slug = 'presbitero'),
         'Presbitero Convidado', 'rls-convlider@test.local');
 
 insert into public.company_invites (company_id, email, role, invited_by)
@@ -4222,6 +4347,996 @@ begin
     raise exception 'FALHA cargos: aceite ligou registro de OUTRA empresa com o mesmo e-mail';
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Chamada e Acompanhamento: só a própria igreja lê nomes, presença e motivos;
+-- a igreja de cima recebe só números; outra rede não vê nada. E a regra da
+-- sequência: ausente soma, justificado é neutro, presente zera.
+-- ---------------------------------------------------------------------------
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('acacacac-0000-4000-8000-000000000001', 'rls-ac-sede@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{}'),
+  ('acacacac-0000-4000-8000-000000000002', 'rls-ac-cong@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{}'),
+  ('acacacac-0000-4000-8000-000000000003', 'rls-ac-memb@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{}'),
+  ('acacacac-0000-4000-8000-000000000004', 'rls-ac-secr@test.local',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{}'),
+  ('acacacac-0000-4000-8000-000000000005', 'rls-ac-outra@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{}');
+
+insert into public.companies (id, name, slug, created_by) values
+  ('acacacac-0000-4000-8000-0000000000c1', 'AC Sede',  'rls-ac-sede',  'acacacac-0000-4000-8000-000000000001'),
+  ('acacacac-0000-4000-8000-0000000000c2', 'AC Cong',  'rls-ac-cong',  'acacacac-0000-4000-8000-000000000002'),
+  ('acacacac-0000-4000-8000-0000000000c3', 'AC Outra', 'rls-ac-outra', 'acacacac-0000-4000-8000-000000000005');
+
+insert into public.company_members (company_id, user_id, role, pode_acompanhar) values
+  ('acacacac-0000-4000-8000-0000000000c1', 'acacacac-0000-4000-8000-000000000001', 'owner',  false),
+  ('acacacac-0000-4000-8000-0000000000c2', 'acacacac-0000-4000-8000-000000000002', 'owner',  false),
+  ('acacacac-0000-4000-8000-0000000000c2', 'acacacac-0000-4000-8000-000000000003', 'member', false),
+  ('acacacac-0000-4000-8000-0000000000c2', 'acacacac-0000-4000-8000-000000000004', 'member', true),
+  ('acacacac-0000-4000-8000-0000000000c3', 'acacacac-0000-4000-8000-000000000005', 'owner',  false);
+
+insert into public.churches (id, company_id, name, slug, public_code, tipo, parent_id) values
+  ('acacacac-0000-4000-8000-0000000000d1', 'acacacac-0000-4000-8000-0000000000c1', 'AC Sede',  'rls-ac-sede',  'rls-ac-sede',  'sede',        null),
+  ('acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2', 'AC Cong',  'rls-ac-cong',  'rls-ac-cong',  'congregacao', 'acacacac-0000-4000-8000-0000000000d1'),
+  ('acacacac-0000-4000-8000-0000000000d3', 'acacacac-0000-4000-8000-0000000000c3', 'AC Outra', 'rls-ac-outra', 'rls-ac-outra', 'subsede',     null);
+
+-- Membro de OUTRA igreja, para provar que não dá para cruzar referências.
+insert into public.rol_membros (id, church_id, nome)
+values ('acacacac-0000-4000-8000-0000000000e9', 'acacacac-0000-4000-8000-0000000000d3', 'Membro Alheio');
+
+-- Cultos da programação (só admin escreve nela; aqui como superuser). O
+-- semanal cai no dia da semana de hoje, para as datas do teste baterem.
+insert into public.church_schedule (id, church_id, titulo, tipo, dia_semana, hora, registra_chamada) values
+  ('acacacac-0000-4000-8000-0000000000f1', 'acacacac-0000-4000-8000-0000000000d2', 'Culto de Domingo', 'semanal',
+   extract(dow from current_date)::int, '19:00', true),
+  ('acacacac-0000-4000-8000-0000000000f2', 'acacacac-0000-4000-8000-0000000000d2', 'Ensaio do coral', 'semanal',
+   extract(dow from current_date)::int, '15:00', false);
+insert into public.church_schedule (id, church_id, titulo, tipo, data, hora, deleted_at) values
+  ('acacacac-0000-4000-8000-0000000000f3', 'acacacac-0000-4000-8000-0000000000d2', 'Culto removido', 'especial',
+   current_date + 1, '19:00', now());
+
+-- ------------------- member AUTORIZADO (secretário) faz tudo ----------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+
+do $$
+declare
+  v_igreja uuid := 'acacacac-0000-4000-8000-0000000000d2';
+  v_culto uuid := 'acacacac-0000-4000-8000-0000000000f1';
+  m1 uuid; m2 uuid; m3 uuid; m4 uuid;
+  n int;
+  v_situacao text;
+  d1 date := current_date - 28;
+  d2 date := current_date - 21;
+  d3 date := current_date - 14;
+  d4 date := current_date - 7;
+begin
+  insert into public.rol_membros (church_id, nome) values (v_igreja, 'M1 Some') returning id into m1;
+  insert into public.rol_membros (church_id, nome) values (v_igreja, 'M2 Viajando') returning id into m2;
+  insert into public.rol_membros (church_id, nome) values (v_igreja, 'M3 Voltou') returning id into m3;
+  insert into public.rol_membros (church_id, nome) values (v_igreja, 'M4 Sempre justificado') returning id into m4;
+
+  -- M2 viaja nas duas últimas semanas; M4 está justificado o mês todo.
+  insert into public.justificativas (church_id, membro_id, motivo, data_inicio, data_fim)
+  values (v_igreja, m2, 'viagem', d3, d4), (v_igreja, m4, 'saude', d1, d4);
+
+  insert into public.acompanhamento_config (church_id, justificativa_longa_cultos)
+  values (v_igreja, 3);
+
+  -- M2 e M4 marcados ausentes de propósito: a justificativa por período cobre.
+  perform public.salvar_chamada(v_culto, d1, jsonb_build_array(
+    jsonb_build_object('membro_id', m1, 'estado', 'ausente'),
+    jsonb_build_object('membro_id', m2, 'estado', 'presente'),
+    jsonb_build_object('membro_id', m3, 'estado', 'presente'),
+    jsonb_build_object('membro_id', m4, 'estado', 'ausente')), '[]');
+  perform public.salvar_chamada(v_culto, d2, jsonb_build_array(
+    jsonb_build_object('membro_id', m1, 'estado', 'ausente'),
+    jsonb_build_object('membro_id', m2, 'estado', 'ausente'),
+    jsonb_build_object('membro_id', m3, 'estado', 'ausente'),
+    jsonb_build_object('membro_id', m4, 'estado', 'ausente')), '[]');
+  perform public.salvar_chamada(v_culto, d3, jsonb_build_array(
+    jsonb_build_object('membro_id', m1, 'estado', 'justificado', 'motivo', 'trabalho'),
+    jsonb_build_object('membro_id', m2, 'estado', 'ausente'),
+    jsonb_build_object('membro_id', m3, 'estado', 'ausente'),
+    jsonb_build_object('membro_id', m4, 'estado', 'justificado')),
+    jsonb_build_array(jsonb_build_object('nome', 'Visitante Teste', 'telefone', '11999990000')));
+  -- Duas vezes: reabrir a mesma chamada edita, não duplica.
+  perform public.salvar_chamada(v_culto, d4, jsonb_build_array(
+    jsonb_build_object('membro_id', m1, 'estado', 'presente')), '[]');
+  perform public.salvar_chamada(v_culto, d4, jsonb_build_array(
+    jsonb_build_object('membro_id', m1, 'estado', 'ausente'),
+    jsonb_build_object('membro_id', m2, 'estado', 'ausente'),
+    jsonb_build_object('membro_id', m3, 'estado', 'presente'),
+    jsonb_build_object('membro_id', m4, 'estado', 'ausente')), '[]');
+
+  select count(*) into n from public.chamadas where schedule_id = v_culto;
+  if n <> 4 then raise exception 'FALHA chamada: reabrir duplicou (% chamadas)', n; end if;
+
+  -- Marcar Justificado na chamada criou a justificativa de um dia, com o motivo.
+  select count(*) into n from public.justificativas where membro_id = m1 and motivo = 'trabalho' and data_inicio = d3;
+  if n <> 1 then raise exception 'FALHA chamada: justificado na chamada nao criou justificativa'; end if;
+
+  -- falta, falta, justificado, falta = 3 faltas seguidas.
+  select faltas_seguidas into n from public.acompanhamento_alertas(v_igreja) where membro_id = m1;
+  if n is distinct from 3 then raise exception 'FALHA sequencia: M1 deveria ter 3 faltas, tem %', n; end if;
+
+  -- Justificativa por período: as ausências cobertas não contam.
+  select count(*) into n from public.acompanhamento_alertas(v_igreja) where membro_id = m2;
+  if n <> 0 then raise exception 'FALHA sequencia: M2 justificado entrou em alerta'; end if;
+
+  -- Presente zera.
+  select count(*) into n from public.acompanhamento_alertas(v_igreja) where membro_id = m3;
+  if n <> 0 then raise exception 'FALHA sequencia: presenca nao zerou a sequencia de M3'; end if;
+
+  -- Justificado por 4 cultos seguidos (limite 3) = justificativa longa.
+  select cultos_justificados into n from public.acompanhamento_justificativas_longas(v_igreja) where membro_id = m4;
+  if n is distinct from 4 then raise exception 'FALHA longas: M4 deveria ter 4 cultos justificados, tem %', n; end if;
+  select count(*) into n from public.acompanhamento_alertas(v_igreja) where membro_id = m4;
+  if n <> 0 then raise exception 'FALHA longas: M4 justificado entrou em faltas'; end if;
+
+  -- Contato "em acompanhamento" mantém na lista com outra situação...
+  insert into public.acompanhamento_contatos (church_id, membro_id, motivo, data, resultado)
+  values (v_igreja, m1, 'faltas', current_date - 1, 'em_acompanhamento');
+  select situacao into v_situacao from public.acompanhamento_alertas(v_igreja) where membro_id = m1;
+  if v_situacao is distinct from 'em_acompanhamento' then
+    raise exception 'FALHA contato: M1 deveria estar em acompanhamento, esta %', v_situacao;
+  end if;
+
+  -- ...e "retornou" tira da lista.
+  insert into public.acompanhamento_contatos (church_id, membro_id, motivo, data, resultado)
+  values (v_igreja, m1, 'faltas', current_date, 'retornou');
+  select count(*) into n from public.acompanhamento_alertas(v_igreja) where membro_id = m1;
+  if n <> 0 then raise exception 'FALHA contato: M1 continua em alerta depois do contato'; end if;
+
+  -- Relatório separa presentes, justificados e ausentes (d3: 0 P, 3 J, 1 A).
+  select presentes * 100 + justificados * 10 + ausentes into n
+  from public.acompanhamento_relatorio_chamadas(v_igreja, d3, d3);
+  if n <> 31 then raise exception 'FALHA relatorio: contagem de d3 errada (%)', n; end if;
+
+  -- Chamada nova só no dia da semana do culto...
+  begin
+    perform public.salvar_chamada(v_culto, current_date - 1, '[]', '[]');
+    raise exception 'FALHA chamada: aceitou data em outro dia da semana';
+  exception when sqlstate '23514' then null;
+  end;
+  -- ...e só para culto marcado para chamada.
+  begin
+    perform public.salvar_chamada('acacacac-0000-4000-8000-0000000000f2', current_date, '[]', '[]');
+    raise exception 'FALHA chamada: aceitou culto com registra_chamada desligado';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Quem faz a chamada lê o nome de culto removido da programação (histórico).
+  select count(*) into n from public.church_schedule where id = 'acacacac-0000-4000-8000-0000000000f3';
+  if n <> 1 then raise exception 'FALHA programacao: secretario nao le culto removido'; end if;
+
+  -- O member autorizado não edita a programação (isso é do admin).
+  update public.church_schedule set registra_chamada = false where id = v_culto;
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA programacao: member alterou a programacao'; end if;
+
+  -- Não dá para justificar membro de outra igreja.
+  begin
+    insert into public.justificativas (church_id, membro_id, motivo, data_inicio, data_fim)
+    values (v_igreja, 'acacacac-0000-4000-8000-0000000000e9', 'outro', current_date, current_date);
+    raise exception 'FALHA cruzamento: justificativa apontou membro de outra igreja';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- "Feita por" é do sistema.
+  begin
+    update public.chamadas set feita_por = null where schedule_id = v_culto;
+    raise exception 'FALHA grants: client alterou feita_por';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- ------------------------ member SEM autorização ----------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.rol_membros;
+  if n <> 0 then raise exception 'FALHA acompanhamento: member sem autorizacao ve % membros', n; end if;
+  select count(*) into n from public.justificativas;
+  if n <> 0 then raise exception 'FALHA acompanhamento: member sem autorizacao ve justificativas'; end if;
+  select count(*) into n from public.acompanhamento_alertas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA acompanhamento: member sem autorizacao ve alertas'; end if;
+
+  begin
+    insert into public.rol_membros (church_id, nome) values ('acacacac-0000-4000-8000-0000000000d2', 'Intruso');
+    raise exception 'FALHA acompanhamento: member sem autorizacao cadastrou membro';
+  exception when sqlstate '42501' then null;
+  end;
+
+  select count(*) into n from public.church_schedule where id = 'acacacac-0000-4000-8000-0000000000f3';
+  if n <> 0 then raise exception 'FALHA programacao: member sem autorizacao le culto removido'; end if;
+
+  -- Não pode se autorizar sozinho.
+  update public.company_members set pode_acompanhar = true
+  where user_id = 'acacacac-0000-4000-8000-000000000003';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA acompanhamento: member se autorizou'; end if;
+end $$;
+
+reset role;
+select set_config('test.ac_culto', 'acacacac-0000-4000-8000-0000000000f1', true);
+set local role authenticated;
+
+do $$
+begin
+  perform public.salvar_chamada(current_setting('test.ac_culto')::uuid, current_date, '[]', '[]');
+  raise exception 'FALHA acompanhamento: member sem autorizacao salvou chamada';
+exception when sqlstate 'P0002' then null;
+end $$;
+
+-- -------------------------- owner da congregação ----------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  -- Os 4 do rol + os 3 logins da igreja (todo login vira membro, fora da chamada).
+  select count(*) into n from public.rol_membros where user_id is null;
+  if n <> 4 then raise exception 'FALHA acompanhamento: owner deveria ver 4 membros do rol, ve %', n; end if;
+  select count(*) into n from public.rol_membros where user_id is not null and not participa_chamada;
+  if n <> 3 then raise exception 'FALHA membros: os 3 logins deveriam ser membros fora da chamada, sao %', n; end if;
+
+  -- Ninguém liga um membro à conta de outra pessoa (user_id é do sistema).
+  begin
+    update public.rol_membros set user_id = 'acacacac-0000-4000-8000-000000000001'
+    where nome = 'M3 Voltou';
+    raise exception 'FALHA membros: client alterou user_id do membro';
+  exception when sqlstate '42501' then null;
+  end;
+  select count(*) into n from public.justificativas where motivo = 'saude';
+  if n <> 1 then raise exception 'FALHA acompanhamento: owner nao ve o motivo da propria igreja'; end if;
+end $$;
+
+-- ------------------- owner da SEDE: só números, nada de nomes ----------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.rol_membros where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if n <> 0 then raise exception 'FALHA LGPD: sede le % nomes da congregacao', n; end if;
+  select count(*) into n from public.justificativas;
+  if n <> 0 then raise exception 'FALHA LGPD: sede le justificativas (motivos) da congregacao'; end if;
+  select count(*) into n from public.acompanhamento_presencas_efetivas;
+  if n <> 0 then raise exception 'FALHA LGPD: sede le presencas individuais'; end if;
+  select count(*) into n from public.acompanhamento_alertas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA LGPD: sede le a lista de alertas da congregacao'; end if;
+  select ativos + em_alerta into n from public.membros_kpis('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA LGPD: sede le os indicadores de membros da congregacao'; end if;
+
+  select membros_ativos into n from public.acompanhamento_resumo_rede('acacacac-0000-4000-8000-0000000000d1')
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if n is distinct from 7 then raise exception 'FALHA rede: sede deveria ver 7 membros ativos (4 do rol + 3 logins) na congregacao, viu %', n; end if;
+
+  update public.rol_membros set nome = 'Editado pela sede' where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA acompanhamento: sede editou membro da congregacao'; end if;
+end $$;
+
+-- ----------------------------- OUTRA rede -----------------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.rol_membros where church_id <> 'acacacac-0000-4000-8000-0000000000d3';
+  if n <> 0 then raise exception 'FALHA acompanhamento: outra rede ve membros alheios'; end if;
+  select count(*) into n from public.acompanhamento_resumo_rede('acacacac-0000-4000-8000-0000000000d1');
+  if n <> 0 then raise exception 'FALHA acompanhamento: outra rede ve resumo da rede alheia'; end if;
+  select count(*) into n from public.chamada_visitantes;
+  if n <> 0 then raise exception 'FALHA acompanhamento: outra rede ve visitantes alheios'; end if;
+
+  begin
+    insert into public.rol_membros (church_id, nome) values ('acacacac-0000-4000-8000-0000000000d2', 'Invasor');
+    raise exception 'FALHA acompanhamento: outra rede cadastrou membro alheio';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+reset role;
+
+set local role anon;
+do $$
+begin
+  begin
+    perform 1 from public.rol_membros;
+    raise exception 'FALHA acompanhamento: anon leu rol_membros';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- Catálogo de cargos com herança (migration 20261001130000). Reaproveita a
+-- árvore dos cargos acima: S (sede) > B (subsede); O é outra rede.
+--   * B vê os cargos de S e os padrões; S NÃO vê os de B; O não vê os de S;
+--   * só o dono edita (S não edita o de B, B não edita o de S);
+--   * B usa o cargo herdado de S num líder; O não consegue usar o de S;
+--   * rol: vários cargos por membro, o Pastor é único por igreja.
+-- ---------------------------------------------------------------------------
+insert into public.cargos (id, church_id, nome) values
+  ('cacacaca-0000-4000-8000-000000000001', '9e9e9e9e-0000-4000-8000-000000000001', 'Coordenador de celulas'),
+  ('cacacaca-0000-4000-8000-000000000002', '9e9e9e9e-0000-4000-8000-000000000002', 'Zelador');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"9c9c9c9c-0000-4000-8000-000000000002","email":"rls-lsub@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.cargos where id in ('cacacaca-0000-4000-8000-000000000001', 'cacacaca-0000-4000-8000-000000000002');
+  if n <> 2 then raise exception 'FALHA heranca: subsede deveria ver o proprio cargo e o da sede (viu %)', n; end if;
+
+  -- A lista pronta (RPC) traz padrão + da sede + o próprio.
+  select count(*) into n from public.cargos_visiveis('9e9e9e9e-0000-4000-8000-000000000002')
+  where id in ('cacacaca-0000-4000-8000-000000000001', 'cacacaca-0000-4000-8000-000000000002') or slug = 'pastor';
+  if n <> 3 then raise exception 'FALHA heranca: cargos_visiveis da subsede veio com % (esperado 3)', n; end if;
+
+  update public.cargos set nome = 'Editado pela sub' where id = 'cacacaca-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA heranca: subsede editou cargo da sede'; end if;
+
+  update public.cargos set nome = 'Zelador(a)' where id = 'cacacaca-0000-4000-8000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALHA heranca: subsede nao editou o proprio cargo'; end if;
+
+  -- Usa o cargo herdado num líder da própria igreja.
+  insert into public.church_leaders (church_id, cargo_id, nome)
+  values ('9e9e9e9e-0000-4000-8000-000000000002', 'cacacaca-0000-4000-8000-000000000001', 'Coordenadora');
+
+  begin
+    insert into public.cargos (church_id, nome) values ('9e9e9e9e-0000-4000-8000-000000000001', 'Imposto na sede');
+    raise exception 'FALHA heranca: subsede criou cargo na sede';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"9c9c9c9c-0000-4000-8000-000000000001","email":"rls-lsede@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.cargos where id = 'cacacaca-0000-4000-8000-000000000002';
+  if n <> 0 then raise exception 'FALHA heranca: sede ve cargo criado pela subsede'; end if;
+  update public.cargos set nome = 'Sede mudou' where id = 'cacacaca-0000-4000-8000-000000000002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALHA heranca: sede editou cargo da subsede'; end if;
+  -- Desativar o próprio cargo: soft delete.
+  update public.cargos set deleted_at = now() where id = 'cacacaca-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALHA heranca: sede nao desativou o proprio cargo'; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"9c9c9c9c-0000-4000-8000-000000000004","email":"rls-lout@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.cargos where church_id is not null and church_id <> '9e9e9e9e-0000-4000-8000-000000000003';
+  if n <> 0 then raise exception 'FALHA heranca: outra rede ve % cargos alheios', n; end if;
+  select count(*) into n from public.cargos_visiveis('9e9e9e9e-0000-4000-8000-000000000002');
+  if n <> 0 then raise exception 'FALHA heranca: outra rede listou os cargos da subsede pela RPC'; end if;
+  begin
+    insert into public.church_leaders (church_id, cargo_id, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000003', 'cacacaca-0000-4000-8000-000000000002', 'Pegou emprestado');
+    raise exception 'FALHA heranca: outra rede usou cargo alheio';
+  exception when sqlstate '23514' then null;
+  end;
+end $$;
+reset role;
+
+-- Cargo desativado não pode ser dado de novo, mas quem já tinha continua.
+do $$
+declare n int;
+begin
+  select count(*) into n from public.church_leaders
+  where cargo_id = 'cacacaca-0000-4000-8000-000000000001' and deleted_at is null;
+  if n <> 1 then raise exception 'FALHA heranca: desativar o cargo apagou quem ja tinha'; end if;
+  begin
+    insert into public.church_leaders (church_id, cargo_id, nome)
+    values ('9e9e9e9e-0000-4000-8000-000000000002', 'cacacaca-0000-4000-8000-000000000001', 'Depois de desativado');
+    raise exception 'FALHA heranca: cargo desativado foi atribuido';
+  exception when sqlstate '23514' then null;
+  end;
+end $$;
+
+-- Rol: a congregação da chamada (acompanhamento) dá cargos aos membros.
+insert into public.rol_membros (id, church_id, nome) values
+  ('cacacaca-0000-4000-8000-0000000000a1', 'acacacac-0000-4000-8000-0000000000d2', 'Membro com cargos'),
+  ('cacacaca-0000-4000-8000-0000000000a2', 'acacacac-0000-4000-8000-0000000000d2', 'Outro membro');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  insert into public.rol_membro_cargos (membro_id, cargo_id, church_id) values
+    ('cacacaca-0000-4000-8000-0000000000a1', (select id from public.cargos where slug = 'diacono'), 'acacacac-0000-4000-8000-0000000000d2'),
+    ('cacacaca-0000-4000-8000-0000000000a1', (select id from public.cargos where slug = 'tesoureiro'), 'acacacac-0000-4000-8000-0000000000d2'),
+    ('cacacaca-0000-4000-8000-0000000000a1', (select id from public.cargos where slug = 'pastor'), 'acacacac-0000-4000-8000-0000000000d2');
+  select count(*) into n from public.rol_membro_cargos where membro_id = 'cacacaca-0000-4000-8000-0000000000a1';
+  if n <> 3 then raise exception 'FALHA rol cargos: esperado 3 cargos no membro, veio %', n; end if;
+
+  begin
+    insert into public.rol_membro_cargos (membro_id, cargo_id, church_id) values
+      ('cacacaca-0000-4000-8000-0000000000a2', (select id from public.cargos where slug = 'pastor'), 'acacacac-0000-4000-8000-0000000000d2');
+    raise exception 'FALHA rol cargos: dois pastores na mesma igreja';
+  exception when unique_violation then null;
+  end;
+
+  begin
+    insert into public.rol_membro_cargos (membro_id, cargo_id, church_id) values
+      ('acacacac-0000-4000-8000-0000000000e9', (select id from public.cargos where slug = 'diacono'), 'acacacac-0000-4000-8000-0000000000d2');
+    raise exception 'FALHA rol cargos: cargo dado a membro de outra igreja';
+  exception when sqlstate '23514' then null;
+  end;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.rol_membro_cargos;
+  if n <> 0 then raise exception 'FALHA LGPD: sede le cargos dos membros da congregacao'; end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Membros e acesso (migration 20261001150000)
+-- ---------------------------------------------------------------------------
+-- O Pastor da congregação (cargo no rol) aparece para a sede pela RPC,
+-- só o nome; outra rede não vê.
+insert into public.rol_membros (id, church_id, nome) values
+  ('cacacaca-0000-4000-8000-0000000000b1', 'acacacac-0000-4000-8000-0000000000d2', 'Pastor da Congregacao');
+-- O membro de cargos do bloco anterior já é Pastor nesta igreja: tira para testar com este.
+delete from public.rol_membro_cargos
+where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and cargo_id = (select id from public.cargos where slug = 'pastor');
+insert into public.rol_membro_cargos (membro_id, cargo_id, church_id) values
+  ('cacacaca-0000-4000-8000-0000000000b1', (select id from public.cargos where slug = 'pastor'),
+   'acacacac-0000-4000-8000-0000000000d2')
+on conflict do nothing;
+
+-- Convidado pela tela de Membros: ao virar login, liga ao membro existente.
+insert into public.rol_membros (id, church_id, nome, email) values
+  ('cacacaca-0000-4000-8000-0000000000b2', 'acacacac-0000-4000-8000-0000000000d2', 'Futuro Login', 'rls-ac-futuro@test.local');
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('acacacac-0000-4000-8000-000000000009', 'rls-ac-futuro@test.local', 'authenticated', 'authenticated',
+   '00000000-0000-0000-0000-000000000000', '{"full_name":"Futuro"}');
+insert into public.company_members (company_id, user_id, role) values
+  ('acacacac-0000-4000-8000-0000000000c2', 'acacacac-0000-4000-8000-000000000009', 'member');
+
+do $$
+declare n int; v uuid;
+begin
+  select user_id into v from public.rol_membros where id = 'cacacaca-0000-4000-8000-0000000000b2';
+  if v is distinct from 'acacacac-0000-4000-8000-000000000009' then
+    raise exception 'FALHA membros: login novo nao ligou ao membro com o mesmo e-mail';
+  end if;
+  select count(*) into n from public.rol_membros where user_id = 'acacacac-0000-4000-8000-000000000009';
+  if n <> 1 then raise exception 'FALHA membros: login novo criou membro duplicado (%)', n; end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare v text;
+begin
+  select nome into v from public.pastores_das_igrejas(array['acacacac-0000-4000-8000-0000000000d2'::uuid]);
+  if v is distinct from 'Pastor da Congregacao' then
+    raise exception 'FALHA membros: sede nao ve o nome do pastor da congregacao (%)', coalesce(v, '<null>');
+  end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.pastores_das_igrejas(array['acacacac-0000-4000-8000-0000000000d2'::uuid]);
+  if n <> 0 then raise exception 'FALHA membros: outra rede ve o pastor da congregacao'; end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- EBD (migration 20261001160000). Na congregação AC Cong (d2):
+--   * professor (0a, member) ensina só a classe K1 (Juniores);
+--   * secretaria da EBD (0b, member com pode_gerir_ebd) vê as duas classes;
+--   * member sem nada (03), a sede (01) e outra rede (05) não veem nada.
+-- ---------------------------------------------------------------------------
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('acacacac-0000-4000-8000-00000000000a', 'rls-ebd-prof@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Prof EBD"}'),
+  ('acacacac-0000-4000-8000-00000000000b', 'rls-ebd-secr@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Secr EBD"}');
+insert into public.company_members (company_id, user_id, role, pode_gerir_ebd) values
+  ('acacacac-0000-4000-8000-0000000000c2', 'acacacac-0000-4000-8000-00000000000a', 'member', false),
+  ('acacacac-0000-4000-8000-0000000000c2', 'acacacac-0000-4000-8000-00000000000b', 'member', true);
+
+insert into public.ebd_classes (id, church_id, nome) values
+  ('ebdebdeb-0000-4000-8000-0000000000a1', 'acacacac-0000-4000-8000-0000000000d2', 'Juniores'),
+  ('ebdebdeb-0000-4000-8000-0000000000a2', 'acacacac-0000-4000-8000-0000000000d2', 'Adultos');
+
+-- O professor é o membro ligado ao login dele (criado pelo trigger).
+insert into public.ebd_professores (classe_id, membro_id, church_id)
+select 'ebdebdeb-0000-4000-8000-0000000000a1', m.id, 'acacacac-0000-4000-8000-0000000000d2'
+from public.rol_membros m where m.user_id = 'acacacac-0000-4000-8000-00000000000a';
+
+insert into public.rol_membros (id, church_id, nome, observacoes) values
+  ('ebdebdeb-0000-4000-8000-0000000000b1', 'acacacac-0000-4000-8000-0000000000d2', 'Aluno Junior', 'Nota pastoral sigilosa'),
+  ('ebdebdeb-0000-4000-8000-0000000000b2', 'acacacac-0000-4000-8000-0000000000d2', 'Aluno Adulto', null),
+  ('ebdebdeb-0000-4000-8000-0000000000b3', 'acacacac-0000-4000-8000-0000000000d2', 'Sem classe', null);
+insert into public.ebd_matriculas (classe_id, membro_id, church_id, desde) values
+  ('ebdebdeb-0000-4000-8000-0000000000a1', 'ebdebdeb-0000-4000-8000-0000000000b1', 'acacacac-0000-4000-8000-0000000000d2', current_date - 30),
+  ('ebdebdeb-0000-4000-8000-0000000000a2', 'ebdebdeb-0000-4000-8000-0000000000b2', 'acacacac-0000-4000-8000-0000000000d2', current_date - 30);
+
+-- ------------------------------ professor ----------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_classes;
+  if n <> 1 then raise exception 'FALHA ebd: professor deveria ver 1 classe, ve %', n; end if;
+  select count(*) into n from public.ebd_classes_da_igreja('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 1 then raise exception 'FALHA ebd: lista de classes do professor veio com %', n; end if;
+
+  select count(*) into n from public.ebd_alunos_da_classe('ebdebdeb-0000-4000-8000-0000000000a1');
+  if n <> 1 then raise exception 'FALHA ebd: professor nao ve os alunos da propria classe (%)', n; end if;
+  select count(*) into n from public.ebd_alunos_da_classe('ebdebdeb-0000-4000-8000-0000000000a2');
+  if n <> 0 then raise exception 'FALHA ebd: professor ve alunos de outra classe'; end if;
+
+  -- Não lê o rol (observações pastorais ficam fora).
+  select count(*) into n from public.rol_membros where observacoes is not null;
+  if n <> 0 then raise exception 'FALHA ebd: professor le o rol de membros'; end if;
+
+  -- Chamada da própria classe, com visitante.
+  perform public.ebd_salvar_aula('ebdebdeb-0000-4000-8000-0000000000a1', current_date, 'Licao 1', 5, 4, 1250,
+    jsonb_build_array(jsonb_build_object('membro_id', 'ebdebdeb-0000-4000-8000-0000000000b1', 'estado', 'presente')),
+    jsonb_build_array(jsonb_build_object('nome', 'Visitante Mirim')));
+  select presentes * 10 + visitantes into n
+  from public.ebd_resumo_do_dia('acacacac-0000-4000-8000-0000000000d2', current_date)
+  where classe_id = 'ebdebdeb-0000-4000-8000-0000000000a1';
+  if n <> 11 then raise exception 'FALHA ebd: resumo do dia errado (%)', n; end if;
+  select count(*) into n from public.ebd_resumo_do_dia('acacacac-0000-4000-8000-0000000000d2', current_date);
+  if n <> 1 then raise exception 'FALHA ebd: professor ve % classes no resumo do dia', n; end if;
+
+  -- Aluno de outra classe não entra na chamada.
+  begin
+    perform public.ebd_salvar_aula('ebdebdeb-0000-4000-8000-0000000000a1', current_date, null, 0, 0, 0,
+      jsonb_build_array(jsonb_build_object('membro_id', 'ebdebdeb-0000-4000-8000-0000000000b2', 'estado', 'presente')), '[]');
+    raise exception 'FALHA ebd: chamada aceitou aluno de outra classe';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Outra classe: não.
+  begin
+    perform public.ebd_salvar_aula('ebdebdeb-0000-4000-8000-0000000000a2', current_date, null, 0, 0, 0, '[]', '[]');
+    raise exception 'FALHA ebd: professor fez chamada de outra classe';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Matricula o visitante como aluno novo (não membro, fora da chamada dos cultos).
+  perform public.ebd_matricular_novo('ebdebdeb-0000-4000-8000-0000000000a1', 'Visitante Mirim', null, null,
+    (select id from public.ebd_visitantes where nome = 'Visitante Mirim'));
+  select count(*) into n from public.ebd_alunos_da_classe('ebdebdeb-0000-4000-8000-0000000000a1') where not membro_igreja;
+  if n <> 1 then raise exception 'FALHA ebd: visitante matriculado nao virou aluno nao-membro'; end if;
+
+  -- Matricular quem já está no rol e criar classe é da gestão.
+  begin
+    perform public.ebd_matricular('ebdebdeb-0000-4000-8000-0000000000a1', 'ebdebdeb-0000-4000-8000-0000000000b3');
+    raise exception 'FALHA ebd: professor matriculou pessoa do rol';
+  exception when sqlstate 'P0002' then null;
+  end;
+  begin
+    insert into public.ebd_classes (church_id, nome) values ('acacacac-0000-4000-8000-0000000000d2', 'Invadida');
+    raise exception 'FALHA ebd: professor criou classe';
+  exception when sqlstate '42501' then null;
+  end;
+  -- Presença não se grava direto na tabela.
+  begin
+    insert into public.ebd_presencas (aula_id, membro_id, classe_id, church_id, estado)
+    select id, 'ebdebdeb-0000-4000-8000-0000000000b1', classe_id, church_id, 'ausente' from public.ebd_aulas limit 1;
+    raise exception 'FALHA ebd: client gravou presenca direto';
+  exception when sqlstate '42501' then null;
+  end;
+  -- A ficha EBD de um membro é de quem cuida do rol ou da EBD, não do professor.
+  select count(*) into n from public.ebd_resumo_do_membro('ebdebdeb-0000-4000-8000-0000000000b1');
+  if n <> 0 then raise exception 'FALHA ebd: professor le o resumo EBD da ficha do membro'; end if;
+end $$;
+
+-- ---------------------------- secretaria EBD -------------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_classes;
+  if n <> 2 then raise exception 'FALHA ebd: secretaria deveria ver 2 classes, ve %', n; end if;
+  select count(*) into n from public.ebd_buscar_pessoas('acacacac-0000-4000-8000-0000000000d2', 'sem classe');
+  if n <> 1 then raise exception 'FALHA ebd: secretaria nao encontra pessoa para matricular'; end if;
+  perform public.ebd_matricular('ebdebdeb-0000-4000-8000-0000000000a2', 'ebdebdeb-0000-4000-8000-0000000000b3');
+  -- Mudar de classe encerra a anterior.
+  perform public.ebd_matricular('ebdebdeb-0000-4000-8000-0000000000a1', 'ebdebdeb-0000-4000-8000-0000000000b3');
+  select count(*) into n from public.ebd_matriculas where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b3' and ate is null;
+  if n <> 1 then raise exception 'FALHA ebd: pessoa ficou com % matriculas ativas', n; end if;
+  insert into public.ebd_classes (church_id, nome) values ('acacacac-0000-4000-8000-0000000000d2', 'Jovens');
+  select count(*) into n from public.ebd_resumo_do_membro('ebdebdeb-0000-4000-8000-0000000000b1');
+  if n <> 1 then raise exception 'FALHA ebd: secretaria nao ve o resumo EBD do membro'; end if;
+end $$;
+
+-- ------------------------- member sem autorização --------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_classes;
+  if n <> 0 then raise exception 'FALHA ebd: member sem autorizacao ve classes'; end if;
+  select count(*) into n from public.ebd_alunos_da_classe('ebdebdeb-0000-4000-8000-0000000000a1');
+  if n <> 0 then raise exception 'FALHA ebd: member sem autorizacao ve alunos'; end if;
+end $$;
+
+-- --------------------------- sede e outra rede -----------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_classes where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if n <> 0 then raise exception 'FALHA LGPD: sede ve classes da EBD da congregacao'; end if;
+  select count(*) into n from public.ebd_resumo_do_dia('acacacac-0000-4000-8000-0000000000d2', current_date);
+  if n <> 0 then raise exception 'FALHA LGPD: sede ve o resumo da EBD da congregacao'; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_presencas;
+  if n <> 0 then raise exception 'FALHA ebd: outra rede ve presencas'; end if;
+  begin
+    perform public.ebd_salvar_aula('ebdebdeb-0000-4000-8000-0000000000a1', current_date, null, 0, 0, 0, '[]', '[]');
+    raise exception 'FALHA ebd: outra rede fez chamada';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- EBD etapa 2 (migration 20261001170000): alertas, contatos, relatórios e
+-- trimestres. Aluno Adulto (b2, classe K2) falta 3 domingos seguidos.
+-- ---------------------------------------------------------------------------
+do $$
+declare v_aula uuid; s int;
+begin
+  for s in 1 .. 3 loop
+    insert into public.ebd_aulas (classe_id, church_id, data, oferta_centavos)
+    values ('ebdebdeb-0000-4000-8000-0000000000a2', 'acacacac-0000-4000-8000-0000000000d2', current_date - 7 * s, 1000)
+    returning id into v_aula;
+    insert into public.ebd_presencas (aula_id, membro_id, classe_id, church_id, estado)
+    values (v_aula, 'ebdebdeb-0000-4000-8000-0000000000b2', 'ebdebdeb-0000-4000-8000-0000000000a2',
+            'acacacac-0000-4000-8000-0000000000d2', 'ausente');
+  end loop;
+end $$;
+
+-- ------------------------------ professor (K1) -----------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_alertas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA ebd2: professor ve alerta de outra classe'; end if;
+  select count(*) into n from public.ebd_relatorio_classes('acacacac-0000-4000-8000-0000000000d2', current_date - 60, current_date);
+  if n <> 1 then raise exception 'FALHA ebd2: relatorio do professor com % classes', n; end if;
+  select count(*) into n from public.ebd_frequencia_alunos('acacacac-0000-4000-8000-0000000000d2', null, current_date - 60, current_date)
+  where classe_id = 'ebdebdeb-0000-4000-8000-0000000000a2';
+  if n <> 0 then raise exception 'FALHA ebd2: professor ve frequencia de outra classe'; end if;
+
+  begin
+    insert into public.ebd_contatos (church_id, membro_id, classe_id, resultado)
+    values ('acacacac-0000-4000-8000-0000000000d2', 'ebdebdeb-0000-4000-8000-0000000000b2',
+            'ebdebdeb-0000-4000-8000-0000000000a2', 'retornou');
+    raise exception 'FALHA ebd2: professor registrou contato em outra classe';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    insert into public.ebd_config (church_id, faltas_alerta) values ('acacacac-0000-4000-8000-0000000000d2', 1);
+    raise exception 'FALHA ebd2: professor mudou as regras do alerta';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    insert into public.ebd_trimestres (church_id, nome, inicio, fim)
+    values ('acacacac-0000-4000-8000-0000000000d2', 'Invadido', current_date, current_date + 90);
+    raise exception 'FALHA ebd2: professor criou trimestre';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- ---------------------------- secretaria da EBD ----------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+do $$
+declare n int; v text;
+begin
+  select faltas_seguidas into n from public.ebd_alertas('acacacac-0000-4000-8000-0000000000d2')
+  where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b2';
+  if n is distinct from 3 then raise exception 'FALHA ebd2: aluno com 3 faltas nao entrou em alerta (%)', n; end if;
+
+  select percentual into v from public.ebd_frequencia_alunos(
+    'acacacac-0000-4000-8000-0000000000d2', 'ebdebdeb-0000-4000-8000-0000000000a2', current_date - 60, current_date)
+  where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b2';
+  if v is distinct from '0.0' then raise exception 'FALHA ebd2: frequencia do aluno faltoso veio %', v; end if;
+
+  select oferta_centavos::int into n from public.ebd_relatorio_classes('acacacac-0000-4000-8000-0000000000d2', current_date - 60, current_date)
+  where classe_id = 'ebdebdeb-0000-4000-8000-0000000000a2';
+  if n <> 3000 then raise exception 'FALHA ebd2: oferta somada errada (%)', n; end if;
+
+  insert into public.ebd_contatos (church_id, membro_id, classe_id, data, resultado)
+  values ('acacacac-0000-4000-8000-0000000000d2', 'ebdebdeb-0000-4000-8000-0000000000b2',
+          'ebdebdeb-0000-4000-8000-0000000000a2', current_date - 1, 'em_acompanhamento');
+  select situacao into v from public.ebd_alertas('acacacac-0000-4000-8000-0000000000d2')
+  where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b2';
+  if v is distinct from 'em_acompanhamento' then raise exception 'FALHA ebd2: contato nao mudou a situacao (%)', v; end if;
+
+  insert into public.ebd_contatos (church_id, membro_id, classe_id, data, resultado)
+  values ('acacacac-0000-4000-8000-0000000000d2', 'ebdebdeb-0000-4000-8000-0000000000b2',
+          'ebdebdeb-0000-4000-8000-0000000000a2', current_date, 'retornou');
+  select count(*) into n from public.ebd_alertas('acacacac-0000-4000-8000-0000000000d2')
+  where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b2';
+  if n <> 0 then raise exception 'FALHA ebd2: contato retornou nao tirou do alerta'; end if;
+
+  insert into public.ebd_trimestres (church_id, nome, inicio, fim, revista)
+  values ('acacacac-0000-4000-8000-0000000000d2', '4o trimestre', current_date - 30, current_date + 60, 'Revista X');
+  insert into public.ebd_config (church_id, faltas_alerta) values ('acacacac-0000-4000-8000-0000000000d2', 4);
+end $$;
+
+-- O professor lê os trimestres (para escolher o período), mas não as regras.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_trimestres;
+  if n <> 1 then raise exception 'FALHA ebd2: professor nao ve os trimestres'; end if;
+  select count(*) into n from public.ebd_config;
+  if n <> 0 then raise exception 'FALHA ebd2: professor le as regras da gestao'; end if;
+end $$;
+
+-- --------------------- member sem nada e outra rede ------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_trimestres;
+  if n <> 0 then raise exception 'FALHA ebd2: member sem autorizacao ve trimestres'; end if;
+  select count(*) into n from public.ebd_contatos;
+  if n <> 0 then raise exception 'FALHA ebd2: member sem autorizacao ve contatos'; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_alertas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA ebd2: outra rede ve alertas da EBD'; end if;
+  select count(*) into n from public.ebd_relatorio_classes('acacacac-0000-4000-8000-0000000000d2', current_date - 60, current_date);
+  if n <> 0 then raise exception 'FALHA ebd2: outra rede ve relatorio da EBD'; end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- EBD etapa 3 (migration 20261001180000): responsáveis, cuidados, promoção,
+-- lições. b1 = aluno da classe K1 (professor 0a); b2 = aluno da K2.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}', true);
+do $$
+declare n int; v text;
+begin
+  perform public.ebd_salvar_responsavel(null, 'ebdebdeb-0000-4000-8000-0000000000b1', null,
+    'Mae do Aluno', '11955554444', 'Mãe', true);
+  perform public.ebd_salvar_cuidados('ebdebdeb-0000-4000-8000-0000000000b1', 'Alergia a amendoim');
+
+  select count(*) into n from public.ebd_responsaveis(array[
+    'ebdebdeb-0000-4000-8000-0000000000b1', 'ebdebdeb-0000-4000-8000-0000000000b2']::uuid[]);
+  if n <> 1 then raise exception 'FALHA ebd3: professor ve % responsaveis (esperado 1, so da classe dele)', n; end if;
+
+  select cuidados into v from public.ebd_alunos_da_classe('ebdebdeb-0000-4000-8000-0000000000a1')
+  where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b1';
+  if v is distinct from 'Alergia a amendoim' then raise exception 'FALHA ebd3: cuidados nao aparecem para o professor'; end if;
+
+  begin
+    perform public.ebd_salvar_responsavel(null, 'ebdebdeb-0000-4000-8000-0000000000b2', null, 'Intruso', null, 'Pai', true);
+    raise exception 'FALHA ebd3: professor cadastrou responsavel de aluno de outra classe';
+  exception when sqlstate 'P0002' then null;
+  end;
+  begin
+    perform public.ebd_salvar_cuidados('ebdebdeb-0000-4000-8000-0000000000b2', 'x');
+    raise exception 'FALHA ebd3: professor mudou cuidados de aluno de outra classe';
+  exception when sqlstate 'P0002' then null;
+  end;
+  begin
+    insert into public.rol_responsaveis (church_id, membro_id, nome, parentesco)
+    values ('acacacac-0000-4000-8000-0000000000d2', 'ebdebdeb-0000-4000-8000-0000000000b1', 'Direto', 'Pai');
+    raise exception 'FALHA ebd3: client gravou responsavel direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.ebd_promover('acacacac-0000-4000-8000-0000000000d2', current_date,
+      jsonb_build_array(jsonb_build_object('membro_id', 'ebdebdeb-0000-4000-8000-0000000000b1',
+                                           'classe_id', 'ebdebdeb-0000-4000-8000-0000000000a2')));
+    raise exception 'FALHA ebd3: professor promoveu aluno';
+  exception when sqlstate 'P0002' then null;
+  end;
+  begin
+    insert into public.ebd_licoes (trimestre_id, church_id, numero, data)
+    select id, church_id, 1, inicio from public.ebd_trimestres limit 1;
+    raise exception 'FALHA ebd3: professor criou licao';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- ---------------------------- secretaria da EBD ----------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  insert into public.ebd_licoes (trimestre_id, church_id, numero, data, titulo)
+  select id, church_id, 1, inicio, 'A criacao' from public.ebd_trimestres limit 1;
+
+  -- Promove b1 da K1 para a K2: fecha a antiga, abre a nova.
+  select public.ebd_promover('acacacac-0000-4000-8000-0000000000d2', current_date + 1,
+    jsonb_build_array(jsonb_build_object('membro_id', 'ebdebdeb-0000-4000-8000-0000000000b1',
+                                         'classe_id', 'ebdebdeb-0000-4000-8000-0000000000a2'))) into n;
+  if n <> 1 then raise exception 'FALHA ebd3: promocao nao moveu o aluno (%)', n; end if;
+  select count(*) into n from public.ebd_matriculas
+  where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b1' and ate is null and classe_id = 'ebdebdeb-0000-4000-8000-0000000000a2';
+  if n <> 1 then raise exception 'FALHA ebd3: aluno promovido sem matricula nova'; end if;
+  select count(*) into n from public.ebd_matriculas
+  where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b1' and classe_id = 'ebdebdeb-0000-4000-8000-0000000000a1' and ate = current_date;
+  if n <> 1 then raise exception 'FALHA ebd3: matricula antiga nao foi encerrada na vespera'; end if;
+end $$;
+
+-- O professor lê as lições (para a chamada).
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_licoes;
+  if n <> 1 then raise exception 'FALHA ebd3: professor nao le as licoes'; end if;
+end $$;
+
+-- ---------------------------- sede e outra rede ----------------------------
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.rol_responsaveis;
+  if n <> 0 then raise exception 'FALHA LGPD: sede ve responsaveis das criancas da congregacao'; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_responsaveis(array['ebdebdeb-0000-4000-8000-0000000000b1']::uuid[]);
+  if n <> 0 then raise exception 'FALHA ebd3: outra rede ve responsaveis'; end if;
+  begin
+    perform public.ebd_salvar_cuidados('ebdebdeb-0000-4000-8000-0000000000b1', 'x');
+    raise exception 'FALHA ebd3: outra rede mudou cuidados';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- EBD rede e títulos por classe (migration 20261001190000).
+-- Sede AC Sede (d1) acima da congregação AC Cong (d2), que tem EBD.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select matriculados into n from public.ebd_resumo_rede('acacacac-0000-4000-8000-0000000000d1')
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if coalesce(n, 0) < 1 then raise exception 'FALHA ebd rede: sede nao ve os numeros da EBD da congregacao (%)', n; end if;
+end $$;
+
+-- Professor da congregação não é da igreja de cima: não vê a rede da sede.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_resumo_rede('acacacac-0000-4000-8000-0000000000d1');
+  if n <> 0 then raise exception 'FALHA ebd rede: professor da congregacao ve a rede da sede'; end if;
+  begin
+    insert into public.ebd_licao_titulos (licao_id, classe_id, church_id, titulo)
+    select id, 'ebdebdeb-0000-4000-8000-0000000000a1', church_id, 'Titulo do professor' from public.ebd_licoes limit 1;
+    raise exception 'FALHA ebd titulos: professor gravou titulo';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_resumo_rede('acacacac-0000-4000-8000-0000000000d1');
+  if n <> 0 then raise exception 'FALHA ebd rede: outra rede ve a EBD da rede alheia'; end if;
+end $$;
+
+-- Secretaria grava o título da classe; o professor da classe lê.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+do $$
+begin
+  insert into public.ebd_licao_titulos (licao_id, classe_id, church_id, titulo)
+  select id, 'ebdebdeb-0000-4000-8000-0000000000a1', church_id, 'Titulo da revista Juniores' from public.ebd_licoes limit 1;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.ebd_licao_titulos;
+  if n <> 1 then raise exception 'FALHA ebd titulos: professor nao le o titulo da propria classe'; end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- meus_cargos (migration 20261001200000): a pessoa vê só os próprios cargos.
+-- O member autorizado (04) da AC Cong ganha o cargo Diácono no rol.
+-- ---------------------------------------------------------------------------
+insert into public.rol_membro_cargos (membro_id, cargo_id, church_id)
+select m.id, (select id from public.cargos where slug = 'diacono'), m.church_id
+from public.rol_membros m where m.user_id = 'acacacac-0000-4000-8000-000000000004';
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare v text;
+begin
+  select string_agg(nome, ',') into v from public.meus_cargos('acacacac-0000-4000-8000-0000000000c2');
+  if v is distinct from 'Diácono' then raise exception 'FALHA meus_cargos: esperado Diácono, veio %', v; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.meus_cargos('acacacac-0000-4000-8000-0000000000c2');
+  if n <> 0 then raise exception 'FALHA meus_cargos: outra rede viu cargos da congregacao'; end if;
+end $$;
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS

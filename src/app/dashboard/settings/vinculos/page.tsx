@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { buildNetwork } from "@/lib/churchNetwork";
 import { ChurchLinksManager } from "@/features/church/components/church-links-manager";
 import { getSupabaseServerClient } from "@/server/supabase-server";
-import { getChurchLeadersService } from "@/server/churchLeaders";
+import { getCargosService } from "@/server/cargos";
 import { getChurchLinkService } from "@/server/churchLinks";
 import { getActiveTenant } from "@/server/tenant";
 import { canManageChurchLinks } from "@/services/churchLinkService";
@@ -39,7 +39,7 @@ export default async function ChurchLinksSettingsPage({
     ...entries.flatMap(({ church, congregacoes }) => [church.id, ...congregacoes.map((c) => c.id)]),
   ];
   // O nome é um complemento: se falhar, a página dos vínculos segue funcionando sem ele.
-  const pastores = await (await getChurchLeadersService()).pastorsOf(actor, idsDaRede).catch((err) => {
+  const pastores = await (await getCargosService()).pastoresDaRede(actor, idsDaRede).catch((err) => {
     console.error("[vinculos] falha ao carregar os pastores", err);
     return {} as Record<string, string>;
   });

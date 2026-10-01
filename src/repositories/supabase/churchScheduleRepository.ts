@@ -6,7 +6,7 @@ import type {
 } from "@/services/churchScheduleService";
 import type { ChurchScheduleItem } from "@/types/database";
 
-const COLUNAS = "id, church_id, titulo, tipo, dia_semana, data, hora, descricao, local";
+const COLUNAS = "id, church_id, titulo, tipo, dia_semana, data, hora, descricao, local, registra_chamada";
 
 /**
  * Programação no painel, com o client do usuário: a RLS só deixa gravar quem
@@ -24,7 +24,7 @@ export function createSupabaseChurchScheduleRepository(client: SupabaseClient): 
       if (error) throw new AppError("internal_error", "Falha ao carregar a programação", error);
       // A tipagem gerada trata a igreja relacionada como lista; numa relação
       // muitos-para-um o PostgREST devolve objeto. Aceita os dois.
-      type Linha = ChurchScheduleItem & { churches: { name: string } | Array<{ name: string }> | null };
+      type Linha = ChurchScheduleItem & { registra_chamada: boolean; churches: { name: string } | Array<{ name: string }> | null };
       return ((data ?? []) as unknown as Linha[]).map(({ churches, ...item }): ScheduleItemWithChurch => {
         const igreja = Array.isArray(churches) ? churches[0] : churches;
         return { ...item, churchName: igreja?.name ?? "" };
@@ -54,6 +54,7 @@ export function createSupabaseChurchScheduleRepository(client: SupabaseClient): 
           hora: input.hora,
           descricao: input.descricao,
           local: input.local,
+          registra_chamada: input.registraChamada,
         })
         .eq("id", itemId)
         .eq("company_id", companyId)
@@ -75,6 +76,7 @@ export function createSupabaseChurchScheduleRepository(client: SupabaseClient): 
           hora: input.hora,
           descricao: input.descricao,
           local: input.local,
+          registra_chamada: input.registraChamada,
         })
         .select("id")
         .single<{ id: string }>();

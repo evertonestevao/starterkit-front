@@ -132,6 +132,17 @@ export function AddScheduleItemForm({ igrejas }: { igrejas: Array<{ id: string; 
         </div>
       </div>
 
+
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" name="registraChamada" defaultChecked={true} className="mt-0.5 size-4" />
+        <span>
+          Registrar chamada neste culto
+          <span className="block text-xs text-muted-foreground">
+            Aparece em Chamada para marcar presença. Desmarque em ensaios e reuniões que não contam.
+          </span>
+        </span>
+      </label>
+
       <div className="flex">
         <Button type="submit" disabled={pending}>
           {pending ? "Adicionando..." : "Adicionar à programação"}
@@ -177,6 +188,7 @@ export function EditScheduleItemForm({
     hora: string;
     descricao: string | null;
     local: string | null;
+    registra_chamada: boolean;
   };
 }) {
   const [state, formAction, pending] = useActionState(updateScheduleItemAction, undefined);
@@ -199,6 +211,7 @@ export function EditScheduleItemForm({
     item.data ?? "",
     item.local ?? "",
     item.descricao ?? "",
+    String(item.registra_chamada),
   ].join("\u0000");
 
   return (
@@ -264,6 +277,17 @@ export function EditScheduleItemForm({
           <Input id={`descricao-${item.id}`} name="descricao" defaultValue={item.descricao ?? ""} />
         </div>
       </div>
+
+
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" name="registraChamada" defaultChecked={item.registra_chamada} className="mt-0.5 size-4" />
+        <span>
+          Registrar chamada neste culto
+          <span className="block text-xs text-muted-foreground">
+            Aparece em Chamada para marcar presença. Desmarque em ensaios e reuniões que não contam.
+          </span>
+        </span>
+      </label>
 
       <div>
         <Button type="submit" size="sm" disabled={pending}>

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useToastedAction } from "@/hooks/useToastedAction";
-import { pastorLabel } from "@/lib/churchLeaders";
+import { pastorLabel } from "@/lib/cargos";
 import { formatChurchName } from "@/lib/churchName";
 import {
   CHURCH_LINK_MAX_USES_LIMIT,

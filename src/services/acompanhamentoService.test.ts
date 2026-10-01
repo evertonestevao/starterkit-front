@@ -1,0 +1,342 @@
+import { describe, expect, it } from "vitest";
+import type { Culto, Justificativa, RolMembro } from "@/types/acompanhamento";
+import {
+  canAcompanhar,
+  createAcompanhamentoService,
+  type AcompanhamentoActor,
+  type AcompanhamentoRepository,
+} from "./acompanhamentoService";
+
+const IGREJA = "11111111-1111-4111-8111-111111111111";
+const MEMBRO = "22222222-2222-4222-8222-222222222222";
+const ALHEIO = "33333333-3333-4333-8333-333333333333";
+const CULTO = "44444444-4444-4444-8444-444444444444";
+const JUST = "55555555-5555-4555-8555-555555555555";
+// 2026-10-15 é quinta; 2026-10-11 foi domingo.
+const HOJE = "2026-10-15";
+
+function culto(over: Partial<Culto> = {}): Culto {
+  return {
+    id: CULTO,
+    churchId: IGREJA,
+    nome: "Culto de Domingo",
+    tipo: "semanal",
+    diaSemana: 0,
+    data: null,
+    hora: "19:00",
+    registraChamada: true,
+    removido: false,
+    ...over,
+  };
+}
+
+const owner: AcompanhamentoActor = { companyId: "c1", role: "owner", podeAcompanhar: false };
+const secretario: AcompanhamentoActor = { companyId: "c1", role: "member", podeAcompanhar: true };
+const member: AcompanhamentoActor = { companyId: "c1", role: "member", podeAcompanhar: false };
+
+const membro: RolMembro = {
+  id: MEMBRO,
+  churchId: IGREJA,
+  nome: "Maria",
+  cargos: [],
+  whatsapp: null,
+  email: null,
+  userId: null,
+  participaChamada: true,
+  membroIgreja: true,
+  cuidados: null,
+  nascimento: null,
+  batismo: null,
+  ativo: true,
+  observacoes: null,
+};
+
+function justificativa(over: Partial<Justificativa>): Justificativa {
+  return {
+    id: JUST,
+    membroId: MEMBRO,
+    membroNome: "Maria",
+    motivo: "viagem",
+    motivoTexto: null,
+    dataInicio: "2026-10-10",
+    dataFim: "2026-10-25",
+    encerradaEm: null,
+    ...over,
+  };
+}
+
+function makeRepo(over: Partial<AcompanhamentoRepository> = {}) {
+  const chamadas: Record<string, unknown[]> = {};
+  const registra =
+    (nome: string, retorno?: unknown) =>
+    async (...args: unknown[]) => {
+      (chamadas[nome] ??= []).push(args);
+      return retorno as never;
+    };
+  const repo = {
+    getChurch: async () => ({ id: IGREJA, name: "Igreja Teste" }),
+    listMembros: async () => [membro],
+    getMembro: async (_c: string, id: string) => (id === MEMBRO ? membro : null),
+    getCulto: async (_c: string, id: string) => (id === CULTO ? culto() : null),
+    listCultos: async () => [culto()],
+    getChamada: async () => null,
+    listJustificativas: async () => [],
+    salvarChamada: registra("salvarChamada", "chamada-1"),
+    createJustificativa: registra("createJustificativa", "j-nova"),
+    updateJustificativa: registra("updateJustificativa", true),
+    getJustificativa: async () => justificativa({}),
+    registrarContato: registra("registrarContato"),
+    saveConfig: registra("saveConfig"),
+    ...over,
+  } as unknown as AcompanhamentoRepository;
+  return { repo, chamadas };
+}
+
+const service = (over: Partial<AcompanhamentoRepository> = {}) => {
+  const { repo, chamadas } = makeRepo(over);
+  return { svc: createAcompanhamentoService({ repo, hoje: () => HOJE, horaAgora: () => "10:00" }), chamadas };
+};
+
+describe("canAcompanhar", () => {
+  it("owner/admin sempre; member só autorizado", () => {
+    expect(canAcompanhar("owner", false)).toBe(true);
+    expect(canAcompanhar("admin", false)).toBe(true);
+    expect(canAcompanhar("member", true)).toBe(true);
+    expect(canAcompanhar("member", false)).toBe(false);
+  });
+});
+
+describe("acompanhamentoService", () => {
+  it("member sem autorização não abre nada", async () => {
+    const { svc } = service();
+    await expect(svc.listMembros(member)).rejects.toMatchObject({ code: "forbidden" });
+  });
+
+  it("member autorizado (secretário) salva chamada", async () => {
+    const { svc, chamadas } = service();
+    const id = await svc.salvarChamada(secretario, {
+      cultoId: CULTO,
+      data: "2026-10-11",
+      presencas: [{ membroId: MEMBRO, estado: "justificado", motivo: "saude" }],
+      visitantes: [{ nome: "João Visitante", telefone: "" }],
+    });
+    expect(id).toBe("chamada-1");
+    const [args] = chamadas.salvarChamada[0] as [{ presencas: unknown[]; visitantes: unknown[] }];
+    expect(args.presencas).toEqual([
+      { membroId: MEMBRO, estado: "justificado", justificativaId: null, motivo: "saude", motivoTexto: null },
+    ]);
+    expect(args.visitantes).toEqual([{ nome: "João Visitante", telefone: null }]);
+  });
+
+  it("recusa na chamada alguém que não é do rol desta igreja", async () => {
+    const { svc } = service();
+    await expect(
+      svc.salvarChamada(owner, {
+        cultoId: CULTO,
+        data: "2026-10-11",
+        presencas: [{ membroId: ALHEIO, estado: "presente" }],
+        visitantes: [],
+      }),
+    ).rejects.toMatchObject({ code: "validation_error" });
+  });
+
+  it("recusa culto de outra igreja e chamada no futuro", async () => {
+    const { svc } = service();
+    await expect(
+      svc.salvarChamada(owner, { cultoId: ALHEIO, data: "2026-10-11", presencas: [], visitantes: [] }),
+    ).rejects.toMatchObject({ code: "not_found" });
+    await expect(
+      svc.salvarChamada(owner, { cultoId: CULTO, data: "2026-10-20", presencas: [], visitantes: [] }),
+    ).rejects.toMatchObject({ code: "validation_error" });
+  });
+
+  it("abrir chamada traz só as justificativas que cobrem a data", async () => {
+    const { svc } = service({
+      listJustificativas: async () => [justificativa({}), justificativa({ id: "j2", dataInicio: "2026-10-12" })],
+    });
+    const chamada = await svc.abrirChamada(owner, CULTO, "2026-10-11");
+    expect(chamada.justificativas.map((j) => j.id)).toEqual([JUST]);
+    expect(chamada.chamadaId).toBeNull();
+  });
+
+  it("justificativa: data final antes da inicial é recusada", async () => {
+    const { svc } = service();
+    await expect(
+      svc.salvarJustificativa(owner, null, {
+        membroId: MEMBRO,
+        motivo: "viagem",
+        dataInicio: "2026-10-25",
+        dataFim: "2026-10-10",
+      }),
+    ).rejects.toMatchObject({ code: "validation_error" });
+  });
+
+  it("justificativa de membro de outra igreja vira not_found", async () => {
+    const { svc } = service();
+    await expect(
+      svc.salvarJustificativa(owner, null, {
+        membroId: ALHEIO,
+        motivo: "viagem",
+        dataInicio: "2026-10-10",
+        dataFim: "2026-10-12",
+      }),
+    ).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("encerrar antes do prazo: passa a valer até ontem", async () => {
+    const { svc, chamadas } = service();
+    await svc.encerrarJustificativa(owner, JUST);
+    const [, , patch] = chamadas.updateJustificativa[0] as [string, string, Record<string, unknown>];
+    expect(patch.dataFim).toBe("2026-10-14");
+    expect(patch.encerradaEm).toBeTruthy();
+  });
+
+  it("encerrar uma que nem começou: cancela", async () => {
+    const { svc, chamadas } = service({
+      getJustificativa: async () => justificativa({ dataInicio: "2026-11-01", dataFim: "2026-11-10" }),
+    });
+    await svc.encerrarJustificativa(owner, JUST);
+    const [, , patch] = chamadas.updateJustificativa[0] as [string, string, Record<string, unknown>];
+    expect(patch.deletedAt).toBeTruthy();
+  });
+
+  it("contato com data futura é recusado", async () => {
+    const { svc } = service();
+    await expect(
+      svc.registrarContato(owner, { membroId: MEMBRO, motivo: "faltas", data: "2026-10-16", resultado: "retornou" }),
+    ).rejects.toMatchObject({ code: "validation_error" });
+  });
+
+  it("regras do alerta: só owner/admin mudam", async () => {
+    const { svc, chamadas } = service();
+    const config = { faltasAlerta: 3, justificativaLongaCultos: 6, justificativaLongaDias: 45 };
+    await expect(svc.salvarConfig(secretario, config)).rejects.toMatchObject({ code: "forbidden" });
+    await svc.salvarConfig(owner, config);
+    expect(chamadas.saveConfig).toHaveLength(1);
+  });
+
+  it("resumo da rede: member não recebe nada", async () => {
+    const { svc } = service({ resumoRede: async () => [{ churchId: "x" } as never] });
+    expect(await svc.resumoRede(member)).toEqual([]);
+    expect(await svc.resumoRede(owner)).toHaveLength(1);
+  });
+
+  it("chamada nova só no dia do culto", async () => {
+    const { svc } = service();
+    // 12/10 foi segunda: o culto é de domingo.
+    await expect(svc.abrirChamada(owner, CULTO, "2026-10-12")).rejects.toMatchObject({ code: "validation_error" });
+    await expect(
+      svc.salvarChamada(owner, { cultoId: CULTO, data: "2026-10-12", presencas: [], visitantes: [] }),
+    ).rejects.toMatchObject({ code: "validation_error" });
+  });
+
+  it("culto sem chamada ou removido da programação não abre chamada nova", async () => {
+    for (const over of [{ registraChamada: false }, { removido: true }]) {
+      const { svc } = service({ getCulto: async () => culto(over) });
+      await expect(svc.abrirChamada(owner, CULTO, "2026-10-11")).rejects.toMatchObject({ code: "validation_error" });
+    }
+  });
+
+  it("chamada já feita reabre mesmo se o culto saiu da programação", async () => {
+    const { svc } = service({
+      getCulto: async () => culto({ removido: true }),
+      getChamada: async () => ({ chamadaId: "ch-1", presencas: [], visitantes: [] }),
+    });
+    const chamada = await svc.abrirChamada(owner, CULTO, "2026-10-11");
+    expect(chamada.chamadaId).toBe("ch-1");
+  });
+
+  it("sugere o último culto quando hoje não tem", async () => {
+    const { svc } = service();
+    expect(await svc.sugestao(owner)).toMatchObject({ data: "2026-10-11", hoje: false });
+  });
+
+  it("lista paginada: tamanho fora das opções volta ao padrão, busca sem acento, página vira deslocamento", async () => {
+    const pedidos: unknown[] = [];
+    const { svc } = service({
+      listMembrosPagina: async (_c, filtro) => {
+        pedidos.push(filtro);
+        return { items: [membro], total: 45 };
+      },
+    });
+
+    const r = await svc.listMembrosPaginado(owner, { page: 3, pageSize: 10, busca: "  ANTÔNIO " });
+    expect(pedidos[0]).toEqual({ busca: "antonio", incluirInativos: false, cargoId: null, limit: 10, offset: 20 });
+    expect(r).toMatchObject({ page: 3, pageSize: 10, total: 45 });
+
+    await svc.listMembrosPaginado(owner, { pageSize: 7, inativos: true });
+    expect(pedidos[1]).toEqual({ busca: null, incluirInativos: true, cargoId: null, limit: 20, offset: 0 });
+  });
+
+  it("lista paginada exige autorização", async () => {
+    const { svc } = service();
+    await expect(svc.listMembrosPaginado(member, {})).rejects.toMatchObject({ code: "forbidden" });
+  });
+
+  describe("cargos do membro", () => {
+    const DIACONO = "77777777-7777-4777-8777-777777777777";
+    const VELHO = "88888888-8888-4888-8888-888888888888";
+    const OUTRA_REDE = "99999999-9999-4999-8999-999999999999";
+    const dados = { nome: "Maria", ativo: true };
+
+    function comCargos() {
+      return service({
+        listCargosDisponiveis: async () => [{ id: DIACONO, nome: "Diácono", ordem: 4, desativado: false }],
+        // Maria já tem um cargo que depois foi desativado.
+        getMembro: async () => ({ ...membro, cargos: [{ id: VELHO, nome: "Antigo", ordem: 50, desativado: true }] }),
+        setCargosDoMembro: async (...args: unknown[]) => {
+          (chamadasCargos ??= []).push(args);
+        },
+        updateMembro: async () => true,
+      });
+    }
+    let chamadasCargos: unknown[][] | undefined;
+
+    it("dá os cargos disponíveis e mantém o desativado que a pessoa já tinha", async () => {
+      chamadasCargos = undefined;
+      const { svc } = comCargos();
+      await svc.salvarMembro(owner, MEMBRO, dados, [DIACONO, VELHO, DIACONO]);
+      expect(chamadasCargos?.[0]).toEqual([IGREJA, MEMBRO, [DIACONO, VELHO]]);
+    });
+
+    it("recusa cargo que a igreja não pode usar (outra rede, ou desativado novo)", async () => {
+      const { svc } = comCargos();
+      await expect(svc.salvarMembro(owner, MEMBRO, dados, [OUTRA_REDE])).rejects.toMatchObject({
+        code: "validation_error",
+      });
+    });
+
+    it("sem a lista de cargos, não mexe neles", async () => {
+      chamadasCargos = undefined;
+      const { svc } = comCargos();
+      await svc.salvarMembro(owner, MEMBRO, dados);
+      expect(chamadasCargos).toBeUndefined();
+    });
+  });
+
+  it("chamada não lista quem não participa (login que só administra)", async () => {
+    const admin = { ...membro, id: "99999999-0000-4000-8000-000000000001", nome: "Contador", participaChamada: false };
+    const { svc } = service({ listMembros: async () => [membro, admin] });
+    const chamada = await svc.abrirChamada(owner, CULTO, "2026-10-11");
+    expect(chamada.membros.map((m) => m.nome)).toEqual(["Maria"]);
+  });
+
+  it("e-mail do membro é opcional e guardado em minúsculas", async () => {
+    const pedidos: unknown[] = [];
+    const { svc } = service({
+      createMembro: async (_c, dados) => {
+        pedidos.push(dados);
+        return "novo";
+      },
+    });
+    await svc.salvarMembro(owner, null, { nome: "Ana", ativo: true, email: "Ana@Igreja.org" });
+    await svc.salvarMembro(owner, null, { nome: "Bia", ativo: true, email: "" });
+    expect(pedidos).toMatchObject([
+      { email: "ana@igreja.org", participaChamada: true },
+      { email: null },
+    ]);
+    await expect(svc.salvarMembro(owner, null, { nome: "Cris", ativo: true, email: "sem-arroba" })).rejects.toMatchObject({
+      code: "validation_error",
+    });
+  });
+});

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHURCH_NETWORK_NAME_MAX_LENGTH, CHURCH_SURNAME_MAX_LENGTH } from "@/lib/churchName";
 import { AppError } from "@/lib/errors";
 import type { RoleCode } from "@/types/database";
 import type { CompanyWithRole, MemberWithProfile } from "@/types/tenant";
@@ -39,8 +40,8 @@ export function normalizePageParams(
 export interface TenantRepository {
   /** Empresas ativas em que o usuário logado é membro, com o papel dele. */
   listMyCompanies(): Promise<CompanyWithRole[]>;
-  /** RPC create_company: empresa + membership owner, atômico. */
-  createCompany(name: string, slug: string): Promise<CompanyWithRole>;
+  /** RPC create_company_with_church: empresa + membership owner + igreja, atômico. */
+  createCompany(name: string, slug: string, church: NewChurchDetails): Promise<CompanyWithRole>;
   updateCompany(companyId: string, data: { name: string }): Promise<void>;
   /** Papel do usuário logado na empresa, ou null se não é membro ativo. */
   getMyRole(companyId: string): Promise<RoleCode | null>;
@@ -50,6 +51,13 @@ export interface TenantRepository {
   ): Promise<{ items: MemberWithProfile[]; total: number }>;
   getMember(memberId: string, companyId: string): Promise<MemberWithProfile | null>;
   updateMemberRole(memberId: string, companyId: string, role: RoleCode): Promise<void>;
+  /** Liga/desliga uma autorização extra de um member (chamada, secretaria da EBD). */
+  updateMemberPermissao(
+    memberId: string,
+    companyId: string,
+    campo: "pode_acompanhar" | "pode_gerir_ebd",
+    value: boolean,
+  ): Promise<void>;
   /** Soft delete da membership. */
   removeMember(memberId: string, companyId: string): Promise<void>;
   /** RPC leave_company (sair da empresa sem precisar de UPDATE direto). */
@@ -57,6 +65,38 @@ export interface TenantRepository {
 }
 
 const companyNameSchema = z.string().trim().min(2, "Nome muito curto").max(80);
+
+/** Dados da igreja pedidos no cadastro, além do nome (que também nomeia a empresa). */
+export interface NewChurchDetails {
+  /** Complemento que distingue igrejas de mesmo nome ("Prainha - Promissão"). */
+  sobrenome: string | null;
+  /** Declaração da igreja; não liga ninguém na árvore. */
+  fazParteDeRede: boolean;
+  /** Só existe quando `fazParteDeRede`. */
+  redeNome: string | null;
+}
+
+/** Texto opcional: aparado, espaços colapsados, vazio vira null. */
+function optionalText(max: number, tooLongMessage: string) {
+  return z
+    .preprocess(
+      (value) => (typeof value === "string" ? value.trim().replace(/\s+/g, " ") : ""),
+      z.string().max(max, tooLongMessage),
+    )
+    .transform((value) => (value === "" ? null : value));
+}
+
+const newChurchDetailsSchema = z
+  .object({
+    sobrenome: optionalText(CHURCH_SURNAME_MAX_LENGTH, "Complemento do nome muito longo"),
+    fazParteDeRede: z.boolean().default(false),
+    redeNome: optionalText(CHURCH_NETWORK_NAME_MAX_LENGTH, "Nome da rede muito longo"),
+  })
+  // Nome de rede sem marcar que faz parte de uma não é gravado.
+  .transform((details): NewChurchDetails => ({
+    ...details,
+    redeNome: details.fazParteDeRede ? details.redeNome : null,
+  }));
 
 /** Gera slug a partir do nome: minúsculas, sem acentos, hífens. */
 export function slugify(name: string): string {
@@ -74,7 +114,12 @@ export function createTenantService(repo: TenantRepository) {
     return repo.listMyCompanies();
   }
 
-  async function createCompany(input: { name: unknown }): Promise<CompanyWithRole> {
+  async function createCompany(input: {
+    name: unknown;
+    sobrenome?: unknown;
+    fazParteDeRede?: unknown;
+    redeNome?: unknown;
+  }): Promise<CompanyWithRole> {
     const parsed = companyNameSchema.safeParse(input.name);
     if (!parsed.success) {
       throw new AppError(
@@ -83,13 +128,24 @@ export function createTenantService(repo: TenantRepository) {
       );
     }
     const name = parsed.data;
+    const details = newChurchDetailsSchema.safeParse({
+      sobrenome: input.sobrenome,
+      fazParteDeRede: input.fazParteDeRede === true,
+      redeNome: input.redeNome,
+    });
+    if (!details.success) {
+      throw new AppError(
+        "validation_error",
+        details.error.issues[0]?.message ?? "Dados da igreja inválidos",
+      );
+    }
     try {
-      return await repo.createCompany(name, slugify(name));
+      return await repo.createCompany(name, slugify(name), details.data);
     } catch (err) {
       if (err instanceof AppError && err.code === "conflict") {
         // Slug em uso: tenta uma vez com sufixo aleatório curto.
         const suffix = Math.random().toString(36).slice(2, 6);
-        return repo.createCompany(name, `${slugify(name)}-${suffix}`);
+        return repo.createCompany(name, `${slugify(name)}-${suffix}`, details.data);
       }
       throw err;
     }
@@ -152,6 +208,32 @@ export function createTenantService(repo: TenantRepository) {
     return { previousRole: target.role, targetUserId: target.user_id };
   }
 
+  /**
+   * Autoriza (ou desautoriza) um member a fazer chamada e acompanhamento, ou
+   * a cuidar da EBD (secretaria). Owner/admin já podem por papel; a flag só
+   * faz sentido para member.
+   */
+  async function setMemberPermissao(
+    companyId: string,
+    memberId: string,
+    campo: "pode_acompanhar" | "pode_gerir_ebd",
+    value: boolean,
+  ): Promise<{ targetUserId: string }> {
+    const actorRole = await requireMembership(companyId);
+    if (!permissionService.canManageMembers(actorRole)) {
+      throw new AppError("forbidden", "Só quem administra a igreja pode dar esta autorização");
+    }
+    const target = await repo.getMember(memberId, companyId);
+    if (!target) {
+      throw new AppError("not_found", "Membro não encontrado");
+    }
+    if (target.role !== "member") {
+      throw new AppError("validation_error", "Owner e admin já podem fazer isso pelo papel");
+    }
+    await repo.updateMemberPermissao(memberId, companyId, campo, value);
+    return { targetUserId: target.user_id };
+  }
+
   async function removeMember(
     companyId: string,
     memberId: string,
@@ -183,6 +265,7 @@ export function createTenantService(repo: TenantRepository) {
     requireMembership,
     listMembers,
     changeMemberRole,
+    setMemberPermissao,
     removeMember,
     leaveCompany,
   };

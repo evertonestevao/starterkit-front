@@ -33,6 +33,8 @@ function makeChurch(overrides: Partial<Church> = {}): Church {
     nome_proprio: "Igreja X",
     sobrenome: null,
     herdar_nome: false,
+    faz_parte_de_rede: false,
+    rede_nome: null,
     slug: "igreja-x",
     logo_url: null,
     address: null,

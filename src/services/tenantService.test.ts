@@ -18,6 +18,8 @@ function makeMember(overrides: Partial<MemberWithProfile>): MemberWithProfile {
     user_id: "u1",
     role: "member",
     invited_by: null,
+    pode_acompanhar: false,
+    pode_gerir_ebd: false,
     deleted_at: null,
     created_at: "",
     updated_at: "",
@@ -45,6 +47,7 @@ function makeRepo(overrides: Partial<TenantRepository> = {}): TenantRepository {
       return makeMember({});
     },
     async updateMemberRole() {},
+    async updateMemberPermissao() {},
     async removeMember() {},
     async leaveCompany() {},
     ...overrides,
@@ -84,6 +87,61 @@ describe("tenantService.createCompany", () => {
     expect(slugs[0]).toBe("minha-empresa");
     expect(slugs[1]).toMatch(/^minha-empresa-[a-z0-9]{4}$/);
     expect(company.slug).toBe(slugs[1]);
+  });
+
+  function repoQueGuarda(received: unknown[]) {
+    return makeRepo({
+      async createCompany(name, slug, church) {
+        received.push(church);
+        return { id: COMPANY_ID, name, slug, role: "owner" } as CompanyWithRole;
+      },
+    });
+  }
+
+  it("sem os campos novos, a igreja nasce sem complemento e fora de rede", async () => {
+    const received: unknown[] = [];
+    await createTenantService(repoQueGuarda(received)).createCompany({ name: "Igreja Esperança" });
+    expect(received[0]).toEqual({ sobrenome: null, fazParteDeRede: false, redeNome: null });
+  });
+
+  it("limpa o complemento (espaços) e trata vazio como ausente", async () => {
+    const received: unknown[] = [];
+    const service = createTenantService(repoQueGuarda(received));
+    await service.createCompany({ name: "Igreja Esperança", sobrenome: "  Prainha   -  Promissão " });
+    await service.createCompany({ name: "Igreja Esperança", sobrenome: "   " });
+    expect(received[0]).toMatchObject({ sobrenome: "Prainha - Promissão" });
+    expect(received[1]).toMatchObject({ sobrenome: null });
+  });
+
+  it("grava o nome da rede só quando a igreja diz que faz parte de uma", async () => {
+    const received: unknown[] = [];
+    const service = createTenantService(repoQueGuarda(received));
+    await service.createCompany({ name: "Igreja Esperança", fazParteDeRede: true, redeNome: " Ministério do Belém " });
+    await service.createCompany({ name: "Igreja Esperança", fazParteDeRede: false, redeNome: "Ministério do Belém" });
+    await service.createCompany({ name: "Igreja Esperança", fazParteDeRede: true, redeNome: "" });
+    expect(received[0]).toMatchObject({ fazParteDeRede: true, redeNome: "Ministério do Belém" });
+    expect(received[1]).toMatchObject({ fazParteDeRede: false, redeNome: null });
+    expect(received[2]).toMatchObject({ fazParteDeRede: true, redeNome: null });
+  });
+
+  it("só aceita `true` de verdade como faz parte de rede (texto não vale)", async () => {
+    const received: unknown[] = [];
+    await createTenantService(repoQueGuarda(received)).createCompany({
+      name: "Igreja Esperança",
+      fazParteDeRede: "true",
+      redeNome: "Ministério do Belém",
+    });
+    expect(received[0]).toMatchObject({ fazParteDeRede: false, redeNome: null });
+  });
+
+  it("rejeita complemento e nome de rede longos demais", async () => {
+    const service = createTenantService(makeRepo());
+    await expect(
+      service.createCompany({ name: "Igreja Esperança", sobrenome: "x".repeat(121) }),
+    ).rejects.toMatchObject({ code: "validation_error" });
+    await expect(
+      service.createCompany({ name: "Igreja Esperança", fazParteDeRede: true, redeNome: "x".repeat(121) }),
+    ).rejects.toMatchObject({ code: "validation_error" });
   });
 });
 
@@ -174,5 +232,42 @@ describe("tenantService autorização", () => {
     await expect(service.removeMember(COMPANY_ID, "m1")).rejects.toMatchObject({
       code: "forbidden",
     });
+  });
+});
+
+describe("tenantService.setMemberPermissao", () => {
+  it("admin autoriza um member", async () => {
+    const chamadas: boolean[] = [];
+    const service = createTenantService(
+      makeRepo({
+        getMyRole: async () => "admin",
+        updateMemberPermissao: async (_m, _c, _campo, value) => {
+          chamadas.push(value);
+        },
+      }),
+    );
+    await service.setMemberPermissao(COMPANY_ID, "m1", "pode_acompanhar", true);
+    expect(chamadas).toEqual([true]);
+  });
+
+  it("member não autoriza ninguém", async () => {
+    const service = createTenantService(makeRepo({ getMyRole: async () => "member" }));
+    await expect(service.setMemberPermissao(COMPANY_ID, "m1", "pode_acompanhar", true)).rejects.toMatchObject({
+      code: "forbidden",
+    });
+  });
+
+  it("não se aplica a admin (já pode por papel)", async () => {
+    const service = createTenantService(
+      makeRepo({ getMember: async () => makeMember({ role: "admin" }) }),
+    );
+    await expect(service.setMemberPermissao(COMPANY_ID, "m1", "pode_acompanhar", true)).rejects.toMatchObject({
+      code: "validation_error",
+    });
+  });
+
+  it("membro de outro tenant vira not_found", async () => {
+    const service = createTenantService(makeRepo({ getMember: async () => null }));
+    await expect(service.setMemberPermissao(COMPANY_ID, "outro", "pode_acompanhar", true)).rejects.toBeInstanceOf(AppError);
   });
 });

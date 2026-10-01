@@ -14,6 +14,8 @@ import { canManageEvents, type EventActor } from "./churchEventsService";
 
 export interface ScheduleItemWithChurch extends ChurchScheduleItem {
   churchName: string;
+  /** Se o culto aparece na chamada (Acompanhamento). */
+  registra_chamada: boolean;
 }
 
 export interface ChurchScheduleRepository {
@@ -28,6 +30,7 @@ export interface ChurchScheduleRepository {
     hora: string;
     descricao: string | null;
     local: string | null;
+    registraChamada: boolean;
   }): Promise<string>;
   /** Edição, só se o item for da empresa. Devolve se alterou. */
   updateItem(
@@ -41,6 +44,7 @@ export interface ChurchScheduleRepository {
       hora: string;
       descricao: string | null;
       local: string | null;
+      registraChamada: boolean;
     },
   ): Promise<boolean>;
   /** Soft delete, só se o item for da empresa. Devolve se removeu. */
@@ -93,6 +97,7 @@ export function createChurchScheduleService(
         hora: dados.hora,
         descricao: dados.descricao,
         local: dados.local,
+        registraChamada: dados.registraChamada,
       });
     },
 
@@ -121,6 +126,7 @@ export function createChurchScheduleService(
         hora: dados.hora,
         descricao: dados.descricao,
         local: dados.local,
+        registraChamada: dados.registraChamada,
       });
       if (!alterou) throw new AppError("not_found", "Item não encontrado.");
     },

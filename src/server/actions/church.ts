@@ -37,8 +37,10 @@ export async function submitVisitorAction(
       churchId,
       name: formData.get("name") ?? "",
       contact: formData.get("contact") ?? "",
+      endereco: formData.get("endereco") ?? "",
+      mensagem: formData.get("mensagem") ?? "",
     });
-    return { success: "Obrigado! Alguém da igreja vai falar com você." };
+    return { success: "Pedido recebido! Vamos ligar para combinar o melhor dia da visita." };
   } catch (err) {
     return toActionError(err);
   }

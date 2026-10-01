@@ -15,7 +15,7 @@ import {
   type NetworkSort,
   type PastorsByChurch,
 } from "@/lib/churchNetwork";
-import { pastorLabel } from "@/lib/churchLeaders";
+import { pastorLabel } from "@/lib/cargos";
 import { cn } from "@/lib/utils";
 import type { ChurchTipo } from "@/types/database";
 import type { ChurchLinkChurch, ChurchLinkNode } from "@/types/churchLinks";

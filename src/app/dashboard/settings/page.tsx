@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PAPEL_LABEL } from "@/lib/papeis";
 import { BellRing } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +62,7 @@ export default async function SettingsPage() {
                 <div className="min-w-0">
                   <p className="truncate font-medium">{invite.company_name}</p>
                   <p className="text-xs text-muted-foreground">
-                    papel: {invite.role === "admin" ? "Admin" : "Member"} · expira em{" "}
+                    papel: {PAPEL_LABEL[invite.role]} · expira em{" "}
                     {new Date(invite.expires_at).toLocaleDateString("pt-BR")}
                   </p>
                 </div>

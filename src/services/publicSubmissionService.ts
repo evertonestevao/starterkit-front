@@ -7,7 +7,7 @@ import { toValidationError } from "@/lib/errors";
 
 /**
  * O que um VISITANTE envia pela página pública da igreja: pedido de oração,
- * primeira visita e inscrição em evento.
+ * pedido de visita e inscrição em evento.
  *
  * Separado do communityService de propósito: aquele é a caixa de entrada da
  * igreja (quem lê é o pastor, filtrado pela empresa dele); este é quem escreve
@@ -18,7 +18,13 @@ import { toValidationError } from "@/lib/errors";
 
 export interface PublicSubmissionRepository {
   insertPrayerRequest(input: { churchId: string; name: string | null; message: string }): Promise<void>;
-  insertVisitor(input: { churchId: string; name: string; contact: string }): Promise<void>;
+  insertVisitor(input: {
+    churchId: string;
+    name: string;
+    contact: string;
+    endereco: string | null;
+    mensagem: string | null;
+  }): Promise<void>;
   /** Pela RPC sign_up_for_event, que confere se o evento aceita inscrição. */
   signUpForEvent(input: { eventId: string; personName: string; contact: string }): Promise<void>;
 }

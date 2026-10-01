@@ -55,10 +55,32 @@ export const publicPrayerSchema = z.object({
     .max(2000, "Seu pedido pode ter até 2.000 caracteres"),
 });
 
+/** Pedido de visita: telefone é obrigatório (é por ele que a igreja combina). */
 export const publicVisitorSchema = z.object({
   churchId: churchIdSchema,
   name: nomeObrigatorio,
-  contact: contatoSchema,
+  contact: z
+    .string()
+    .trim()
+    .max(20, "Telefone inválido")
+    .refine((v) => {
+      const digitos = v.replace(/\D/g, "").length;
+      return digitos >= 10 && digitos <= 13;
+    }, "Informe um telefone com DDD"),
+  endereco: z
+    .string()
+    .trim()
+    .max(300, "Endereço muito longo")
+    .transform((v) => v || null)
+    .optional()
+    .transform((v) => v ?? null),
+  mensagem: z
+    .string()
+    .trim()
+    .max(1000, "Mensagem muito longa")
+    .transform((v) => v || null)
+    .optional()
+    .transform((v) => v ?? null),
 });
 
 /**
@@ -123,6 +145,8 @@ export const createScheduleItemSchema = z
       .trim()
       .max(200, "Local muito longo")
       .transform((v) => (v === "" ? null : v)),
+    /** Se o culto aparece na chamada (Acompanhamento). Padrão: sim. */
+    registraChamada: z.boolean().default(true),
   })
   .superRefine((v, ctx) => {
     if (v.tipo === "semanal" && !/^[0-6]$/.test(v.diaSemana)) {
@@ -153,6 +177,8 @@ export const updateScheduleItemSchema = z
       .trim()
       .max(200, "Local muito longo")
       .transform((v) => (v === "" ? null : v)),
+    /** Se o culto aparece na chamada (Acompanhamento). Padrão: sim. */
+    registraChamada: z.boolean().default(true),
   })
   .superRefine((v, ctx) => {
     if (v.tipo === "semanal" && !/^[0-6]$/.test(v.diaSemana)) {

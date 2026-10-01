@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { brand } from "@/config/brand";
 import { AcceptTermsForm } from "@/features/terms/components/accept-terms-form";
+import { signOutAction } from "@/server/actions/auth";
+import { exigeUsuarioValido } from "@/server/session";
 import { getTermsService } from "@/server/terms";
 
 export const metadata: Metadata = { title: "Aceite dos termos" };
@@ -14,6 +16,8 @@ export const metadata: Metadata = { title: "Aceite dos termos" };
  * onboarding). O layout do dashboard redireciona para cá.
  */
 export default async function AcceptTermsPage() {
+  // Conta excluída com token ainda assinado: sai em vez de travar aqui.
+  const user = await exigeUsuarioValido();
   const terms = await getTermsService();
   if (await terms.hasAcceptedCurrent("igreja")) {
     redirect("/dashboard");
@@ -40,6 +44,13 @@ export default async function AcceptTermsPage() {
             {current.content}
           </div>
           <AcceptTermsForm />
+          {/* Conta errada, ou não quer aceitar agora: sempre dá para sair. */}
+          <form action={signOutAction} className="flex flex-wrap items-center justify-center gap-1 text-sm text-muted-foreground">
+            Entrou como {user.email}.
+            <button type="submit" className="font-medium text-primary underline-offset-4 hover:underline">
+              Sair
+            </button>
+          </form>
         </CardContent>
       </Card>
     </div>

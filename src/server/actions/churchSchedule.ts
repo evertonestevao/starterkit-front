@@ -39,6 +39,8 @@ export async function addScheduleItemAction(
       hora: texto(formData, "hora"),
       descricao: texto(formData, "descricao"),
       local: texto(formData, "local"),
+      // Checkbox desmarcado não vai no form; o campo escondido diz que ele existia.
+      registraChamada: formData.get("registraChamada") === "on",
     });
     await recordAudit({
       companyId: actor.companyId,
@@ -48,6 +50,7 @@ export async function addScheduleItemAction(
       metadata: { titulo: titulo.trim() },
     });
     revalidatePath(PAGINA);
+    revalidatePath("/dashboard/acompanhamento", "layout");
     return { success: `“${titulo.trim()}” entrou na programação.` };
   } catch (err) {
     return toActionError(err);
@@ -69,6 +72,7 @@ export async function removeScheduleItemAction(
       entityId: id,
     });
     revalidatePath(PAGINA);
+    revalidatePath("/dashboard/acompanhamento", "layout");
     return { success: "Removido da programação." };
   } catch (err) {
     return toActionError(err);
@@ -93,6 +97,8 @@ export async function updateScheduleItemAction(
       hora: texto(formData, "hora"),
       descricao: texto(formData, "descricao"),
       local: texto(formData, "local"),
+      // Checkbox desmarcado não vai no form; o campo escondido diz que ele existia.
+      registraChamada: formData.get("registraChamada") === "on",
     });
     await recordAudit({
       companyId: actor.companyId,
@@ -102,6 +108,7 @@ export async function updateScheduleItemAction(
       metadata: { titulo: titulo.trim() },
     });
     revalidatePath(PAGINA);
+    revalidatePath("/dashboard/acompanhamento", "layout");
     return { success: `“${titulo.trim()}” foi atualizado.` };
   } catch (err) {
     return toActionError(err);

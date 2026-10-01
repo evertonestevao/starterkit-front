@@ -341,9 +341,9 @@ export function ChurchPageRenderer({
         <>
           <TituloSecao
             icone={UserPlus}
-            antes="Quero"
-            destaque="visitar"
-            subtitulo="Quer conhecer a igreja? Deixe seu contato e a gente te recebe."
+            antes="Quer receber uma"
+            destaque="visita?"
+            subtitulo="Se você deseja a visita do Pastor ou de alguém da igreja, para uma oração ou uma conversa, deixe seu telefone. A gente liga para combinar o melhor dia."
           />
           <div className={cartao}>
             <VisitorForm churchId={church.id} />

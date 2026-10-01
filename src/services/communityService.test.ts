@@ -24,6 +24,13 @@ function makeRepo(overrides: Partial<CommunityRepository> = {}) {
       calls.push({ op: "visitors", companyId, extra: opts });
       return { items: [], total: 0 };
     },
+    async countVisitas(companyId, periodo) {
+      calls.push({ op: "countVisitas", companyId, extra: periodo });
+      return { pendentes: 2, feitas: 1 };
+    },
+    async registrarVisita(input) {
+      calls.push({ op: "registrarVisita", companyId: "", extra: input });
+    },
     async countAll(companyId, since) {
       calls.push({ op: "counts", companyId, extra: since });
       return { prayerRequests: 3, eventSignups: 2, visitors: 1, lastWeek: 4 };
@@ -161,5 +168,43 @@ describe("groupSignupsByEvent", () => {
 
   it("lista vazia não quebra", () => {
     expect(groupSignupsByEvent([])).toEqual([]);
+  });
+});
+
+describe("registrarVisita", () => {
+  const ID = "22222222-2222-4222-8222-222222222222";
+
+  it("visita feita exige quem visitou", async () => {
+    const { repo, calls } = makeRepo();
+    const err = await createCommunityService(repo)
+      .registrarVisita({ visitorId: ID, visitadoEm: "2026-10-01", visitadoPor: " ", observacao: "" })
+      .catch((e) => e);
+    expect(isAppError(err) && err.message).toBe("Informe quem fez a visita");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("desfazer (sem data) limpa quem visitou", async () => {
+    const { repo, calls } = makeRepo();
+    await createCommunityService(repo).registrarVisita({
+      visitorId: ID,
+      visitadoEm: "",
+      visitadoPor: "Pr. João",
+      observacao: "",
+    });
+    expect(calls[0].extra).toEqual({ visitorId: ID, visitadoEm: null, visitadoPor: null, observacao: null });
+  });
+
+  it("filtro de situação desconhecido lista todos", async () => {
+    const { repo, calls } = makeRepo();
+    await createCommunityService(repo).listVisitors(COMPANY, { situacao: "xpto" });
+    expect(calls[0].extra).toMatchObject({ situacao: undefined });
+  });
+});
+
+describe("normalizarPeriodo", () => {
+  it("ignora data malformada e troca de/até invertidos", async () => {
+    const { normalizarPeriodo } = await import("./communityService");
+    expect(normalizarPeriodo("2026-13-45", "x")).toEqual({ de: undefined, ate: undefined });
+    expect(normalizarPeriodo("2026-10-01", "2026-09-01")).toEqual({ de: "2026-09-01", ate: "2026-10-01" });
   });
 });

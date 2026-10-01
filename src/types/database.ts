@@ -42,6 +42,10 @@ export interface CompanyMember {
   user_id: string;
   role: RoleCode;
   invited_by: string | null;
+  /** Member autorizado a fazer chamada e acompanhamento (owner/admin já podem). */
+  pode_acompanhar: boolean;
+  /** Member da secretaria da EBD (owner/admin já podem). */
+  pode_gerir_ebd: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -181,6 +185,10 @@ export interface Church {
   sobrenome: string | null;
   /** Usa o nome da igreja superior. */
   herdar_nome: boolean;
+  /** Declarado no cadastro: a igreja diz pertencer a uma rede de igrejas. Não é vínculo na árvore. */
+  faz_parte_de_rede: boolean;
+  /** Nome da rede declarada (opcional). Só a moderação lê. */
+  rede_nome: string | null;
   slug: string;
   logo_url: string | null;
   address: string | null;
@@ -310,7 +318,14 @@ export interface Visitor {
   /** Empresa dona da igreja, preenchida por trigger (nunca pelo cliente). */
   company_id: string | null;
   name: string;
+  /** Telefone/WhatsApp (obrigatório nos pedidos novos; antigos podem ter email). */
   contact: string;
+  endereco: string | null;
+  mensagem: string | null;
+  /** Preenchido quando a visita foi feita (data + quem foi). */
+  visitado_em: string | null;
+  visitado_por: string | null;
+  visita_obs: string | null;
   created_at: string;
 }
 

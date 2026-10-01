@@ -17,7 +17,12 @@ import type { ScheduleItemWithChurch } from "@/services/churchScheduleService";
 export const metadata: Metadata = { title: "Programação" };
 
 function Detalhes({ item, mostrarIgreja }: { item: ScheduleItemWithChurch; mostrarIgreja: boolean }) {
-  const extras = [item.local, item.descricao, mostrarIgreja ? item.churchName : null].filter(Boolean);
+  const extras = [
+    item.local,
+    item.descricao,
+    mostrarIgreja ? item.churchName : null,
+    item.registra_chamada ? null : "sem chamada",
+  ].filter(Boolean);
   if (extras.length === 0) return null;
   return (
     <span className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">

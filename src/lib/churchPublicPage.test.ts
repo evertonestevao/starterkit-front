@@ -85,4 +85,9 @@ describe("churchInitials", () => {
   it("nome só com palavra genérica ainda tem monograma", () => {
     expect(churchInitials("Igreja")).toBe("I");
   });
+
+  it("'assembleia' não é genérica: é a denominação, não o tipo de local", () => {
+    expect(churchInitials("Assembleia de Deus ministério no Ipiranga")).toBe("AD");
+    expect(churchInitials("Assembléia de Deus - Ministério no Ipiranga")).toBe("AD");
+  });
 });

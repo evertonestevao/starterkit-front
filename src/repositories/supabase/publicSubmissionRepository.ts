@@ -20,12 +20,12 @@ export function createSupabasePublicSubmissionRepository(
       }
     },
 
-    async insertVisitor({ churchId, name, contact }) {
+    async insertVisitor({ churchId, name, contact, endereco, mensagem }) {
       const { error } = await client
         .from("visitors")
-        .insert({ church_id: churchId, name, contact });
+        .insert({ church_id: churchId, name, contact, endereco, mensagem });
       if (error) {
-        throw new AppError("internal_error", "Não foi possível registrar a sua visita.", error);
+        throw new AppError("internal_error", "Não foi possível enviar o seu pedido de visita.", error);
       }
     },
 

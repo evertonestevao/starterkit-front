@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Network } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,12 @@ export default async function PlatformChurchesPage({
 
   const termo = q.trim().toLowerCase();
   const filtradas = termo
-    ? todas.filter((c) => c.name.toLowerCase().includes(termo) || c.publicCode.includes(termo))
+    ? todas.filter(
+        (c) =>
+          c.name.toLowerCase().includes(termo) ||
+          c.publicCode.includes(termo) ||
+          (c.redeNome?.toLowerCase().includes(termo) ?? false),
+      )
     : todas;
   const visiveis = filtradas.slice(0, LIMITE);
   const appUrl = getServerEnv().APP_URL;
@@ -44,7 +50,7 @@ export default async function PlatformChurchesPage({
       </div>
 
       <form className="flex max-w-md gap-2" role="search">
-        <Input name="q" defaultValue={q} placeholder="Buscar por nome ou código" aria-label="Buscar igreja" />
+        <Input name="q" defaultValue={q} placeholder="Buscar por nome, código ou rede" aria-label="Buscar igreja" />
         <Button type="submit" variant="outline">
           Buscar
         </Button>
@@ -76,6 +82,14 @@ export default async function PlatformChurchesPage({
                         no lugar certo da árvore. */}
                     {church.tipo === "subsede" && !church.parentId ? (
                       <Badge variant="outline">hierarquia a definir</Badge>
+                    ) : null}
+                    {/* Rede declarada no cadastro: clicar busca as irmãs da mesma rede. */}
+                    {church.redeNome ? (
+                      <Link href={`?q=${encodeURIComponent(church.redeNome)}`} title="Ver igrejas desta rede">
+                        <Badge variant="outline">Rede: {church.redeNome}</Badge>
+                      </Link>
+                    ) : church.fazParteDeRede ? (
+                      <Badge variant="outline">rede (sem nome)</Badge>
                     ) : null}
                   </div>
                   {/* Endereços que vão impressos: o ?origem= separa QR de NFC nas métricas. */}

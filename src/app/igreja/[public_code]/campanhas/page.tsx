@@ -2,7 +2,7 @@ import { formatChurchName } from "@/lib/churchName";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, HandCoins } from "lucide-react";
+import { ArrowLeft, ChevronDown, HandCoins } from "lucide-react";
 import { brand } from "@/config/brand";
 import { fonteTitulos, PublicShell } from "@/features/church/components/public-shell";
 import { getPublicChurchRepository, loadPublicChurch } from "@/server/publicChurch";
@@ -66,6 +66,8 @@ export default async function ChurchCampaignsPage({ params }: Params) {
   const { church, theme, accent } = carregado;
 
   const campanhas = await (await getPublicChurchRepository()).listActiveCampaigns(church.id);
+  const emAndamento = campanhas.filter((campanha) => campanha.status !== "encerrada");
+  const encerradas = campanhas.filter((campanha) => campanha.status === "encerrada");
   const base = `/igreja/${church.public_code}`;
 
   return (
@@ -94,9 +96,9 @@ export default async function ChurchCampaignsPage({ params }: Params) {
       </header>
 
       <main className="mx-auto w-full max-w-xl px-5 py-8">
-        {campanhas.length > 0 ? (
+        {emAndamento.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {campanhas.map((campanha) => (
+            {emAndamento.map((campanha) => (
               <CampaignCard key={campanha.id} campanha={campanha} href={`${base}/campanhas/${campanha.id}`} />
             ))}
           </div>
@@ -109,6 +111,23 @@ export default async function ChurchCampaignsPage({ params }: Params) {
             </Link>
           </div>
         )}
+
+        {encerradas.length > 0 ? (
+          // <details> nativo: recolhe sem JavaScript, e as encerradas ficam no
+          // fim da página, fora do caminho de quem veio para apoiar.
+          <details className="group mt-8">
+            <summary className="flex cursor-pointer list-none items-center justify-center gap-1.5 text-sm font-semibold text-[var(--pg-muted)] hover:text-[var(--pg-text)] [&::-webkit-details-marker]:hidden">
+              <span className="group-open:hidden">Ver campanhas encerradas ({encerradas.length})</span>
+              <span className="hidden group-open:inline">Ocultar campanhas encerradas</span>
+              <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="mt-4 flex flex-col gap-3">
+              {encerradas.map((campanha) => (
+                <CampaignCard key={campanha.id} campanha={campanha} href={`${base}/campanhas/${campanha.id}`} />
+              ))}
+            </div>
+          </details>
+        ) : null}
       </main>
 
       <footer className="px-4 pt-2 pb-10 text-center">

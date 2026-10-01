@@ -9,6 +9,9 @@
 
 export const CHURCH_SURNAME_MAX_LENGTH = 120;
 
+/** Nome da rede/ministério declarado no cadastro ("Assembleia de Deus Ministério do Belém"). */
+export const CHURCH_NETWORK_NAME_MAX_LENGTH = 120;
+
 /** Sobrenome só com espaços é sobrenome nenhum. */
 export function normalizeSurname(value: string | null | undefined): string | null {
   const limpo = (value ?? "").trim().replace(/\s+/g, " ");

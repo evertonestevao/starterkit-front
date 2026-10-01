@@ -10,6 +10,7 @@ import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getSponsorService } from "@/server/sponsor";
 import { getActiveTenant } from "@/server/tenant";
 import { isPlatformStaff } from "@/server/platform";
+import { exigeUsuarioValido } from "@/server/session";
 import { getTermsService } from "@/server/terms";
 import { createUserService } from "@/services/userService";
 import { TenantProvider } from "@/providers/tenant-provider";
@@ -19,6 +20,8 @@ import { TenantProvider } from "@/providers/tenant-provider";
  * validados no servidor a cada request.
  */
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Antes de tudo: sessão de conta que não existe mais vai para a saída.
+  await exigeUsuarioValido();
   const { companies, active } = await getActiveTenant();
 
   // Moderação da plataforma sem igreja não é uma igreja incompleta: é outra
@@ -79,14 +82,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
         pendingInvitesCount={myInvites.length}
         unseenPrayerRequestsCount={unseenPrayerRequestsCount}
       >
-        {/* Aviso permanente, em toda tela do painel: a plataforma não toca no
-            dinheiro das doações. É a pergunta que toda igreja faz na primeira
-            conversa, e a resposta não deve depender de alguém ter lido os
-            Termos. */}
-        <p className="mb-4 rounded-lg border border-dashed px-3 py-2 text-xs leading-5 text-muted-foreground">
-          Dízimos e ofertas vão direto do banco de quem doa para a conta da igreja. A plataforma não
-          recebe, não repassa e não cobra taxa sobre doação.
-        </p>
         {children}
       </AppShell>
     </TenantProvider>

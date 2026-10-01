@@ -16,7 +16,7 @@ const CONG_A = "10000000-0000-4000-8000-000000000004";
 const CONG_B = "10000000-0000-4000-8000-000000000005";
 
 function igreja(id: string, tipo: HierarchyChurch["tipo"], parentId: string | null, path: string): HierarchyChurch {
-  return { id, name: path.split(".").pop()!, publicCode: id, tipo, parentId, path, companyId: id };
+  return { id, name: path.split(".").pop()!, publicCode: id, tipo, parentId, path, companyId: id, fazParteDeRede: false, redeNome: null };
 }
 
 // Sede com Y ligada; X ainda solta (a sede dela entra depois).
