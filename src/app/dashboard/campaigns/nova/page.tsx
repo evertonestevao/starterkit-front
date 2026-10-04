@@ -14,7 +14,7 @@ export default async function NewCampaignPage() {
   const { active } = await getActiveTenant();
   if (!active) return null; // o layout já redirecionou
 
-  const podeGerenciar = canManageCampaigns(active.role);
+  const podeGerenciar = canManageCampaigns(active.role, active.acessos.includes("campaigns"));
   const igrejas = podeGerenciar ? await (await getCampaignsService()).listChurches(active.id) : [];
 
   return (

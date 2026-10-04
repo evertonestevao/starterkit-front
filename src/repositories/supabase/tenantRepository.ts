@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
+import { acessosDaPessoa } from "@/lib/menuPermissoes";
 import type { TenantRepository } from "@/services/tenantService";
 import type { Company, CompanyMember, RoleCode } from "@/types/database";
 import type { MemberWithProfile } from "@/types/tenant";
@@ -29,15 +30,30 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       // Onde a pessoa ensina na EBD (para o menu). Falhar aqui não derruba o painel.
       const { data: professor } = await client.rpc("minhas_empresas_professor_ebd");
       const ensinaEm = new Set(((professor ?? []) as unknown as string[]).map(String));
+      // Módulos liberados pelos cargos da pessoa, por empresa. Falhar aqui
+      // deixa só o acesso do papel — nunca libera a mais.
+      const { data: liberados } = await client.rpc("meus_acessos");
+      const porCargo = new Map<string, string[]>();
+      for (const l of (liberados ?? []) as Array<{ company_id: string; modulo: string }>) {
+        porCargo.set(l.company_id, [...(porCargo.get(l.company_id) ?? []), l.modulo]);
+      }
       const companies = (data ?? [])
         .filter((row) => row.company && !(row.company as unknown as Company).deleted_at)
-        .map((row) => ({
-          ...(row.company as unknown as Company),
-          role: row.role as RoleCode,
-          pode_acompanhar: Boolean(row.pode_acompanhar),
-          pode_gerir_ebd: Boolean(row.pode_gerir_ebd),
-          professor_ebd: ensinaEm.has((row.company as unknown as Company).id),
-        }));
+        .map((row) => {
+          const company = row.company as unknown as Company;
+          const acessos = acessosDaPessoa(porCargo.get(company.id) ?? [], {
+            pode_acompanhar: Boolean(row.pode_acompanhar),
+            pode_gerir_ebd: Boolean(row.pode_gerir_ebd),
+          });
+          return {
+            ...company,
+            role: row.role as RoleCode,
+            pode_acompanhar: acessos.includes("acompanhamento") || acessos.includes("membros"),
+            pode_gerir_ebd: acessos.includes("ebd"),
+            professor_ebd: ensinaEm.has(company.id),
+            acessos,
+          };
+        });
       // Dedup defensivo por id: o índice único parcial de company_members já
       // impede membership dupla, mas a UI usa company.id como React key —
       // um duplicado aqui quebraria o switcher inteiro.
@@ -64,7 +80,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         }
         throw new AppError("internal_error", "Falha ao criar igreja", error);
       }
-      return { ...data, role: "owner" as const, pode_acompanhar: false, pode_gerir_ebd: false, professor_ebd: false };
+      return { ...data, role: "owner" as const, pode_acompanhar: false, pode_gerir_ebd: false, professor_ebd: false, acessos: [] };
     },
 
     async updateCompany(companyId, { name }) {

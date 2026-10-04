@@ -5339,6 +5339,167 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Acessos por cargo (migration 20261004100000): o módulo liberado para um
+-- cargo abre de verdade, com herança. AC Sede (c1) -> AC Cong (c2); AC Outra
+-- (c3) é outra rede. O member 03 da AC Cong ganha o cargo Secretário.
+-- ---------------------------------------------------------------------------
+do $$
+declare v_membro uuid;
+begin
+  select id into v_membro from public.rol_membros
+  where user_id = 'acacacac-0000-4000-8000-000000000003'
+    and church_id = 'acacacac-0000-4000-8000-0000000000d2' and deleted_at is null;
+  if v_membro is null then raise exception 'FIXTURE acessos: member 03 sem linha no rol'; end if;
+  insert into public.rol_membro_cargos (membro_id, cargo_id, church_id)
+  values (v_membro, (select id from public.cargos where slug = 'secretario'), 'acacacac-0000-4000-8000-0000000000d2');
+end $$;
+
+set local role authenticated;
+
+-- Antes de qualquer liberação: cargo sozinho não abre nada.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'campaigns') then
+    raise exception 'FALHA acessos: cargo sem liberacao ja abre campanhas';
+  end if;
+  if public.can_gerir_ebd('acacacac-0000-4000-8000-0000000000d2') then
+    raise exception 'FALHA acessos: cargo sem liberacao ja gere a EBD';
+  end if;
+  if public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
+    raise exception 'FALHA acessos: cargo sem liberacao ja acompanha';
+  end if;
+end $$;
+
+-- A sede libera Campanhas e EBD para o Secretário.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare v_cargo uuid := (select id from public.cargos where slug = 'secretario');
+begin
+  perform public.salvar_cargo_acessos('acacacac-0000-4000-8000-0000000000c1', jsonb_build_array(
+    jsonb_build_object('cargo_id', v_cargo, 'modulo', 'campaigns', 'permitido', true),
+    jsonb_build_object('cargo_id', v_cargo, 'modulo', 'ebd', 'permitido', true)));
+
+  -- A sede não grava na igreja de baixo (não é responsável por ela).
+  begin
+    perform public.salvar_cargo_acessos('acacacac-0000-4000-8000-0000000000c2', '[]'::jsonb);
+    raise exception 'FALHA acessos: sede gravou os acessos da congregacao';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Módulo fora da lista (ex.: pedidos de oração) não é gravável.
+  begin
+    perform public.salvar_cargo_acessos('acacacac-0000-4000-8000-0000000000c1', jsonb_build_array(
+      jsonb_build_object('cargo_id', v_cargo, 'modulo', 'prayers', 'permitido', true)));
+    raise exception 'FALHA acessos: gravou modulo nao liberavel';
+  exception when check_violation then null;
+  end;
+
+  -- Sem GRANT: ninguém lê nem escreve a tabela direto.
+  begin
+    perform 1 from public.cargo_acessos;
+    raise exception 'FALHA acessos: authenticated leu cargo_acessos direto';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- O Secretário da congregação herda da sede: abre Campanhas e EBD, e só.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
+do $$
+declare v text; n int;
+begin
+  if not public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'campaigns') then
+    raise exception 'FALHA acessos: secretario nao herdou campanhas da sede';
+  end if;
+  if not public.can_gerir_ebd('acacacac-0000-4000-8000-0000000000d2') then
+    raise exception 'FALHA acessos: secretario nao herdou a EBD da sede';
+  end if;
+  if public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'events') then
+    raise exception 'FALHA acessos: secretario abriu modulo nao liberado';
+  end if;
+  if public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
+    raise exception 'FALHA acessos: secretario le o rol sem Membros/Presenca liberado';
+  end if;
+  -- Não vira administrador, nem ganha nada na igreja de cima.
+  if public.is_company_admin('acacacac-0000-4000-8000-0000000000c2') then
+    raise exception 'FALHA acessos: cargo liberado virou administrador';
+  end if;
+  if public.tem_acesso('acacacac-0000-4000-8000-0000000000c1', 'campaigns') then
+    raise exception 'FALHA acessos: secretario da congregacao abriu campanhas da sede';
+  end if;
+
+  select string_agg(modulo, ',' order by modulo) into v from public.meus_acessos()
+  where company_id = 'acacacac-0000-4000-8000-0000000000c2';
+  if v is distinct from 'campaigns,ebd' then raise exception 'FALHA acessos: meus_acessos veio %', v; end if;
+
+  -- Não configura nem enxerga a configuração.
+  begin
+    perform public.salvar_cargo_acessos('acacacac-0000-4000-8000-0000000000c2', '[]'::jsonb);
+    raise exception 'FALHA acessos: member alterou os acessos';
+  exception when sqlstate '42501' then null;
+  end;
+  select count(*) into n from public.cargo_acessos_da_rede('acacacac-0000-4000-8000-0000000000c2');
+  if n <> 0 then raise exception 'FALHA acessos: member leu a configuracao de acessos'; end if;
+end $$;
+
+-- O responsável da congregação tira Campanhas e libera Membros: a dele vence.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v_cargo uuid := (select id from public.cargos where slug = 'secretario'); n int;
+begin
+  perform public.salvar_cargo_acessos('acacacac-0000-4000-8000-0000000000c2', jsonb_build_array(
+    jsonb_build_object('cargo_id', v_cargo, 'modulo', 'campaigns', 'permitido', false),
+    jsonb_build_object('cargo_id', v_cargo, 'modulo', 'membros', 'permitido', true)));
+  select count(*) into n from public.cargo_acessos_da_rede('acacacac-0000-4000-8000-0000000000c2');
+  if n <> 4 then raise exception 'FALHA acessos: esperado 2 proprias + 2 herdadas, veio %', n; end if;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'campaigns') then
+    raise exception 'FALHA acessos: a congregacao tirou campanhas e o secretario ainda abre';
+  end if;
+  if not public.can_gerir_ebd('acacacac-0000-4000-8000-0000000000d2') then
+    raise exception 'FALHA acessos: secretario perdeu a EBD herdada';
+  end if;
+  if not public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
+    raise exception 'FALHA acessos: Membros liberado nao abriu o rol';
+  end if;
+end $$;
+
+-- Outra rede não herda nada da AC Sede.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.cargo_acessos_da_rede('acacacac-0000-4000-8000-0000000000c3');
+  if n <> 0 then raise exception 'FALHA acessos: outra rede herdou acessos (% linhas)', n; end if;
+end $$;
+reset role;
+
+-- Sem o cargo, o acesso some na hora.
+delete from public.rol_membro_cargos rc using public.rol_membros m
+where rc.membro_id = m.id and m.user_id = 'acacacac-0000-4000-8000-000000000003';
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if public.can_gerir_ebd('acacacac-0000-4000-8000-0000000000d2')
+     or public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
+    raise exception 'FALHA acessos: perdeu o cargo e manteve o acesso';
+  end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

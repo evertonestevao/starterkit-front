@@ -194,3 +194,12 @@ describe("updateEvent e removeEvent", () => {
     ).rejects.toMatchObject({ code: "not_found" });
   });
 });
+
+describe("canManageEvents com cargo liberado", () => {
+  it("membro só gerencia com o módulo liberado; quem administra, sempre", async () => {
+    const { canManageEvents } = await import("./churchEventsService");
+    expect(canManageEvents("member")).toBe(false);
+    expect(canManageEvents("member", true)).toBe(true);
+    expect(canManageEvents("admin")).toBe(true);
+  });
+});

@@ -28,7 +28,7 @@ export async function createChurchEventAction(
     const service = await getChurchEventsService();
     const titulo = texto(formData, "titulo");
     const id = await service.createEvent(
-      { companyId: active.id, role: active.role },
+      { companyId: active.id, role: active.role, liberado: active.acessos.includes("events") },
       {
         churchId: texto(formData, "churchId"),
         titulo,
@@ -62,7 +62,7 @@ async function ator() {
   // Empresa e papel vêm da sessão, nunca do formulário.
   const { active } = await getActiveTenant();
   if (!active) throw new AppError("unauthorized", "Selecione uma igreja para continuar.");
-  return { companyId: active.id, role: active.role };
+  return { companyId: active.id, role: active.role, liberado: active.acessos.includes("events") };
 }
 
 /** Edita um evento publicado. A igreja do evento não muda. */

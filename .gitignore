@@ -48,3 +48,6 @@ next-env.d.ts
 # fixtures locais de validacao manual
 /test-fixtures/
 /.stripe-cli/
+
+# prints de tela tirados durante o desenvolvimento
+/prints-ebd/

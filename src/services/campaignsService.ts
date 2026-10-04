@@ -95,12 +95,15 @@ export interface CampaignsRepository {
 export interface CampaignActor {
   companyId: string;
   role: RoleCode;
+  /** Campanhas está liberado para um cargo da pessoa. */
+  liberado?: boolean;
 }
 
 const QUEM_GERENCIA: RoleCode[] = ["owner", "admin"];
 
-export function canManageCampaigns(role: RoleCode): boolean {
-  return QUEM_GERENCIA.includes(role);
+/** Quem administra a igreja, ou quem tem Campanhas liberado por cargo. */
+export function canManageCampaigns(role: RoleCode, liberado = false): boolean {
+  return QUEM_GERENCIA.includes(role) || liberado;
 }
 
 /** Texto opcional de valor (sugestão): vazio = não informado; inválido/zero = erro. */
@@ -170,7 +173,7 @@ function parseMeta(texto: string): number {
 
 export function createCampaignsService(repo: CampaignsRepository, now: () => Date = () => new Date()) {
   function exigePermissao(actor: CampaignActor) {
-    if (!canManageCampaigns(actor.role)) {
+    if (!canManageCampaigns(actor.role, actor.liberado)) {
       throw new AppError("forbidden", "Só quem administra a igreja pode gerenciar campanhas.");
     }
   }

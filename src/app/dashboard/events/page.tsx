@@ -115,7 +115,7 @@ export default async function EventsPage({
 
   // O filtro só vale se o evento é desta igreja; senão, lista tudo.
   const selecionado = eventos.find((e) => e.id === eventoFiltro) ?? null;
-  const podePublicar = canManageEvents(active.role);
+  const podePublicar = canManageEvents(active.role, active.acessos.includes("events"));
 
 
   return (

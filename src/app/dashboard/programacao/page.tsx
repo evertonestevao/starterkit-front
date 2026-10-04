@@ -42,7 +42,7 @@ export default async function SchedulePage() {
   if (!active) return null;
 
   const service = await getChurchScheduleService();
-  const podeEditar = canManageEvents(active.role);
+  const podeEditar = canManageEvents(active.role, active.acessos.includes("programacao"));
   const [itens, igrejas] = await Promise.all([
     service.list(active.id),
     podeEditar ? service.listChurches(active.id) : Promise.resolve([]),

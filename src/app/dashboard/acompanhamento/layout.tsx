@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { exigeMenu } from "@/server/menuPermissoes";
 import { RouteTabs, type RouteTab } from "@/components/route-tabs";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
 import { canConfigurar } from "@/services/acompanhamentoService";
@@ -10,6 +11,7 @@ const BASE = "/dashboard/acompanhamento";
  * mesmo com a URL na mão; o service e a RLS (can_acompanhar) recusam de novo.
  */
 export default async function AcompanhamentoLayout({ children }: { children: React.ReactNode }) {
+  await exigeMenu("acompanhamento");
   const actor = await getAcompanhamentoActorAutorizado();
   if (!actor) notFound();
 

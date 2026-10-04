@@ -25,10 +25,10 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const { id } = await params;
   const { active } = await getActiveTenant();
   if (!active) return null; // layout já redirecionou
-  if (!canManageCampaigns(active.role)) notFound();
+  if (!canManageCampaigns(active.role, active.acessos.includes("campaigns"))) notFound();
 
   const service = await getCampaignsService();
-  const actor = { companyId: active.id, role: active.role };
+  const actor = { companyId: active.id, role: active.role, liberado: active.acessos.includes("campaigns") };
   const campanha = await service.get(actor, id).catch(() => null);
   if (!campanha) notFound();
 

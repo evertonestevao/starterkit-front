@@ -56,7 +56,7 @@ export function createChurchScheduleService(
   now: () => Date = () => new Date(),
 ) {
   function exigePermissao(actor: EventActor) {
-    if (!canManageEvents(actor.role)) {
+    if (!canManageEvents(actor.role, actor.liberado)) {
       throw new AppError("forbidden", "Só quem administra a igreja pode mudar a programação.");
     }
   }

@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { usePublicarSubnav } from "@/components/app-shell/section-subnav";
 import { cn } from "@/lib/utils";
 
 /**
- * Abas navegadas por ROTA (não por estado de client). Usadas em
- * Configurações e no painel do patrocinador.
+ * Abas navegadas por ROTA (não por estado de client). No painel da igreja
+ * (dentro do AppShell) viram subitens do menu lateral e nada é desenhado
+ * aqui; no painel do patrocinador e na plataforma continuam no topo.
  *
  * Cada aba é uma página server própria: continua renderizando no servidor,
  * fica deep-linkável e o `revalidatePath` das actions atinge só a aba que
@@ -26,6 +28,9 @@ export interface RouteTab {
 
 export function RouteTabs({ tabs }: { tabs: RouteTab[] }) {
   const pathname = usePathname();
+  // Dentro do painel da igreja, as abas viram subitens do menu lateral.
+  const naLateral = usePublicarSubnav(tabs);
+  if (naLateral) return null;
 
   return (
     // Rolagem horizontal no mobile: aba nova não quebra o layout nem some.

@@ -33,6 +33,7 @@
 --
 -- EBD (Demo Sede): 4 classes, 6 domingos de aula, crianças "não membro" e
 -- uma professora com login: professora.demo@dev.local (só vê os Juniores).
+-- secretaria.ebd.demo@dev.local: member da sede com a autorização da EBD.
 
 do $$
 begin
@@ -410,6 +411,11 @@ declare
   i int;
 begin
   select id into v_sede from public.churches where slug = 'demo-sede';
+
+  -- Secretaria da EBD com login (member): só a autorização da EBD.
+  insert into public.company_members (company_id, user_id, role, pode_gerir_ebd)
+  select company_id, public.__demo_user('secretaria.ebd.demo@dev.local', 'Secretária EBD Demo'), 'member', true
+  from public.churches where id = v_sede;
 
   -- Professora com login (member): o trigger já cria o membro dela.
   v_prof := public.__demo_user('professora.demo@dev.local', 'Professora Demo');

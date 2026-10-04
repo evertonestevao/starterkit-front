@@ -1,0 +1,212 @@
+import type { RoleCode } from "@/types/database";
+
+/**
+ * Menus do painel e acessos por cargo. Lógica pura (sem I/O), usada pela
+ * sidebar, pela guarda das telas e por Configurações → Acessos.
+ *
+ * Quem abre um módulo:
+ *  - o papel (Responsável/Administrador sempre; Membro só no que está em `roles`);
+ *  - ou um cargo da pessoa com o módulo LIBERADO pela igreja (ou herdado da
+ *    igreja acima). O banco repete a regra em tem_acesso().
+ */
+
+/** Módulos que o Responsável pode liberar para um cargo. */
+export const MODULOS_LIBERAVEIS = ["acompanhamento", "membros", "ebd", "programacao", "events", "campaigns"] as const;
+export type Modulo = (typeof MODULOS_LIBERAVEIS)[number];
+
+export function isModulo(valor: string): valor is Modulo {
+  return (MODULOS_LIBERAVEIS as readonly string[]).includes(valor);
+}
+
+export interface MenuDef {
+  /** Chave estável; nos módulos liberáveis é a mesma gravada em cargo_acessos.modulo. */
+  key: string;
+  title: string;
+  href: string;
+  /** Papéis que abrem o menu sem depender de cargo. */
+  roles: RoleCode[];
+}
+
+/**
+ * Catálogo dos menus do painel — editar aqui ao adicionar um módulo.
+ *
+ * Financeiro e Presença digital existem como rota (/dashboard/finance,
+ * /presence) mas estão FORA do menu: as duas ainda são maquete, com números
+ * fixos no arquivo. Voltam quando lerem o banco — é só devolver o item aqui.
+ */
+export const MENUS: readonly MenuDef[] = [
+  { key: "dashboard", title: "Dashboard", href: "/dashboard", roles: ["owner", "admin", "member"] },
+  // Chamada nos cultos, justificativas e quem está faltando. Dado pessoal:
+  // só a própria igreja; a RLS repete a regra (can_acompanhar).
+  { key: "acompanhamento", title: "Presença nos cultos", href: "/dashboard/acompanhamento", roles: ["owner", "admin"] },
+  // As pessoas da igreja. O login de cada uma é gerenciado na ficha, só por
+  // quem administra.
+  { key: "membros", title: "Membros", href: "/dashboard/membros", roles: ["owner", "admin"] },
+  // Escola Bíblica Dominical. O professor entra só nas classes dele (a RLS
+  // repete: can_ebd_classe).
+  { key: "ebd", title: "EBD", href: "/dashboard/ebd", roles: ["owner", "admin"] },
+  // Dado sensível (LGPD): o texto do pedido é só de quem lidera a igreja.
+  // Não é liberável por cargo.
+  { key: "prayers", title: "Pedidos de oração", href: "/dashboard/prayers", roles: ["owner", "admin"] },
+  // O dia a dia (cultos semanais e especiais). Todos veem; editar é de quem
+  // administra ou de um cargo liberado.
+  { key: "programacao", title: "Programação", href: "/dashboard/programacao", roles: ["owner", "admin", "member"] },
+  // Só o que tem inscrição e/ou pagamento. Mesma regra da Programação.
+  { key: "events", title: "Eventos", href: "/dashboard/events", roles: ["owner", "admin", "member"] },
+  { key: "campaigns", title: "Campanhas", href: "/dashboard/campaigns", roles: ["owner", "admin"] },
+  { key: "sponsors", title: "Patrocinadores", href: "/dashboard/sponsors", roles: ["owner", "admin"] },
+  { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin", "member"] },
+  { key: "billing", title: "Billing", href: "/dashboard/billing", roles: ["owner"] },
+  { key: "audit", title: "Auditoria", href: "/dashboard/audit", roles: ["owner", "admin"] },
+  { key: "settings", title: "Configurações", href: "/dashboard/settings", roles: ["owner", "admin", "member"] },
+];
+
+/** O que cada módulo liberado deixa fazer (texto da tela de Acessos). */
+export const MODULO_INFO: Record<Modulo, { titulo: string; libera: string; aviso?: string }> = {
+  acompanhamento: {
+    titulo: "Presença nos cultos",
+    libera: "Fazer a chamada, lançar justificativas e acompanhar quem está faltando.",
+    aviso: "Mostra nomes e telefones dos membros.",
+  },
+  membros: {
+    titulo: "Membros",
+    libera: "Ver, cadastrar e editar os membros da igreja.",
+    aviso: "Mostra dados pessoais de toda a igreja. Logins e convites continuam só com quem administra.",
+  },
+  ebd: {
+    titulo: "EBD",
+    libera: "Gerir a Escola Dominical inteira: classes, matrículas, chamada, trimestres e relatórios.",
+    aviso: "Mostra dados de alunos, inclusive crianças.",
+  },
+  programacao: { titulo: "Programação", libera: "Criar e editar os cultos e horários da página da igreja." },
+  events: { titulo: "Eventos", libera: "Publicar e editar eventos e ver as inscrições." },
+  campaigns: {
+    titulo: "Campanhas",
+    libera: "Criar, publicar e encerrar campanhas e confirmar doações.",
+    aviso: "A campanha aparece na página pública e recebe pelo Pix já cadastrado da igreja, que este cargo não altera.",
+  },
+};
+
+/** A pessoa na igreja ativa. */
+export interface PessoaAcesso {
+  role: RoleCode;
+  /** Módulos liberados (por cargo ou pelas autorizações antigas da ficha). */
+  acessos: string[];
+  /** Ensina em alguma classe: abre a EBD só nas classes dela. */
+  professor_ebd: boolean;
+}
+
+/**
+ * Módulos da pessoa: os liberados por cargo mais os das autorizações antigas
+ * (chamada e secretaria da EBD), que continuam valendo.
+ */
+export function acessosDaPessoa(
+  porCargo: string[],
+  autorizacoes: { pode_acompanhar: boolean; pode_gerir_ebd: boolean },
+): Modulo[] {
+  const todos = new Set<string>(porCargo);
+  if (autorizacoes.pode_acompanhar) {
+    todos.add("acompanhamento");
+    todos.add("membros");
+  }
+  if (autorizacoes.pode_gerir_ebd) todos.add("ebd");
+  return MODULOS_LIBERAVEIS.filter((m) => todos.has(m));
+}
+
+/** A pessoa gerencia o módulo? (administra a igreja ou tem o módulo liberado) */
+export function podeNoModulo(pessoa: Pick<PessoaAcesso, "role" | "acessos">, modulo: Modulo): boolean {
+  return pessoa.role === "owner" || pessoa.role === "admin" || pessoa.acessos.includes(modulo);
+}
+
+/** Chaves dos menus que a pessoa vê. */
+export function menusVisiveis(pessoa: PessoaAcesso): string[] {
+  return MENUS.filter(
+    (m) =>
+      m.roles.includes(pessoa.role) || pessoa.acessos.includes(m.key) || (m.key === "ebd" && pessoa.professor_ebd),
+  ).map((m) => m.key);
+}
+
+/** Linha gravada: da própria igreja (nivel 0) ou de uma acima (1 = mãe...). */
+export interface LinhaAcesso {
+  cargo_id: string;
+  modulo: string;
+  permitido: boolean;
+  nivel: number;
+  /** Nome da igreja que definiu. */
+  igreja: string;
+}
+
+export interface CelulaAcesso {
+  /** O que vale agora. */
+  permitido: boolean;
+  /** O que valeria sem a escolha desta igreja. */
+  herdado: boolean;
+  /** Igreja acima que definiu o herdado; null = padrão (não liberado). */
+  herdadoDe: string | null;
+  /** Esta igreja tem escolha própria neste ponto. */
+  propria: boolean;
+}
+
+const chave = (cargoId: string, modulo: string) => `${cargoId}:${modulo}`;
+
+/** Resolve cargo × módulo: a própria igreja vence; depois a acima mais próxima; senão, não liberado. */
+export function resolverAcessos(cargoIds: string[], linhas: LinhaAcesso[]): Map<string, CelulaAcesso> {
+  const proprias = new Map<string, LinhaAcesso>();
+  const acima = new Map<string, LinhaAcesso>();
+  for (const l of [...linhas].sort((a, b) => a.nivel - b.nivel)) {
+    const k = chave(l.cargo_id, l.modulo);
+    if (l.nivel === 0) proprias.set(k, l);
+    else if (!acima.has(k)) acima.set(k, l);
+  }
+
+  const matriz = new Map<string, CelulaAcesso>();
+  for (const cargoId of cargoIds) {
+    for (const modulo of MODULOS_LIBERAVEIS) {
+      const k = chave(cargoId, modulo);
+      const pai = acima.get(k);
+      const minha = proprias.get(k);
+      const herdado = pai?.permitido ?? false;
+      matriz.set(k, {
+        herdado,
+        herdadoDe: pai?.igreja ?? null,
+        propria: minha !== undefined,
+        permitido: minha ? minha.permitido : herdado,
+      });
+    }
+  }
+  return matriz;
+}
+
+export function celula(matriz: Map<string, CelulaAcesso>, cargoId: string, modulo: Modulo): CelulaAcesso | undefined {
+  return matriz.get(chave(cargoId, modulo));
+}
+
+/**
+ * O que gravar quando a igreja salva os acessos.
+ *
+ * A igreja que mexe passa a ter configuração PRÓPRIA e inteira: grava todos
+ * os pontos (cargo × módulo), não só os diferentes. Assim, o que a igreja
+ * acima mudar depois não chega mais aqui. Voltar a seguir a de cima é apagar
+ * tudo ("Voltar ao herdado").
+ *
+ * Exceção: igreja que ainda segue a de cima e salva sem mudar nada continua
+ * seguindo (não grava nada). Cargo ou módulo desconhecido é descartado.
+ */
+export function escolhasParaGravar(
+  desejado: Array<{ cargoId: string; modulo: string; permitido: boolean }>,
+  cargoIds: string[],
+  linhas: LinhaAcesso[],
+): Array<{ cargoId: string; modulo: Modulo; permitido: boolean }> {
+  const deCima = resolverAcessos(
+    cargoIds,
+    linhas.filter((l) => l.nivel > 0),
+  );
+  const validas = desejado.flatMap((d) =>
+    isModulo(d.modulo) && deCima.has(chave(d.cargoId, d.modulo))
+      ? [{ cargoId: d.cargoId, modulo: d.modulo, permitido: d.permitido }]
+      : [],
+  );
+  const jaTemPropria = linhas.some((l) => l.nivel === 0);
+  const mudouAlgo = validas.some((d) => d.permitido !== deCima.get(chave(d.cargoId, d.modulo))?.herdado);
+  return jaTemPropria || mudouAlgo ? validas : [];
+}

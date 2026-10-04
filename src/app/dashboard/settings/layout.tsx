@@ -1,5 +1,6 @@
 import { RouteTabs, type RouteTab } from "@/components/route-tabs";
 import { getActiveTenant } from "@/server/tenant";
+import { canConfigurarAcessos } from "@/services/menuPermissoesService";
 import { permissionService } from "@/services/permissionService";
 
 /**
@@ -22,6 +23,7 @@ export default async function SettingsLayout({
   if (active && permissionService.canEditCompany(active.role)) {
     tabs.push({ href: "/dashboard/settings/igreja", label: "Página da igreja" });
     tabs.push({ href: "/dashboard/settings/cargos", label: "Cargos" });
+    if (canConfigurarAcessos(active.role)) tabs.push({ href: "/dashboard/settings/acessos", label: "Acessos" });
     tabs.push({ href: "/dashboard/settings/vinculos", label: "Vínculos" });
     tabs.push({ href: "/dashboard/settings/domain", label: "Domínio próprio" });
     tabs.push({ href: "/dashboard/settings/pix", label: "Dízimos (PIX)" });

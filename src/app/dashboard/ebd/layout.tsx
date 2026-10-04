@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { exigeMenu } from "@/server/menuPermissoes";
 import { RouteTabs, type RouteTab } from "@/components/route-tabs";
 import { getEbdActorAutorizado, getEbdService } from "@/server/ebd";
 import { canGerirEbd } from "@/services/ebdService";
@@ -10,6 +11,7 @@ const BASE = "/dashboard/ebd";
  * 404 mesmo com a URL na mão; o service e a RLS (can_ebd_classe) recusam de novo.
  */
 export default async function EbdLayout({ children }: { children: React.ReactNode }) {
+  await exigeMenu("ebd");
   const actor = await getEbdActorAutorizado();
   if (!actor) notFound();
 

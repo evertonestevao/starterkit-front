@@ -61,12 +61,15 @@ export interface ChurchEventsRepository {
 export interface EventActor {
   companyId: string;
   role: RoleCode;
+  /** O módulo (Eventos ou Programação) está liberado para um cargo da pessoa. */
+  liberado?: boolean;
 }
 
 const QUEM_PUBLICA: RoleCode[] = ["owner", "admin"];
 
-export function canManageEvents(role: RoleCode): boolean {
-  return QUEM_PUBLICA.includes(role);
+/** Quem administra a igreja, ou quem tem o módulo liberado por cargo. */
+export function canManageEvents(role: RoleCode, liberado = false): boolean {
+  return QUEM_PUBLICA.includes(role) || liberado;
 }
 
 export function createChurchEventsService(
@@ -104,8 +107,8 @@ export function createChurchEventsService(
     },
 
     async createEvent(actor: EventActor, input: unknown): Promise<string> {
-      if (!canManageEvents(actor.role)) {
-        throw new AppError("forbidden", "Só quem administra a igreja pode publicar eventos.");
+      if (!canManageEvents(actor.role, actor.liberado)) {
+        throw new AppError("forbidden", "Você não tem permissão para publicar eventos.");
       }
 
       const parsed = createChurchEventSchema.safeParse(input);
@@ -157,8 +160,8 @@ export function createChurchEventsService(
      * editar.
      */
     async updateEvent(actor: EventActor, input: unknown): Promise<void> {
-      if (!canManageEvents(actor.role)) {
-        throw new AppError("forbidden", "Só quem administra a igreja pode editar eventos.");
+      if (!canManageEvents(actor.role, actor.liberado)) {
+        throw new AppError("forbidden", "Você não tem permissão para editar eventos.");
       }
 
       const parsed = updateChurchEventSchema.safeParse(input);
@@ -200,8 +203,8 @@ export function createChurchEventsService(
      * o evento foi cancelado.
      */
     async removeEvent(actor: EventActor, eventId: unknown): Promise<void> {
-      if (!canManageEvents(actor.role)) {
-        throw new AppError("forbidden", "Só quem administra a igreja pode remover eventos.");
+      if (!canManageEvents(actor.role, actor.liberado)) {
+        throw new AppError("forbidden", "Você não tem permissão para remover eventos.");
       }
       const id = typeof eventId === "string" ? eventId.trim() : "";
       if (!/^[0-9a-f-]{36}$/i.test(id)) throw new AppError("validation_error", "Evento inválido.");

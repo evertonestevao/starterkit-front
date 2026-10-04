@@ -9,6 +9,7 @@ import { createInviteService } from "@/services/inviteService";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getSponsorService } from "@/server/sponsor";
 import { getActiveTenant } from "@/server/tenant";
+import { getMenusVisiveis } from "@/server/menuPermissoes";
 import { isPlatformStaff } from "@/server/platform";
 import { exigeUsuarioValido } from "@/server/session";
 import { getTermsService } from "@/server/terms";
@@ -62,18 +63,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect("/login");
   }
 
-  // Member não vê "Pedidos de oração" no menu (a RLS também não devolve
-  // nada para ele) — poupa a consulta.
+  // Quem não vê "Pedidos de oração" no menu (member sempre; a RLS também
+  // não devolve nada para ele) não precisa da contagem — poupa a consulta.
   const unseenPrayerRequestsCount =
-    active.role === "member"
+    active.role === "member" || !(await getMenusVisiveis()).includes("prayers")
       ? 0
       : await (await getCommunityService()).getUnseenPrayerCount(active.id).catch(() => 0);
+
+  // Menus da pessoa: papel + autorizações + o que a igreja configurou.
+  const menus = await getMenusVisiveis();
 
   const cookieStore = await cookies();
   const initialCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "true";
 
   return (
-    <TenantProvider value={{ companies, active }}>
+    <TenantProvider value={{ companies, active, menus }}>
       <AppShell
         initialCollapsed={initialCollapsed}
         userName={profile?.full_name ?? "Usuário"}

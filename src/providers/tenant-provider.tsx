@@ -12,6 +12,8 @@ import type { CompanyWithRole } from "@/types/tenant";
 export interface TenantContextValue {
   companies: CompanyWithRole[];
   active: CompanyWithRole;
+  /** Chaves dos menus que a pessoa vê na igreja ativa (Configurações → Acessos). */
+  menus: string[];
 }
 
 const TenantContext = createContext<TenantContextValue | null>(null);

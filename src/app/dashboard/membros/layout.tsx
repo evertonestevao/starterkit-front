@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { exigeMenu } from "@/server/menuPermissoes";
 import { getAcompanhamentoActorAutorizado } from "@/server/acompanhamento";
 
 /**
@@ -7,6 +8,7 @@ import { getAcompanhamentoActorAutorizado } from "@/server/acompanhamento";
  * pode recebe 404, e o service e a RLS (can_acompanhar) recusam de novo.
  */
 export default async function MembrosLayout({ children }: { children: React.ReactNode }) {
+  await exigeMenu("membros");
   const actor = await getAcompanhamentoActorAutorizado();
   if (!actor) notFound();
 

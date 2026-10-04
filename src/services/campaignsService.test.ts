@@ -239,3 +239,12 @@ describe("confirmPixDonation", () => {
     expect(repo.confirmPixDonation).toHaveBeenCalledWith("99999999-9999-4999-8999-999999999999");
   });
 });
+
+describe("canManageCampaigns com cargo liberado", () => {
+  it("membro só gerencia com Campanhas liberado; quem administra, sempre", async () => {
+    const { canManageCampaigns } = await import("./campaignsService");
+    expect(canManageCampaigns("member")).toBe(false);
+    expect(canManageCampaigns("member", true)).toBe(true);
+    expect(canManageCampaigns("owner")).toBe(true);
+  });
+});

@@ -3,8 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useState } from "react";
-import { ChevronsLeft, ChevronsRight, Menu } from "lucide-react";
+import { ChevronDown, ChevronsLeft, ChevronsRight, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { brand } from "@/config/brand";
@@ -13,6 +21,7 @@ import { useTenant } from "@/providers/tenant-provider";
 import { Breadcrumbs } from "./breadcrumbs";
 import { CompanySwitcher } from "./company-switcher";
 import { titleForPath, visibleNavItems } from "./nav-items";
+import { SectionSubnavProvider, subitemAtivo, useSectionSubnav } from "./section-subnav";
 import { UserMenu, type UserMenuProps } from "./user-menu";
 
 /** Cookie lido pelo layout server para SSR sem "flash" do estado colapsado. */
@@ -52,6 +61,7 @@ export function AppShell({
   }, []);
 
   return (
+    <SectionSubnavProvider>
     <div className="flex min-h-svh w-full">
       {/* Sidebar desktop: some abaixo de lg; colapsa para rail de ícones. */}
       <aside
@@ -126,6 +136,7 @@ export function AppShell({
         <main className="mx-auto w-full max-w-6xl flex-1 p-4 lg:p-8">{children}</main>
       </div>
     </div>
+    </SectionSubnavProvider>
   );
 }
 
@@ -150,13 +161,104 @@ function SidebarNav({
   unseenPrayerRequestsCount?: number;
   onNavigate?: () => void;
 }) {
-  const { active } = useTenant();
-  const visible = visibleNavItems(active);
+  const { menus } = useTenant();
+  const visible = visibleNavItems(menus);
   const badges = badgesByHref(pendingInvitesCount, unseenPrayerRequestsCount);
+  // Abas da seção aberta, publicadas pelo layout dela (ver section-subnav).
+  const subnav = useSectionSubnav();
+  const subAtivo = subnav ? subitemAtivo(subnav, pathname) : null;
+  const contador = (count?: number) =>
+    count && count > 0 ? (
+      <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[0.7rem] leading-5 font-semibold text-white tabular-nums dark:text-neutral-950">
+        {count > 99 ? "99+" : count}
+        <span className="sr-only">{count === 1 ? " pendência" : " pendências"}</span>
+      </span>
+    ) : null;
 
   return (
-    <nav className="flex flex-col gap-1 p-2">
+    <nav className="flex flex-col gap-1 overflow-y-auto p-2">
       {visible.map((item) => {
+        // Seção aberta: o item é dono das abas publicadas (mesmo prefixo).
+        const subitens =
+          subnav && item.href !== "/dashboard" && subnav.every((t) => t.href.startsWith(item.href)) ? subnav : null;
+        const pendencias = subitens?.reduce((soma, t) => soma + (t.count ?? 0), 0) ?? 0;
+
+        if (subitens && collapsed) {
+          // Menu recolhido: os subitens abrem num painel ao lado do ícone.
+          return (
+            <DropdownMenu key={item.href}>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={item.title}
+                    className="relative flex items-center justify-center rounded-md bg-sidebar-primary px-2 py-2 text-sm text-sidebar-primary-foreground"
+                  />
+                }
+              >
+                <item.icon className="size-4 shrink-0" />
+                {pendencias > 0 ? (
+                  <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-destructive" />
+                ) : null}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="right" align="start" className="w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>{item.title}</DropdownMenuLabel>
+                </DropdownMenuGroup>
+                {subitens.map((t) => (
+                  <DropdownMenuItem
+                    key={t.href}
+                    render={<Link href={t.href} aria-current={t.href === subAtivo ? "page" : undefined} />}
+                    className={cn(t.href === subAtivo && "font-semibold")}
+                  >
+                    {t.label}
+                    {contador(t.count)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        }
+
+        if (subitens) {
+          return (
+            <div key={item.href} className="flex flex-col gap-0.5">
+              <Link
+                href={item.href}
+                onClick={onNavigate}
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                <item.icon className="size-4 shrink-0" />
+                <span>{item.title}</span>
+                <ChevronDown className="ml-auto size-4 opacity-60" aria-hidden />
+              </Link>
+              <ul className="ml-5 flex flex-col gap-0.5 border-l pl-2">
+                {subitens.map((t) => {
+                  const atual = t.href === subAtivo;
+                  return (
+                    <li key={t.href}>
+                      <Link
+                        href={t.href}
+                        onClick={onNavigate}
+                        aria-current={atual ? "page" : undefined}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
+                          atual
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        )}
+                      >
+                        {t.label}
+                        {contador(t.count)}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        }
+
         const isActive = pathname === item.href;
         const badge = badges[item.href as keyof typeof badges];
         const badgeCount = badge?.count ?? 0;

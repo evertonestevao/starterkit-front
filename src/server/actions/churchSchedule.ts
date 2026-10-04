@@ -20,7 +20,7 @@ async function ator() {
   // Empresa e papel vêm da sessão, nunca do formulário.
   const { active } = await getActiveTenant();
   if (!active) throw new AppError("unauthorized", "Selecione uma igreja para continuar.");
-  return { companyId: active.id, role: active.role };
+  return { companyId: active.id, role: active.role, liberado: active.acessos.includes("programacao") };
 }
 
 export async function addScheduleItemAction(

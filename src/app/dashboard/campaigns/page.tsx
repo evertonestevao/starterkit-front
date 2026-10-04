@@ -75,7 +75,7 @@ export default async function CampaignsPage() {
   const { active } = await getActiveTenant();
   if (!active) return null; // layout já redirecionou
 
-  const podeGerenciar = canManageCampaigns(active.role);
+  const podeGerenciar = canManageCampaigns(active.role, active.acessos.includes("campaigns"));
   const campanhas = await (await getCampaignsService()).list(active.id);
   const igrejas = new Set(campanhas.map((c) => c.churchId));
 

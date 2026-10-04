@@ -14,7 +14,7 @@ export default async function NewEventPage() {
   const { active } = await getActiveTenant();
   if (!active) return null; // o layout já redirecionou
 
-  const podePublicar = canManageEvents(active.role);
+  const podePublicar = canManageEvents(active.role, active.acessos.includes("events"));
   const igrejas = podePublicar ? await (await getChurchEventsService()).listChurches(active.id) : [];
 
   return (
