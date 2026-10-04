@@ -67,7 +67,7 @@ export function AppShell({
       <aside
         data-collapsed={collapsed}
         className={cn(
-          "sticky top-0 hidden h-svh shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex",
+          "sticky top-0 hidden h-svh shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex print:hidden",
           collapsed ? "w-14" : "w-60",
         )}
       >
@@ -113,7 +113,7 @@ export function AppShell({
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur">
+        <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur print:hidden">
           <Button
             variant="ghost"
             size="icon"
@@ -133,7 +133,7 @@ export function AppShell({
             <UserMenu {...user} />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 p-4 lg:p-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 p-4 lg:p-8 print:max-w-none print:p-0">{children}</main>
       </div>
     </div>
     </SectionSubnavProvider>

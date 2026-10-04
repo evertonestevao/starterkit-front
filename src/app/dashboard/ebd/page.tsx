@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BookOpen, ClipboardCheck, Users } from "lucide-react";
+import { BookOpen, ClipboardCheck, FileDown, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,12 +51,17 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
                 {trimestre ? ` · ${trimestre.nome}${trimestre.revista ? ` (${trimestre.revista})` : ""}` : ""}
               </CardDescription>
             </div>
-            <form className="flex items-center gap-2 text-sm">
-              <input name="data" type="date" defaultValue={data} className="h-9 rounded-md border bg-transparent px-2" aria-label="Domingo" />
-              <button type="submit" className="h-9 rounded-md border px-3 hover:bg-muted">
-                Ver
-              </button>
-            </form>
+            <div className="flex flex-wrap items-center gap-2">
+              <form className="flex items-center gap-2 text-sm">
+                <input name="data" type="date" defaultValue={data} className="h-9 rounded-md border bg-transparent px-2" aria-label="Domingo" />
+                <button type="submit" className="h-9 rounded-md border px-3 hover:bg-muted">
+                  Ver
+                </button>
+              </form>
+              <Link href={`/dashboard/ebd/relatorio?data=${data}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                <FileDown className="size-4" /> Gerar PDF
+              </Link>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
