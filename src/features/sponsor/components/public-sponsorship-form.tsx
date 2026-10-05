@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TelefoneInput } from "@/components/telefone-input";
 import { TermsCheckboxes } from "@/features/terms/components/terms-checkboxes";
 import { DEFAULT_SPONSOR_KIND, SPONSOR_KIND_OPTIONS } from "@/features/sponsor/sponsorKindOptions";
 import { cn } from "@/lib/utils";
@@ -140,14 +141,7 @@ export function PublicSponsorshipForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="phone">Celular (opcional)</Label>
-        <Input
-          id="phone"
-          name="phone"
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          defaultValue={state?.values?.phone}
-        />
+        <TelefoneInput id="phone" name="phone" defaultValue={state?.values?.phone} />
       </div>
 
       <TermsCheckboxes audience="patrocinador" />

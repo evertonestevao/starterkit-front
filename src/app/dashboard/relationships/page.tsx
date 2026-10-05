@@ -1,20 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarCheck, Clock, HeartHandshake, UserPlus } from "lucide-react";
+import { CalendarCheck, CalendarClock, Clock, HeartHandshake, UserPlus } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
 import { PaginationControls } from "@/components/pagination-controls";
+import { RankingBarras } from "@/components/ranking-barras";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VisitaAcoes } from "@/features/community/components/visita-acoes";
 import { formatarData } from "@/lib/acompanhamento";
 import { cn } from "@/lib/utils";
 import { getCommunityService } from "@/server/community";
-import { normalizarPeriodo } from "@/services/communityService";
 import { getActiveTenant } from "@/server/tenant";
+import { normalizarPeriodo, situacaoDoPedido, type PessoaQueVisita } from "@/services/communityService";
 import type { Visitor } from "@/types/database";
 
 export const metadata: Metadata = { title: "Quem quer visita" };
@@ -30,11 +31,14 @@ function formatDateTime(iso: string): string {
   });
 }
 
+/** As etapas de um pedido, na ordem em que acontecem. */
 const FILTROS = [
-  { id: "pendentes", rotulo: "Aguardando visita" },
+  { id: "novos", rotulo: "Aguardando contato" },
+  { id: "andamento", rotulo: "Contato feito" },
   { id: "feitas", rotulo: "Visitados" },
   { id: "todos", rotulo: "Todos" },
 ] as const;
+type Filtro = (typeof FILTROS)[number]["id"];
 
 export default async function QuemQuerVisitaPage({
   searchParams,
@@ -47,12 +51,21 @@ export default async function QuemQuerVisitaPage({
   const { page, situacao: situacaoParam, de: deParam, ate: ateParam } = await searchParams;
   const { de, ate } = normalizarPeriodo(deParam, ateParam);
   const periodo = { de, ate };
-  // Abre nos pendentes: é o que precisa de ação.
-  const situacao = situacaoParam === "feitas" || situacaoParam === "todos" ? situacaoParam : "pendentes";
+  // Abre em "aguardando contato": é o que pede ação primeiro.
+  const situacao: Filtro = FILTROS.some((f) => f.id === situacaoParam) ? (situacaoParam as Filtro) : "novos";
   const community = await getCommunityService();
-  const [pedidos, totais] = await Promise.all([
+  const [pedidos, totais, quemVisita, porPessoa] = await Promise.all([
     community.listVisitors(active.id, { page: Number(page) || 1, situacao, ...periodo }),
     community.countVisitas(active.id, periodo),
+    // Complementos da tela: se falharem, a lista de pedidos continua.
+    community.quemPodeVisitar(active.id).catch((err: unknown) => {
+      console.error("[visitas] falha ao carregar quem pode visitar", err);
+      return [] as PessoaQueVisita[];
+    }),
+    community.visitasPorPessoa(active.id, periodo).catch((err: unknown) => {
+      console.error("[visitas] falha ao contar as visitas por pessoa", err);
+      return [];
+    }),
   ]);
 
   const textoPeriodo =
@@ -68,6 +81,12 @@ export default async function QuemQuerVisitaPage({
     for (const [k, v] of Object.entries({ situacao, de, ate, ...extra })) if (v) qs.set(k, v);
     return `/dashboard/relationships?${qs}`;
   };
+  const contagem: Record<Filtro, number> = {
+    novos: totais.novos,
+    andamento: totais.andamento,
+    feitas: totais.feitas,
+    todos: totais.novos + totais.andamento + totais.feitas,
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -77,15 +96,15 @@ export default async function QuemQuerVisitaPage({
         </div>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight">Quem quer visita</h2>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Pessoas que pediram, pela página da igreja, a visita do Pastor ou de alguém da igreja. Ligue para combinar e
-          marque aqui quando a visita for feita e quem foi.
+          Pessoas que pediram, pela página da igreja, a visita do Pastor ou de alguém da igreja. Fale com a pessoa,
+          marque &ldquo;Contato feito&rdquo; com o dia combinado e, depois, registre a visita e quem foi.
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard icon={Clock} label="Aguardando visita" value={totais.pendentes} hint="precisam de retorno" />
+        <MetricCard icon={Clock} label="Aguardando contato" value={totais.novos} hint="ninguém falou ainda" />
+        <MetricCard icon={CalendarClock} label="Contato feito" value={totais.andamento} hint="visita ainda por fazer" />
         <MetricCard icon={CalendarCheck} label="Visitados" value={totais.feitas} hint={textoPeriodo} />
-        <MetricCard icon={UserPlus} label="Pedidos recebidos" value={totais.pendentes + totais.feitas} hint={textoPeriodo} />
       </div>
 
       <form
@@ -123,7 +142,7 @@ export default async function QuemQuerVisitaPage({
               situacao === f.id ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted",
             )}
           >
-            {f.rotulo}
+            {f.rotulo} <span className="tabular-nums opacity-75">({contagem[f.id]})</span>
           </Link>
         ))}
       </nav>
@@ -131,7 +150,13 @@ export default async function QuemQuerVisitaPage({
       {pedidos.items.length === 0 ? (
         <EmptyState
           icon={UserPlus}
-          title={situacao === "pendentes" ? "Nenhum pedido aguardando visita" : "Nenhum pedido aqui"}
+          title={
+            situacao === "novos"
+              ? "Nenhum pedido aguardando contato"
+              : situacao === "andamento"
+                ? "Nenhuma visita combinada no momento"
+                : "Nenhum pedido aqui"
+          }
           description="Quando alguém pedir uma visita pela página da igreja, o pedido aparece aqui."
         />
       ) : (
@@ -139,7 +164,7 @@ export default async function QuemQuerVisitaPage({
           <ul className="flex flex-col gap-3">
             {pedidos.items.map((p) => (
               <li key={p.id}>
-                <PedidoCard pedido={p} />
+                <PedidoCard pedido={p} quemVisita={quemVisita} />
               </li>
             ))}
           </ul>
@@ -153,12 +178,33 @@ export default async function QuemQuerVisitaPage({
           />
         </>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Visitas por pessoa</CardTitle>
+          <CardDescription>
+            Quantas visitas cada membro fez, {textoPeriodo === "desde o início" ? textoPeriodo : `com pedidos ${textoPeriodo}`}.
+            Conta quem foi marcado em &ldquo;Quem visitou&rdquo;.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RankingBarras
+            vazio="Nenhuma visita registrada com membros marcados ainda."
+            itens={porPessoa.map((v) => ({
+              key: v.membroId,
+              nome: v.nome,
+              valor: v.visitas,
+              valorTexto: v.visitas === 1 ? "1 visita" : `${v.visitas} visitas`,
+            }))}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function PedidoCard({ pedido: p }: { pedido: Visitor }) {
-  const feita = p.visitado_em !== null;
+function PedidoCard({ pedido: p, quemVisita }: { pedido: Visitor; quemVisita: PessoaQueVisita[] }) {
+  const etapa = situacaoDoPedido(p);
   return (
     <Card>
       <CardContent className="flex flex-col gap-3">
@@ -169,11 +215,15 @@ function PedidoCard({ pedido: p }: { pedido: Visitor }) {
             {p.endereco ? <p className="text-sm text-muted-foreground">{p.endereco}</p> : null}
           </div>
           <div className="flex flex-col items-end gap-1">
-            {feita ? (
+            {etapa === "feitas" ? (
               <Badge className="bg-emerald-600 text-white">Visitado</Badge>
+            ) : etapa === "andamento" ? (
+              <Badge variant="outline" className="border-sky-600 text-sky-700 dark:text-sky-400">
+                Contato feito
+              </Badge>
             ) : (
               <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">
-                Aguardando visita
+                Aguardando contato
               </Badge>
             )}
             <span className="text-xs text-muted-foreground">pedido em {formatDateTime(p.created_at)}</span>
@@ -184,14 +234,37 @@ function PedidoCard({ pedido: p }: { pedido: Visitor }) {
           <p className="rounded-md bg-muted/50 px-3 py-2 text-sm leading-6 whitespace-pre-line">{p.mensagem}</p>
         ) : null}
 
-        {feita ? (
+        {p.contato_em && etapa !== "feitas" ? (
+          <p className="text-sm">
+            Contato feito em <strong>{formatarData(p.contato_em)}</strong>
+            {p.agendada_para ? (
+              <>
+                {" "}
+                · visita marcada para <strong>{formatarData(p.agendada_para)}</strong>
+              </>
+            ) : (
+              " · visita ainda sem data"
+            )}
+            {p.contato_obs ? <span className="block text-muted-foreground">{p.contato_obs}</span> : null}
+          </p>
+        ) : null}
+
+        {etapa === "feitas" ? (
           <p className="text-sm">
             Visitado em <strong>{formatarData(p.visitado_em)}</strong> por <strong>{p.visitado_por}</strong>
             {p.visita_obs ? <span className="block text-muted-foreground">{p.visita_obs}</span> : null}
           </p>
         ) : null}
 
-        <VisitaAcoes visitorId={p.id} nome={p.name} telefone={p.contact} feita={feita} />
+        <VisitaAcoes
+          visitorId={p.id}
+          nome={p.name}
+          telefone={p.contact}
+          etapa={etapa}
+          agendadaPara={p.agendada_para}
+          contatoObs={p.contato_obs}
+          quemVisita={quemVisita}
+        />
       </CardContent>
     </Card>
   );

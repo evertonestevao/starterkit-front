@@ -52,7 +52,7 @@ export function createSupabaseCampaignDonationsRepository(
     },
 
     async createPixDonation({ campaignId, nome, telefone, valorCents }) {
-      const { data, error } = await client.rpc("criar_doacao_pix_campanha", {
+      const { data, error } = await adminClient.rpc("criar_doacao_pix_campanha", {
         p_campaign_id: campaignId,
         p_nome: nome,
         p_telefone: telefone,
@@ -69,7 +69,7 @@ export function createSupabaseCampaignDonationsRepository(
     },
 
     async createGatewayDonation({ campaignId, nome, telefone, valorCents }) {
-      const { data, error } = await client.rpc("registrar_doacao_gateway_campanha", {
+      const { data, error } = await adminClient.rpc("registrar_doacao_gateway_campanha", {
         p_campaign_id: campaignId,
         p_nome: nome,
         p_telefone: telefone,

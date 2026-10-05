@@ -11,7 +11,7 @@
 --   │   └── Demo Congregação Aurora (6)          pastor.demo.aurora@dev.local
 --   └── Demo Subsede Sul (6)                     pastor.demo.sul@dev.local
 --       └── Demo Congregação Centro (6)          pastor.demo.centro@dev.local
--- + secretario.demo@dev.local: member da sede AUTORIZADO a fazer chamada.
+-- + secretario.demo@dev.local: member da sede com o cargo Secretário(a).
 --
 -- 8 semanas de cultos (domingo + quarta de oração) com os casos que o módulo
 -- precisa mostrar, todos na Demo Sede:
@@ -33,7 +33,7 @@
 --
 -- EBD (Demo Sede): 4 classes, 6 domingos de aula, crianças "não membro" e
 -- uma professora com login: professora.demo@dev.local (só vê os Juniores).
--- secretaria.ebd.demo@dev.local: member da sede com a autorização da EBD.
+-- secretaria.ebd.demo@dev.local: member da sede com o cargo Secretário(a) da EBD.
 
 do $$
 begin
@@ -261,10 +261,10 @@ begin
     (v_sede, 'Coordenador de células', 'Acompanha os líderes das células da rede.', 20),
     (v_norte, 'Líder de casais', 'Ministério de casais da Subsede Norte.', 21);
 
-  -- Secretário: member da sede com autorização de chamada.
+  -- Secretário: member da sede; o acesso vem do cargo Secretário(a).
   v_secretario := public.__demo_user('secretario.demo@dev.local', 'Secretário Demo');
-  insert into public.company_members (company_id, user_id, role, pode_acompanhar)
-  select company_id, v_secretario, 'member', true from public.churches where id = v_sede;
+  insert into public.company_members (company_id, user_id, role)
+  select company_id, v_secretario, 'member' from public.churches where id = v_sede;
   insert into public.rol_membro_cargos (membro_id, cargo_id, church_id)
   select m.id, (select id from public.cargos where slug = 'secretario'), v_sede
   from public.rol_membros m where m.church_id = v_sede and m.user_id = v_secretario;
@@ -412,10 +412,14 @@ declare
 begin
   select id into v_sede from public.churches where slug = 'demo-sede';
 
-  -- Secretaria da EBD com login (member): só a autorização da EBD.
-  insert into public.company_members (company_id, user_id, role, pode_gerir_ebd)
-  select company_id, public.__demo_user('secretaria.ebd.demo@dev.local', 'Secretária EBD Demo'), 'member', true
+  -- Secretaria da EBD com login (member): o acesso vem do cargo.
+  insert into public.company_members (company_id, user_id, role)
+  select company_id, public.__demo_user('secretaria.ebd.demo@dev.local', 'Secretária EBD Demo'), 'member'
   from public.churches where id = v_sede;
+  perform public.__demo_cargo(
+    (select m.id from public.rol_membros m join auth.users u on u.id = m.user_id
+     where u.email = 'secretaria.ebd.demo@dev.local' and m.church_id = v_sede),
+    'secretario_ebd');
 
   -- Professora com login (member): o trigger já cria o membro dela.
   v_prof := public.__demo_user('professora.demo@dev.local', 'Professora Demo');
@@ -630,6 +634,57 @@ begin
     (v_sede, 'Seu Joaquim Lima', '(11) 96666-3308', 'Sítio Boa Vista', null, now() - interval '35 days', current_date - 30, 'Pr. Demo Sede', null),
     (v_sede, 'Bianca Freitas', '(11) 95555-4409', 'Parque das Flores', 'Gostaria de batizar meus filhos.', now() - interval '50 days', current_date - 44, 'Diác. Roberto', 'Encaminhada para a classe de novos convertidos.'),
     (v_sede, 'Tereza Nogueira', '(11) 94444-5510', 'Vila Nova', 'Meu marido está desempregado e desanimado.', now() - interval '75 days', null, null, null);
+end $$;
+
+-- Etapas dos pedidos de visita da Demo Sede: contato feito e quem visitou.
+do $$
+declare v_sede uuid; v_pastor uuid; v_outro uuid;
+begin
+  select id into v_sede from public.churches where slug = 'demo-sede';
+  -- O pastor (login do responsável) e mais um membro com cargo, para a contagem por pessoa.
+  select m.id into v_pastor from public.rol_membros m join auth.users u on u.id = m.user_id
+  where m.church_id = v_sede and u.email = 'pastor.demo.sede@dev.local';
+  select m.id into v_outro from public.rol_membros m
+  join public.rol_membro_cargos rc on rc.membro_id = m.id
+  where m.church_id = v_sede and m.deleted_at is null and m.id <> v_pastor
+  order by m.nome limit 1;
+
+  -- Visitados: o contato veio dois dias antes da visita.
+  update public.visitors set contato_em = visitado_em - 2
+  where church_id = v_sede and visitado_em is not null and contato_em is null;
+  insert into public.visita_participantes (visitor_id, membro_id, church_id)
+  select v.id, v_pastor, v_sede from public.visitors v
+  where v.church_id = v_sede and v.visitado_em is not null and v_pastor is not null
+  on conflict do nothing;
+  insert into public.visita_participantes (visitor_id, membro_id, church_id)
+  select v.id, v_outro, v_sede from public.visitors v
+  where v.church_id = v_sede and v.visitado_em is not null and v.name in ('Rogério e Paula Menezes', 'Bianca Freitas')
+    and v_outro is not null
+  on conflict do nothing;
+
+  -- Em andamento: já falaram com dois; um com a visita marcada.
+  update public.visitors
+  set contato_em = current_date - 1, agendada_para = current_date + 2, contato_obs = 'Prefere à tarde; a filha atende o telefone.'
+  where church_id = v_sede and name = 'Sr. Antônio Pires' and visitado_em is null;
+  update public.visitors
+  set contato_em = current_date - 3, contato_obs = 'Vai avisar o melhor dia.'
+  where church_id = v_sede and name = 'Juliana Costa' and visitado_em is null;
+end $$;
+
+-- Pedidos de oração da Demo Sede: alguns aguardando, outros já orados.
+do $$
+declare v_sede uuid;
+begin
+  select id into v_sede from public.churches where slug = 'demo-sede';
+  if exists (select 1 from public.prayer_requests where church_id = v_sede) then return; end if;
+  insert into public.prayer_requests (church_id, name, message, created_at, orado_em, anotacao) values
+    (v_sede, 'Marlene', 'Peço oração pela saúde do meu esposo, que fará uma cirurgia na próxima semana.', now() - interval '5 hours', null, null),
+    (v_sede, null, 'Estou desempregado há seis meses e desanimado. Orem por uma porta aberta.', now() - interval '1 day', null, null),
+    (v_sede, 'Rafael Souza', 'Pela restauração do meu casamento.', now() - interval '3 days', null, 'O pastor ligou na quinta; pediu para continuar orando.'),
+    (v_sede, 'Dona Ivone', 'Pelo meu neto, que se afastou da igreja.', now() - interval '6 days', null, null),
+    (v_sede, null, 'Agradeço a Deus por um livramento e peço oração pela minha família.', now() - interval '9 days', now() - interval '7 days', null),
+    (v_sede, 'Cláudio', 'Pela minha mãe, que está internada.', now() - interval '15 days', now() - interval '14 days', 'Visitada no hospital.'),
+    (v_sede, 'Jovem da igreja', 'Pelas provas do vestibular.', now() - interval '30 days', now() - interval '28 days', null);
 end $$;
 
 drop function public.__demo_rol_pequeno(uuid, text, int, date);

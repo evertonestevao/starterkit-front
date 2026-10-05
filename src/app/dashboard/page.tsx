@@ -33,7 +33,7 @@ import { getActiveTenant } from "@/server/tenant";
 import { createInviteService } from "@/services/inviteService";
 import { permissionService } from "@/services/permissionService";
 
-export const metadata: Metadata = { title: "Dashboard" };
+export const metadata: Metadata = { title: "Painel" };
 
 /** Um número do painel: só existe para quem tem o menu correspondente. */
 interface Numero {
@@ -188,11 +188,11 @@ export default async function DashboardPage() {
   if (visitas) {
     numeros.push({
       icon: HeartHandshake,
-      rotulo: "Aguardando visita",
-      valor: visitas.pendentes,
-      detalhe: `${visitas.feitas} já visitado(s)`,
+      rotulo: "Pedidos de visita sem contato",
+      valor: visitas.novos,
+      detalhe: `${visitas.andamento} com visita por fazer · ${visitas.feitas} visitado(s)`,
       href: "/dashboard/relationships",
-      atencao: visitas.pendentes > 0,
+      atencao: visitas.novos > 0,
     });
   }
   if (oracao !== null) {

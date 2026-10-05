@@ -45,6 +45,9 @@ export default defineConfig({
       SPONSOR_BILLING_PROVIDER: "fake",
       EMAIL_PROVIDER: "console",
       RATE_LIMIT_STORE: "memory",
+      // O teste preenche os formulários públicos em milissegundos e sempre do
+      // mesmo endereço: sem isto a barreira contra robôs barraria o próprio teste.
+      PUBLIC_FORMS_RELAXED: "true",
       APP_URL: BASE_URL,
     },
   },

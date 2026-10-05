@@ -3,14 +3,11 @@ import type { Company, CompanyMember, RoleCode } from "./database";
 /** Empresa + papel do usuário logado nela (resultado do join com membership). */
 export interface CompanyWithRole extends Company {
   role: RoleCode;
-  /**
-   * Pode fazer chamada e acompanhamento (owner/admin já podem): autorização
-   * da ficha OU cargo com Presença/Membros liberado.
-   */
+  /** Pode fazer chamada e acompanhamento (owner/admin já podem): cargo com Presença ou Membros liberado. */
   pode_acompanhar: boolean;
-  /** Gestão da EBD (owner/admin já podem): autorização da ficha OU cargo com EBD liberado. */
+  /** Gestão da EBD (owner/admin já podem): cargo com EBD liberado. */
   pode_gerir_ebd: boolean;
-  /** Módulos liberados para a pessoa (por cargo ou pelas autorizações da ficha). */
+  /** Módulos liberados para a pessoa: a soma do que os cargos dela liberam. */
   acessos: string[];
   /** É professor(a) de alguma classe da EBD desta empresa. */
   professor_ebd: boolean;

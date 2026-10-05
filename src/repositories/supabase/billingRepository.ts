@@ -11,7 +11,7 @@ import type { Plan, Subscription } from "@/types/database";
 export function createSupabaseBillingRepository(client: SupabaseClient): BillingRepository {
   function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T | null {
     if (result.error) {
-      throw new AppError("internal_error", "Falha ao acessar dados de billing", result.error);
+      throw new AppError("internal_error", "Falha ao acessar os dados da assinatura", result.error);
     }
     return result.data;
   }

@@ -14,6 +14,8 @@ export interface TenantContextValue {
   active: CompanyWithRole;
   /** Chaves dos menus que a pessoa vê na igreja ativa (Configurações → Acessos). */
   menus: string[];
+  /** Pedidos de visita em que ninguém fez contato ainda (aviso no menu). */
+  visitasSemContato: number;
 }
 
 const TenantContext = createContext<TenantContextValue | null>(null);

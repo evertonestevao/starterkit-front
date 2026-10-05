@@ -20,7 +20,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       // ser o de outra pessoa da mesma empresa (o owner, que vem primeiro).
       const { data, error } = await client
         .from("company_members")
-        .select("role, pode_acompanhar, pode_gerir_ebd, company:companies(*)")
+        .select("role, company:companies(*)")
         .eq("user_id", auth.user.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: true });
@@ -41,10 +41,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         .filter((row) => row.company && !(row.company as unknown as Company).deleted_at)
         .map((row) => {
           const company = row.company as unknown as Company;
-          const acessos = acessosDaPessoa(porCargo.get(company.id) ?? [], {
-            pode_acompanhar: Boolean(row.pode_acompanhar),
-            pode_gerir_ebd: Boolean(row.pode_gerir_ebd),
-          });
+          const acessos = acessosDaPessoa(porCargo.get(company.id) ?? []);
           return {
             ...company,
             role: row.role as RoleCode,
@@ -159,22 +156,6 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         .select("id");
       if (error) {
         throw new AppError("internal_error", "Falha ao alterar papel", error);
-      }
-      if (!data || data.length === 0) {
-        throw new AppError("not_found", "Membro não encontrado");
-      }
-    },
-
-    async updateMemberPermissao(memberId, companyId, campo, value) {
-      const { data, error } = await client
-        .from("company_members")
-        .update({ [campo]: value })
-        .eq("id", memberId)
-        .eq("company_id", companyId)
-        .is("deleted_at", null)
-        .select("id");
-      if (error) {
-        throw new AppError("internal_error", "Falha ao alterar a autorização", error);
       }
       if (!data || data.length === 0) {
         throw new AppError("not_found", "Membro não encontrado");

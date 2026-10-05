@@ -23,8 +23,18 @@ export interface CommunityCounts {
 export interface CommunityRepository {
   listPrayerRequests(
     companyId: string,
-    opts: { limit: number; offset: number },
+    opts: { limit: number; offset: number; situacao?: SituacaoOracao },
   ): Promise<{ items: PrayerRequest[]; total: number }>;
+  /** Quantos pedidos aguardam oração e quantos já foram orados. */
+  countOracoes(companyId: string): Promise<{ pendentes: number; orados: number }>;
+  /** RPC marcar_pedidos_orados. ids null = todos os pendentes. Devolve quantos mudaram. */
+  marcarOrados(companyId: string, ids: string[] | null, orado: boolean): Promise<number>;
+  /** RPC anotar_pedido_oracao (texto null apaga a anotação). */
+  anotarPedido(id: string, texto: string | null): Promise<void>;
+  /** RPC ocultar_pedido_oracao: tira da tela um pedido ofensivo ou de spam. */
+  ocultarPedidoOracao(id: string): Promise<void>;
+  /** RPC ocultar_pedido_visita: idem para o pedido de visita. */
+  ocultarPedidoVisita(id: string): Promise<void>;
   listEventSignups(
     companyId: string,
     opts: { limit: number; offset: number; eventId?: string },
@@ -33,10 +43,16 @@ export interface CommunityRepository {
     companyId: string,
     opts: { limit: number; offset: number; situacao?: SituacaoVisita } & PeriodoPedidos,
   ): Promise<{ items: Visitor[]; total: number }>;
-  /** Quantos pedidos (do período) esperam visita e quantos já foram visitados. */
-  countVisitas(companyId: string, periodo: PeriodoPedidos): Promise<{ pendentes: number; feitas: number }>;
+  /** Quantos pedidos (do período) em cada etapa: sem contato, com contato feito, visitados. */
+  countVisitas(companyId: string, periodo: PeriodoPedidos): Promise<ContagemVisitas>;
   /** Pela RPC registrar_visita (só a equipe da própria igreja). Data null = desfaz. */
   registrarVisita(input: RegistroVisita): Promise<void>;
+  /** Pela RPC registrar_contato_visita. `desfazer` volta para "aguardando contato". */
+  registrarContato(input: RegistroContatoVisita): Promise<void>;
+  /** Membros com cargo que podem ser marcados como quem visitou (só nome e cargos). */
+  listQuemPodeVisitar(companyId: string): Promise<PessoaQueVisita[]>;
+  /** Visitas feitas por membro, pela data da visita. */
+  visitasPorPessoa(companyId: string, periodo: PeriodoPedidos): Promise<VisitasDaPessoa[]>;
   countAll(companyId: string, since: string): Promise<CommunityCounts>;
   /** Até quando a PRÓPRIA sessão já viu os pedidos desta empresa. Null = nunca viu. */
   getPrayerSeenAt(companyId: string): Promise<string | null>;
@@ -45,7 +61,36 @@ export interface CommunityRepository {
   markPrayerRequestsSeen(companyId: string, seenAt: string): Promise<void>;
 }
 
-export type SituacaoVisita = "pendentes" | "feitas";
+export type SituacaoOracao = "pendentes" | "orados";
+
+/** Etapas do pedido: sem contato → contato feito (em andamento) → visitado. */
+export type SituacaoVisita = "novos" | "andamento" | "feitas";
+
+export interface ContagemVisitas {
+  /** Ninguém falou com a pessoa ainda. */
+  novos: number;
+  /** Contato feito, visita ainda não aconteceu. */
+  andamento: number;
+  feitas: number;
+}
+
+export interface PessoaQueVisita {
+  membroId: string;
+  nome: string;
+  cargos: string;
+}
+
+export interface VisitasDaPessoa {
+  membroId: string;
+  nome: string;
+  visitas: number;
+}
+
+/** Em que etapa o pedido está, pelas datas gravadas. */
+export function situacaoDoPedido(v: Pick<Visitor, "visitado_em" | "contato_em">): SituacaoVisita {
+  if (v.visitado_em) return "feitas";
+  return v.contato_em ? "andamento" : "novos";
+}
 
 /** Período pela data do PEDIDO (dias inteiros, YYYY-MM-DD). Vazio = sem limite. */
 export interface PeriodoPedidos {
@@ -66,8 +111,19 @@ export function normalizarPeriodo(de?: string, ate?: string): PeriodoPedidos {
 export interface RegistroVisita {
   visitorId: string;
   visitadoEm: string | null;
-  visitadoPor: string | null;
+  /** Membros da igreja que foram (para a contagem por pessoa). */
+  membroIds: string[];
+  /** Quem foi e não é membro cadastrado (texto livre). */
+  outros: string | null;
   observacao: string | null;
+}
+
+export interface RegistroContatoVisita {
+  visitorId: string;
+  /** Dia combinado para a visita; null = ainda sem data. */
+  agendadaPara: string | null;
+  observacao: string | null;
+  desfazer: boolean;
 }
 
 const textoOpcional = (max: number, msg: string) =>
@@ -83,13 +139,26 @@ const registroVisitaSchema = z
       (v) => (v === "" || v === undefined ? null : v),
       z.iso.date("Data inválida").nullable(),
     ),
-    visitadoPor: textoOpcional(120, "Nome muito longo"),
+    membroIds: z.array(z.uuid("Pessoa inválida")).max(20, "Gente demais na visita").default([]),
+    outros: textoOpcional(120, "Texto muito longo"),
     observacao: textoOpcional(1000, "Observação muito longa"),
   })
-  .refine((r) => r.visitadoEm === null || !!r.visitadoPor, {
+  .refine((r) => r.visitadoEm === null || r.membroIds.length > 0 || !!r.outros, {
     message: "Informe quem fez a visita",
-    path: ["visitadoPor"],
+    path: ["membroIds"],
   });
+
+const dataOpcional = z.preprocess(
+  (v) => (v === "" || v === undefined ? null : v),
+  z.iso.date("Data inválida").nullable(),
+);
+
+const registroContatoSchema = z.object({
+  visitorId: z.uuid("Pedido inválido"),
+  agendadaPara: dataOpcional,
+  observacao: textoOpcional(500, "Observação muito longa"),
+  desfazer: z.boolean().default(false),
+});
 
 const PAGE_SIZE = 20;
 
@@ -106,14 +175,58 @@ export function createCommunityService(repo: CommunityRepository) {
   return {
     async listPrayerRequests(
       companyId: string,
-      params?: PageParams,
+      params?: PageParams & { situacao?: string },
     ): Promise<Paginated<PrayerRequest>> {
       const { page, pageSize, offset } = normalizePageParams(params, PAGE_SIZE);
+      // Filtro da URL: valor desconhecido lista todos.
+      const situacao = params?.situacao === "pendentes" || params?.situacao === "orados" ? params.situacao : undefined;
       const { items, total } = await repo.listPrayerRequests(requireCompany(companyId), {
         limit: pageSize,
         offset,
+        situacao,
       });
       return { items, total, page, pageSize };
+    },
+
+    async countOracoes(companyId: string): Promise<{ pendentes: number; orados: number }> {
+      return repo.countOracoes(requireCompany(companyId));
+    },
+
+    /**
+     * Marca pedidos como "já oramos" (ou desfaz). `ids` = "todos" marca todos
+     * os que aguardam — como depois de um culto de oração. Quem pode é
+     * decidido no banco (só quem administra a própria igreja).
+     */
+    async marcarOrados(companyId: string, ids: unknown, orado: boolean): Promise<number> {
+      const empresa = requireCompany(companyId);
+      if (ids === "todos") {
+        // "Todos" só existe para marcar: desfazer em massa apagaria o histórico inteiro.
+        if (!orado) throw new AppError("validation_error", "Desfaça um pedido por vez.");
+        return repo.marcarOrados(empresa, null, true);
+      }
+      const parsed = z.array(z.uuid("Pedido inválido")).min(1, "Escolha um pedido").max(500).safeParse(ids);
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      return repo.marcarOrados(empresa, [...new Set(parsed.data)], orado);
+    },
+
+    /**
+     * Tira da tela um pedido ofensivo ou de spam ("oracao" ou "visita"). Não
+     * volta pela tela; o registro continua no banco. Quem pode é decidido lá.
+     */
+    async ocultarPedido(tipo: "oracao" | "visita", id: unknown): Promise<void> {
+      const parsed = z.uuid("Pedido inválido").safeParse(id);
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      if (tipo === "oracao") await repo.ocultarPedidoOracao(parsed.data);
+      else await repo.ocultarPedidoVisita(parsed.data);
+    },
+
+    /** Anotação da liderança no pedido (vazia apaga). */
+    async anotarPedido(id: unknown, texto: unknown): Promise<void> {
+      const parsed = z
+        .object({ id: z.uuid("Pedido inválido"), texto: textoOpcional(500, "Anotação muito longa") })
+        .safeParse({ id, texto });
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      await repo.anotarPedido(parsed.data.id, parsed.data.texto);
     },
 
     async listEventSignups(
@@ -140,7 +253,9 @@ export function createCommunityService(repo: CommunityRepository) {
       const { page, pageSize, offset } = normalizePageParams(params, PAGE_SIZE);
       // Filtro da URL: valor desconhecido lista todos.
       const situacao =
-        params?.situacao === "pendentes" || params?.situacao === "feitas" ? params.situacao : undefined;
+        params?.situacao === "novos" || params?.situacao === "andamento" || params?.situacao === "feitas"
+          ? params.situacao
+          : undefined;
       const { items, total } = await repo.listVisitors(requireCompany(companyId), {
         limit: pageSize,
         offset,
@@ -162,9 +277,34 @@ export function createCommunityService(repo: CommunityRepository) {
       await repo.registrarVisita({
         visitorId: r.visitorId,
         visitadoEm: r.visitadoEm,
-        visitadoPor: r.visitadoEm ? r.visitadoPor : null,
-        observacao: r.observacao,
+        // Desfazer (sem data) limpa tudo.
+        membroIds: r.visitadoEm ? [...new Set(r.membroIds)] : [],
+        outros: r.visitadoEm ? r.outros : null,
+        observacao: r.visitadoEm ? r.observacao : null,
       });
+    },
+
+    /** Registra que a equipe já falou com a pessoa (e o dia combinado, se houver), ou desfaz. */
+    async registrarContato(input: unknown): Promise<void> {
+      const parsed = registroContatoSchema.safeParse(input);
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      const r = parsed.data;
+      await repo.registrarContato({
+        visitorId: r.visitorId,
+        agendadaPara: r.desfazer ? null : r.agendadaPara,
+        observacao: r.desfazer ? null : r.observacao,
+        desfazer: r.desfazer,
+      });
+    },
+
+    /** Quem pode ser marcado como visitante (membros com cargo). */
+    async quemPodeVisitar(companyId: string): Promise<PessoaQueVisita[]> {
+      return repo.listQuemPodeVisitar(requireCompany(companyId));
+    },
+
+    /** Quantas visitas cada membro fez no período (pela data da visita). */
+    async visitasPorPessoa(companyId: string, periodo?: { de?: string; ate?: string }): Promise<VisitasDaPessoa[]> {
+      return repo.visitasPorPessoa(requireCompany(companyId), normalizarPeriodo(periodo?.de, periodo?.ate));
     },
 
     /** Totais para os cartões do topo. `now` injetável para teste. */

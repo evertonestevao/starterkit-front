@@ -9,7 +9,9 @@ import { ESTADO_LABEL, MOTIVOS, MOTIVO_LABEL, formatarData } from "@/lib/acompan
 import { cn } from "@/lib/utils";
 import type { ChamadaParaPreencher, EstadoPresenca } from "@/types/acompanhamento";
 import { useChamada } from "../hooks/useChamada";
+import { AvisoRascunho } from "@/components/aviso-rascunho";
 import { LegendaPresenca } from "@/components/legenda-presenca";
+import { TelefoneInput } from "@/components/telefone-input";
 
 const ESTADOS: EstadoPresenca[] = ["presente", "ausente", "justificado"];
 
@@ -54,6 +56,16 @@ export function ChamadaForm({ chamada }: { chamada: ChamadaParaPreencher }) {
           Ainda não há membros cadastrados. Cadastre em &ldquo;Membros&rdquo; para fazer a chamada.
         </p>
       ) : null}
+
+      <AvisoRascunho
+        pendente={c.pendente}
+        enviando={c.salvando}
+        encontradoEm={c.rascunhoEncontrado?.salvoEm ?? null}
+        encontradoPendente={c.rascunhoEncontrado?.pendente ?? false}
+        aoTentar={() => c.salvar(() => router.refresh())}
+        aoRecuperar={c.recuperarRascunho}
+        aoDescartar={c.descartarRascunho}
+      />
 
       <LegendaPresenca />
 
@@ -203,12 +215,11 @@ function Visitantes({
           maxLength={120}
           aria-label="Nome do visitante"
         />
-        <Input
+        <TelefoneInput
           placeholder="Telefone (opcional)"
-          inputMode="tel"
+          autoComplete="off"
           value={telefone}
           onChange={(e) => setTelefone(e.target.value)}
-          maxLength={20}
           aria-label="Telefone do visitante"
         />
         <Button type="button" variant="outline" onClick={adicionar} disabled={nome.trim().length < 2}>

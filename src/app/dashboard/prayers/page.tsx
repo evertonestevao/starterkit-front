@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
-import { CalendarClock, HandHeart, Inbox, MessageCircleHeart } from "lucide-react";
+import Link from "next/link";
+import { Check, Clock, HandHeart, MessageCircleHeart } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
 import { PaginationControls } from "@/components/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarkPrayerRequestsSeen } from "@/features/church/components/mark-prayer-requests-seen";
+import { MarcarTodosOrados, OracaoAcoes } from "@/features/community/components/oracao-acoes";
+import { formatarData } from "@/lib/acompanhamento";
+import { cn } from "@/lib/utils";
 import { getCommunityService } from "@/server/community";
 import { getActiveTenant } from "@/server/tenant";
 
@@ -23,10 +27,18 @@ function whenLabel(iso: string, now: Date): string {
   return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
+/** Estado do pedido: aguardando oração → já oramos. */
+const FILTROS = [
+  { id: "pendentes", rotulo: "Aguardando oração" },
+  { id: "orados", rotulo: "Já oramos" },
+  { id: "todos", rotulo: "Todos" },
+] as const;
+type Filtro = (typeof FILTROS)[number]["id"];
+
 export default async function PrayersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; situacao?: string }>;
 }) {
   const { active } = await getActiveTenant();
   if (!active) return null; // layout já redirecionou
@@ -44,13 +56,15 @@ export default async function PrayersPage({
     );
   }
 
-  const { page } = await searchParams;
+  const { page, situacao: situacaoParam } = await searchParams;
+  // Abre nos que aguardam oração: é o que pede ação.
+  const situacao: Filtro = FILTROS.some((f) => f.id === situacaoParam) ? (situacaoParam as Filtro) : "pendentes";
   const community = await getCommunityService();
   // Pedido de oração é só da igreja que recebeu, mesmo para quem administra
   // uma igreja acima dela na rede: nem a contagem é mostrada fora daqui.
-  const [requests, counts, seenAt] = await Promise.all([
-    community.listPrayerRequests(active.id, { page: Number(page) || 1 }),
-    community.getCounts(active.id),
+  const [requests, totais, seenAt] = await Promise.all([
+    community.listPrayerRequests(active.id, { page: Number(page) || 1, situacao }),
+    community.countOracoes(active.id),
     // Buscado ANTES de marcar como visto: o selo "Novo" usa o que já estava
     // gravado quando a página carregou, não o valor que está prestes a virar.
     community.getPrayerSeenAt(active.id).catch(() => null),
@@ -60,6 +74,11 @@ export default async function PrayersPage({
   // O mais recente desta página: em geral é a página 1, que traz os mais
   // novos primeiro — é o que vira o próximo "já vi até aqui".
   const seenUpTo = requests.items[0]?.created_at ?? null;
+  const contagem: Record<Filtro, number> = {
+    pendentes: totais.pendentes,
+    orados: totais.orados,
+    todos: totais.pendentes + totais.orados,
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,36 +92,55 @@ export default async function PrayersPage({
         <h2 className="mt-2 text-2xl font-semibold tracking-tight">Pedidos de oração</h2>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
           Chegam pela página pública da igreja. Trate cada um como o que é: alguém da comunidade
-          confiando uma dor a vocês.
+          confiando uma dor a vocês. Marque &ldquo;Já oramos&rdquo; para o pedido sair da fila.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <MetricCard icon={Clock} label="Aguardando oração" value={totais.pendentes} hint="ainda não marcados" />
+        <MetricCard icon={Check} label="Já oramos" value={totais.orados} hint="marcados pela liderança" />
         <MetricCard
           icon={MessageCircleHeart}
           label="Pedidos recebidos"
-          value={counts.prayerRequests}
+          value={totais.pendentes + totais.orados}
           hint="desde o início"
         />
-        <MetricCard
-          icon={CalendarClock}
-          label="Nos últimos 7 dias"
-          value={counts.lastWeek}
-          hint="oração, eventos e visitas"
-        />
-        <MetricCard
-          icon={Inbox}
-          label="Nesta página"
-          value={requests.items.length}
-          hint={`de ${requests.total}`}
-        />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav className="flex flex-wrap gap-2" aria-label="Filtrar pedidos">
+          {FILTROS.map((f) => (
+            <Link
+              key={f.id}
+              href={`/dashboard/prayers?situacao=${f.id}`}
+              aria-current={situacao === f.id ? "page" : undefined}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-sm",
+                situacao === f.id ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted",
+              )}
+            >
+              {f.rotulo} <span className="tabular-nums opacity-75">({contagem[f.id]})</span>
+            </Link>
+          ))}
+        </nav>
+        <MarcarTodosOrados pendentes={totais.pendentes} />
       </div>
 
       {requests.items.length === 0 ? (
         <EmptyState
           icon={MessageCircleHeart}
-          title="Nenhum pedido ainda"
-          description="Assim que alguém enviar um pedido pela página da igreja, ele aparece aqui."
+          title={
+            situacao === "pendentes" && totais.orados > 0
+              ? "Nenhum pedido aguardando oração"
+              : situacao === "orados"
+                ? "Nenhum pedido marcado como orado ainda"
+                : "Nenhum pedido ainda"
+          }
+          description={
+            situacao === "pendentes" && totais.orados > 0
+              ? "Vocês já oraram por todos os pedidos recebidos. Os novos aparecem aqui."
+              : "Assim que alguém enviar um pedido pela página da igreja, ele aparece aqui."
+          }
         />
       ) : (
         <>
@@ -114,6 +152,13 @@ export default async function PrayersPage({
                     <p className="flex items-center gap-2 font-medium">
                       {request.name?.trim() || "Pedido anônimo"}
                       {isNovo(request.created_at) ? <Badge>Novo</Badge> : null}
+                      {request.orado_em ? (
+                        <Badge className="bg-emerald-600 text-white">Já oramos</Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400">
+                          Aguardando oração
+                        </Badge>
+                      )}
                     </p>
                     <span className="text-xs text-muted-foreground">
                       {whenLabel(request.created_at, now)}
@@ -124,6 +169,18 @@ export default async function PrayersPage({
                   <p className="text-sm leading-6 whitespace-pre-line text-muted-foreground">
                     {request.message}
                   </p>
+                  {request.orado_em ? (
+                    <p className="text-xs text-muted-foreground">
+                      Oramos em {formatarData(new Date(request.orado_em).toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }))}
+                    </p>
+                  ) : null}
+                  {request.anotacao ? (
+                    <p className="rounded-md bg-muted/50 px-3 py-2 text-sm whitespace-pre-line">
+                      <span className="text-xs font-medium text-muted-foreground">Anotação da liderança: </span>
+                      {request.anotacao}
+                    </p>
+                  ) : null}
+                  <OracaoAcoes pedidoId={request.id} orado={request.orado_em !== null} anotacao={request.anotacao} />
                 </CardContent>
               </Card>
             ))}
@@ -134,6 +191,7 @@ export default async function PrayersPage({
             pageSize={requests.pageSize}
             total={requests.total}
             basePath="/dashboard/prayers"
+            params={{ situacao }}
           />
         </>
       )}

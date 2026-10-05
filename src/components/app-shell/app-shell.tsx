@@ -141,10 +141,11 @@ export function AppShell({
 }
 
 /** Badge de atenção por item de menu: href -> quantidade + rótulo do que é. */
-function badgesByHref(pendingInvitesCount: number, unseenPrayerRequestsCount: number) {
+function badgesByHref(pendingInvitesCount: number, unseenPrayerRequestsCount: number, visitasSemContato: number) {
   return {
     "/dashboard/settings": { count: pendingInvitesCount, label: "convite(s) pendente(s)" },
     "/dashboard/prayers": { count: unseenPrayerRequestsCount, label: "pedido(s) de oração não visto(s)" },
+    "/dashboard/relationships": { count: visitasSemContato, label: "pedido(s) de visita aguardando contato" },
   } as const;
 }
 
@@ -161,9 +162,9 @@ function SidebarNav({
   unseenPrayerRequestsCount?: number;
   onNavigate?: () => void;
 }) {
-  const { menus } = useTenant();
+  const { menus, visitasSemContato } = useTenant();
   const visible = visibleNavItems(menus);
-  const badges = badgesByHref(pendingInvitesCount, unseenPrayerRequestsCount);
+  const badges = badgesByHref(pendingInvitesCount, unseenPrayerRequestsCount, visitasSemContato);
   // Abas da seção aberta, publicadas pelo layout dela (ver section-subnav).
   const subnav = useSectionSubnav();
   const subAtivo = subnav ? subitemAtivo(subnav, pathname) : null;

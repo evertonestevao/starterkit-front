@@ -21,10 +21,20 @@ export async function getInviteService(): Promise<InviteService> {
   return createInviteService({
     repo: createSupabaseInviteRepository(client),
     rateLimiter: inviteLimiter,
-    notifier: createEmailService({
-      provider: getEmailProvider(),
-      appUrl: getServerEnv().APP_URL,
-    }),
+    notifier: {
+      // O e-mail diz qual igreja convidou: quem recebe pode não conhecer o sistema.
+      async sendInviteEmail(invite) {
+        const { data } = await client
+          .from("companies")
+          .select("name")
+          .eq("id", invite.company_id)
+          .maybeSingle<{ name: string }>();
+        await createEmailService({ provider: getEmailProvider(), appUrl: getServerEnv().APP_URL }).sendInviteEmail(
+          invite,
+          { churchName: data?.name ?? null },
+        );
+      },
+    },
     audit: createAuditService(createSupabaseAuditRepository(client)),
   });
 }

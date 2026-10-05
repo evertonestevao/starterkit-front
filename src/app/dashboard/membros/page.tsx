@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { FileUp } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -44,9 +47,15 @@ export default async function RolMembrosPage({
       <MembrosKpisFaixa kpis={kpis} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Para tirar alguém da chamada sem perder o histórico, edite e desmarque &ldquo;Ativo&rdquo;.
+          Para tirar alguém da chamada sem perder o histórico, edite e desmarque &ldquo;Ativo&rdquo;. Cadastro feito
+          por engano pode ser excluído na ficha do membro.
         </p>
-        <MembroForm cargos={cargos} podeConvidar={gerenciaAcesso} />
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/membros/importar" className={buttonVariants({ variant: "outline" })}>
+            <FileUp className="size-4" /> Importar planilha
+          </Link>
+          <MembroForm cargos={cargos} podeConvidar={gerenciaAcesso} />
+        </div>
       </div>
       <MembrosFiltros opcoesPorPagina={MEMBROS_POR_PAGINA} padrao={MEMBROS_POR_PAGINA_PADRAO} cargos={cargos} />
       <MembrosLista

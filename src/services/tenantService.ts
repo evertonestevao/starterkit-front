@@ -51,13 +51,6 @@ export interface TenantRepository {
   ): Promise<{ items: MemberWithProfile[]; total: number }>;
   getMember(memberId: string, companyId: string): Promise<MemberWithProfile | null>;
   updateMemberRole(memberId: string, companyId: string, role: RoleCode): Promise<void>;
-  /** Liga/desliga uma autorização extra de um member (chamada, secretaria da EBD). */
-  updateMemberPermissao(
-    memberId: string,
-    companyId: string,
-    campo: "pode_acompanhar" | "pode_gerir_ebd",
-    value: boolean,
-  ): Promise<void>;
   /** Soft delete da membership. */
   removeMember(memberId: string, companyId: string): Promise<void>;
   /** RPC leave_company (sair da empresa sem precisar de UPDATE direto). */
@@ -208,32 +201,6 @@ export function createTenantService(repo: TenantRepository) {
     return { previousRole: target.role, targetUserId: target.user_id };
   }
 
-  /**
-   * Autoriza (ou desautoriza) um member a fazer chamada e acompanhamento, ou
-   * a cuidar da EBD (secretaria). Owner/admin já podem por papel; a flag só
-   * faz sentido para member.
-   */
-  async function setMemberPermissao(
-    companyId: string,
-    memberId: string,
-    campo: "pode_acompanhar" | "pode_gerir_ebd",
-    value: boolean,
-  ): Promise<{ targetUserId: string }> {
-    const actorRole = await requireMembership(companyId);
-    if (!permissionService.canManageMembers(actorRole)) {
-      throw new AppError("forbidden", "Só quem administra a igreja pode dar esta autorização");
-    }
-    const target = await repo.getMember(memberId, companyId);
-    if (!target) {
-      throw new AppError("not_found", "Membro não encontrado");
-    }
-    if (target.role !== "member") {
-      throw new AppError("validation_error", "Owner e admin já podem fazer isso pelo papel");
-    }
-    await repo.updateMemberPermissao(memberId, companyId, campo, value);
-    return { targetUserId: target.user_id };
-  }
-
   async function removeMember(
     companyId: string,
     memberId: string,
@@ -265,7 +232,6 @@ export function createTenantService(repo: TenantRepository) {
     requireMembership,
     listMembers,
     changeMemberRole,
-    setMemberPermissao,
     removeMember,
     leaveCompany,
   };

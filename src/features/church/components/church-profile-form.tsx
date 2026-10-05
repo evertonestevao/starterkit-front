@@ -5,6 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TelefoneInput } from "@/components/telefone-input";
 import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
 import {
@@ -221,12 +222,7 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="whatsapp">WhatsApp</Label>
-              <Input
-                id="whatsapp"
-                name="whatsapp"
-                defaultValue={rede(igreja, "whatsapp")}
-                placeholder="14999998888"
-              />
+              <TelefoneInput id="whatsapp" name="whatsapp" defaultValue={rede(igreja, "whatsapp")} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="youtube">YouTube</Label>

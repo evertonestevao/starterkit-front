@@ -11,6 +11,8 @@ import { getRequestEvidence, getTermsService } from "@/server/terms";
 import { getInviteService } from "@/server/invites";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { ACTIVE_COMPANY_COOKIE, getTenantService } from "@/server/tenant";
+import { getServerEnv } from "@/config/env";
+import { linkDeAceite } from "@/services/inviteService";
 import { permissionService } from "@/services/permissionService";
 import type { RoleCode } from "@/types/database";
 import { convidarParaSistema } from "@/server/conviteSistema";
@@ -147,6 +149,47 @@ export async function revokeInviteAction(
   }
 }
 
+/** Quem administra a igreja e está logado; devolve o id de quem age. */
+async function exigeGestaoDeConvites(companyId: string): Promise<string> {
+  const tenant = await getTenantService();
+  const role = await tenant.requireMembership(companyId);
+  if (!permissionService.canManageMembers(role)) {
+    throw new AppError("forbidden", "Só quem administra a igreja gerencia os convites.");
+  }
+  const client = await getSupabaseServerClient();
+  const { data } = await client.auth.getUser();
+  if (!data.user) throw new AppError("unauthorized", "Sessão expirada");
+  return data.user.id;
+}
+
+/** Manda de novo o e-mail de um convite pendente. */
+export async function reenviarConviteAction(inviteId: string, companyId: string): Promise<ActionState> {
+  try {
+    const quem = await exigeGestaoDeConvites(companyId);
+    const convite = await (await getInviteService()).resend(inviteId, companyId, quem);
+    return { success: `E-mail reenviado para ${convite.email}.` };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/**
+ * Link de aceite de um convite pendente, para mandar por outro canal
+ * (WhatsApp) quando o e-mail não chega. Só quem administra a igreja.
+ */
+export async function linkDoConviteAction(
+  inviteId: string,
+  companyId: string,
+): Promise<ActionState & { url?: string; email?: string }> {
+  try {
+    await exigeGestaoDeConvites(companyId);
+    const { token, email } = await (await getInviteService()).tokenDoConvite(inviteId, companyId);
+    return { url: linkDeAceite(getServerEnv().APP_URL, token), email };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
 export async function acceptInviteAction(token: string): Promise<{ error?: string }> {
   try {
     const invites = await getInviteService();
@@ -174,51 +217,6 @@ export async function changeMemberRoleAction(
       metadata: { previous_role: previousRole, new_role: newRole },
     });
     revalidatePath("/dashboard/membros", "layout");
-  } catch (err) {
-    return toActionError(err);
-  }
-}
-
-/** Autoriza (ou não) um member a fazer chamada e acompanhamento. */
-export async function setMemberPodeAcompanharAction(
-  companyId: string,
-  memberId: string,
-  value: boolean,
-): Promise<ActionState | void> {
-  try {
-    const tenant = await getTenantService();
-    await tenant.setMemberPermissao(companyId, memberId, "pode_acompanhar", value);
-    await recordAudit({
-      companyId,
-      action: value ? "member.acompanhamento_granted" : "member.acompanhamento_revoked",
-      entityType: "company_member",
-      entityId: memberId,
-      metadata: {},
-    });
-    revalidatePath("/dashboard/membros", "layout");
-  } catch (err) {
-    return toActionError(err);
-  }
-}
-
-/** Autoriza (ou não) um member a cuidar da EBD (secretaria). */
-export async function setMemberPodeGerirEbdAction(
-  companyId: string,
-  memberId: string,
-  value: boolean,
-): Promise<ActionState | void> {
-  try {
-    const tenant = await getTenantService();
-    await tenant.setMemberPermissao(companyId, memberId, "pode_gerir_ebd", value);
-    await recordAudit({
-      companyId,
-      action: value ? "member.ebd_granted" : "member.ebd_revoked",
-      entityType: "company_member",
-      entityId: memberId,
-      metadata: {},
-    });
-    revalidatePath("/dashboard/membros", "layout");
-    revalidatePath("/dashboard/ebd", "layout");
   } catch (err) {
     return toActionError(err);
   }

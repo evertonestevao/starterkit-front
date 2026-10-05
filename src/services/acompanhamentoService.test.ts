@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isAppError } from "@/lib/errors";
 import type { Culto, Justificativa, RolMembro } from "@/types/acompanhamento";
 import {
   canAcompanhar,
@@ -338,5 +339,118 @@ describe("acompanhamentoService", () => {
     await expect(svc.salvarMembro(owner, null, { nome: "Cris", ativo: true, email: "sem-arroba" })).rejects.toMatchObject({
       code: "validation_error",
     });
+  });
+});
+
+describe("excluirMembro", () => {
+  it("exclui o cadastro sem login", async () => {
+    const { svc, chamadas } = service({
+      excluirMembro: async (id) => {
+        (chamadas.excluir ??= []).push(id);
+      },
+    });
+    await expect(svc.excluirMembro(owner, MEMBRO)).resolves.toEqual({ nome: membro.nome });
+    expect(chamadas.excluir).toEqual([MEMBRO]);
+  });
+
+  it("quem tem login não é excluído por aqui: primeiro remove o acesso", async () => {
+    const excluidos: string[] = [];
+    const { svc } = service({
+      getMembro: async () => ({ ...membro, userId: "99999999-9999-4999-8999-999999999999" }),
+      excluirMembro: async (id) => {
+        excluidos.push(id);
+      },
+    });
+    const err = await svc.excluirMembro(owner, MEMBRO).catch((e) => e);
+    expect(isAppError(err) && err.code).toBe("conflict");
+    expect(excluidos).toEqual([]);
+  });
+
+  it("membro de outra igreja (ou inexistente) é não encontrado", async () => {
+    const { svc } = service({ getMembro: async () => null });
+    const err = await svc.excluirMembro(owner, MEMBRO).catch((e) => e);
+    expect(isAppError(err) && err.code).toBe("not_found");
+  });
+});
+
+describe("importarMembros", () => {
+  type Pessoa = { nome: string; nascimento: string | null; email: string | null };
+  const montar = (existentes: Pessoa[] = []) => {
+    const gravados: unknown[] = [];
+    const { svc } = service({
+      listPessoasDoRol: async () => existentes,
+      createMembros: async (_c, lista) => {
+        gravados.push(...lista);
+        return lista.length;
+      },
+    });
+    return { svc, gravados };
+  };
+
+  it("grava as linhas boas, já normalizadas", async () => {
+    const { svc, gravados } = montar();
+    const r = await svc.importarMembros(owner, [
+      { nome: "  Ana Lima ", whatsapp: "(11) 98888-7777", email: "ANA@Igreja.org", nascimento: "1980-12-25", batismo: "", observacoes: "" },
+      { nome: "Beto" },
+    ]);
+    expect(r).toEqual({ importados: 2, ignorados: [] });
+    expect(gravados).toMatchObject([
+      { nome: "Ana Lima", email: "ana@igreja.org", nascimento: "1980-12-25", batismo: null, ativo: true, participaChamada: true },
+      { nome: "Beto", whatsapp: null, email: null },
+    ]);
+  });
+
+  it("homônimos entram: mesmo nome com outra data de nascimento é outra pessoa", async () => {
+    const { svc, gravados } = montar([{ nome: "José da Silva", nascimento: "1950-01-10", email: null }]);
+    const r = await svc.importarMembros(owner, [
+      { nome: "José da Silva", nascimento: "1978-08-22" }, // o filho
+      { nome: "José da Silva", nascimento: "2005-03-01" }, // o neto
+    ]);
+    expect(r).toEqual({ importados: 2, ignorados: [] });
+    expect(gravados).toHaveLength(2);
+  });
+
+  it("mesmo nome e mesmo nascimento fica de fora, a não ser que a pessoa diga que é outra", async () => {
+    const { svc, gravados } = montar([{ nome: "José da Silva", nascimento: "1950-01-10", email: null }]);
+    const r = await svc.importarMembros(owner, [
+      { nome: "JOSE DA SILVA", nascimento: "1950-01-10" }, // repetido, sem confirmação
+      { nome: "Jose da Silva", nascimento: "1950-01-10", outraPessoa: true }, // confirmou que é outro
+      { nome: "Carla" },
+      { nome: "carla" }, // repetida dentro da planilha, sem data nos dois
+    ]);
+    expect(r.importados).toBe(2);
+    expect(gravados).toMatchObject([{ nome: "Jose da Silva" }, { nome: "Carla" }]);
+    expect(r.ignorados).toEqual([
+      { nome: "JOSE DA SILVA", motivo: "já cadastrado (mesmo nome e mesma data de nascimento)" },
+      { nome: "carla", motivo: "já cadastrado (mesmo nome, sem data de nascimento para diferenciar)" },
+    ]);
+  });
+
+  it("e-mail já usado nunca entra, nem dizendo que é outra pessoa", async () => {
+    const { svc, gravados } = montar([{ nome: "Outra Pessoa", nascimento: null, email: "maria@igreja.org" }]);
+    const r = await svc.importarMembros(owner, [{ nome: "Maria Nova", email: "Maria@igreja.org", outraPessoa: true }]);
+    expect(r.importados).toBe(0);
+    expect(gravados).toEqual([]);
+    expect(r.ignorados[0].motivo).toBe("e-mail já usado por outro membro");
+  });
+
+  it("valida de novo no servidor: linha ruim não entra, mesmo vinda do navegador", async () => {
+    const { svc, gravados } = montar();
+    const r = await svc.importarMembros(owner, [{ nome: "A" }, { nome: "Dani", whatsapp: "9999" }, { nome: "Edu", nascimento: "25/12/1980" }]);
+    expect(r.importados).toBe(0);
+    expect(gravados).toEqual([]);
+    expect(r.ignorados.map((i) => i.nome)).toEqual(["A", "Dani", "Edu"]);
+  });
+
+  it("recusa planilha vazia ou acima do limite, e quem não pode acompanhar", async () => {
+    const { svc } = montar();
+    for (const linhas of [[], Array.from({ length: 1001 }, (_, i) => ({ nome: `Pessoa ${i}` }))]) {
+      const err = await svc.importarMembros(owner, linhas).catch((e) => e);
+      expect(isAppError(err) && err.code).toBe("validation_error");
+    }
+    const semAcesso = await svc
+      .importarMembros({ companyId: owner.companyId, role: "member", podeAcompanhar: false }, [{ nome: "Ana" }])
+      .catch((e) => e);
+    expect(isAppError(semAcesso) && semAcesso.code).toBe("forbidden");
   });
 });

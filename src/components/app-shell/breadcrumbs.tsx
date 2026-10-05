@@ -5,7 +5,7 @@ import { ChevronRight } from "lucide-react";
 import { useTenant } from "@/providers/tenant-provider";
 import { titleForPath } from "./nav-items";
 
-/** Breadcrumb simples: Dashboard / Página atual (desktop). */
+/** Breadcrumb simples: Painel / Página atual (desktop). */
 export function Breadcrumbs({ pathname }: { pathname: string }) {
   const { menus } = useTenant();
   const current = titleForPath(pathname);
@@ -24,10 +24,10 @@ export function Breadcrumbs({ pathname }: { pathname: string }) {
     <ol className="flex items-center gap-1 text-sm text-muted-foreground">
       <li>
         {isRoot ? (
-          <span className="font-medium text-foreground">Dashboard</span>
+          <span className="font-medium text-foreground">Painel</span>
         ) : (
           <Link href="/dashboard" className="hover:text-foreground">
-            Dashboard
+            Painel
           </Link>
         )}
       </li>

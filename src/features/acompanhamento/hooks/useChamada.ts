@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useMemo, useRef, useState } from "react";
+import { useEnvioComRascunho } from "@/hooks/useEnvioComRascunho";
 import { contarEstados, estadosIniciais, justificativaDoDia } from "@/lib/acompanhamento";
+import { manterSoConhecidos } from "@/lib/rascunhoChamada";
 import { normalizeSearch } from "@/lib/search";
 import { salvarChamadaAction } from "@/server/actions/acompanhamento";
 import type {
@@ -12,9 +13,18 @@ import type {
   Visitante,
 } from "@/types/acompanhamento";
 
+/** O que da tela vai para o rascunho guardado no aparelho. */
+interface RascunhoChamada {
+  estados: Record<string, EstadoPresenca>;
+  motivos: Record<string, MotivoJustificativa>;
+  visitantes: Visitante[];
+}
+
 /**
  * Estado da tela de chamada. Tudo fica em memória e vai num envio só no
- * "Salvar" — 40 toques não viram 40 idas ao servidor.
+ * "Salvar" — 40 toques não viram 40 idas ao servidor. O que é marcado também
+ * fica guardado no aparelho: se a internet cair ao salvar, nada se perde
+ * (ver useEnvioComRascunho).
  */
 export function useChamada(chamada: ChamadaParaPreencher) {
   const [estados, setEstados] = useState<Record<string, EstadoPresenca>>(() =>
@@ -31,7 +41,7 @@ export function useChamada(chamada: ChamadaParaPreencher) {
   const [visitantes, setVisitantes] = useState<Visitante[]>(chamada.visitantes);
   const [busca, setBusca] = useState("");
   const [alterado, setAlterado] = useState(false);
-  const [salvando, startSalvar] = useTransition();
+  const depoisRef = useRef<(() => void) | undefined>(undefined);
 
   const registrada = useMemo(() => {
     const porMembro: Record<string, ReturnType<typeof justificativaDoDia>> = {};
@@ -77,32 +87,43 @@ export function useChamada(chamada: ChamadaParaPreencher) {
     setAlterado(true);
   }
 
+  const rascunho = useMemo<RascunhoChamada>(() => ({ estados, motivos, visitantes }), [estados, motivos, visitantes]);
+
+  const envio = useEnvioComRascunho<RascunhoChamada>({
+    chave: `culto:${chamada.culto.id}:${chamada.data}`,
+    rascunho,
+    alterado,
+    mensagemSucesso: "Chamada salva.",
+    // Recuperado do aparelho: só vale para quem ainda está na lista de hoje.
+    aplicar: (r) => {
+      const ids = chamada.membros.map((m) => m.id);
+      setEstados((atual) => ({ ...atual, ...manterSoConhecidos(r.estados ?? {}, ids) }));
+      setMotivos(manterSoConhecidos(r.motivos ?? {}, ids));
+      setVisitantes(Array.isArray(r.visitantes) ? r.visitantes : []);
+      setAlterado(true);
+    },
+    enviar: () =>
+      salvarChamadaAction({
+        cultoId: chamada.culto.id,
+        data: chamada.data,
+        presencas: chamada.membros.map((m) => ({
+          membroId: m.id,
+          estado: estados[m.id],
+          justificativaId: estados[m.id] === "justificado" ? (registrada[m.id]?.id ?? null) : null,
+          motivo: estados[m.id] === "justificado" && !registrada[m.id] ? (motivos[m.id] ?? "outro") : null,
+          motivoTexto: null,
+        })),
+        visitantes,
+      }),
+    aoSalvar: () => {
+      setAlterado(false);
+      depoisRef.current?.();
+    },
+  });
+
   function salvar(depois?: () => void) {
-    startSalvar(async () => {
-      try {
-        const result = await salvarChamadaAction({
-          cultoId: chamada.culto.id,
-          data: chamada.data,
-          presencas: chamada.membros.map((m) => ({
-            membroId: m.id,
-            estado: estados[m.id],
-            justificativaId: estados[m.id] === "justificado" ? (registrada[m.id]?.id ?? null) : null,
-            motivo: estados[m.id] === "justificado" && !registrada[m.id] ? (motivos[m.id] ?? "outro") : null,
-            motivoTexto: null,
-          })),
-          visitantes,
-        });
-        if (result.error) {
-          toast.error(result.error);
-          return;
-        }
-        toast.success(result.success ?? "Chamada salva.");
-        setAlterado(false);
-        depois?.();
-      } catch {
-        toast.error("Não foi possível salvar. Verifique a internet e tente de novo.");
-      }
-    });
+    depoisRef.current = depois;
+    envio.salvar();
   }
 
   return {
@@ -115,7 +136,13 @@ export function useChamada(chamada: ChamadaParaPreencher) {
     contadores,
     registrada,
     alterado,
-    salvando,
+    salvando: envio.enviando,
+    /** Sem conexão: a chamada está guardada no aparelho, aguardando envio. */
+    pendente: envio.pendente,
+    /** Chamada não enviada de uma visita anterior a esta tela. */
+    rascunhoEncontrado: envio.encontrado,
+    recuperarRascunho: envio.recuperar,
+    descartarRascunho: envio.descartar,
     marcar,
     todosPresentes,
     definirMotivo,

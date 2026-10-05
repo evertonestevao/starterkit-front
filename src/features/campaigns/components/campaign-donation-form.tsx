@@ -3,6 +3,8 @@
 import { useActionState, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { CopyPix } from "@/features/church/components/copy-pix";
+import { CamposAntiRobo } from "@/components/campos-anti-robo";
+import { TelefoneInput } from "@/components/telefone-input";
 import { campo, rotulo } from "@/features/church/components/public-actions";
 import {
   submitGatewayCampaignDonationAction,
@@ -105,14 +107,7 @@ function DadosDoDoador({ telefoneObrigatorio }: { telefoneObrigatorio: boolean }
             <span className="font-normal text-[var(--pg-muted)]"> (opcional)</span>
           ) : null}
         </span>
-        <input
-          name="telefone"
-          required={telefoneObrigatorio}
-          autoComplete="tel"
-          maxLength={20}
-          placeholder="(11) 99999-9999"
-          className={campo}
-        />
+        <TelefoneInput semEstilo name="telefone" required={telefoneObrigatorio} className={campo} />
       </label>
     </>
   );
@@ -166,7 +161,8 @@ function PixDonationForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} className="relative flex flex-col gap-3">
+      <CamposAntiRobo />
       <input type="hidden" name="campaignId" value={campaignId} />
       <DadosDoDoador telefoneObrigatorio />
       <SeletorDeValor
@@ -196,7 +192,8 @@ function GatewayDonationForm({
   const [valor, setValor] = useState(valorPadraoCents ? formatCents(valorPadraoCents) : "");
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} className="relative flex flex-col gap-3">
+      <CamposAntiRobo />
       <input type="hidden" name="campaignId" value={campaignId} />
       <DadosDoDoador telefoneObrigatorio={false} />
       <SeletorDeValor

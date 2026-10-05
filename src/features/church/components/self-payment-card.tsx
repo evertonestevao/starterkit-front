@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TelefoneInput } from "@/components/telefone-input";
 import { useToastedAction } from "@/hooks/useToastedAction";
 import { formatDocumentFor } from "@/lib/brDocument";
 import { cn } from "@/lib/utils";
@@ -116,7 +117,7 @@ function EnableForm({ churchId, defaultEmail }: { churchId: string; defaultEmail
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="sp-phone">Celular (opcional)</Label>
-          <Input id="sp-phone" name="phone" type="tel" inputMode="tel" placeholder="(11) 90000-0000" />
+          <TelefoneInput id="sp-phone" name="phone" />
         </div>
       </div>
 

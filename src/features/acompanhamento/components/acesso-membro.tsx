@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { KeyRound, Mail, ShieldCheck, UserMinus, X } from "lucide-react";
+import { Copy, KeyRound, Mail, MessageCircle, ShieldCheck, UserMinus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,11 +18,12 @@ import { useTenant } from "@/providers/tenant-provider";
 import {
   changeMemberRoleAction,
   inviteMemberAction,
+  linkDoConviteAction,
+  reenviarConviteAction,
   removeMemberAction,
   revokeInviteAction,
-  setMemberPodeAcompanharAction,
-  setMemberPodeGerirEbdAction,
 } from "@/server/actions/tenant";
+import { linkWhatsapp } from "@/lib/acompanhamento";
 import { PAPEL_LABEL } from "@/lib/papeis";
 import { permissionService } from "@/services/permissionService";
 import type { AcessoMembro, ConvitePendente, RolMembro } from "@/types/acompanhamento";
@@ -37,8 +38,6 @@ export function AcessoBadge({ acesso, convite }: { acesso?: AcessoMembro; convit
       <Badge variant={acesso.role === "member" ? "outline" : "secondary"} className="gap-1">
         <KeyRound className="size-3" aria-hidden />
         {PAPEL_LABEL[acesso.role]}
-        {acesso.role === "member" && acesso.podeAcompanhar ? " · chamada" : ""}
-        {acesso.role === "member" && acesso.podeGerirEbd ? " · EBD" : ""}
       </Badge>
     );
   }
@@ -82,6 +81,34 @@ export function AcessoMembroCard({
     });
   }
 
+  /**
+   * Link do convite por outro canal, para quando o e-mail não chega: copia
+   * para colar onde quiser, ou abre o WhatsApp do membro com a mensagem pronta.
+   */
+  function comLink(destino: "copiar" | "whatsapp") {
+    if (!convite) return;
+    start(async () => {
+      const r = await linkDoConviteAction(convite.id, active.id);
+      if (r.error || !r.url) {
+        toast.error(r.error ?? "Não foi possível gerar o link do convite.");
+        return;
+      }
+      const mensagem = `A paz do Senhor! A ${active.name} convidou você para acessar o sistema da igreja. Abra este link e entre com o e-mail ${r.email}: ${r.url}`;
+      if (destino === "whatsapp") {
+        const wa = linkWhatsapp(membro.whatsapp, mensagem);
+        if (wa) window.open(wa, "_blank", "noopener,noreferrer");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(r.url);
+        toast.success("Link copiado. Cole no WhatsApp ou onde preferir.");
+      } catch {
+        // Navegador sem permissão de área de transferência: mostra para copiar à mão.
+        window.prompt("Copie o link do convite:", r.url);
+      }
+    });
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -96,10 +123,15 @@ export function AcessoMembroCard({
         {acesso ? (
           <>
             <p>
-              Tem acesso como <strong>{PAPEL_LABEL[acesso.role]}</strong>
-              {acesso.role === "member" && acesso.podeAcompanhar ? ", autorizado a fazer a chamada" : ""}
-              {acesso.role === "member" && acesso.podeGerirEbd ? ", da secretaria da EBD" : ""}.
+              Tem acesso como <strong>{PAPEL_LABEL[acesso.role]}</strong>.
             </p>
+            {acesso.role === "member" ? (
+              <p className="text-muted-foreground">
+                O que esta pessoa usa no sistema vem dos <strong>cargos</strong> dela: cada cargo libera os módulos
+                marcados em Configurações → Acessos, e quem tem mais de um cargo soma os de todos. Para mudar, edite
+                os cargos do membro.
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {permissionService.canChangeRole(active.role, acesso.role) ? (
                 <Button
@@ -119,38 +151,6 @@ export function AcessoMembroCard({
                   {acesso.role === "admin" ? "Tornar Membro" : "Tornar Administrador"}
                 </Button>
               ) : null}
-              {acesso.role === "member" && permissionService.canManageMembers(active.role) ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pending}
-                  onClick={() =>
-                    rodar(
-                      () => setMemberPodeAcompanharAction(active.id, acesso.companyMemberId, !acesso.podeAcompanhar),
-                      acesso.podeAcompanhar ? "Autorização de chamada removida." : "Agora pode fazer a chamada.",
-                    )
-                  }
-                >
-                  {acesso.podeAcompanhar ? "Tirar autorização de chamada" : "Autorizar a fazer chamada"}
-                </Button>
-              ) : null}
-              {acesso.role === "member" && permissionService.canManageMembers(active.role) ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pending}
-                  onClick={() =>
-                    rodar(
-                      () => setMemberPodeGerirEbdAction(active.id, acesso.companyMemberId, !acesso.podeGerirEbd),
-                      acesso.podeGerirEbd ? "Saiu da secretaria da EBD." : "Agora cuida da EBD (todas as classes).",
-                    )
-                  }
-                >
-                  {acesso.podeGerirEbd ? "Tirar da secretaria da EBD" : "Autorizar secretaria da EBD"}
-                </Button>
-              ) : null}
               {permissionService.canRemoveMember(active.role, acesso.role) ? (
                 <Button
                   type="button"
@@ -168,20 +168,48 @@ export function AcessoMembroCard({
             </div>
           </>
         ) : convite ? (
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-col gap-3">
             <p>
-              Convite enviado para <strong>{convite.email}</strong> como {PAPEL_LABEL[convite.role]}. Vale até{" "}
+              Convite aguardando <strong>{convite.email}</strong> aceitar, como {PAPEL_LABEL[convite.role]}. Vale até{" "}
               {new Date(convite.expiraEm).toLocaleDateString("pt-BR")}.
             </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={pending}
-              onClick={() => rodar(() => revokeInviteAction(convite.id, active.id), "Convite cancelado.")}
-            >
-              <X className="size-3.5" /> Cancelar convite
-            </Button>
+            <p className="text-xs text-muted-foreground">
+              O e-mail não chegou? Peça para olhar a caixa de spam, reenvie, ou mande o link do convite pelo WhatsApp.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    const r = await reenviarConviteAction(convite.id, active.id);
+                    if (r.error) toast.error(r.error);
+                    else toast.success(r.success ?? "E-mail reenviado.");
+                  })
+                }
+              >
+                <Mail className="size-3.5" /> Reenviar e-mail
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => comLink("copiar")}>
+                <Copy className="size-3.5" /> Copiar link
+              </Button>
+              {linkWhatsapp(membro.whatsapp, "") ? (
+                <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => comLink("whatsapp")}>
+                  <MessageCircle className="size-3.5" /> Enviar por WhatsApp
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={pending}
+                onClick={() => rodar(() => revokeInviteAction(convite.id, active.id), "Convite cancelado.")}
+              >
+                <X className="size-3.5" /> Cancelar convite
+              </Button>
+            </div>
           </div>
         ) : membro.email ? (
           <ConvidarForm email={membro.email} companyId={active.id} />

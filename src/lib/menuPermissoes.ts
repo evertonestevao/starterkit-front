@@ -46,7 +46,7 @@ export interface MenuDef {
  */
 export const MENUS: readonly MenuDef[] = [
   // O painel: liberável por cargo. Cada número dele ainda depende do módulo de onde vem.
-  { key: "dashboard", title: "Dashboard", href: "/dashboard", roles: ["owner", "admin"] },
+  { key: "dashboard", title: "Painel", href: "/dashboard", roles: ["owner", "admin"] },
   // Chamada nos cultos, justificativas e quem está faltando. Dado pessoal:
   // só a própria igreja; a RLS repete a regra (can_acompanhar).
   { key: "acompanhamento", title: "Presença nos cultos", href: "/dashboard/acompanhamento", roles: ["owner", "admin"] },
@@ -67,7 +67,7 @@ export const MENUS: readonly MenuDef[] = [
   { key: "sponsors", title: "Patrocinadores", href: "/dashboard/sponsors", roles: ["owner", "admin"] },
   // Pedidos de visita (nome e telefone de quem pediu).
   { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin"] },
-  { key: "billing", title: "Billing", href: "/dashboard/billing", roles: ["owner"] },
+  { key: "billing", title: "Assinatura", href: "/dashboard/billing", roles: ["owner"] },
   { key: "audit", title: "Auditoria", href: "/dashboard/audit", roles: ["owner", "admin"] },
   { key: "settings", title: "Configurações", href: "/dashboard/settings", roles: ["owner", "admin", "member"] },
 ];
@@ -75,7 +75,7 @@ export const MENUS: readonly MenuDef[] = [
 /** O que cada módulo liberado deixa fazer (texto da tela de Acessos). */
 export const MODULO_INFO: Record<Modulo, { titulo: string; libera: string; aviso?: string }> = {
   dashboard: {
-    titulo: "Dashboard",
+    titulo: "Painel",
     libera:
       "Ver o painel inicial. Cada número e gráfico dele só aparece para quem também tem o módulo de onde vem. Sem o painel, a pessoa entra direto no primeiro menu que tem.",
   },
@@ -111,28 +111,19 @@ export const MODULO_INFO: Record<Modulo, { titulo: string; libera: string; aviso
 /** A pessoa na igreja ativa. */
 export interface PessoaAcesso {
   role: RoleCode;
-  /** Módulos liberados (por cargo ou pelas autorizações antigas da ficha). */
+  /** Módulos liberados pelos cargos da pessoa (a soma de todos os cargos dela). */
   acessos: string[];
   /** Ensina em alguma classe: abre a EBD só nas classes dela. */
   professor_ebd: boolean;
 }
 
 /**
- * Módulos da pessoa: os liberados por cargo mais os das autorizações antigas
- * (chamada e secretaria da EBD), que continuam valendo.
+ * Módulos da pessoa, a partir do que o banco devolve (meus_acessos): a soma
+ * do que cada cargo dela libera. Só o cargo libera — não há mais autorização
+ * avulsa na ficha. Módulo desconhecido é descartado.
  */
-export function acessosDaPessoa(
-  porCargo: string[],
-  autorizacoes: { pode_acompanhar: boolean; pode_gerir_ebd: boolean },
-): Modulo[] {
+export function acessosDaPessoa(porCargo: string[]): Modulo[] {
   const todos = new Set<string>(porCargo);
-  if (autorizacoes.pode_acompanhar) {
-    todos.add("acompanhamento");
-    todos.add("membros");
-  }
-  if (autorizacoes.pode_gerir_ebd) todos.add("ebd");
-  // Quem recebeu uma autorização na ficha já via o painel: continua vendo.
-  if (autorizacoes.pode_acompanhar || autorizacoes.pode_gerir_ebd) todos.add("dashboard");
   return MODULOS_LIBERAVEIS.filter((m) => todos.has(m));
 }
 

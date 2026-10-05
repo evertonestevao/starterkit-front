@@ -34,6 +34,7 @@ import type {
   SugestaoChamada,
   Visitante,
 } from "@/types/acompanhamento";
+import { LIMITE_IMPORTACAO, chaveDePessoa } from "@/lib/importarMembros";
 import { normalizeSearch } from "@/lib/search";
 import type { CargoResumo } from "@/types/cargos";
 import type { RoleCode } from "@/types/database";
@@ -46,7 +47,7 @@ import { normalizePageParams, type Paginated } from "./tenantService";
  * chamada; este módulo só os lê — quem cria e edita é a tela Programação.
  *
  * Quem usa: owner/admin da igreja e o member que o responsável autorizou
- * (`pode_acompanhar`). Tudo opera sobre a igreja da EMPRESA ATIVA — o id da
+ * (cargo com Presença ou Membros liberado). Tudo opera sobre a igreja da EMPRESA ATIVA — o id da
  * igreja nunca vem do client; ids de membro/culto/justificativa vindos do
  * client são sempre conferidos contra essa igreja no repositório (e de novo
  * pela RLS, que só abre a própria igreja).
@@ -110,6 +111,12 @@ export interface AcompanhamentoRepository {
   setCargosDoMembro(churchId: string, membroId: string, cargoIds: string[]): Promise<void>;
   getMembro(churchId: string, membroId: string): Promise<RolMembro | null>;
   createMembro(churchId: string, input: NovoMembro): Promise<string>;
+  /** Vários de uma vez (importação). Devolve quantos entraram. */
+  createMembros(churchId: string, membros: NovoMembro[]): Promise<number>;
+  /** Nome, nascimento e e-mail de todos os membros não excluídos (para achar repetidos na importação). */
+  listPessoasDoRol(churchId: string): Promise<Array<{ nome: string; nascimento: string | null; email: string | null }>>;
+  /** Exclui o cadastro (RPC excluir_membro: tira cargos, encerra matrícula). */
+  excluirMembro(membroId: string): Promise<void>;
   updateMembro(churchId: string, membroId: string, input: NovoMembro): Promise<boolean>;
 
   /** Itens ativos da programação da igreja (com e sem chamada). */
@@ -215,6 +222,24 @@ const membroSchema = z.object({
   ativo: z.boolean(),
   observacoes: vazioVira(z.string().trim().max(1000, "Observação longa demais")),
 });
+
+/** Linhas da planilha: só os campos importáveis, no formato do formulário. */
+const importacaoSchema = z
+  .array(
+    z.object({
+      nome: z.string().max(200),
+      whatsapp: z.string().max(40).optional(),
+      email: z.string().max(300).optional(),
+      nascimento: z.string().max(20).optional(),
+      batismo: z.string().max(20).optional(),
+      observacoes: z.string().max(1200).optional(),
+      /** A pessoa conferiu um possível repetido e disse que é OUTRA pessoa. */
+      outraPessoa: z.boolean().optional(),
+    }),
+    "Planilha inválida",
+  )
+  .min(1, "Nenhuma linha para importar")
+  .max(LIMITE_IMPORTACAO, `Importe até ${LIMITE_IMPORTACAO} membros por vez`);
 
 const justificativaSchema = z
   .object({
@@ -413,7 +438,10 @@ export function createAcompanhamentoService(deps: {
     ): Promise<string> {
       const church = await igreja(actor);
       const dados = validar(membroSchema, input);
-      const cargos = cargoIds === undefined ? undefined : validar(cargosDoMembroSchema, cargoIds);
+      // Cargo é acesso: só quem administra a igreja dá ou tira (a RLS repete).
+      // De quem só cuida do cadastro, os cargos enviados são ignorados.
+      const cargos =
+        cargoIds === undefined || !canConfigurar(actor.role) ? undefined : validar(cargosDoMembroSchema, cargoIds);
 
       if (cargos) {
         const disponiveis = new Set((await repo.listCargosDisponiveis(church.id)).map((c) => c.id));
@@ -436,6 +464,83 @@ export function createAcompanhamentoService(deps: {
       }
       if (cargos) await repo.setCargosDoMembro(church.id, id, [...new Set(cargos)]);
       return id;
+    },
+
+    /**
+     * Exclui um cadastro feito por engano. Quem tem login não sai por aqui:
+     * primeiro remove-se o acesso (só quem administra), depois exclui.
+     */
+    async excluirMembro(actor: AcompanhamentoActor, membroId: unknown): Promise<{ nome: string }> {
+      const church = await igreja(actor);
+      const id = validar(uuid("Membro inválido"), membroId);
+      const membro = await repo.getMembro(church.id, id);
+      if (!membro) throw new AppError("not_found", "Membro não encontrado.");
+      if (membro.userId) {
+        throw new AppError(
+          "conflict",
+          "Este membro tem acesso ao sistema. Remova o acesso dele primeiro, na ficha, e depois exclua.",
+        );
+      }
+      await repo.excluirMembro(id);
+      return { nome: membro.nome };
+    },
+
+    /** Quem a igreja já tem (nome e nascimento), para a tela avisar os possíveis repetidos antes de importar. */
+    async pessoasParaConferir(actor: AcompanhamentoActor): Promise<Array<{ nome: string; nascimento: string | null }>> {
+      const church = await igreja(actor);
+      return (await repo.listPessoasDoRol(church.id)).map((m) => ({ nome: m.nome, nascimento: m.nascimento }));
+    },
+
+    /**
+     * Importa membros de uma planilha já lida no navegador. Tudo é validado
+     * de novo aqui (o navegador não é fonte de verdade).
+     *
+     * Repetido = mesmo nome E mesma data de nascimento de alguém já
+     * cadastrado ou de uma linha anterior (homônimos entram). O repetido só
+     * entra se a pessoa confirmou na conferência que é OUTRA pessoa
+     * (`outraPessoa`); sem isso, fica de fora. E-mail já usado nunca entra
+     * (o e-mail é único na igreja). Cargos e acesso não são importados.
+     */
+    async importarMembros(
+      actor: AcompanhamentoActor,
+      linhas: unknown,
+    ): Promise<{ importados: number; ignorados: Array<{ nome: string; motivo: string }> }> {
+      const church = await igreja(actor);
+      const entrada = validar(importacaoSchema, linhas);
+      const existentes = await repo.listPessoasDoRol(church.id);
+      const pessoas = new Set(existentes.map((m) => chaveDePessoa(m.nome, m.nascimento)));
+      const emails = new Set(existentes.flatMap((m) => (m.email ? [m.email.toLowerCase()] : [])));
+
+      const novos: NovoMembro[] = [];
+      const ignorados: Array<{ nome: string; motivo: string }> = [];
+      for (const linha of entrada) {
+        const lido = membroSchema.safeParse({ ...linha, ativo: true });
+        const nome = String(linha.nome ?? "").trim() || "(sem nome)";
+        if (!lido.success) {
+          ignorados.push({ nome, motivo: lido.error.issues[0]?.message ?? "dados inválidos" });
+          continue;
+        }
+        const chave = chaveDePessoa(lido.data.nome, lido.data.nascimento);
+        if (pessoas.has(chave) && !linha.outraPessoa) {
+          ignorados.push({
+            nome,
+            motivo: lido.data.nascimento
+              ? "já cadastrado (mesmo nome e mesma data de nascimento)"
+              : "já cadastrado (mesmo nome, sem data de nascimento para diferenciar)",
+          });
+          continue;
+        }
+        if (lido.data.email && emails.has(lido.data.email)) {
+          ignorados.push({ nome, motivo: "e-mail já usado por outro membro" });
+          continue;
+        }
+        pessoas.add(chave);
+        if (lido.data.email) emails.add(lido.data.email);
+        novos.push(lido.data);
+      }
+
+      const importados = novos.length > 0 ? await repo.createMembros(church.id, novos) : 0;
+      return { importados, ignorados };
     },
 
     // ------------------------------------------------------------- cultos

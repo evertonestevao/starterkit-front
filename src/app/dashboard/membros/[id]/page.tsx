@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AcessoBadge, AcessoMembroCard } from "@/features/acompanhamento/components/acesso-membro";
+import { ExcluirMembro } from "@/features/acompanhamento/components/excluir-membro";
 import { MembroForm } from "@/features/acompanhamento/components/membro-form";
 import { ResponsaveisBotao } from "@/features/ebd/components/ebd-responsaveis";
 import { isAppError } from "@/lib/errors";
@@ -92,7 +93,11 @@ export default async function MembroPage({ params }: { params: Promise<{ id: str
             {!membro.membroIgreja ? <Badge variant="outline">Não membro</Badge> : null}
           </div>
         </div>
-        <MembroForm membro={membro} cargos={cargos} podeConvidar={gerenciaAcesso && !acesso && !convite} />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quem tem login não é excluído por aqui: primeiro remove-se o acesso. */}
+          {!membro.userId ? <ExcluirMembro membroId={membro.id} nome={membro.nome} /> : null}
+          <MembroForm membro={membro} cargos={cargos} podeConvidar={gerenciaAcesso && !acesso && !convite} />
+        </div>
       </div>
       {membro.observacoes ? <p className="rounded-lg bg-muted/50 p-3 text-sm">{membro.observacoes}</p> : null}
 

@@ -16,7 +16,19 @@ import { createBillingService } from "@/services/billingService";
 import { permissionService } from "@/services/permissionService";
 import type { Plan } from "@/types/database";
 
-export const metadata: Metadata = { title: "Billing" };
+export const metadata: Metadata = { title: "Assinatura" };
+
+/** Situação da assinatura em português (o provedor devolve em inglês). */
+const STATUS_ASSINATURA: Record<string, string> = {
+  trialing: "em período de teste",
+  active: "ativa",
+  past_due: "pagamento em atraso",
+  canceled: "cancelada",
+  unpaid: "não paga",
+  incomplete: "aguardando pagamento",
+  incomplete_expired: "expirada",
+  paused: "pausada",
+};
 
 function formatPrice(plan: Plan): string {
   if (plan.price_cents === 0) return "Grátis";
@@ -78,10 +90,12 @@ export default async function BillingPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Billing</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Assinatura</h2>
         <p className="text-sm text-muted-foreground">
           Plano atual: <span className="font-medium text-foreground">{currentPlan?.name ?? "—"}</span>
-          {subscription ? ` · status ${subscription.status}` : " · sem assinatura (plano free)"}
+          {subscription
+            ? ` · ${STATUS_ASSINATURA[subscription.status] ?? subscription.status}`
+            : " · sem assinatura (plano gratuito)"}
         </p>
       </div>
 

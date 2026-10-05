@@ -2,9 +2,16 @@
 
 import { redirect } from "next/navigation";
 import { getCampaignDonationsService } from "@/server/campaigns";
+import { protegerEnvioPublico } from "@/server/protecaoPublica";
 import { toActionError, type ActionState } from "./action-state";
 
-/** Server actions da doação pública numa campanha (sem login). */
+/**
+ * Server actions da doação pública numa campanha (sem login). Passam por
+ * `protegerEnvioPublico` antes de criar a doação: barreira contra robôs e
+ * limite de envios por pessoa.
+ */
+
+const RECUSA = "Não foi possível concluir. Recarregue a página e tente de novo.";
 
 function texto(formData: FormData, campo: string): string {
   const valor = formData.get(campo);
@@ -30,6 +37,9 @@ export async function submitPixCampaignDonationAction(
   formData: FormData,
 ): Promise<PixCampaignDonationState> {
   try {
+    const campanha = texto(formData, "campaignId");
+    // Doação não tem "sucesso falso" para mostrar (a resposta de verdade é um QR): recusa genérica.
+    if ((await protegerEnvioPublico("doacao", campanha, formData)).robo) return { error: RECUSA };
     const resultado = await (await getCampaignDonationsService()).submitPixDonation({
       campaignId: texto(formData, "campaignId"),
       nome: texto(formData, "nome"),
@@ -49,6 +59,8 @@ export async function submitGatewayCampaignDonationAction(
 ): Promise<ActionState> {
   let destino: string;
   try {
+    const campanha = texto(formData, "campaignId");
+    if ((await protegerEnvioPublico("doacao", campanha, formData)).robo) return { error: RECUSA };
     const resultado = await (await getCampaignDonationsService()).submitGatewayDonation({
       campaignId: texto(formData, "campaignId"),
       nome: texto(formData, "nome"),

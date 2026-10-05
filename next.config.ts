@@ -34,6 +34,33 @@ const nextConfig: NextConfig = {
    * chegando. Este redirect não pode ser removido depois que houver material
    * impresso com o endereço antigo.
    */
+  /**
+   * Cabeçalhos de segurança em todas as respostas.
+   *
+   * A CSP aqui é de propósito a parte que NÃO depende de nonce: impede o site
+   * de ser aberto dentro de outro (clickjacking), a troca do endereço-base e
+   * plugins. Restringir `script-src` exige nonce por pedido (o Next injeta
+   * scripts inline) e fica para quando houver necessidade — não afrouxar o
+   * que está aqui para "consertar" uma tela.
+   */
+  async headers() {
+    const cabecalhos = [
+      { key: "X-Frame-Options", value: "DENY" },
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), browsing-topics=()" },
+      {
+        key: "Content-Security-Policy",
+        value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+      },
+    ];
+    // HSTS só em produção: em dev o acesso é por http (localhost e IP da rede).
+    if (process.env.NODE_ENV === "production") {
+      cabecalhos.push({ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" });
+    }
+    return [{ source: "/(.*)", headers: cabecalhos }];
+  },
+
   async redirects() {
     return [
       {

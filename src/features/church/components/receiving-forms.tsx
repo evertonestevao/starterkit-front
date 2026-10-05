@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TelefoneInput } from "@/components/telefone-input";
 import { useActionToast } from "@/hooks/useActionToast";
 import {
   setCardEnabledAction,
@@ -262,7 +263,7 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="telefoneRecebimento">Telefone com DDD</Label>
-            <Input
+            <TelefoneInput
               id="telefoneRecebimento"
               name="telefone"
               required

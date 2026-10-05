@@ -42,10 +42,6 @@ export interface CompanyMember {
   user_id: string;
   role: RoleCode;
   invited_by: string | null;
-  /** Member autorizado a fazer chamada e acompanhamento (owner/admin já podem). */
-  pode_acompanhar: boolean;
-  /** Member da secretaria da EBD (owner/admin já podem). */
-  pode_gerir_ebd: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -298,6 +294,10 @@ export interface PrayerRequest {
   company_id: string | null;
   name: string | null;
   message: string;
+  /** Quando a liderança marcou "já oramos"; null = aguardando oração. */
+  orado_em: string | null;
+  /** Anotação curta da liderança no pedido. */
+  anotacao: string | null;
   created_at: string;
 }
 
@@ -322,6 +322,11 @@ export interface Visitor {
   contact: string;
   endereco: string | null;
   mensagem: string | null;
+  /** Dia em que a equipe falou com a pessoa; null = ainda aguardando contato. */
+  contato_em: string | null;
+  /** Dia combinado para a visita, se já houver. */
+  agendada_para: string | null;
+  contato_obs: string | null;
   /** Preenchido quando a visita foi feita (data + quem foi). */
   visitado_em: string | null;
   visitado_por: string | null;

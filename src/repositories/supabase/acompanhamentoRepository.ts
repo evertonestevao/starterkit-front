@@ -160,7 +160,7 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       const [membros, convites] = await Promise.all([
         client
           .from("company_members")
-          .select("id, user_id, role, pode_acompanhar, pode_gerir_ebd")
+          .select("id, user_id, role")
           .eq("company_id", companyId)
           .is("deleted_at", null),
         // Para quem não é admin a RLS devolve vazio — e está certo assim.
@@ -180,14 +180,10 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
             id: string;
             user_id: string;
             role: AcessoMembro["role"];
-            pode_acompanhar: boolean;
-            pode_gerir_ebd: boolean;
           }): AcessoMembro => ({
             companyMemberId: r.id,
             userId: r.user_id,
             role: r.role,
-            podeAcompanhar: r.pode_acompanhar,
-            podeGerirEbd: r.pode_gerir_ebd,
           }),
         ),
         convites: (convites.data ?? []).map(
@@ -285,6 +281,66 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         .maybeSingle();
       if (error) falha("Falha ao carregar o membro", error);
       return data ? toMembro(data) : null;
+    },
+
+    async createMembros(churchId, membros) {
+      let criados = 0;
+      // Em lotes: uma planilha grande não vira um pedido gigante.
+      for (let i = 0; i < membros.length; i += 200) {
+        const lote = membros.slice(i, i + 200).map((m) => ({
+          church_id: churchId,
+          nome: m.nome,
+          whatsapp: m.whatsapp,
+          email: m.email,
+          participa_chamada: m.participaChamada,
+          membro_igreja: m.membroIgreja,
+          nascimento: m.nascimento,
+          batismo: m.batismo ?? null,
+          ativo: m.ativo,
+          observacoes: m.observacoes,
+        }));
+        const { data, error } = await client.from("rol_membros").insert(lote).select("id");
+        if (error) {
+          if (error.code === "23505") {
+            throw new AppError(
+              "conflict",
+              `Um e-mail da planilha já está em uso por outro membro. ${criados} membro(s) entraram antes do erro.`,
+              error,
+            );
+          }
+          falha(`Falha ao importar os membros (${criados} entraram antes do erro)`, error);
+        }
+        criados += data?.length ?? 0;
+      }
+      return criados;
+    },
+
+    async listPessoasDoRol(churchId) {
+      const todos: Array<{ nome: string; nascimento: string | null; email: string | null }> = [];
+      // O PostgREST devolve no máximo 1000 linhas por pedido: pagina até acabar.
+      for (let inicio = 0; ; inicio += 1000) {
+        const { data, error } = await client
+          .from("rol_membros")
+          .select("nome, nascimento, email")
+          .eq("church_id", churchId)
+          .is("deleted_at", null)
+          .order("id")
+          .range(inicio, inicio + 999);
+        if (error) falha("Falha ao carregar os membros da igreja", error);
+        todos.push(...((data ?? []) as Array<{ nome: string; nascimento: string | null; email: string | null }>));
+        if (!data || data.length < 1000) return todos;
+      }
+    },
+
+    async excluirMembro(membroId) {
+      const { error } = await client.rpc("excluir_membro", { p_membro_id: membroId });
+      if (error) {
+        if (error.code === "P0002") throw new AppError("not_found", "Membro não encontrado.", error);
+        if (error.code === "23514") {
+          throw new AppError("conflict", "Este membro tem acesso ao sistema. Remova o acesso antes de excluir.", error);
+        }
+        falha("Falha ao excluir o membro", error);
+      }
     },
 
     async createMembro(churchId, m) {

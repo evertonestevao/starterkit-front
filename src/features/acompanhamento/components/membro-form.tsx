@@ -14,12 +14,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TelefoneInput } from "@/components/telefone-input";
 import { useActionToast } from "@/hooks/useActionToast";
 import { salvarMembroAction } from "@/server/actions/acompanhamento";
 import type { ActionState } from "@/server/actions/action-state";
 import type { RolMembro } from "@/types/acompanhamento";
 import type { CargoResumo } from "@/types/cargos";
 import { selectClasses, textareaClasses } from "./campos";
+import { useTenant } from "@/providers/tenant-provider";
+import { permissionService } from "@/services/permissionService";
 
 /**
  * Cadastro e edição de membro do rol, num diálogo. Com `podeConvidar`
@@ -36,6 +39,9 @@ export function MembroForm({
   podeConvidar?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
+  // Cargo é acesso ao sistema: só Responsável/Administrador mexe.
+  const { active } = useTenant();
+  const podeDefinirCargos = permissionService.canManageMembers(active.role);
   const [email, setEmail] = useState(membro?.email ?? "");
   const [convidar, setConvidar] = useState(false);
   const [papel, setPapel] = useState<"member" | "admin">("member");
@@ -80,13 +86,11 @@ export function MembroForm({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`whatsapp-${id}`}>WhatsApp / telefone</Label>
-              <Input
+              <TelefoneInput
                 id={`whatsapp-${id}`}
                 name="whatsapp"
-                inputMode="tel"
-                placeholder="(11) 98888-7777"
-                defaultValue={membro?.whatsapp ?? ""}
-                maxLength={20}
+                autoComplete="off"
+                defaultValue={membro?.whatsapp}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -154,11 +158,22 @@ export function MembroForm({
                 maxLength={1000}
               />
             </div>
-            <fieldset className="flex flex-col gap-1.5">
-              <input type="hidden" name="cargosEnviados" value="1" />
-              <legend className="mb-1 text-sm font-medium">Cargos</legend>
-              <CargosCheckboxes membro={membro} cargos={cargos} />
-            </fieldset>
+            {podeDefinirCargos ? (
+              <fieldset className="flex flex-col gap-1.5">
+                <input type="hidden" name="cargosEnviados" value="1" />
+                <legend className="mb-1 text-sm font-medium">Cargos</legend>
+                <p className="text-xs text-muted-foreground">
+                  Os cargos definem o que a pessoa acessa no sistema (Configurações → Acessos). Com mais de um cargo,
+                  ela soma os acessos de todos.
+                </p>
+                <CargosCheckboxes membro={membro} cargos={cargos} />
+              </fieldset>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Cargos: {membro && membro.cargos.length > 0 ? membro.cargos.map((c) => c.nome).join(", ") : "nenhum"}. Só
+                quem administra a igreja altera os cargos, porque eles definem o acesso ao sistema.
+              </p>
+            )}
             <input type="hidden" name="participaEnviado" value="1" />
             <label className="flex items-start gap-2 text-sm">
               <input

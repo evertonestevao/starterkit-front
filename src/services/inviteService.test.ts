@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { AppError } from "@/lib/errors";
 import { createMemoryRateLimiter } from "@/server/rateLimit";
 import type { CompanyInvite, CompanyMember } from "@/types/database";
 import {
   createInviteService,
+  linkDeAceite,
   type InviteRepository,
 } from "./inviteService";
 
@@ -135,6 +137,103 @@ describe("inviteService.invite", () => {
     });
     expect(sent).toHaveLength(1);
     expect(audited).toEqual(["member.invited"]);
+  });
+
+  it("se o e-mail falha, o convite fica criado e a mensagem diz o que fazer", async () => {
+    const criados: string[] = [];
+    const audited: string[] = [];
+    const service = makeService({
+      repo: makeRepo({
+        async createInvite(data) {
+          criados.push(data.email);
+          return makeInvite({ email: data.email, role: data.role });
+        },
+      }),
+      notifier: {
+        async sendInviteEmail() {
+          throw new AppError("email_error", "Falha ao enviar email", { status: 403 });
+        },
+      },
+      audit: {
+        async record(entry) {
+          audited.push(entry.action);
+        },
+        async listRecent() {
+          return { items: [], total: 0, page: 1, pageSize: 20 };
+        },
+      },
+    });
+    const err = await service
+      .invite({ companyId: COMPANY_ID, email: "a@b.com", role: "member", invitedBy: USER_ID })
+      .catch((e) => e);
+    expect(err).toMatchObject({ code: "email_error" });
+    expect(String(err.message)).toContain("Reenviar e-mail");
+    expect(String(err.message)).toContain("Copiar link");
+    // O convite existe e foi auditado mesmo sem o e-mail.
+    expect(criados).toEqual(["a@b.com"]);
+    expect(audited).toEqual(["member.invited"]);
+  });
+});
+
+describe("inviteService: reenviar e link do convite", () => {
+  const INVITE_ID = "44444444-4444-4444-8444-444444444444";
+  const pendente = () => makeRepo({ listPending: async () => [makeInvite({ id: INVITE_ID, email: "a@b.com" })] });
+
+  it("reenvia o e-mail de um convite pendente e registra", async () => {
+    const sent: string[] = [];
+    const audited: string[] = [];
+    const service = makeService({
+      repo: pendente(),
+      notifier: {
+        async sendInviteEmail(invite) {
+          sent.push(invite.email);
+        },
+      },
+      audit: {
+        async record(entry) {
+          audited.push(entry.action);
+        },
+        async listRecent() {
+          return { items: [], total: 0, page: 1, pageSize: 20 };
+        },
+      },
+    });
+    await expect(service.resend(INVITE_ID, COMPANY_ID, USER_ID)).resolves.toMatchObject({ email: "a@b.com" });
+    expect(sent).toEqual(["a@b.com"]);
+    expect(audited).toEqual(["invite.resent"]);
+  });
+
+  it("convite que não está mais pendente (aceito, cancelado, de outra igreja) não reenvia nem dá link", async () => {
+    const sent: string[] = [];
+    const service = makeService({
+      notifier: {
+        async sendInviteEmail(invite) {
+          sent.push(invite.email);
+        },
+      },
+    });
+    await expect(service.resend(INVITE_ID, COMPANY_ID, USER_ID)).rejects.toMatchObject({ code: "not_found" });
+    await expect(service.tokenDoConvite(INVITE_ID, COMPANY_ID)).rejects.toMatchObject({ code: "not_found" });
+    await expect(service.tokenDoConvite("xpto", COMPANY_ID)).rejects.toMatchObject({ code: "validation_error" });
+    expect(sent).toEqual([]);
+  });
+
+  it("reenviar conta no mesmo limite de quem convida", async () => {
+    const service = makeService({
+      repo: pendente(),
+      rateLimiter: createMemoryRateLimiter({ limit: 1, windowMs: 60_000 }),
+    });
+    await service.resend(INVITE_ID, COMPANY_ID, USER_ID);
+    await expect(service.resend(INVITE_ID, COMPANY_ID, USER_ID)).rejects.toMatchObject({ code: "rate_limited" });
+  });
+
+  it("devolve o token do convite pendente e monta o mesmo link do e-mail", async () => {
+    const service = makeService({ repo: pendente() });
+    const { token, email } = await service.tokenDoConvite(INVITE_ID, COMPANY_ID);
+    expect(email).toBe("a@b.com");
+    expect(linkDeAceite("https://app.example.com/", token)).toBe(
+      `https://app.example.com/invites/accept?token=${token}`,
+    );
   });
 });
 

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TelefoneInput } from "@/components/telefone-input";
 import { useActionToast } from "@/hooks/useActionToast";
 import {
   adicionarProfessorAction,
@@ -323,7 +324,7 @@ export function NovoAluno({
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`al-tel-${id}`}>Telefone</Label>
-                <Input id={`al-tel-${id}`} name="telefone" inputMode="tel" maxLength={20} defaultValue={visitante?.telefone ?? ""} />
+                <TelefoneInput id={`al-tel-${id}`} name="telefone" autoComplete="off" defaultValue={visitante?.telefone} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`al-nasc-${id}`}>Nascimento</Label>

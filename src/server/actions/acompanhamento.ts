@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppError } from "@/lib/errors";
 import { getAcompanhamentoActor, getAcompanhamentoService } from "@/server/acompanhamento";
+import { recordAudit } from "@/server/audit";
 import type { AcompanhamentoActor } from "@/services/acompanhamentoService";
 import type { ConfigAcompanhamento, Visitante } from "@/types/acompanhamento";
 import { convidarParaSistema } from "@/server/conviteSistema";
@@ -72,6 +73,56 @@ export async function salvarMembroAction(
 
     revalidar();
     return { success: salvo };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Exclui um cadastro feito por engano (quem tem login não sai por aqui). */
+export async function excluirMembroAction(membroId: string): Promise<ActionState> {
+  try {
+    const actor = await ator();
+    const { nome } = await (await getAcompanhamentoService()).excluirMembro(actor, membroId);
+    await recordAudit({
+      companyId: actor.companyId,
+      action: "membro.deleted",
+      entityType: "rol_membro",
+      entityId: membroId,
+      metadata: { nome },
+    });
+    revalidar();
+    revalidatePath("/dashboard/ebd", "layout");
+    return { success: `${nome} foi excluído(a) do cadastro.` };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Importa os membros de uma planilha lida no navegador (validada de novo no service). */
+export async function importarMembrosAction(
+  linhas: unknown,
+): Promise<ActionState & { importados?: number; ignorados?: Array<{ nome: string; motivo: string }> }> {
+  try {
+    const actor = await ator();
+    const { importados, ignorados } = await (await getAcompanhamentoService()).importarMembros(actor, linhas);
+    await recordAudit({
+      companyId: actor.companyId,
+      action: "membros.imported",
+      entityType: "rol_membro",
+      entityId: actor.companyId,
+      metadata: { importados, ignorados: ignorados.length },
+    });
+    revalidar();
+    return {
+      success:
+        importados === 0
+          ? "Nenhum membro novo: todos já estavam cadastrados."
+          : importados === 1
+            ? "1 membro importado."
+            : `${importados} membros importados.`,
+      importados,
+      ignorados,
+    };
   } catch (err) {
     return toActionError(err);
   }

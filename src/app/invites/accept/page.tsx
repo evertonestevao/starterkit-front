@@ -24,7 +24,8 @@ export default async function AcceptInvitePage({
         <CardHeader>
           <CardTitle>Convite para uma igreja</CardTitle>
           <CardDescription>
-            Ao aceitar, você entra na igreja com o papel definido no convite.
+            Ao aceitar, você passa a acessar o sistema da igreja que convidou você. Entre com o mesmo e-mail que
+            recebeu o convite.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -34,7 +35,7 @@ export default async function AcceptInvitePage({
             <>
               <p className="text-sm text-destructive">Link de convite inválido.</p>
               <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>
-                Ir para o dashboard
+                Ir para o painel
               </Link>
             </>
           )}

@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TelefoneInput } from "@/components/telefone-input";
 import { TermsCheckboxes } from "@/features/terms/components/terms-checkboxes";
 import { DEFAULT_SPONSOR_KIND, SPONSOR_KIND_OPTIONS } from "@/features/sponsor/sponsorKindOptions";
 import { formatDocumentFor } from "@/lib/brDocument";
@@ -135,14 +136,7 @@ export function SponsorAccountForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="phone">Celular (opcional)</Label>
-        <Input
-          id="phone"
-          name="phone"
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          placeholder="(11) 90000-0000"
-        />
+        <TelefoneInput id="phone" name="phone" />
       </div>
 
       {needsTerms ? <TermsCheckboxes audience="patrocinador" /> : null}

@@ -12,7 +12,9 @@ import { cn } from "@/lib/utils";
 import type { EstadoPresenca } from "@/types/acompanhamento";
 import type { EbdAulaParaPreencher } from "@/types/ebd";
 import { useAulaEbd } from "../hooks/useAulaEbd";
+import { AvisoRascunho } from "@/components/aviso-rascunho";
 import { LegendaPresenca } from "@/components/legenda-presenca";
+import { TelefoneInput } from "@/components/telefone-input";
 
 const ESTADOS: EstadoPresenca[] = ["presente", "ausente", "justificado"];
 const SIGLA: Record<EstadoPresenca, string> = { presente: "P", ausente: "A", justificado: "J" };
@@ -45,6 +47,16 @@ export function EbdChamadaForm({ aula }: { aula: EbdAulaParaPreencher }) {
           <CheckCheck className="size-4" /> Marcar todos presentes
         </Button>
       </div>
+
+      <AvisoRascunho
+        pendente={c.pendente}
+        enviando={c.salvando}
+        encontradoEm={c.rascunhoEncontrado?.salvoEm ?? null}
+        encontradoPendente={c.rascunhoEncontrado?.pendente ?? false}
+        aoTentar={() => c.salvar(() => router.refresh())}
+        aoRecuperar={c.recuperarRascunho}
+        aoDescartar={c.descartarRascunho}
+      />
 
       {aula.alunos.length > 0 ? <LegendaPresenca /> : null}
 
@@ -192,12 +204,11 @@ function Visitantes({ c }: { c: ReturnType<typeof useAulaEbd> }) {
       ) : null}
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
         <Input placeholder="Nome do visitante" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} aria-label="Nome do visitante" />
-        <Input
+        <TelefoneInput
           placeholder="Telefone (opcional)"
-          inputMode="tel"
+          autoComplete="off"
           value={telefone}
           onChange={(e) => setTelefone(e.target.value)}
-          maxLength={20}
           aria-label="Telefone do visitante"
         />
         <Button type="button" variant="outline" onClick={adicionar} disabled={nome.trim().length < 2}>

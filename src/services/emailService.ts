@@ -1,5 +1,6 @@
 import type { EmailProvider } from "@/adapters/email/EmailProvider";
 import { describeApproved, LINK_TIPO_LABEL } from "@/lib/churchLinks";
+import { PAPEL_LABEL } from "@/lib/papeis";
 import type { ChurchLinkTipo } from "@/types/churchLinks";
 import type { CompanyInvite } from "@/types/database";
 import type { InviteNotifier } from "./inviteService";
@@ -29,17 +30,35 @@ export function createEmailService({ provider, appUrl }: EmailServiceDeps) {
   const base = appUrl.replace(/\/+$/, "");
 
   const service = {
-    async sendInviteEmail(invite: CompanyInvite): Promise<void> {
+    /**
+     * Convite para acessar o sistema. Quem recebe pode nunca ter ouvido falar
+     * do produto: o e-mail diz QUAL igreja convidou e o que acontece ao aceitar.
+     */
+    async sendInviteEmail(invite: CompanyInvite, contexto?: { churchName?: string | null }): Promise<void> {
       const acceptUrl = `${base}/invites/accept?token=${invite.token}`;
+      const nome = contexto?.churchName?.trim();
+      // Sem o nome (falha ao buscar), o texto continua correto: "Uma igreja convidou...".
+      const quem = nome ? `A ${nome}` : "Uma igreja";
+      const papel = PAPEL_LABEL[invite.role] ?? "Membro";
       await provider.send({
         to: invite.email,
-        subject: "Você foi convidado para uma igreja",
-        text: `Você recebeu um convite (papel: ${invite.role}). Aceite em: ${acceptUrl}`,
+        subject: nome ? `Convite para acessar o sistema da ${nome}` : "Convite para acessar o sistema da igreja",
+        text: `A paz do Senhor!
+
+${quem} convidou você para acessar o sistema da igreja (acesso: ${papel}).
+
+Para aceitar, abra este link e entre com este mesmo e-mail (${invite.email}):
+${acceptUrl}
+
+Se você ainda não tem conta, é só criar uma com este e-mail e voltar ao link.
+O convite vale por 7 dias. Se você não esperava este e-mail, pode ignorá-lo.`,
         html: [
-          "<p>Você recebeu um convite para entrar em uma igreja.</p>",
-          `<p>Papel: <strong>${invite.role}</strong></p>`,
-          `<p><a href="${acceptUrl}">Aceitar convite</a></p>`,
-          "<p>O convite expira em 7 dias. Se você não esperava este email, ignore-o.</p>",
+          "<p>A paz do Senhor!</p>",
+          `<p><strong>${escapeHtml(quem)}</strong> convidou você para acessar o sistema da igreja (acesso: ${escapeHtml(papel)}).</p>`,
+          `<p><a href="${acceptUrl}" style="display:inline-block;padding:10px 18px;background:#41694b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:600">Aceitar o convite</a></p>`,
+          `<p>Entre com este mesmo e-mail (<strong>${escapeHtml(invite.email)}</strong>). Se você ainda não tem conta, é só criar uma com ele e voltar a este link.</p>`,
+          `<p style="color:#666;font-size:13px">Se o botão não abrir, copie e cole no navegador:<br>${acceptUrl}</p>`,
+          '<p style="color:#666;font-size:13px">O convite vale por 7 dias. Se você não esperava este e-mail, pode ignorá-lo.</p>',
         ].join("\n"),
       });
     },

@@ -74,19 +74,14 @@ describe("menusVisiveis", () => {
 });
 
 describe("acessosDaPessoa e podeNoModulo", () => {
-  it("as autorizações antigas da ficha continuam valendo, somadas aos cargos", () => {
-    expect(acessosDaPessoa(["events"], { pode_acompanhar: true, pode_gerir_ebd: false })).toEqual([
-      "dashboard",
-      "acompanhamento",
-      "membros",
-      "events",
-    ]);
-    // Quem tem autorização na ficha continua com o painel.
-    expect(acessosDaPessoa([], { pode_acompanhar: false, pode_gerir_ebd: true })).toEqual(["dashboard", "ebd"]);
+  it("os módulos vêm só dos cargos, na ordem do catálogo e sem repetir", () => {
+    // Dois cargos liberando coisas diferentes (e uma em comum): vale a soma.
+    expect(acessosDaPessoa(["events", "membros", "events", "dashboard"])).toEqual(["dashboard", "membros", "events"]);
+    expect(acessosDaPessoa([])).toEqual([]);
   });
 
   it("módulo desconhecido vindo do banco é ignorado", () => {
-    expect(acessosDaPessoa(["billing", "prayers"], { pode_acompanhar: false, pode_gerir_ebd: false })).toEqual([]);
+    expect(acessosDaPessoa(["billing", "prayers"])).toEqual([]);
   });
 
   it("quem administra pode em qualquer módulo; membro só no liberado", () => {

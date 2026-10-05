@@ -5,6 +5,7 @@ import { Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TelefoneInput } from "@/components/telefone-input";
 import { useActionToast } from "@/hooks/useActionToast";
 import { parseSponsorLink, sponsorLinkHref } from "@/lib/sponsorLink";
 import { requestProfileChangeAction } from "@/server/actions/sponsorProfile";
@@ -138,15 +139,7 @@ export function SponsorProfileForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="phone">Celular</Label>
-        <Input
-          id="phone"
-          name="phone"
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          defaultValue={phone ?? ""}
-          placeholder="(11) 90000-0000"
-        />
+        <TelefoneInput id="phone" name="phone" defaultValue={phone} />
         <p className="text-xs text-muted-foreground">
           Usado só para falarmos com você. Não aparece para as igrejas, e salva na hora.
         </p>

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TelefoneInput } from "@/components/telefone-input";
 import { linkLigar } from "@/lib/acompanhamento";
 import { PARENTESCOS } from "@/lib/ebd";
 import {
@@ -200,7 +201,7 @@ function NovoResponsavel({ membroId, podeEscolherMembro }: { membroId: string; p
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor={`resp-tel-${membroId}`}>Telefone {escolhido ? "(em branco: o de Membros)" : ""}</Label>
-          <Input id={`resp-tel-${membroId}`} name="telefone" inputMode="tel" maxLength={20} />
+          <TelefoneInput id={`resp-tel-${membroId}`} name="telefone" autoComplete="off" />
         </div>
       </div>
       <label className="flex items-center gap-2 text-sm">

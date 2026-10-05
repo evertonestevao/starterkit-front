@@ -70,14 +70,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ? 0
       : await (await getCommunityService()).getUnseenPrayerCount(active.id).catch(() => 0);
 
-  // Menus da pessoa: papel + autorizações + o que a igreja configurou.
+  // Menus da pessoa: papel + o que os cargos dela liberam.
   const menus = await getMenusVisiveis();
+
+  // Aviso no menu "Quem quer visita": pedidos em que ninguém fez contato
+  // ainda. Só para quem tem o menu; se a contagem falhar, fica sem aviso.
+  const visitasSemContato = menus.includes("relationships")
+    ? await (await getCommunityService())
+        .countVisitas(active.id)
+        .then((c) => c.novos)
+        .catch(() => 0)
+    : 0;
 
   const cookieStore = await cookies();
   const initialCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "true";
 
   return (
-    <TenantProvider value={{ companies, active, menus }}>
+    <TenantProvider value={{ companies, active, menus, visitasSemContato }}>
       <AppShell
         initialCollapsed={initialCollapsed}
         userName={profile?.full_name ?? "Usuário"}

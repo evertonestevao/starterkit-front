@@ -7,7 +7,7 @@ import { canConfigurar } from "@/services/acompanhamentoService";
 const BASE = "/dashboard/acompanhamento";
 
 /**
- * Casca de Chamada e Acompanhamento. Quem não pode acompanhar recebe 404
+ * Casca de Presença nos cultos (chamada e acompanhamento). Quem não pode acompanhar recebe 404
  * mesmo com a URL na mão; o service e a RLS (can_acompanhar) recusam de novo.
  */
 export default async function AcompanhamentoLayout({ children }: { children: React.ReactNode }) {
@@ -33,9 +33,9 @@ export default async function AcompanhamentoLayout({ children }: { children: Rea
   return (
     <div className="flex max-w-4xl flex-col gap-6">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Chamada e acompanhamento</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Presença nos cultos</h2>
         <p className="text-sm text-muted-foreground">
-          Presença nos cultos e cuidado com quem está faltando.
+          A chamada de cada culto e o cuidado com quem está faltando.
         </p>
       </div>
       <RouteTabs tabs={tabs} />

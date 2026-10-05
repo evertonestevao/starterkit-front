@@ -18,8 +18,6 @@ function makeMember(overrides: Partial<MemberWithProfile>): MemberWithProfile {
     user_id: "u1",
     role: "member",
     invited_by: null,
-    pode_acompanhar: false,
-    pode_gerir_ebd: false,
     deleted_at: null,
     created_at: "",
     updated_at: "",
@@ -47,7 +45,6 @@ function makeRepo(overrides: Partial<TenantRepository> = {}): TenantRepository {
       return makeMember({});
     },
     async updateMemberRole() {},
-    async updateMemberPermissao() {},
     async removeMember() {},
     async leaveCompany() {},
     ...overrides,
@@ -232,42 +229,5 @@ describe("tenantService autorização", () => {
     await expect(service.removeMember(COMPANY_ID, "m1")).rejects.toMatchObject({
       code: "forbidden",
     });
-  });
-});
-
-describe("tenantService.setMemberPermissao", () => {
-  it("admin autoriza um member", async () => {
-    const chamadas: boolean[] = [];
-    const service = createTenantService(
-      makeRepo({
-        getMyRole: async () => "admin",
-        updateMemberPermissao: async (_m, _c, _campo, value) => {
-          chamadas.push(value);
-        },
-      }),
-    );
-    await service.setMemberPermissao(COMPANY_ID, "m1", "pode_acompanhar", true);
-    expect(chamadas).toEqual([true]);
-  });
-
-  it("member não autoriza ninguém", async () => {
-    const service = createTenantService(makeRepo({ getMyRole: async () => "member" }));
-    await expect(service.setMemberPermissao(COMPANY_ID, "m1", "pode_acompanhar", true)).rejects.toMatchObject({
-      code: "forbidden",
-    });
-  });
-
-  it("não se aplica a admin (já pode por papel)", async () => {
-    const service = createTenantService(
-      makeRepo({ getMember: async () => makeMember({ role: "admin" }) }),
-    );
-    await expect(service.setMemberPermissao(COMPANY_ID, "m1", "pode_acompanhar", true)).rejects.toMatchObject({
-      code: "validation_error",
-    });
-  });
-
-  it("membro de outro tenant vira not_found", async () => {
-    const service = createTenantService(makeRepo({ getMember: async () => null }));
-    await expect(service.setMemberPermissao(COMPANY_ID, "outro", "pode_acompanhar", true)).rejects.toBeInstanceOf(AppError);
   });
 });

@@ -7,6 +7,8 @@ import {
   submitPrayerRequestAction,
   submitVisitorAction,
 } from "@/server/actions/church";
+import { CamposAntiRobo } from "@/components/campos-anti-robo";
+import { TelefoneInput } from "@/components/telefone-input";
 import type { ActionState } from "@/server/actions/action-state";
 
 /**
@@ -102,7 +104,8 @@ function Formulario({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} className="relative flex flex-col gap-3">
+      <CamposAntiRobo />
       {children}
       {state?.error ? (
         <p role="alert" className="text-sm text-[var(--pg-danger)]">
@@ -153,16 +156,7 @@ export function VisitorForm({ churchId }: { churchId: string }) {
         <input name="name" required autoComplete="name" maxLength={120} className={campo} />
       </Campo>
       <Campo rotulo="Telefone ou WhatsApp (com DDD)">
-        <input
-          name="contact"
-          type="tel"
-          inputMode="tel"
-          required
-          autoComplete="tel"
-          maxLength={20}
-          placeholder="(11) 99999-9999"
-          className={campo}
-        />
+        <TelefoneInput semEstilo name="contact" required className={campo} />
       </Campo>
       <Campo rotulo="Endereço ou bairro (opcional)">
         <input name="endereco" autoComplete="street-address" maxLength={300} className={campo} />

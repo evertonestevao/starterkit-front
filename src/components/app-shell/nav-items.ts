@@ -59,5 +59,5 @@ export function titleForPath(pathname: string): string {
     .find(
       (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
     );
-  return match?.title ?? "Dashboard";
+  return match?.title ?? "Painel";
 }

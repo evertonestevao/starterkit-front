@@ -28,10 +28,21 @@ const serverEnvSchema = z.object({
   EMAIL_PROVIDER: z.enum(["resend", "console"]).default("console"),
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.email().optional(),
+  /** Nome que aparece como remetente ("Conecta Igreja <no-reply@...>"). Padrão: o nome do produto. */
+  EMAIL_FROM_NAME: z.string().min(1).max(60).optional(),
+  /** Para onde vão as respostas (ex.: suporte@...). Sem ele, respondem ao remetente. */
+  EMAIL_REPLY_TO: z.email().optional(),
   /** URL pública da app, usada em links de emails transacionais. */
   APP_URL: z.url().default("http://localhost:3000"),
   /** Notificações externas (WhatsApp/SMS/push). Só "console" implementado. */
   NOTIFICATION_PROVIDER: z.enum(["console"]).default("console"),
+  /**
+   * SÓ PARA TESTE AUTOMÁTICO (e2e): "true" tira o tempo mínimo e afrouxa o
+   * limite de envios dos formulários públicos, porque o robô de teste
+   * preenche em milissegundos, sempre do mesmo endereço. Nunca em produção
+   * de verdade — o boot avisa se estiver ligado.
+   */
+  PUBLIC_FORMS_RELAXED: z.enum(["true", "false"]).default("false"),
   /** Store do rate limiter: memory (single-node/dev) ou redis (Upstash). */
   RATE_LIMIT_STORE: z.enum(["memory", "redis"]).default("memory"),
   UPSTASH_REDIS_REST_URL: z.url().optional(),

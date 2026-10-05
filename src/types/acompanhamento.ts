@@ -48,8 +48,6 @@ export interface AcessoMembro {
   companyMemberId: string;
   userId: string;
   role: "owner" | "admin" | "member";
-  podeAcompanhar: boolean;
-  podeGerirEbd: boolean;
 }
 
 /** Convite pendente para o sistema (só owner/admin enxergam). */
