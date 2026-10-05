@@ -95,6 +95,12 @@ export default async function EbdDestaquesPage({ searchParams }: { searchParams:
         </p>
       ) : (
         <>
+          {totais.domingos < 3 ? (
+            <p className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
+              <strong>Trimestre no começo.</strong> Há só {totais.domingos} domingo(s) com chamada, então as médias, a
+              comparação com o trimestre anterior e os rankings ainda podem mudar bastante.
+            </p>
+          ) : null}
           <section aria-label="Números do trimestre" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Numero
               rotulo={classe ? "Presença da classe" : "Presença geral"}

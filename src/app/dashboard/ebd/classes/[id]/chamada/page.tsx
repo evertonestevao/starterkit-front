@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { DataAuto } from "@/components/data-auto";
 import { Badge } from "@/components/ui/badge";
 import { EbdChamadaForm } from "@/features/ebd/components/ebd-chamada-form";
 import { formatarData, hojeISO, somarDias } from "@/lib/acompanhamento";
@@ -47,16 +48,11 @@ export default async function ChamadaEbdPage({
             {aula.aulaId ? <Badge variant="secondary">Já feita — editando</Badge> : <Badge>Nova chamada</Badge>}
           </div>
         ) : null}
-        <form className="flex flex-wrap items-center gap-2 text-sm">
-          <label htmlFor="data" className="text-muted-foreground">
-            Domingo:
-          </label>
-          <input id="data" name="data" type="date" defaultValue={data} max={somarDias(hoje, 1)} className="h-9 rounded-md border bg-transparent px-2" />
-          <button type="submit" className="h-9 rounded-md border px-3 hover:bg-muted">
-            Abrir
-          </button>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Domingo:</span>
+          <DataAuto valor={data} rotulo="Domingo da chamada" max={somarDias(hoje, 1)} />
           <span className="text-muted-foreground">({formatarData(data)})</span>
-        </form>
+        </div>
       </div>
       {aviso ? <p className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-sm">{aviso}</p> : null}
       {aula ? <EbdChamadaForm key={`${id}-${data}-${aula.aulaId ?? "nova"}`} aula={aula} /> : null}

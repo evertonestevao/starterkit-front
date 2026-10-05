@@ -1,10 +1,11 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { PASSWORD, signupAndOnboard, uniqueEmail } from "./helpers";
 
 /**
  * EBD de ponta a ponta, do jeito que a igreja usa no domingo: cria a classe,
  * põe DOIS professores (revezamento é o normal), matricula alunos, faz a
- * chamada e confere que o resumo e o relatório em PDF mostram os números.
+ * chamada, confere o resumo e baixa o relatório do domingo em PDF.
  *
  * É o fluxo que não pode quebrar sem ninguém perceber: uma chamada que não
  * salva some com o domingo inteiro de uma classe.
@@ -88,18 +89,20 @@ test("classe com dois professores, chamada salva e relatório do domingo", async
   await expect(page.getByText("de 2 matriculados")).toBeVisible();
   await expect(page.getByText("Prof.: Marta Professora, Paulo Professor")).toBeVisible();
 
-  // 7. Relatório para PDF: mesmos números, e o menu não sai na folha.
-  await page.getByRole("link", { name: "Gerar PDF" }).click();
-  await expect(page).toHaveURL(/\/dashboard\/ebd\/relatorio\?data=/);
-  const folha = page.locator("article");
-  await expect(folha.getByRole("heading", { name: "Igreja EBD E2E" })).toBeVisible();
-  await expect(folha.getByText("Prof.: Marta Professora, Paulo Professor")).toBeVisible();
-  await expect(folha.getByText("50%", { exact: true }).first()).toBeVisible();
-  await expect(folha.getByText("R$ 12,50").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Salvar em PDF" })).toBeVisible();
+  // 7. Relatório do domingo: o botão entrega o arquivo PDF direto.
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("link", { name: "Baixar PDF" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^ebd-relatorio-\d{4}-\d{2}-\d{2}\.pdf$/);
+  const caminho = await download.path();
+  const bytes = readFileSync(caminho);
+  expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  expect(bytes.length).toBeGreaterThan(1500);
 
-  await page.emulateMedia({ media: "print" });
-  await expect(page.locator("aside")).toBeHidden();
-  await expect(page.getByRole("button", { name: "Salvar em PDF" })).toBeHidden();
-  await expect(folha).toBeVisible();
+  // 8. Trocar a data recarrega o resumo sozinho (sem botão "Ver").
+  const semanaPassada = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  await page.getByLabel("Domingo").fill(semanaPassada);
+  await expect(page).toHaveURL(new RegExp(`data=${semanaPassada}`));
+  await expect(page.getByText("0 de 1 classe(s) com chamada")).toBeVisible();
 });
