@@ -137,6 +137,9 @@ export default async function RelatorioDomingoPage({ searchParams }: { searchPar
         )}
 
         <p className="mt-3 text-xs text-neutral-600">
+          Matr. = Matriculados · Pres. = Presentes · Aus. = Ausentes · Just. = Justificados · Visit. = Visitantes
+        </p>
+        <p className="mt-1 text-xs text-neutral-600">
           {t.classesComChamada} de {resumo.length} classe(s) com chamada feita. Presença = presentes ÷ (presentes +
           ausentes); justificados ficam de fora.
         </p>

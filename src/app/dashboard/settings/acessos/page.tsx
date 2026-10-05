@@ -23,6 +23,11 @@ export default async function AcessosPage() {
   const linhas: CargoAcessos[] = cargos.map((cargo) => ({
     cargoId: cargo.id,
     nome: cargo.nome,
+    // O professor já entra na EBD pela classe em que ensina, sem depender daqui.
+    nota:
+      cargo.slug === "professor_ebd"
+        ? "Quem é professor de uma classe já entra na EBD e vê apenas a classe dele: alunos, chamada e relatórios dela. Marque EBD aqui só se este cargo deve cuidar da escola inteira (todas as classes, trimestres e regras)."
+        : null,
     modulos: MODULOS_LIBERAVEIS.map((modulo) => {
       const c = celula(matriz, cargo.id, modulo);
       return {
@@ -42,7 +47,8 @@ export default async function AcessosPage() {
         <CardTitle>Acessos</CardTitle>
         <CardDescription>
           Escolha o que cada cargo pode usar no sistema. Quem tem login e o cargo na ficha de membro passa a usar o
-          módulo marcado como um administrador usa, só naquele módulo. Responsável e Administrador já acessam tudo. As
+          módulo marcado como um administrador usa, só naquele módulo. Os cargos já vêm com um padrão marcado, que você
+          pode ajustar. Responsável e Administrador já acessam tudo. As
           igrejas abaixo desta seguem o que for definido aqui até mudarem algo; a partir daí ficam com a configuração
           delas, e o que mudar aqui não as afeta mais.
         </CardDescription>

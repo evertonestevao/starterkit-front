@@ -10,6 +10,8 @@ import { restaurarAcessosAction, salvarAcessosAction } from "@/server/actions/me
 export interface CargoAcessos {
   cargoId: string;
   nome: string;
+  /** Explicação extra do cargo (ex.: professor da EBD vê só a classe dele). */
+  nota: string | null;
   modulos: Array<{
     modulo: string;
     titulo: string;
@@ -68,6 +70,7 @@ export function AcessosForm({ cargos }: { cargos: CargoAcessos[] }) {
             <input type="hidden" name="cargo" value={cargo.cargoId} />
             <fieldset className="flex flex-col gap-2">
               <legend className="text-sm font-medium">{cargo.nome}</legend>
+              {cargo.nota ? <p className="text-xs text-muted-foreground">{cargo.nota}</p> : null}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {cargo.modulos.map((m) => (
                   <label key={m.modulo} className="flex items-start gap-2 text-sm">
@@ -104,7 +107,7 @@ export function AcessosForm({ cargos }: { cargos: CargoAcessos[] }) {
         {temPropria ? (
           <Button type="button" variant="outline" disabled={pending || restaurando} onClick={restaurar}>
             <RotateCcw className="size-4" />{" "}
-            {restaurando ? "Restaurando..." : acima ? `Voltar a seguir ${acima}` : "Remover todas as liberações"}
+            {restaurando ? "Restaurando..." : acima ? `Voltar a seguir ${acima}` : "Voltar ao padrão"}
           </Button>
         ) : null}
       </div>

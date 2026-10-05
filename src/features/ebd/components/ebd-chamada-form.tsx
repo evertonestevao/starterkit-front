@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import type { EstadoPresenca } from "@/types/acompanhamento";
 import type { EbdAulaParaPreencher } from "@/types/ebd";
 import { useAulaEbd } from "../hooks/useAulaEbd";
+import { LegendaPresenca } from "@/components/legenda-presenca";
 
 const ESTADOS: EstadoPresenca[] = ["presente", "ausente", "justificado"];
 const SIGLA: Record<EstadoPresenca, string> = { presente: "P", ausente: "A", justificado: "J" };
@@ -44,6 +45,8 @@ export function EbdChamadaForm({ aula }: { aula: EbdAulaParaPreencher }) {
           <CheckCheck className="size-4" /> Marcar todos presentes
         </Button>
       </div>
+
+      {aula.alunos.length > 0 ? <LegendaPresenca /> : null}
 
       {aula.alunos.length === 0 ? (
         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">

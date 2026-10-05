@@ -19,6 +19,10 @@ import type { RoleCode } from "@/types/database";
 export interface CargoDaIgreja {
   id: string;
   nome: string;
+  /** Só os cargos da plataforma têm (ex.: "professor_ebd"). */
+  slug: string | null;
+  /** Módulos que o cargo já libera quando nenhuma igreja da rede definiu. */
+  acessosPadrao: string[];
 }
 
 export interface MenuPermissoesRepository {
@@ -66,7 +70,7 @@ export function createMenuPermissoesService(repo: MenuPermissoesRepository) {
         repo.listarCargos(actor.companyId),
         repo.listarDaRede(actor.companyId),
       ]);
-      return { cargos, matriz: resolverAcessos(cargos.map((c) => c.id), linhas) };
+      return { cargos, matriz: resolverAcessos(cargos, linhas) };
     },
 
     /**
@@ -83,11 +87,7 @@ export function createMenuPermissoesService(repo: MenuPermissoesRepository) {
         repo.listarCargos(actor.companyId),
         repo.listarDaRede(actor.companyId),
       ]);
-      const itens = escolhasParaGravar(
-        parsed.data,
-        cargos.map((c) => c.id),
-        linhas,
-      );
+      const itens = escolhasParaGravar(parsed.data, cargos, linhas);
       await repo.salvar(actor.companyId, itens);
       return itens.length;
     },

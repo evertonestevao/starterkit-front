@@ -10,6 +10,7 @@ import { ClasseForm } from "@/features/ebd/components/ebd-classe-acoes";
 import { formatarData, formatarPercentual, hojeISO } from "@/lib/acompanhamento";
 import { domingoSugerido, formatarReais, totaisDoDia, trimestreDe } from "@/lib/ebd";
 import { getEbdActorAutorizado, getEbdService } from "@/server/ebd";
+import { LegendaPresenca } from "@/components/legenda-presenca";
 
 export const metadata: Metadata = { title: "EBD" };
 
@@ -76,6 +77,12 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
             <p className="text-sm text-muted-foreground">Nenhuma classe ativa.</p>
           ) : (
             <>
+              <LegendaPresenca
+                extras={[
+                  ["Matr.", "Matriculados"],
+                  ["Visit.", "Visitantes"],
+                ]}
+              />
               <div className="hidden md:block">
                 <Table>
                   <TableHeader>

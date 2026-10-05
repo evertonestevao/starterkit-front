@@ -2177,9 +2177,12 @@ begin
   if n <> 0 then raise exception 'FALHA oracao: member leu % pedidos', n; end if;
   select count(*) into n from public.prayer_counts_tree(365) where church_id::text like '7d7d7d7d-%';
   if n <> 0 then raise exception 'FALHA oracao: member leu contagem de % igrejas', n; end if;
-  -- Contato deixado para ser procurado segue visível pela árvore.
+  -- Pedido de visita tem nome e telefone: member sem cargo liberado não lê
+  -- (migration 20261004130000). Quem administra segue vendo pela árvore.
   select count(*) into n from public.visitors where church_id::text like '7d7d7d7d-%';
-  if n <> 2 then raise exception 'FALHA arvore: member de X ve % visitantes (esperado 2)', n; end if;
+  if n <> 0 then raise exception 'FALHA arvore: member de X ve % visitantes (esperado 0)', n; end if;
+  select count(*) into n from public.event_signups where church_id::text like '7d7d7d7d-%';
+  if n <> 0 then raise exception 'FALHA arvore: member de X ve % inscricoes (esperado 0)', n; end if;
   -- Patrocínio é leitura de gestão: member não vê nem o da própria igreja.
   select count(*) into n from public.sponsorships where church_id::text like '7d7d7d7d-%';
   if n <> 0 then raise exception 'FALHA arvore: member ve patrocinios'; end if;
@@ -5046,6 +5049,10 @@ begin
   select count(*) into n from public.ebd_frequencia_alunos('acacacac-0000-4000-8000-0000000000d2', null, current_date - 60, current_date)
   where classe_id = 'ebdebdeb-0000-4000-8000-0000000000a2';
   if n <> 0 then raise exception 'FALHA ebd2: professor ve frequencia de outra classe'; end if;
+  -- Gráfico por domingo (migration 20261004150000): classe de outro professor não entra.
+  select count(*) into n from public.ebd_presenca_por_domingo(
+    'acacacac-0000-4000-8000-0000000000d2', 'ebdebdeb-0000-4000-8000-0000000000a2', current_date - 60, current_date);
+  if n <> 0 then raise exception 'FALHA ebd: professor ve presenca por domingo de outra classe'; end if;
 
   begin
     insert into public.ebd_contatos (church_id, membro_id, classe_id, resultado)
@@ -5138,6 +5145,9 @@ begin
   if n <> 0 then raise exception 'FALHA ebd2: outra rede ve alertas da EBD'; end if;
   select count(*) into n from public.ebd_relatorio_classes('acacacac-0000-4000-8000-0000000000d2', current_date - 60, current_date);
   if n <> 0 then raise exception 'FALHA ebd2: outra rede ve relatorio da EBD'; end if;
+  select count(*) into n from public.ebd_presenca_por_domingo(
+    'acacacac-0000-4000-8000-0000000000d2', null, current_date - 60, current_date);
+  if n <> 0 then raise exception 'FALHA ebd: outra rede ve presenca por domingo'; end if;
 end $$;
 reset role;
 
@@ -5356,7 +5366,9 @@ end $$;
 
 set local role authenticated;
 
--- Antes de qualquer liberação: cargo sozinho não abre nada.
+-- Antes de qualquer igreja configurar: vale o padrão do cargo (migration
+-- 20261004120000). Secretário abre Presença/Membros/Programação/Eventos;
+-- Campanhas e EBD, não.
 select set_config('request.jwt.claims',
   '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
 do $$
@@ -5367,8 +5379,15 @@ begin
   if public.can_gerir_ebd('acacacac-0000-4000-8000-0000000000d2') then
     raise exception 'FALHA acessos: cargo sem liberacao ja gere a EBD';
   end if;
-  if public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
-    raise exception 'FALHA acessos: cargo sem liberacao ja acompanha';
+  if not public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
+    raise exception 'FALHA acessos: padrao do secretario nao abriu o rol';
+  end if;
+  if not public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'events') then
+    raise exception 'FALHA acessos: padrao do secretario nao abriu eventos';
+  end if;
+  -- O padrão não vale em empresa onde a pessoa não tem login.
+  if public.tem_acesso('acacacac-0000-4000-8000-0000000000c1', 'events') then
+    raise exception 'FALHA acessos: padrao do cargo abriu eventos de outra igreja';
   end if;
 end $$;
 
@@ -5417,12 +5436,6 @@ begin
   if not public.can_gerir_ebd('acacacac-0000-4000-8000-0000000000d2') then
     raise exception 'FALHA acessos: secretario nao herdou a EBD da sede';
   end if;
-  if public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'events') then
-    raise exception 'FALHA acessos: secretario abriu modulo nao liberado';
-  end if;
-  if public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
-    raise exception 'FALHA acessos: secretario le o rol sem Membros/Presenca liberado';
-  end if;
   -- Não vira administrador, nem ganha nada na igreja de cima.
   if public.is_company_admin('acacacac-0000-4000-8000-0000000000c2') then
     raise exception 'FALHA acessos: cargo liberado virou administrador';
@@ -5433,7 +5446,7 @@ begin
 
   select string_agg(modulo, ',' order by modulo) into v from public.meus_acessos()
   where company_id = 'acacacac-0000-4000-8000-0000000000c2';
-  if v is distinct from 'campaigns,ebd' then raise exception 'FALHA acessos: meus_acessos veio %', v; end if;
+  if v is distinct from 'acompanhamento,campaigns,dashboard,ebd,events,membros,programacao,relationships' then raise exception 'FALHA acessos: meus_acessos veio %', v; end if;
 
   -- Não configura nem enxerga a configuração.
   begin
@@ -5445,7 +5458,8 @@ begin
   if n <> 0 then raise exception 'FALHA acessos: member leu a configuracao de acessos'; end if;
 end $$;
 
--- O responsável da congregação tira Campanhas e libera Membros: a dele vence.
+-- O responsável da congregação tira Campanhas (herdada da sede) e também
+-- Presença e Membros (padrão do cargo): a escolha dele vence as duas.
 select set_config('request.jwt.claims',
   '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
 do $$
@@ -5453,9 +5467,10 @@ declare v_cargo uuid := (select id from public.cargos where slug = 'secretario')
 begin
   perform public.salvar_cargo_acessos('acacacac-0000-4000-8000-0000000000c2', jsonb_build_array(
     jsonb_build_object('cargo_id', v_cargo, 'modulo', 'campaigns', 'permitido', false),
-    jsonb_build_object('cargo_id', v_cargo, 'modulo', 'membros', 'permitido', true)));
+    jsonb_build_object('cargo_id', v_cargo, 'modulo', 'acompanhamento', 'permitido', false),
+    jsonb_build_object('cargo_id', v_cargo, 'modulo', 'membros', 'permitido', false)));
   select count(*) into n from public.cargo_acessos_da_rede('acacacac-0000-4000-8000-0000000000c2');
-  if n <> 4 then raise exception 'FALHA acessos: esperado 2 proprias + 2 herdadas, veio %', n; end if;
+  if n <> 5 then raise exception 'FALHA acessos: esperado 3 proprias + 2 herdadas, veio %', n; end if;
 end $$;
 
 select set_config('request.jwt.claims',
@@ -5468,8 +5483,11 @@ begin
   if not public.can_gerir_ebd('acacacac-0000-4000-8000-0000000000d2') then
     raise exception 'FALHA acessos: secretario perdeu a EBD herdada';
   end if;
-  if not public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
-    raise exception 'FALHA acessos: Membros liberado nao abriu o rol';
+  if public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
+    raise exception 'FALHA acessos: a congregacao tirou Presenca e Membros e o padrao ainda abre o rol';
+  end if;
+  if not public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'events') then
+    raise exception 'FALHA acessos: eventos (padrao, nao mexido) sumiu';
   end if;
 end $$;
 
@@ -5493,7 +5511,8 @@ select set_config('request.jwt.claims',
 do $$
 begin
   if public.can_gerir_ebd('acacacac-0000-4000-8000-0000000000d2')
-     or public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2') then
+     or public.can_acompanhar('acacacac-0000-4000-8000-0000000000d2')
+     or public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'events') then
     raise exception 'FALHA acessos: perdeu o cargo e manteve o acesso';
   end if;
 end $$;

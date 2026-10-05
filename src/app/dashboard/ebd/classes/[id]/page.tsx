@@ -21,6 +21,7 @@ import { domingoSugerido, formatarReais, idadeEm } from "@/lib/ebd";
 import { isAppError } from "@/lib/errors";
 import { getEbdActorAutorizado, getEbdService } from "@/server/ebd";
 import { canGerirEbd } from "@/services/ebdService";
+import { LegendaPresenca } from "@/components/legenda-presenca";
 
 export const metadata: Metadata = { title: "Classe da EBD" };
 
@@ -183,6 +184,7 @@ export default async function ClasseEbdPage({ params }: { params: Promise<{ id: 
           <CardTitle className="text-base">Aulas</CardTitle>
         </CardHeader>
         <CardContent>
+          {aulas.length > 0 ? <LegendaPresenca className="mb-2" extras={[["visit.", "Visitantes"]]} /> : null}
           {aulas.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma chamada feita ainda.</p>
           ) : (

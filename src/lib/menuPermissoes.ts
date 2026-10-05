@@ -5,13 +5,23 @@ import type { RoleCode } from "@/types/database";
  * sidebar, pela guarda das telas e por Configurações → Acessos.
  *
  * Quem abre um módulo:
- *  - o papel (Responsável/Administrador sempre; Membro só no que está em `roles`);
+ *  - o papel (Responsável/Administrador sempre; Membro, sozinho, só o painel
+ *    e as próprias configurações);
  *  - ou um cargo da pessoa com o módulo LIBERADO pela igreja (ou herdado da
  *    igreja acima). O banco repete a regra em tem_acesso().
  */
 
 /** Módulos que o Responsável pode liberar para um cargo. */
-export const MODULOS_LIBERAVEIS = ["acompanhamento", "membros", "ebd", "programacao", "events", "campaigns"] as const;
+export const MODULOS_LIBERAVEIS = [
+  "dashboard",
+  "acompanhamento",
+  "membros",
+  "ebd",
+  "programacao",
+  "events",
+  "campaigns",
+  "relationships",
+] as const;
 export type Modulo = (typeof MODULOS_LIBERAVEIS)[number];
 
 export function isModulo(valor: string): valor is Modulo {
@@ -35,7 +45,8 @@ export interface MenuDef {
  * fixos no arquivo. Voltam quando lerem o banco — é só devolver o item aqui.
  */
 export const MENUS: readonly MenuDef[] = [
-  { key: "dashboard", title: "Dashboard", href: "/dashboard", roles: ["owner", "admin", "member"] },
+  // O painel: liberável por cargo. Cada número dele ainda depende do módulo de onde vem.
+  { key: "dashboard", title: "Dashboard", href: "/dashboard", roles: ["owner", "admin"] },
   // Chamada nos cultos, justificativas e quem está faltando. Dado pessoal:
   // só a própria igreja; a RLS repete a regra (can_acompanhar).
   { key: "acompanhamento", title: "Presença nos cultos", href: "/dashboard/acompanhamento", roles: ["owner", "admin"] },
@@ -48,14 +59,14 @@ export const MENUS: readonly MenuDef[] = [
   // Dado sensível (LGPD): o texto do pedido é só de quem lidera a igreja.
   // Não é liberável por cargo.
   { key: "prayers", title: "Pedidos de oração", href: "/dashboard/prayers", roles: ["owner", "admin"] },
-  // O dia a dia (cultos semanais e especiais). Todos veem; editar é de quem
-  // administra ou de um cargo liberado.
-  { key: "programacao", title: "Programação", href: "/dashboard/programacao", roles: ["owner", "admin", "member"] },
-  // Só o que tem inscrição e/ou pagamento. Mesma regra da Programação.
-  { key: "events", title: "Eventos", href: "/dashboard/events", roles: ["owner", "admin", "member"] },
+  // O dia a dia (cultos semanais e especiais).
+  { key: "programacao", title: "Programação", href: "/dashboard/programacao", roles: ["owner", "admin"] },
+  // Só o que tem inscrição e/ou pagamento.
+  { key: "events", title: "Eventos", href: "/dashboard/events", roles: ["owner", "admin"] },
   { key: "campaigns", title: "Campanhas", href: "/dashboard/campaigns", roles: ["owner", "admin"] },
   { key: "sponsors", title: "Patrocinadores", href: "/dashboard/sponsors", roles: ["owner", "admin"] },
-  { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin", "member"] },
+  // Pedidos de visita (nome e telefone de quem pediu).
+  { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin"] },
   { key: "billing", title: "Billing", href: "/dashboard/billing", roles: ["owner"] },
   { key: "audit", title: "Auditoria", href: "/dashboard/audit", roles: ["owner", "admin"] },
   { key: "settings", title: "Configurações", href: "/dashboard/settings", roles: ["owner", "admin", "member"] },
@@ -63,6 +74,11 @@ export const MENUS: readonly MenuDef[] = [
 
 /** O que cada módulo liberado deixa fazer (texto da tela de Acessos). */
 export const MODULO_INFO: Record<Modulo, { titulo: string; libera: string; aviso?: string }> = {
+  dashboard: {
+    titulo: "Dashboard",
+    libera:
+      "Ver o painel inicial. Cada número e gráfico dele só aparece para quem também tem o módulo de onde vem. Sem o painel, a pessoa entra direto no primeiro menu que tem.",
+  },
   acompanhamento: {
     titulo: "Presença nos cultos",
     libera: "Fazer a chamada, lançar justificativas e acompanhar quem está faltando.",
@@ -84,6 +100,11 @@ export const MODULO_INFO: Record<Modulo, { titulo: string; libera: string; aviso
     titulo: "Campanhas",
     libera: "Criar, publicar e encerrar campanhas e confirmar doações.",
     aviso: "A campanha aparece na página pública e recebe pelo Pix já cadastrado da igreja, que este cargo não altera.",
+  },
+  relationships: {
+    titulo: "Quem quer visita",
+    libera: "Ver os pedidos de visita, entrar em contato e marcar a visita como feita.",
+    aviso: "Mostra nome, telefone e o motivo de quem pediu a visita.",
   },
 };
 
@@ -110,6 +131,8 @@ export function acessosDaPessoa(
     todos.add("membros");
   }
   if (autorizacoes.pode_gerir_ebd) todos.add("ebd");
+  // Quem recebeu uma autorização na ficha já via o painel: continua vendo.
+  if (autorizacoes.pode_acompanhar || autorizacoes.pode_gerir_ebd) todos.add("dashboard");
   return MODULOS_LIBERAVEIS.filter((m) => todos.has(m));
 }
 
@@ -124,6 +147,17 @@ export function menusVisiveis(pessoa: PessoaAcesso): string[] {
     (m) =>
       m.roles.includes(pessoa.role) || pessoa.acessos.includes(m.key) || (m.key === "ebd" && pessoa.professor_ebd),
   ).map((m) => m.key);
+}
+
+/**
+ * Para onde a pessoa vai ao entrar: o painel, se tiver; senão o primeiro
+ * menu que ela tem (ex.: o professor cai na EBD). Configurações é de todos,
+ * então sempre há para onde ir.
+ */
+export function paginaInicial(pessoa: PessoaAcesso): string {
+  const menus = menusVisiveis(pessoa);
+  if (menus.includes("dashboard")) return "/dashboard";
+  return MENUS.find((m) => menus.includes(m.key))?.href ?? "/dashboard/settings";
 }
 
 /** Linha gravada: da própria igreja (nivel 0) ou de uma acima (1 = mãe...). */
@@ -141,7 +175,7 @@ export interface CelulaAcesso {
   permitido: boolean;
   /** O que valeria sem a escolha desta igreja. */
   herdado: boolean;
-  /** Igreja acima que definiu o herdado; null = padrão (não liberado). */
+  /** Igreja acima que definiu o herdado; null = padrão do cargo. */
   herdadoDe: string | null;
   /** Esta igreja tem escolha própria neste ponto. */
   propria: boolean;
@@ -149,8 +183,17 @@ export interface CelulaAcesso {
 
 const chave = (cargoId: string, modulo: string) => `${cargoId}:${modulo}`;
 
-/** Resolve cargo × módulo: a própria igreja vence; depois a acima mais próxima; senão, não liberado. */
-export function resolverAcessos(cargoIds: string[], linhas: LinhaAcesso[]): Map<string, CelulaAcesso> {
+/** Cargo da igreja com o padrão dele (módulos que já vêm liberados). */
+export interface CargoComPadrao {
+  id: string;
+  acessosPadrao: string[];
+}
+
+/**
+ * Resolve cargo × módulo: a própria igreja vence; depois a acima mais
+ * próxima; senão, o padrão do cargo (cargo criado pela igreja não tem).
+ */
+export function resolverAcessos(cargos: CargoComPadrao[], linhas: LinhaAcesso[]): Map<string, CelulaAcesso> {
   const proprias = new Map<string, LinhaAcesso>();
   const acima = new Map<string, LinhaAcesso>();
   for (const l of [...linhas].sort((a, b) => a.nivel - b.nivel)) {
@@ -160,12 +203,12 @@ export function resolverAcessos(cargoIds: string[], linhas: LinhaAcesso[]): Map<
   }
 
   const matriz = new Map<string, CelulaAcesso>();
-  for (const cargoId of cargoIds) {
+  for (const cargo of cargos) {
     for (const modulo of MODULOS_LIBERAVEIS) {
-      const k = chave(cargoId, modulo);
+      const k = chave(cargo.id, modulo);
       const pai = acima.get(k);
       const minha = proprias.get(k);
-      const herdado = pai?.permitido ?? false;
+      const herdado = pai?.permitido ?? cargo.acessosPadrao.includes(modulo);
       matriz.set(k, {
         herdado,
         herdadoDe: pai?.igreja ?? null,
@@ -194,11 +237,11 @@ export function celula(matriz: Map<string, CelulaAcesso>, cargoId: string, modul
  */
 export function escolhasParaGravar(
   desejado: Array<{ cargoId: string; modulo: string; permitido: boolean }>,
-  cargoIds: string[],
+  cargos: CargoComPadrao[],
   linhas: LinhaAcesso[],
 ): Array<{ cargoId: string; modulo: Modulo; permitido: boolean }> {
   const deCima = resolverAcessos(
-    cargoIds,
+    cargos,
     linhas.filter((l) => l.nivel > 0),
   );
   const validas = desejado.flatMap((d) =>

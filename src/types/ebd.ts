@@ -137,6 +137,15 @@ export interface EbdTrimestre {
   revista: string | null;
 }
 
+/** Soma das classes num dia de aula (gráfico dos relatórios). */
+export interface EbdPresencaDomingo {
+  data: string;
+  presentes: number;
+  ausentes: number;
+  justificados: number;
+  visitantes: number;
+}
+
 export interface EbdRelatorioClasse {
   classeId: string;
   classeNome: string;

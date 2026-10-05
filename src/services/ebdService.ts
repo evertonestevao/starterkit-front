@@ -15,6 +15,7 @@ import type {
   EbdPessoaBusca,
   EbdPromocaoLinha,
   EbdRedeIgreja,
+  EbdPresencaDomingo,
   EbdRelatorioClasse,
   EbdResumoClasse,
   EbdResponsavel,
@@ -107,6 +108,8 @@ export interface EbdRepository {
   salvarTrimestre(churchId: string, id: string | null, input: Omit<EbdTrimestre, "id">): Promise<void>;
   removerTrimestre(churchId: string, id: string): Promise<boolean>;
   relatorioClasses(churchId: string, de: string, ate: string): Promise<EbdRelatorioClasse[]>;
+  /** Presença somada por data de aula, no período (classeId null = todas as que a pessoa vê). */
+  presencaPorDomingo(churchId: string, classeId: string | null, de: string, ate: string): Promise<EbdPresencaDomingo[]>;
   frequenciaAlunos(churchId: string, classeId: string | null, de: string, ate: string): Promise<EbdFrequenciaAluno[]>;
 
   responsaveis(membroIds: string[]): Promise<EbdResponsavel[]>;
@@ -455,11 +458,12 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
       const church = await igreja(actor);
       const { de, ate } = validar(periodoSchema, filtro);
       const classeId = filtro.classeId && z.uuid().safeParse(filtro.classeId).success ? filtro.classeId : null;
-      const [classes, alunos] = await Promise.all([
+      const [classes, alunos, domingos] = await Promise.all([
         repo.relatorioClasses(church.id, de, ate),
         repo.frequenciaAlunos(church.id, classeId, de, ate),
+        repo.presencaPorDomingo(church.id, classeId, de, ate),
       ]);
-      return { classes, alunos };
+      return { classes, alunos, domingos };
     },
 
     // ------------------------------------------- responsáveis e cuidados

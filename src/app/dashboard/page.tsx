@@ -1,305 +1,352 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowRight,
+  BookOpen,
   CalendarDays,
-  ChartNoAxesCombined,
+  ClipboardCheck,
+  Contact,
+  HandHeart,
   HeartHandshake,
-  Landmark,
   Megaphone,
   MessageCircleHeart,
-  QrCode,
-  Users,
+  type LucideIcon,
 } from "lucide-react";
-import { MetricCard } from "@/components/metric-card";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { ResumoAcompanhamentoCard } from "@/features/acompanhamento/components/resumo-card";
+import { MiniBarChart, type PontoGrafico } from "@/components/mini-bar-chart";
+import { Card, CardContent } from "@/components/ui/card";
 import { ChurchLinkNotices } from "@/features/church/components/church-link-notices";
+import { formatarData, formatarPercentual, hojeISO, somarDias } from "@/lib/acompanhamento";
+import { domingoSugerido, totaisDoDia } from "@/lib/ebd";
+import { menusVisiveis, paginaInicial } from "@/lib/menuPermissoes";
+import { PAPEL_LABEL } from "@/lib/papeis";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
 import { getAcompanhamentoService } from "@/server/acompanhamento";
-import { PAPEL_LABEL } from "@/lib/papeis";
+import { getCampaignsService } from "@/server/campaigns";
 import { getCargosService } from "@/server/cargos";
+import { getChurchEventsService } from "@/server/churchEvents";
 import { getChurchLinkService } from "@/server/churchLinks";
+import { getCommunityService } from "@/server/community";
+import { getEbdActor, getEbdService } from "@/server/ebd";
 import { createMemoryRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
-import { getActiveTenant, getTenantService } from "@/server/tenant";
+import { getActiveTenant } from "@/server/tenant";
 import { createInviteService } from "@/services/inviteService";
-import { canAcompanhar } from "@/services/acompanhamentoService";
 import { permissionService } from "@/services/permissionService";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
+/** Um número do painel: só existe para quem tem o menu correspondente. */
+interface Numero {
+  icon: LucideIcon;
+  rotulo: string;
+  valor: string | number;
+  detalhe?: string;
+  href: string;
+  /** Pede atenção (ex.: gente em alerta, pedido esperando). */
+  atencao?: boolean;
+}
+
+/** Roda a consulta só se a pessoa tem o menu; falha vira null (o número some, o painel não cai). */
+function se<T>(tem: boolean, nome: string, consulta: () => Promise<T>): Promise<T | null> {
+  if (!tem) return Promise.resolve(null);
+  return consulta().catch((err: unknown) => {
+    console.error(`[dashboard] falha ao carregar ${nome}`, err);
+    return null;
+  });
+}
+
+/**
+ * Painel: um resumo curto do que a pessoa pode acessar, e mais nada. Cada
+ * número e cada atalho só aparece para quem tem o menu dele (papel, cargo
+ * liberado ou autorização) — a mesma regra da sidebar e da guarda das telas.
+ */
 export default async function DashboardPage() {
   const { active } = await getActiveTenant();
   if (!active) return null; // layout já redirecionou
+  // Quem só dá aula na EBD não tem o painel geral: cai direto na EBD.
+  if (paginaInicial(active) !== "/dashboard") redirect(paginaInicial(active));
 
-  const client = await getSupabaseServerClient();
-  const tenant = await getTenantService();
+  const menus = new Set(menusVisiveis(active));
+  const tem = (menu: string) => menus.has(menu);
   const isAdmin = permissionService.canManageMembers(active.role);
-
+  const client = await getSupabaseServerClient();
   const { data: auth } = await client.auth.getUser();
-  const actor = { companyId: active.id, role: active.role, podeAcompanhar: active.pode_acompanhar };
-  const [members, pendingInvites, linkNotices, acompanhamento, meusCargos] = await Promise.all([
-    // pageSize mínimo: aqui só o total interessa (métrica), não as linhas.
-    tenant.listMembers(active.id, { page: 1, pageSize: 1 }),
-    isAdmin
-      ? createInviteService({
-          repo: createSupabaseInviteRepository(client),
-          rateLimiter: createMemoryRateLimiter({
-            limit: 1000,
-            windowMs: 60_000,
-          }),
-        }).listPending(active.id)
-      : Promise.resolve([]),
-    // Respostas a convites de vínculo entre igrejas; falhar aqui não derruba o painel.
-    auth.user
-      ? getChurchLinkService()
-          .then((service) => service.listNotices({ companyId: active.id, role: active.role, userId: auth.user.id }))
-          .catch((err: unknown) => {
-            console.error("[dashboard] falha ao carregar avisos de vínculo", err);
-            return [];
-          })
-      : Promise.resolve([]),
-    // Resumo da chamada para o pastor; falhar aqui não derruba o painel.
-    canAcompanhar(actor.role, actor.podeAcompanhar)
-      ? getAcompanhamentoService()
-          .then((service) => service.resumo(actor))
-          .catch((err: unknown) => {
-            console.error("[dashboard] falha ao carregar o resumo da chamada", err);
-            return null;
-          })
-      : Promise.resolve(null),
-    // O cargo da pessoa (Pastor, Secretário...); falhar aqui mostra só o acesso.
-    getCargosService()
-      .then((service) => service.meusCargos({ companyId: active.id, role: active.role }))
-      .catch((err: unknown) => {
-        console.error("[dashboard] falha ao carregar os cargos", err);
-        return [] as string[];
-      }),
-  ]);
+  const domingo = domingoSugerido(hojeISO());
+  const acompanhamentoActor = { companyId: active.id, role: active.role, podeAcompanhar: active.pode_acompanhar };
 
-  // Mostra o cargo (o que a pessoa conhece); o papel no sistema vai embaixo.
-  const papel = PAPEL_LABEL[active.role];
+  const hoje = hojeISO();
+  // Os últimos 6 domingos, do mais antigo ao mais recente.
+  const domingos = [5, 4, 3, 2, 1, 0].map((semanas) => somarDias(domingo, -7 * semanas));
+
+  const [linkNotices, meusCargos, presenca, membros, ebd, oracao, visitas, eventos, campanhas, convites, cultos, ebdDomingos] =
+    await Promise.all([
+      // Respostas a convites de vínculo entre igrejas.
+      se(!!auth.user, "os avisos de vínculo", async () =>
+        (await getChurchLinkService()).listNotices({ companyId: active.id, role: active.role, userId: auth.user!.id }),
+      ),
+      se(true, "os cargos", async () =>
+        (await getCargosService()).meusCargos({ companyId: active.id, role: active.role }),
+      ),
+      se(tem("acompanhamento"), "o resumo da presença", async () =>
+        (await getAcompanhamentoService()).resumo(acompanhamentoActor),
+      ),
+      se(tem("membros"), "os números dos membros", async () =>
+        (await getAcompanhamentoService()).kpisMembros(acompanhamentoActor),
+      ),
+      se(tem("ebd"), "o resumo da EBD", async () => {
+        const actor = await getEbdActor();
+        return actor ? totaisDoDia(await (await getEbdService()).resumoDoDia(actor, domingo)) : null;
+      }),
+      se(tem("prayers"), "os pedidos de oração", async () =>
+        (await getCommunityService()).getUnseenPrayerCount(active.id),
+      ),
+      se(tem("relationships"), "os pedidos de visita", async () =>
+        (await getCommunityService()).countVisitas(active.id),
+      ),
+      se(tem("events"), "os eventos", async () => (await (await getChurchEventsService()).getAgenda(active.id)).proximos),
+      se(tem("campaigns"), "as campanhas", async () =>
+        (await (await getCampaignsService()).list(active.id)).filter((c) => c.status === "ativa").length,
+      ),
+      se(isAdmin, "os convites", () =>
+        createInviteService({
+          repo: createSupabaseInviteRepository(client),
+          rateLimiter: createMemoryRateLimiter({ limit: 1000, windowMs: 60_000 }),
+        }).listPending(active.id),
+      ),
+      // Gráficos: presença por culto (8 semanas) e EBD por domingo.
+      se(tem("acompanhamento"), "a presença por culto", async () =>
+        (await getAcompanhamentoService()).chamadasDoPeriodo(acompanhamentoActor, { de: somarDias(hoje, -56), ate: hoje }),
+      ),
+      se(tem("ebd"), "a EBD por domingo", async () => {
+        const actor = await getEbdActor();
+        if (!actor) return null;
+        const service = await getEbdService();
+        return Promise.all(domingos.map(async (d) => ({ data: d, ...totaisDoDia(await service.resumoDoDia(actor, d)) })));
+      }),
+    ]);
+
+  const dia = (data: string) => formatarData(data).slice(0, 5);
+  // Presença = presentes ÷ (presentes + ausentes); justificados ficam de fora.
+  const graficoCultos: PontoGrafico[] = [...(cultos ?? [])]
+    .sort((a, b) => a.data.localeCompare(b.data))
+    .slice(-12)
+    .map((c) => {
+      const marcados = c.presentes + c.ausentes;
+      const pct = marcados > 0 ? (c.presentes / marcados) * 100 : null;
+      return {
+        rotulo: dia(c.data),
+        valor: pct,
+        valorTexto: formatarPercentual(pct),
+        detalhe: `${c.cultoNome} · ${c.presentes} de ${marcados} presentes`,
+      };
+    });
+  const graficoEbd: PontoGrafico[] = (ebdDomingos ?? []).map((d) => ({
+    rotulo: dia(d.data),
+    valor: d.classesComChamada > 0 ? d.presentes : null,
+    valorTexto: String(d.presentes),
+    detalhe: d.classesComChamada > 0 ? `presentes de ${d.matriculados} matriculados` : "chamada não feita",
+  }));
+
+  const numeros: Numero[] = [];
+  if (presenca) {
+    const marcados = presenca.presentes + presenca.ausentes;
+    numeros.push({
+      icon: ClipboardCheck,
+      rotulo: "Em alerta de faltas",
+      valor: presenca.emAlerta,
+      detalhe: presenca.ultimaChamadaData
+        ? `último culto: ${marcados > 0 ? formatarPercentual((presenca.presentes / marcados) * 100) : "—"} de presença`
+        : "nenhuma chamada ainda",
+      href: presenca.emAlerta > 0 ? "/dashboard/acompanhamento/alertas" : "/dashboard/acompanhamento",
+      atencao: presenca.emAlerta > 0,
+    });
+  }
+  if (membros) {
+    numeros.push({
+      icon: Contact,
+      rotulo: "Membros ativos",
+      valor: membros.ativos,
+      detalhe:
+        membros.aniversariantesDoMes > 0
+          ? `${membros.aniversariantesDoMes} aniversariante(s) no mês`
+          : `${membros.novosNoMes} novo(s) no mês`,
+      href: "/dashboard/membros",
+    });
+  }
+  if (ebd) {
+    numeros.push({
+      icon: BookOpen,
+      rotulo: `EBD em ${formatarData(domingo).slice(0, 5)}`,
+      valor: ebd.classesComChamada > 0 ? ebd.presentes : "—",
+      detalhe:
+        ebd.classesComChamada > 0
+          ? `presentes de ${ebd.matriculados} matriculados`
+          : `chamada não feita · ${ebd.matriculados} matriculados`,
+      href: "/dashboard/ebd",
+    });
+  }
+  if (visitas) {
+    numeros.push({
+      icon: HeartHandshake,
+      rotulo: "Aguardando visita",
+      valor: visitas.pendentes,
+      detalhe: `${visitas.feitas} já visitado(s)`,
+      href: "/dashboard/relationships",
+      atencao: visitas.pendentes > 0,
+    });
+  }
+  if (oracao !== null) {
+    numeros.push({
+      icon: HandHeart,
+      rotulo: "Pedidos de oração novos",
+      valor: oracao,
+      detalhe: "desde a sua última visita",
+      href: "/dashboard/prayers",
+      atencao: oracao > 0,
+    });
+  }
+  if (eventos) {
+    const proximo = eventos[0];
+    numeros.push({
+      icon: CalendarDays,
+      rotulo: "Próximos eventos",
+      valor: eventos.length,
+      detalhe: proximo ? `${proximo.titulo} · ${proximo.inscritos} inscrito(s)` : "nenhum agendado",
+      href: "/dashboard/events",
+    });
+  }
+  if (campanhas !== null) {
+    numeros.push({
+      icon: Megaphone,
+      rotulo: "Campanhas ativas",
+      valor: campanhas,
+      href: "/dashboard/campaigns",
+    });
+  }
+  if (convites) {
+    numeros.push({
+      icon: MessageCircleHeart,
+      rotulo: "Convites pendentes",
+      valor: convites.length,
+      detalhe: "aguardando resposta",
+      href: "/dashboard/membros",
+    });
+  }
+
+  const atalhos = [
+    {
+      menu: "prayers",
+      icon: HandHeart,
+      titulo: "Pedidos de oração",
+      descricao: "Acompanhe quem pediu cuidado e retorno da equipe.",
+      href: "/dashboard/prayers",
+    },
+    {
+      menu: "events",
+      icon: CalendarDays,
+      titulo: "Eventos e inscrições",
+      descricao: "Organize encontros e veja quem confirmou presença.",
+      href: "/dashboard/events",
+    },
+    {
+      menu: "relationships",
+      icon: HeartHandshake,
+      titulo: "Quem quer visita",
+      descricao: "Veja quem pediu uma visita e marque quando for feita.",
+      href: "/dashboard/relationships",
+    },
+    {
+      menu: "membros",
+      icon: Contact,
+      titulo: "Membros",
+      descricao: "Cadastro, cargos e aniversariantes da igreja.",
+      href: "/dashboard/membros",
+    },
+    {
+      menu: "campaigns",
+      icon: Megaphone,
+      titulo: "Campanhas",
+      descricao: "Crie metas para obras, missões e ações sociais.",
+      href: "/dashboard/campaigns",
+    },
+  ].filter((a) => tem(a.menu));
+
+  const cargos = meusCargos ?? [];
 
   return (
     <div className="flex flex-col gap-6">
-      <ChurchLinkNotices notices={linkNotices} />
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <p className="text-sm font-medium text-primary">Bom ter você aqui</p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight">
-            {active.name}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Acompanhe os relacionamentos e os próximos passos da sua igreja.
-          </p>
-        </div>
-        <Link
-          href="#acoes"
-          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-        >
-          Ver ações importantes <ArrowRight className="size-4" />
-        </Link>
-      </div>
+      <ChurchLinkNotices notices={linkNotices ?? []} />
 
-      {/* Sem o cartão de convites (só admin vê), são 3: a grade acompanha para não sobrar buraco. */}
-      <div
-        className={
-          isAdmin ? "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" : "grid grid-cols-1 gap-4 sm:grid-cols-3"
-        }
-      >
-        <MetricCard
-          icon={Users}
-          label="Com acesso ao sistema"
-          value={members.total}
-          hint="pessoas com login"
-        />
-        {isAdmin ? (
-          <MetricCard
-            icon={MessageCircleHeart}
-            label="Convites pendentes"
-            value={pendingInvites.length}
-            hint="aguardando resposta"
-          />
-        ) : null}
-        <MetricCard
-          icon={Megaphone}
-          label="Campanhas"
-          value="Em breve"
-          hint="crie e acompanhe metas"
-        />
-        <MetricCard
-          icon={ChartNoAxesCombined}
-          label={meusCargos.length > 0 ? "Seu cargo" : "Seu acesso"}
-          value={meusCargos.length > 0 ? meusCargos.join(", ") : papel}
-          hint={meusCargos.length > 0 ? `acesso: ${papel}` : "no sistema"}
-        />
-      </div>
-
-      {acompanhamento ? <ResumoAcompanhamentoCard resumo={acompanhamento} /> : null}
-
-      <section id="acoes" className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b bg-muted/35">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <CardTitle>O que está acontecendo na sua igreja</CardTitle>
-                <CardDescription className="mt-1">
-                  Os principais espaços para cuidar da comunidade.
-                </CardDescription>
-              </div>
-              <HeartHandshake className="size-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-3 p-4 sm:grid-cols-2">
-            <DashboardAction
-              icon={HeartHandshake}
-              title="Pedidos de oração"
-              description="Acompanhe quem pediu cuidado e retorno da equipe."
-            />
-            <DashboardAction
-              icon={CalendarDays}
-              title="Eventos e inscrições"
-              description="Organize encontros e veja quem confirmou presença."
-            />
-            <DashboardAction
-              icon={Users}
-              title="Visitantes e membresia"
-              description="Transforme o primeiro contato em relacionamento."
-            />
-            <DashboardAction
-              icon={Megaphone}
-              title="Campanhas"
-              description="Crie metas para obras, missões e ações sociais."
-            />
-          </CardContent>
-        </Card>
-
-        <Card className="border-primary/15 bg-primary text-primary-foreground">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <QrCode className="size-5" /> Sua presença está pronta
-            </CardTitle>
-            <CardDescription className="text-primary-foreground/75">
-              Compartilhe um único espaço para a comunidade encontrar a igreja.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-xl bg-white/10 p-4 text-sm leading-6 text-primary-foreground/90">
-              Link público, QR Code ou NFC: cada pessoa escolhe como se
-              aproximar.
-            </div>
-            <Link
-              href="/dashboard/settings"
-              className="mt-5 inline-flex items-center gap-2 text-sm font-semibold hover:underline"
-            >
-              Configurar presença <ArrowRight className="size-4" />
-            </Link>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        <InfoCard
-          icon={Landmark}
-          title="Patrocinadores locais"
-          description="Conecte negócios que acreditam na comunidade e ajudam a sustentar a plataforma."
-        />
-        <InfoCard
-          icon={ChartNoAxesCombined}
-          title="Visão para a liderança"
-          description="Em breve, acompanhe os relacionamentos e o impacto das ações em um só painel."
-        />
-        <InfoCard
-          icon={CalendarDays}
-          title="Próximo passo"
-          description="Complete as informações públicas da igreja para começar a receber visitas."
-          href="/dashboard/settings"
-        />
-      </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Comece a cuidar da sua presença</CardTitle>
-          <CardDescription>
-            Uma base organizada para a equipe construir relacionamentos
-            duradouros.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              Convide quem ajuda a cuidar da igreja: na ficha de cada membro, em &ldquo;Acesso ao sistema&rdquo;.
-            </span>
-            <Link
-              href="/dashboard/membros"
-              className="inline-flex items-center gap-2 font-medium text-foreground hover:underline"
-            >
-              Ver membros <ArrowRight className="size-4" />
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function DashboardAction({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: typeof HeartHandshake;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-xl border bg-background p-4 transition-colors hover:border-primary/35 hover:bg-muted/30">
-      <Icon className="size-5 text-primary" />
-      <h3 className="mt-4 text-sm font-semibold">{title}</h3>
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function InfoCard({
-  icon: Icon,
-  title,
-  description,
-  href,
-}: {
-  icon: typeof HeartHandshake;
-  title: string;
-  description: string;
-  href?: string;
-}) {
-  const content = (
-    <CardContent className="flex gap-3 p-5">
-      <Icon className="mt-0.5 size-5 shrink-0 text-primary" />
       <div>
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {description}
+        <h2 className="text-2xl font-semibold tracking-tight">{active.name}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {cargos.length > 0 ? cargos.join(", ") : PAPEL_LABEL[active.role]}
+          {cargos.length > 0 && active.role !== "member" ? ` · ${PAPEL_LABEL[active.role]}` : ""}
         </p>
       </div>
-    </CardContent>
-  );
-  return href ? (
-    <Link
-      href={href}
-      className="block rounded-xl transition-transform hover:-translate-y-0.5"
-    >
-      <Card>{content}</Card>
-    </Link>
-  ) : (
-    <Card>{content}</Card>
+
+      {numeros.length > 0 ? (
+        <section aria-label="Resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {numeros.map((n) => (
+            <Link key={n.rotulo} href={n.href} className="rounded-xl transition-transform hover:-translate-y-0.5">
+              <Card className={n.atencao ? "h-full border-amber-500/60" : "h-full"}>
+                <CardContent className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">{n.rotulo}</p>
+                    <p className="mt-1 text-3xl font-semibold tabular-nums">{n.valor}</p>
+                    {n.detalhe ? <p className="mt-1 truncate text-xs text-muted-foreground">{n.detalhe}</p> : null}
+                  </div>
+                  <n.icon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </section>
+      ) : (
+        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          Você ainda não tem nenhum módulo liberado nesta igreja. Fale com o responsável para receber um cargo com
+          acesso.
+        </p>
+      )}
+
+      {cultos || ebdDomingos ? (
+        <section aria-label="Gráficos" className="grid gap-3 lg:grid-cols-2">
+          {cultos ? (
+            <MiniBarChart
+              titulo="Presença nos cultos"
+              descricao="Percentual de presença em cada culto com chamada, nas últimas 8 semanas."
+              pontos={graficoCultos}
+              maximo={100}
+              sufixo="%"
+              vazio="Nenhuma chamada nas últimas 8 semanas."
+            />
+          ) : null}
+          {ebdDomingos ? (
+            <MiniBarChart
+              titulo="Presentes na EBD"
+              descricao="Alunos presentes em cada um dos últimos 6 domingos."
+              pontos={graficoEbd}
+              vazio="Nenhuma chamada da EBD nos últimos 6 domingos."
+            />
+          ) : null}
+        </section>
+      ) : null}
+
+      {atalhos.length > 0 ? (
+        <section aria-label="Atalhos" className="grid gap-3 sm:grid-cols-2">
+          {atalhos.map((a) => (
+            <Link
+              key={a.menu}
+              href={a.href}
+              className="rounded-xl border bg-background p-4 transition-colors hover:border-primary/35 hover:bg-muted/30"
+            >
+              <a.icon className="size-5 text-primary" aria-hidden />
+              <h3 className="mt-4 text-sm font-semibold">{a.titulo}</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{a.descricao}</p>
+            </Link>
+          ))}
+        </section>
+      ) : null}
+    </div>
   );
 }

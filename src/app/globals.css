@@ -157,6 +157,41 @@
     @apply font-sans;
   }
   /*
+   * "Mãozinha" em tudo que é clicável. O Tailwind 4 deixa <button> com a seta
+   * comum; para quem não tem prática, a mãozinha é o que diz "isto clica".
+   * Vale para botões, seletores, caixas de marcar e rótulos ligados a um
+   * campo. Desabilitado mostra "proibido". Uma classe cursor-* no elemento
+   * continua vencendo (ex.: colunas do gráfico, que só mostram valor).
+   */
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  [role="radio"],
+  [role="checkbox"],
+  [role="switch"],
+  summary,
+  select,
+  label[for],
+  label:has(input, select, textarea),
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="file"],
+  input[type="date"],
+  input[type="color"] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  select:disabled,
+  input:disabled,
+  label:has(input:disabled) {
+    cursor: not-allowed;
+  }
+  /*
    * A lista aberta de um <select> nativo é desenhada pelo navegador: o campo
    * herda o texto do tema, mas o fundo da lista vem do esquema de cores do
    * sistema. No escuro isso dava texto claro sobre fundo claro (ilegível).
@@ -174,4 +209,25 @@
     background-color: var(--popover);
     color: var(--popover-foreground);
   }
+}
+
+/*
+ * Seta do <select> nativo. No Windows, o navegador desenha a seta dentro de
+ * uma caixinha clara que ignora o tema — no modo escuro ficava um bloco
+ * branco na lateral do campo. Aqui a seta do navegador sai (appearance) e
+ * entra uma seta nossa, na cor do texto secundário de cada tema.
+ *
+ * Fora de @layer de propósito: o espaço da seta (padding-right) precisa
+ * vencer as classes px-* dos campos, senão o texto passaria por baixo dela.
+ */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23718075' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1rem;
+  padding-right: 2rem;
+}
+.dark select:not([multiple]):not([size]) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b3a894' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }

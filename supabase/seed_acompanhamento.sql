@@ -489,7 +489,17 @@ begin
         where mt.classe_id = v_classe.id and mt.ate is null order by m.nome
       loop
         i := i + 1;
-        v_estado := case when (i + s) % 6 = 0 then 'ausente' when (i * 2 + s) % 11 = 0 then 'justificado' else 'presente' end;
+        -- Perfis variados, para os relatórios e destaques não darem todo mundo
+        -- com a mesma presença: assíduo (100%), uma falta, duas faltas, uma
+        -- falta e uma justificativa, e quem falta bastante (nunca 3 seguidas
+        -- recentes: os alertas ficam só com os dois casos montados abaixo).
+        v_estado := case i % 5
+          when 1 then case when s = 4 then 'ausente' else 'presente' end
+          when 2 then case when s in (1, 4) then 'ausente' else 'presente' end
+          when 3 then case when s = 3 then 'ausente' when s = 5 then 'justificado' else 'presente' end
+          when 4 then case when s in (0, 2, 5) then 'ausente' else 'presente' end
+          else 'presente'
+        end;
         insert into public.ebd_presencas (aula_id, membro_id, classe_id, church_id, estado)
         values (v_aula, v_aluno.membro_id, v_classe.id, v_sede, v_estado);
       end loop;

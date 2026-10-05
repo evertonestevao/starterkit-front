@@ -10,7 +10,7 @@ const DE_OUTRA_REDE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 function build(linhas: LinhaAcesso[] = []) {
   const repo: MenuPermissoesRepository = {
     listarDaRede: vi.fn(async () => linhas),
-    listarCargos: vi.fn(async () => [{ id: SECRETARIO, nome: "Secretário(a)" }]),
+    listarCargos: vi.fn(async () => [{ id: SECRETARIO, nome: "Secretário(a)", slug: "secretario", acessosPadrao: [] }]),
     salvar: vi.fn(async () => {}),
   };
   return { repo, service: createMenuPermissoesService(repo) };

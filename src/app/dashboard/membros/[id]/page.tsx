@@ -155,7 +155,7 @@ export default async function MembroPage({ params }: { params: Promise<{ id: str
                 {formatarPercentual(percentualPresenca(ebd.presencas, ebd.ausencias))}
               </p>
               <p className="text-xs text-muted-foreground tabular-nums">
-                {ebd.presencas} P · {ebd.ausencias} A · {ebd.justificados} J
+                {ebd.presencas} presentes · {ebd.ausencias} ausentes · {ebd.justificados} justificados
               </p>
             </div>
             <div>

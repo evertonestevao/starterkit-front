@@ -29,9 +29,24 @@ export function createSupabaseMenuPermissoesRepository(client: SupabaseClient): 
 
       const { data, error } = await client.rpc("cargos_visiveis", { p_church: church.id });
       if (error) throw new AppError("internal_error", "Falha ao carregar os cargos", error);
-      return ((data ?? []) as Array<{ id: string; nome: string; deleted_at: string | null }>)
-        .filter((c) => c.deleted_at === null)
-        .map((c) => ({ id: c.id, nome: c.nome }));
+      const cargos = ((data ?? []) as Array<{ id: string; nome: string; slug: string | null; deleted_at: string | null }>).filter(
+        (c) => c.deleted_at === null,
+      );
+      if (cargos.length === 0) return [];
+
+      // O padrão de cada cargo (a RPC acima não devolve a coluna).
+      const { data: padroes, error: padraoError } = await client
+        .from("cargos")
+        .select("id, acessos_padrao")
+        .in(
+          "id",
+          cargos.map((c) => c.id),
+        );
+      if (padraoError) throw new AppError("internal_error", "Falha ao carregar o padrão dos cargos", padraoError);
+      const padrao = new Map(
+        ((padroes ?? []) as Array<{ id: string; acessos_padrao: string[] | null }>).map((p) => [p.id, p.acessos_padrao ?? []]),
+      );
+      return cargos.map((c) => ({ id: c.id, nome: c.nome, slug: c.slug, acessosPadrao: padrao.get(c.id) ?? [] }));
     },
 
     async salvar(companyId, itens) {

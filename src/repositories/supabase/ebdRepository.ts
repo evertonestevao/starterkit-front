@@ -434,6 +434,23 @@ export function createSupabaseEbdRepository(client: SupabaseClient): EbdReposito
       );
     },
 
+    async presencaPorDomingo(churchId, classeId, de, ate) {
+      const { data, error } = await client.rpc("ebd_presenca_por_domingo", {
+        p_church_id: churchId,
+        p_classe_id: classeId,
+        p_de: de,
+        p_ate: ate,
+      });
+      if (error) falha("Falha ao montar a presença por domingo", error);
+      return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        data: r.data as string,
+        presentes: n(r.presentes),
+        ausentes: n(r.ausentes),
+        justificados: n(r.justificados),
+        visitantes: n(r.visitantes),
+      }));
+    },
+
     async frequenciaAlunos(churchId, classeId, de, ate) {
       const { data, error } = await client.rpc("ebd_frequencia_alunos", {
         p_church_id: churchId,

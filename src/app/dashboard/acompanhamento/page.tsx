@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { descreverQuando, formatarData, hojeISO, ultimaOcorrencia } from "@/lib/acompanhamento";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
+import { LegendaPresenca } from "@/components/legenda-presenca";
 
 export const metadata: Metadata = { title: "Chamada e acompanhamento" };
 
@@ -148,6 +149,7 @@ export default async function AcompanhamentoResumoPage() {
                 </TableBody>
               </Table>
             </div>
+            <LegendaPresenca className="md:hidden" />
             <ul className="flex flex-col gap-2 md:hidden">
               {rede.map((r) => (
                 <li key={r.churchId} className="rounded-lg border p-3 text-sm">

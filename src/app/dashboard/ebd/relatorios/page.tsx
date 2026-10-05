@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MiniBarChart } from "@/components/mini-bar-chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatarData, formatarPercentual, hojeISO, percentualPresenca, somarDias } from "@/lib/acompanhamento";
 import { domingoSugerido, formatarReais, trimestreDe } from "@/lib/ebd";
 import { FrequenciaTabela } from "@/features/acompanhamento/components/frequencia-tabela";
+import { EbdRelatorioFiltros } from "@/features/ebd/components/ebd-relatorio-filtros";
 import { isAppError } from "@/lib/errors";
 import { getEbdActorAutorizado, getEbdService } from "@/server/ebd";
 
 export const metadata: Metadata = { title: "Relatórios da EBD" };
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
-const selectClasses = "h-9 rounded-md border bg-transparent px-2 text-sm";
 
 export default async function EbdRelatoriosPage({
   searchParams,
@@ -26,14 +27,18 @@ export default async function EbdRelatoriosPage({
   const hoje = hojeISO();
 
   const [trimestres, { classes: todasClasses }] = await Promise.all([service.trimestres(actor), service.classes(actor)]);
-  // Período: trimestre escolhido > datas digitadas > trimestre do último
-  // domingo (no 1º dia do trimestre novo, o atual ainda está vazio) > 13 semanas.
+  // Período: as datas da URL mandam (o seletor de trimestre só as preenche).
+  // Link antigo com ?trimestre= ainda vale. Sem nada: o trimestre do último
+  // domingo (no 1º dia do trimestre novo, o atual ainda está vazio) ou 13 semanas.
   const escolhido = trimestres.find((t) => t.id === sp.trimestre);
   const atual = trimestreDe(trimestres, domingoSugerido(hoje));
   const temDatas = sp.de && DATA.test(sp.de) && sp.ate && DATA.test(sp.ate);
-  const de = escolhido?.inicio ?? (temDatas ? sp.de! : (atual?.inicio ?? somarDias(hoje, -90)));
-  const ate = escolhido?.fim ?? (temDatas ? sp.ate! : (atual?.fim ?? hoje));
-  const trimestreAtivo = escolhido ?? (!temDatas ? atual : null);
+  const de = temDatas ? sp.de! : (escolhido?.inicio ?? atual?.inicio ?? somarDias(hoje, -90));
+  const ate = temDatas ? sp.ate! : (escolhido?.fim ?? atual?.fim ?? hoje);
+  // O trimestre "ativo" é o que casa exatamente com o período mostrado.
+  const trimestreAtivo = trimestres.find((t) => t.inicio === de && t.fim === ate) ?? null;
+
+  const classeFiltrada = todasClasses.find((c) => c.id === sp.classe)?.nome ?? null;
 
   const resultado = await service
     .relatorio(actor, { de, ate, classeId: sp.classe })
@@ -44,43 +49,15 @@ export default async function EbdRelatoriosPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <form className="flex flex-wrap items-end gap-2 text-sm">
-        {trimestres.length > 0 ? (
-          <label className="flex flex-col gap-1">
-            Trimestre
-            <select name="trimestre" defaultValue={trimestreAtivo?.id ?? ""} className={selectClasses}>
-              <option value="">Datas abaixo</option>
-              {trimestres.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nome}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <label className="flex flex-col gap-1">
-          De
-          <input name="de" type="date" defaultValue={de} className={selectClasses} />
-        </label>
-        <label className="flex flex-col gap-1">
-          Até
-          <input name="ate" type="date" defaultValue={ate} className={selectClasses} />
-        </label>
-        <label className="flex flex-col gap-1">
-          Classe
-          <select name="classe" defaultValue={sp.classe ?? ""} className={selectClasses}>
-            <option value="">Todas</option>
-            {todasClasses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className="h-9 rounded-md border px-3 hover:bg-muted">
-          Ver
-        </button>
-      </form>
+      {/* key: outro período na URL remonta o formulário com as datas novas. */}
+      <EbdRelatorioFiltros
+        key={`${de}-${ate}`}
+        trimestres={trimestres}
+        classes={todasClasses.map((c) => ({ id: c.id, nome: c.nome }))}
+        de={de}
+        ate={ate}
+        classe={sp.classe ?? ""}
+      />
       <p className="text-xs text-muted-foreground">
         {trimestreAtivo ? `${trimestreAtivo.nome} · ` : ""}
         {formatarData(de)} a {formatarData(ate)}
@@ -91,6 +68,25 @@ export default async function EbdRelatoriosPage({
         <p className="text-sm text-destructive">{resultado.erro}</p>
       ) : (
         <>
+          <MiniBarChart
+            titulo="Presença por domingo"
+            descricao={`Percentual de presença em cada domingo com chamada, de ${formatarData(de)} a ${formatarData(ate)}${
+              classeFiltrada ? ` · ${classeFiltrada}` : ""
+            }. Justificados ficam de fora.`}
+            pontos={resultado.domingos.slice(-26).map((d) => {
+              const pct = percentualPresenca(d.presentes, d.ausentes);
+              return {
+                rotulo: formatarData(d.data).slice(0, 5),
+                valor: pct,
+                valorTexto: formatarPercentual(pct),
+                detalhe: `${d.presentes} presentes, ${d.ausentes} ausentes, ${d.justificados} justificados, ${d.visitantes} visitante(s)`,
+              };
+            })}
+            maximo={100}
+              sufixo="%"
+            vazio="Nenhuma chamada da EBD neste período."
+          />
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Por classe</CardTitle>

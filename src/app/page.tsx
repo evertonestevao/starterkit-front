@@ -1,14 +1,19 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  BookOpen,
   CalendarDays,
   ChartNoAxesCombined,
+  ClipboardCheck,
+  Contact,
+  HandHeart,
   HeartHandshake,
-  Landmark,
+  KeyRound,
   LayoutDashboard,
   MapPin,
   Megaphone,
   MessageCircleHeart,
+  Network,
   QrCode,
   Sparkles,
   Users,
@@ -21,39 +26,109 @@ import { cn } from "@/lib/utils";
 const benefits = [
   {
     icon: HeartHandshake,
-    title: "A jornada da pessoa",
+    title: "Para quem chega",
     description:
-      "Dízimo, oração, eventos, visita e membresia em uma experiência clara, acolhedora e sempre disponível.",
+      "Uma página da igreja com a programação, os eventos, o pedido de oração e o pedido de visita, sempre disponível no celular.",
+  },
+  {
+    icon: Users,
+    title: "Para quem cuida",
+    description:
+      "Membros, presença nos cultos, Escola Dominical e visitas em um só lugar, com aviso de quem está faltando.",
   },
   {
     icon: LayoutDashboard,
-    title: "A gestão da igreja",
+    title: "Para quem lidera",
     description:
-      "Um painel para entender quem se aproximou, acompanhar pedidos e cuidar melhor de cada relacionamento.",
+      "Um painel com números e gráficos, e cada pessoa da equipe vendo só o que o cargo dela precisa ver.",
+  },
+];
+
+/** Os módulos do sistema, como a igreja os encontra no menu. */
+const modules = [
+  {
+    icon: QrCode,
+    title: "Página da igreja",
+    description:
+      "Endereço próprio com programação, eventos e contatos. Compartilhe por link, QR Code ou NFC e escolha o tema visual.",
   },
   {
-    icon: Landmark,
-    title: "Um motor sustentável",
+    icon: Contact,
+    title: "Membros e cargos",
     description:
-      "Negócios locais patrocinam a plataforma e ajudam a manter a presença digital acessível para a igreja.",
+      "Cadastro com busca, aniversariantes do mês e os cargos de cada um: pastor, diácono, secretário, professor e os que a igreja criar.",
+  },
+  {
+    icon: ClipboardCheck,
+    title: "Presença nos cultos",
+    description:
+      "Chamada pelo celular em poucos toques, justificativas e alerta de quem faltou várias vezes seguidas, com atalho para o WhatsApp.",
+  },
+  {
+    icon: BookOpen,
+    title: "Escola Dominical",
+    description:
+      "Classes, matrículas, chamada de cada professor, visitantes, lições do trimestre, relatório do domingo em PDF e os alunos mais assíduos.",
+  },
+  {
+    icon: HeartHandshake,
+    title: "Quem quer visita",
+    description:
+      "Quem deseja a visita do pastor pede pela página. A equipe liga, combina o dia e registra quem foi e quando.",
+  },
+  {
+    icon: HandHeart,
+    title: "Pedidos de oração",
+    description:
+      "Os pedidos chegam pela página e ficam reservados à liderança da igreja, com aviso dos que ainda não foram lidos.",
+  },
+  {
+    icon: CalendarDays,
+    title: "Programação e eventos",
+    description:
+      "Cultos da semana e datas especiais sempre atualizados, e eventos com inscrição e lista de quem confirmou presença.",
+  },
+  {
+    icon: Megaphone,
+    title: "Campanhas",
+    description:
+      "Apresente a causa, defina a meta e mostre o avanço para a comunidade acompanhar até o fim.",
+  },
+  {
+    icon: Network,
+    title: "Rede de igrejas",
+    description:
+      "Sede, subsedes e congregações ligadas. A igreja de cima acompanha os números das demais, sem ver os dados pessoais dos membros.",
+  },
+  {
+    icon: KeyRound,
+    title: "Acessos por cargo",
+    description:
+      "O pastor decide o que cada cargo pode usar. O professor vê a classe dele; a secretaria, o que é da secretaria.",
+  },
+  {
+    icon: ChartNoAxesCombined,
+    title: "Painel e relatórios",
+    description:
+      "Presença por culto e por domingo em gráficos, frequência de cada pessoa e os destaques do trimestre.",
   },
 ];
 
 const steps = [
   [
     "01",
-    "Sua igreja ganha uma presença",
-    "Página, identidade e informações essenciais prontas para usar em qualquer canal.",
+    "Sua igreja ganha uma página",
+    "Nome, endereço, programação e identidade prontos para compartilhar em qualquer canal.",
   ],
   [
     "02",
-    "Sua comunidade encontra caminhos",
-    "O visitante escolhe como se aproximar: oração, evento, visita, dízimo ou membresia.",
+    "A comunidade encontra caminhos",
+    "Quem chega escolhe como se aproximar: pedir oração, pedir uma visita ou se inscrever em um evento.",
   ],
   [
     "03",
-    "Sua equipe acompanha e cresce",
-    "A igreja entende os relacionamentos e conta com patrocinadores da própria comunidade.",
+    "A equipe acompanha de perto",
+    "Chamada nos cultos e na Escola Dominical, visitas registradas e um painel que mostra quem precisa de atenção.",
   ],
 ];
 
@@ -82,7 +157,7 @@ export default function LandingPage() {
               Como funciona
             </Link>
             <Link
-              href="#recursos"
+              href="#modulos"
               className="hidden text-sm text-[#637066] hover:text-[#243128] sm:block"
             >
               Recursos
@@ -105,19 +180,19 @@ export default function LandingPage() {
           <div className="relative z-10 max-w-2xl">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#d9dfd2] bg-[#eef2e8] px-3 py-1.5 text-xs font-medium tracking-[0.08em] text-[#54705a] uppercase">
               <span className="size-1.5 rounded-full bg-[#c39a3a]" />A
-              plataforma que aproxima a igreja da comunidade
+              plataforma para acolher e acompanhar a comunidade
             </div>
             <h1 className="max-w-[680px] text-[clamp(2.8rem,6vw,5.6rem)] font-semibold leading-[0.98] tracking-[-0.065em] text-[#243128]">
-              A presença digital da sua igreja, inteira em um só lugar.
+              A página da sua igreja e o cuidado com as pessoas, em um só lugar.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#637066] sm:text-xl">
               O{" "}
               <strong className="font-semibold text-[#36543d]">
                 {brand.name}
               </strong>{" "}
-              dá a qualquer igreja uma presença pronta para usar: conecta a
-              jornada das pessoas, organiza os relacionamentos e se sustenta com
-              o apoio de negócios locais.
+              dá a qualquer igreja uma página pronta para a comunidade e as
+              ferramentas do dia a dia da liderança: membros, presença nos
+              cultos, Escola Dominical, visitas e eventos.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link
@@ -138,7 +213,7 @@ export default function LandingPage() {
               </Link>
             </div>
             <p className="mt-5 text-xs text-[#7d897f]">
-              Presença digital acessível, sem exigir estrutura técnica própria.
+              Funciona no celular, sem exigir estrutura técnica própria.
             </p>
           </div>
 
@@ -149,10 +224,10 @@ export default function LandingPage() {
               <div className="absolute -right-1 top-7 z-10 hidden w-52 -rotate-3 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-[0_20px_45px_rgba(40,63,45,0.13)] sm:block">
                 <div className="flex items-center gap-2 text-xs font-semibold text-[#36543d]">
                   <MessageCircleHeart className="size-4 text-[#c39a3a]" /> Novo
-                  relacionamento
+                  pedido de visita
                 </div>
                 <p className="mt-2 text-xs leading-5 text-[#718075]">
-                  Mariana quer conhecer a comunidade.
+                  Mariana gostaria de receber uma visita.
                 </p>
               </div>
               <div className="relative overflow-hidden rounded-[2rem] border-[7px] border-[#d8dfd2] bg-white shadow-[0_28px_70px_rgba(43,67,47,0.18)]">
@@ -178,7 +253,7 @@ export default function LandingPage() {
                     {[
                       [HeartHandshake, "Pedir oração"],
                       [CalendarDays, "Ver eventos"],
-                      [Users, "Quero visitar"],
+                      [Users, "Quero uma visita"],
                       [ChartNoAxesCombined, "Painel da igreja"],
                     ].map(([Icon, label]) => (
                       <div
@@ -227,14 +302,15 @@ export default function LandingPage() {
             <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-24">
               <div>
                 <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
-                  Mais que um link
+                  Mais que uma página
                 </p>
                 <h2 className="mt-4 max-w-md text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
-                  O primeiro passo para pertencer.
+                  Do primeiro contato ao cuidado de cada semana.
                 </h2>
                 <p className="mt-5 max-w-sm leading-7 text-[#718075]">
-                  Sua igreja já transforma vidas no encontro presencial. Agora,
-                  continue esse cuidado nos momentos entre um encontro e outro.
+                  Sua igreja já transforma vidas no encontro presencial. Aqui
+                  esse cuidado continua entre um encontro e outro, sem ninguém
+                  passar despercebido.
                 </p>
               </div>
               <div className="grid gap-8 sm:grid-cols-3">
@@ -254,6 +330,39 @@ export default function LandingPage() {
           </div>
         </section>
 
+        <section id="modulos" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-24">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
+              O que a igreja encontra
+            </p>
+            <h2 className="mt-4 text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
+              Tudo o que a secretaria e a liderança usam, no mesmo sistema.
+            </h2>
+            <p className="mt-5 leading-7 text-[#718075]">
+              Comece pelo que a sua igreja precisa hoje. Cada parte funciona
+              sozinha e conversa com as outras.
+            </p>
+          </div>
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {modules.map(({ icon: Icon, title, description }) => (
+              <div
+                key={title}
+                className="rounded-2xl border border-[#dfe5d8] bg-white/70 p-5"
+              >
+                <div className="flex size-10 items-center justify-center rounded-xl bg-[#edf3e9] text-[#41694b]">
+                  <Icon className="size-5" strokeWidth={1.7} />
+                </div>
+                <h3 className="mt-4 text-base font-semibold text-[#35463a]">
+                  {title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-[#718075]">
+                  {description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <ChurchFinderPreview />
 
         <section className="bg-[#f0f3eb]">
@@ -268,7 +377,7 @@ export default function LandingPage() {
               <p className="mt-5 max-w-lg leading-7 text-[#718075]">
                 Crie campanhas para reformas, missões, ações sociais ou qualquer
                 sonho da igreja. Apresente a causa com clareza, convide as
-                pessoas a participar e acompanhe o avanço até a meta.
+                pessoas a participar e mostre o avanço até a meta.
               </p>
               <div className="mt-7 flex items-center gap-3 text-sm font-medium text-[#41694b]">
                 <Megaphone className="size-5" />
@@ -292,24 +401,24 @@ export default function LandingPage() {
                 </span>
               </div>
               <p className="mt-3 max-w-md text-sm leading-6 text-[#718075]">
-                Cada contribuição aproxima a nossa comunidade de um lugar mais
-                seguro, bonito e preparado para receber a próxima geração.
+                Cada passo aproxima a nossa comunidade de um lugar mais seguro,
+                bonito e preparado para receber a próxima geração.
               </p>
               <div className="mt-6 h-2 overflow-hidden rounded-full bg-[#e6ece2]">
                 <div className="h-full w-[68%] rounded-full bg-[#c39a3a]" />
               </div>
               <div className="mt-3 flex items-center justify-between text-sm">
                 <span className="font-semibold text-[#35463a]">
-                  R$ 34.000 arrecadados
+                  Mais de dois terços do caminho
                 </span>
-                <span className="text-[#89938a]">Meta: R$ 50.000</span>
+                <span className="text-[#89938a]">Meta definida pela igreja</span>
               </div>
               <div className="mt-6 flex flex-wrap gap-2 border-t border-[#edf0ea] pt-5 text-xs text-[#718075]">
                 <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">
                   Página pública
                 </span>
                 <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">
-                  Atualizações para apoiadores
+                  Notícias da campanha
                 </span>
                 <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">
                   Acompanhamento da meta
@@ -362,16 +471,16 @@ export default function LandingPage() {
             <div className="absolute -right-16 -top-32 size-80 rounded-full border-[40px] border-[#719371]/25" />
             <div className="relative max-w-2xl">
               <p className="text-xs font-semibold tracking-[0.18em] text-[#d9c17b] uppercase dark:text-primary-foreground/70">
-                Uma plataforma feita para durar
+                Comece pelo essencial
               </p>
               <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-[-0.04em] text-white sm:text-5xl">
-                Tecnologia a serviço da comunidade, sem pesar no caixa da
-                igreja.
+                Tecnologia a serviço do cuidado, do jeito que a sua igreja já
+                trabalha.
               </h2>
               <p className="mt-5 max-w-lg leading-7 text-[#dce7d8]">
-                A igreja usa a plataforma para cuidar das pessoas. Negócios
-                locais associados à comunidade sustentam o serviço com
-                patrocínios recorrentes.
+                Publique a página da igreja, cadastre os membros e faça a
+                primeira chamada. O restante você liga quando a equipe
+                precisar.
               </p>
               <Link
                 href="/signup"
@@ -390,7 +499,7 @@ export default function LandingPage() {
       <footer className="border-t border-[#dfe5d8] px-5 py-8 sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm text-[#718075] sm:flex-row sm:items-center sm:justify-between">
           <span className="font-semibold text-[#41694b]">{brand.name}</span>
-          <span>Presença digital para igrejas e comunidades.</span>
+          <span>Página, membros e acompanhamento para igrejas.</span>
           <span>© 2026</span>
         </div>
       </footer>

@@ -199,7 +199,7 @@ describe("etapa 2", () => {
 
   it("relatório: período válido e classe opcional", async () => {
     const freq = vi.fn(async () => []);
-    const { svc } = build({ relatorioClasses: async () => [], frequenciaAlunos: freq });
+    const { svc } = build({ relatorioClasses: async () => [], frequenciaAlunos: freq, presencaPorDomingo: async () => [] });
     await expect(svc.relatorio(owner, { de: "2026-10-10", ate: "2026-10-01" })).rejects.toMatchObject({
       code: "validation_error",
     });

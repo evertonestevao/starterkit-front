@@ -30,6 +30,7 @@ export default async function EbdLayout({ children }: { children: React.ReactNod
     { href: `${BASE}/relatorios`, label: "Relatórios" },
   ];
   if (canGerirEbd(actor.role, actor.podeGerirEbd)) {
+    tabs.push({ href: `${BASE}/destaques`, label: "Destaques" });
     tabs.push({ href: `${BASE}/trimestres`, label: "Trimestres" });
     tabs.push({ href: `${BASE}/promocao`, label: "Promoção" });
     tabs.push({ href: `${BASE}/regras`, label: "Regras" });

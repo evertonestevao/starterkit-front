@@ -9,6 +9,7 @@ import { ESTADO_LABEL, MOTIVOS, MOTIVO_LABEL, formatarData } from "@/lib/acompan
 import { cn } from "@/lib/utils";
 import type { ChamadaParaPreencher, EstadoPresenca } from "@/types/acompanhamento";
 import { useChamada } from "../hooks/useChamada";
+import { LegendaPresenca } from "@/components/legenda-presenca";
 
 const ESTADOS: EstadoPresenca[] = ["presente", "ausente", "justificado"];
 
@@ -53,6 +54,8 @@ export function ChamadaForm({ chamada }: { chamada: ChamadaParaPreencher }) {
           Ainda não há membros cadastrados. Cadastre em &ldquo;Membros&rdquo; para fazer a chamada.
         </p>
       ) : null}
+
+      <LegendaPresenca />
 
       <ul className="flex flex-col divide-y rounded-lg border">
         {c.visiveis.map((m) => {

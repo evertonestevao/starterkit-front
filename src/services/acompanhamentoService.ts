@@ -590,6 +590,13 @@ export function createAcompanhamentoService(deps: {
     },
 
     // ------------------------------------------------- relatórios / resumo
+    /** Só as chamadas do período (presentes/ausentes por culto), para o gráfico do painel. */
+    async chamadasDoPeriodo(actor: AcompanhamentoActor, periodo: { de: string; ate: string }) {
+      const church = await igreja(actor);
+      const { de, ate } = validar(periodoSchema, periodo);
+      return repo.relatorioChamadas(church.id, de, ate);
+    },
+
     async relatorio(actor: AcompanhamentoActor, periodo: { de: string; ate: string }) {
       const church = await igreja(actor);
       const { de, ate } = validar(periodoSchema, periodo);
