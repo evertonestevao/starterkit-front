@@ -6051,6 +6051,145 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Ficha completa do membro (migration 20261006100000). "Outro membro" (a2) é
+-- da AC Cong (d2). Lê e grava só quem tem o módulo Membros nessa igreja.
+-- ---------------------------------------------------------------------------
+set local role anon;
+do $$
+begin
+  begin
+    perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2', '{"cidade":"Bauru"}'::jsonb);
+    raise exception 'FALHA ficha: anon gravou a ficha';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform 1 from public.rol_membro_fichas;
+    raise exception 'FALHA ficha: anon leu a tabela de fichas';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+set local role authenticated;
+-- Quem administra a congregação grava; a situação tira a pessoa da chamada.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2', jsonb_build_object(
+    'estado_civil', 'casado', 'conjuge_nome', '  Maria  ', 'cep', '17012345', 'cidade', 'Bauru', 'uf', 'sp',
+    'profissao', '', 'situacao', 'ativo'));
+  select count(*) into n from public.rol_membro_fichas
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a2' and company_id = 'acacacac-0000-4000-8000-0000000000c2'
+    and conjuge_nome = 'Maria' and uf = 'SP' and profissao is null and situacao = 'ativo';
+  if n <> 1 then raise exception 'FALHA ficha: nao gravou como esperado'; end if;
+
+  -- Escrever direto na tabela, sem a função, não passa.
+  begin
+    update public.rol_membro_fichas set cidade = 'Outra' where membro_id = 'cacacaca-0000-4000-8000-0000000000a2';
+    raise exception 'FALHA ficha: UPDATE direto foi aceito';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    insert into public.rol_membro_fichas (membro_id, church_id, company_id)
+    values ('cacacaca-0000-4000-8000-0000000000a1', 'acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2');
+    raise exception 'FALHA ficha: INSERT direto foi aceito';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Opção fora da lista e CEP torto param no CHECK da tabela.
+  begin
+    perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2', '{"situacao":"sumido"}'::jsonb);
+    raise exception 'FALHA ficha: situacao inventada foi aceita';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2', '{"cep":"17012-345"}'::jsonb);
+    raise exception 'FALHA ficha: CEP com traco foi aceito';
+  exception when sqlstate '23514' then null;
+  end;
+end $$;
+reset role;
+
+-- Situação <-> ativo, nos dois sentidos.
+do $$
+declare v_ativo boolean; v_situacao text;
+begin
+  select ativo into v_ativo from public.rol_membros where id = 'cacacaca-0000-4000-8000-0000000000a2';
+  if not v_ativo then raise exception 'FALHA ficha: membro deveria comecar ativo'; end if;
+end $$;
+set local role authenticated;
+do $$
+begin
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2', jsonb_build_object(
+    'cidade', 'Bauru', 'situacao', 'transferido', 'situacao_em', '2026-01-10', 'situacao_motivo', 'Mudou de cidade'));
+end $$;
+reset role;
+do $$
+declare v_ativo boolean; v_situacao text; v_cidade text; v_conjuge text;
+begin
+  select ativo into v_ativo from public.rol_membros where id = 'cacacaca-0000-4000-8000-0000000000a2';
+  if v_ativo then raise exception 'FALHA ficha: transferido continuou ativo'; end if;
+  select cidade, conjuge_nome into v_cidade, v_conjuge from public.rol_membro_fichas
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a2';
+  -- A ficha é gravada inteira: o que não veio fica em branco.
+  if v_cidade <> 'Bauru' or v_conjuge is not null then raise exception 'FALHA ficha: gravacao inteira nao aplicada'; end if;
+
+  -- "Ativo" marcado no cadastro rápido: a ficha acompanha e esquece data e motivo.
+  update public.rol_membros set ativo = true where id = 'cacacaca-0000-4000-8000-0000000000a2';
+  select situacao into v_situacao from public.rol_membro_fichas
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a2' and situacao_em is null and situacao_motivo is null;
+  if v_situacao is distinct from 'ativo' then raise exception 'FALHA ficha: reativar nao voltou a situacao'; end if;
+
+  -- E desmarcado: vira "afastado" com a data de hoje.
+  update public.rol_membros set ativo = false where id = 'cacacaca-0000-4000-8000-0000000000a2';
+  select situacao into v_situacao from public.rol_membro_fichas
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a2' and situacao_em = current_date;
+  if v_situacao is distinct from 'afastado' then raise exception 'FALHA ficha: inativar nao marcou afastado'; end if;
+  update public.rol_membros set ativo = true where id = 'cacacaca-0000-4000-8000-0000000000a2';
+end $$;
+
+set local role authenticated;
+-- Member sem cargo, a igreja de cima e outra rede: nem leem nem gravam.
+do $$
+declare
+  v_quem text;
+  n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.rol_membro_fichas;
+    if n <> 0 then raise exception 'FALHA ficha: % leu % ficha(s) de outra igreja', v_quem, n; end if;
+    begin
+      perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2', '{"cidade":"Invasor"}'::jsonb);
+      raise exception 'FALHA ficha: % gravou ficha de outra igreja', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+  end loop;
+end $$;
+
+-- Member com cargo que libera Membros (auxiliar da chamada, pelo padrão): lê e grava.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.rol_membro_fichas where membro_id = 'cacacaca-0000-4000-8000-0000000000a2';
+  if n <> 1 then raise exception 'FALHA ficha: quem tem o modulo Membros nao leu a ficha'; end if;
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2', '{"cidade":"Marilia","situacao":"ativo"}'::jsonb);
+  select count(*) into n from public.rol_membro_fichas
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a2' and cidade = 'Marilia'
+    and atualizado_por = 'acacacac-0000-4000-8000-000000000004';
+  if n <> 1 then raise exception 'FALHA ficha: quem tem o modulo Membros nao gravou'; end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

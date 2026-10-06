@@ -42,6 +42,45 @@ export interface RolMembro {
   observacoes: string | null;
 }
 
+export type SexoMembro = "masculino" | "feminino";
+export type EstadoCivil = "solteiro" | "casado" | "uniao_estavel" | "divorciado" | "viuvo";
+export type FormaEntrada = "batismo" | "aclamacao" | "transferencia" | "outro";
+export type SituacaoMembro = "ativo" | "afastado" | "transferido" | "desligado" | "falecido";
+
+/**
+ * Ficha completa do membro (tabela rol_membro_fichas). Só quem tem o módulo
+ * Membros lê e grava: endereço e família não aparecem para quem só faz a chamada.
+ */
+export interface FichaMembro {
+  sexo: SexoMembro | null;
+  estadoCivil: EstadoCivil | null;
+  naturalidade: string | null;
+  profissao: string | null;
+  conjugeNome: string | null;
+  dataCasamento: string | null;
+  paiNome: string | null;
+  maeNome: string | null;
+  /** Nomes dos filhos, em texto livre. */
+  filhos: string | null;
+  /** Só os 8 dígitos. */
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  uf: string | null;
+  dataConversao: string | null;
+  /** Como entrou para o quadro de membros. */
+  entradaForma: FormaEntrada | null;
+  membroDesde: string | null;
+  igrejaOrigem: string | null;
+  /** Diferente de "ativo" tira a pessoa da chamada e dos alertas. */
+  situacao: SituacaoMembro;
+  situacaoEm: string | null;
+  situacaoMotivo: string | null;
+}
+
 /** Acesso ao sistema de quem tem login (vem de company_members). */
 export interface AcessoMembro {
   /** id da linha em company_members (para trocar papel / remover acesso). */

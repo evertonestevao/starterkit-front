@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Copy, KeyRound, Mail, MessageCircle, ShieldCheck, UserMinus, X } from "lucide-react";
+import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,7 +105,7 @@ export function AcessoMembroCard({
         toast.success("Link copiado. Cole no WhatsApp ou onde preferir.");
       } catch {
         // Navegador sem permissão de área de transferência: mostra para copiar à mão.
-        window.prompt("Copie o link do convite:", r.url);
+        toast.message("Copie o link do convite:", { description: r.url, duration: Infinity, closeButton: true });
       }
     });
   }
@@ -157,8 +158,14 @@ export function AcessoMembroCard({
                   variant="outline"
                   size="sm"
                   disabled={pending}
-                  onClick={() => {
-                    if (!window.confirm(`Remover o acesso de ${membro.nome}? A pessoa continua como membro.`)) return;
+                  onClick={async () => {
+                    const sim = await confirmar({
+                      titulo: `Remover o acesso de ${membro.nome}?`,
+                      descricao: "A pessoa deixa de entrar no sistema, mas continua como membro.",
+                      botao: "Remover acesso",
+                      perigo: true,
+                    });
+                    if (!sim) return;
                     rodar(() => removeMemberAction(active.id, acesso.companyMemberId), "Acesso removido.");
                   }}
                 >

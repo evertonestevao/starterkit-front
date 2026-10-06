@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isAppError } from "@/lib/errors";
-import type { Culto, Justificativa, RolMembro } from "@/types/acompanhamento";
+import type { FichaMembro, Culto, Justificativa, RolMembro } from "@/types/acompanhamento";
 import {
   canAcompanhar,
   createAcompanhamentoService,
@@ -369,6 +369,87 @@ describe("excluirMembro", () => {
   it("membro de outra igreja (ou inexistente) é não encontrado", async () => {
     const { svc } = service({ getMembro: async () => null });
     const err = await svc.excluirMembro(owner, MEMBRO).catch((e) => e);
+    expect(isAppError(err) && err.code).toBe("not_found");
+  });
+});
+
+describe("ficha do membro", () => {
+  const base = { situacao: "ativo" };
+  const gravadas = () => {
+    const fichas: FichaMembro[] = [];
+    const { svc } = service({
+      salvarFicha: async (_id, f) => {
+        fichas.push(f);
+      },
+    });
+    return { svc, fichas };
+  };
+
+  it("quem ainda não tem ficha recebe uma em branco, com a situação do cadastro", async () => {
+    const { svc } = service({ getFicha: async () => null });
+    const ficha = await svc.getFicha(owner, MEMBRO);
+    expect(ficha.situacao).toBe(membro.ativo ? "ativo" : "afastado");
+    expect(ficha.cidade).toBeNull();
+  });
+
+  it("limpa o CEP, vira null o que veio vazio e guarda o resto", async () => {
+    const { svc, fichas } = gravadas();
+    await svc.salvarFicha(owner, MEMBRO, {
+      ...base,
+      cep: "17012-345",
+      cidade: "  Bauru ",
+      uf: "SP",
+      profissao: "",
+      estadoCivil: "casado",
+      conjugeNome: "Maria",
+    });
+    expect(fichas[0]).toMatchObject({
+      cep: "17012345",
+      cidade: "Bauru",
+      uf: "SP",
+      profissao: null,
+      conjugeNome: "Maria",
+      situacao: "ativo",
+      situacaoEm: null,
+    });
+  });
+
+  it("sem cônjuge não guarda nome nem data de casamento", async () => {
+    const { svc, fichas } = gravadas();
+    await svc.salvarFicha(owner, MEMBRO, {
+      ...base,
+      estadoCivil: "solteiro",
+      conjugeNome: "Maria",
+      dataCasamento: "2020-05-01",
+    });
+    expect(fichas[0]).toMatchObject({ conjugeNome: null, dataCasamento: null });
+  });
+
+  it("situação diferente de ativo guarda a data de hoje quando não informada; ativo apaga data e motivo", async () => {
+    const { svc, fichas } = gravadas();
+    await svc.salvarFicha(owner, MEMBRO, { situacao: "transferido", situacaoMotivo: "Mudou de cidade" });
+    expect(fichas[0]).toMatchObject({ situacao: "transferido", situacaoEm: HOJE, situacaoMotivo: "Mudou de cidade" });
+    await svc.salvarFicha(owner, MEMBRO, { situacao: "ativo", situacaoEm: "2026-01-01", situacaoMotivo: "x" });
+    expect(fichas[1]).toMatchObject({ situacao: "ativo", situacaoEm: null, situacaoMotivo: null });
+  });
+
+  it("recusa CEP incompleto, UF e situação que não existem e data no futuro", async () => {
+    const { svc, fichas } = gravadas();
+    for (const ruim of [
+      { ...base, cep: "1701" },
+      { ...base, uf: "XX" },
+      { situacao: "sumido" },
+      { ...base, dataConversao: "2999-01-01" },
+    ]) {
+      const err = await svc.salvarFicha(owner, MEMBRO, ruim).catch((e) => e);
+      expect(isAppError(err) && err.code).toBe("validation_error");
+    }
+    expect(fichas).toEqual([]);
+  });
+
+  it("membro de outra igreja (ou inexistente) é não encontrado", async () => {
+    const { svc } = service({ getMembro: async () => null });
+    const err = await svc.salvarFicha(owner, MEMBRO, base).catch((e) => e);
     expect(isAppError(err) && err.code).toBe("not_found");
   });
 });

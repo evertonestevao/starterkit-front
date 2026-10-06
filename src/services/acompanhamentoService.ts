@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AppError, toValidationError } from "@/lib/errors";
+import { ESTADOS_CIVIS, FORMAS_ENTRADA, SEXOS, SITUACOES, UFS, fichaVazia, temConjuge } from "@/lib/fichaMembro";
 import {
   MOTIVOS,
   RESULTADOS,
@@ -33,6 +34,8 @@ import type {
   RolMembro,
   SugestaoChamada,
   Visitante,
+  FichaMembro,
+  SituacaoMembro,
 } from "@/types/acompanhamento";
 import { LIMITE_IMPORTACAO, chaveDePessoa } from "@/lib/importarMembros";
 import { normalizeSearch } from "@/lib/search";
@@ -118,6 +121,10 @@ export interface AcompanhamentoRepository {
   /** Exclui o cadastro (RPC excluir_membro: tira cargos, encerra matrícula). */
   excluirMembro(membroId: string): Promise<void>;
   updateMembro(churchId: string, membroId: string, input: NovoMembro): Promise<boolean>;
+  /** Ficha completa; null se ainda não há (ou se quem pede não tem o módulo Membros). */
+  getFicha(churchId: string, membroId: string): Promise<FichaMembro | null>;
+  /** RPC salvar_ficha_membro: confere o acesso e ajusta "ativo" quando a situação muda. */
+  salvarFicha(membroId: string, ficha: FichaMembro): Promise<void>;
 
   /** Itens ativos da programação da igreja (com e sem chamada). */
   listCultos(churchId: string): Promise<Culto[]>;
@@ -298,6 +305,46 @@ const configSchema = z.object({
 const periodoSchema = z
   .object({ de: dataISO, ate: dataISO })
   .refine((v) => v.ate >= v.de, { message: "Período inválido", path: ["ate"] });
+
+const textoCurto = (max: number, msg: string) => vazioVira(z.string().trim().max(max, msg));
+
+const fichaSchema = z
+  .object({
+    sexo: vazioVira(z.enum(SEXOS, "Sexo inválido")),
+    estadoCivil: vazioVira(z.enum(ESTADOS_CIVIS, "Estado civil inválido")),
+    naturalidade: textoCurto(120, "Naturalidade longa demais"),
+    profissao: textoCurto(120, "Profissão longa demais"),
+    conjugeNome: textoCurto(120, "Nome do cônjuge longo demais"),
+    dataCasamento: vazioVira(dataISO),
+    paiNome: textoCurto(120, "Nome do pai longo demais"),
+    maeNome: textoCurto(120, "Nome da mãe longo demais"),
+    filhos: textoCurto(500, "Texto dos filhos longo demais"),
+    cep: vazioVira(
+      z
+        .string()
+        .transform((v) => v.replace(/\D/g, ""))
+        .refine((v) => v.length === 8, "CEP com 8 dígitos, por favor"),
+    ),
+    logradouro: textoCurto(160, "Endereço longo demais"),
+    numero: textoCurto(20, "Número longo demais"),
+    complemento: textoCurto(80, "Complemento longo demais"),
+    bairro: textoCurto(80, "Bairro longo demais"),
+    cidade: textoCurto(80, "Cidade longa demais"),
+    uf: vazioVira(z.enum(UFS, "Estado (UF) inválido")),
+    dataConversao: vazioVira(dataISO),
+    entradaForma: vazioVira(z.enum(FORMAS_ENTRADA, "Forma de entrada inválida")),
+    membroDesde: vazioVira(dataISO),
+    igrejaOrigem: textoCurto(160, "Igreja de origem longa demais"),
+    situacao: z.enum(SITUACOES, "Situação inválida"),
+    situacaoEm: vazioVira(dataISO),
+    situacaoMotivo: textoCurto(300, "Motivo longo demais"),
+  })
+  .transform((f) => ({
+    ...f,
+    // Sem cônjuge, não guarda nome nem data de casamento de um estado civil anterior.
+    conjugeNome: temConjuge(f.estadoCivil) ? f.conjugeNome : null,
+    dataCasamento: temConjuge(f.estadoCivil) ? f.dataCasamento : null,
+  }));
 
 function validar<T>(schema: z.ZodType<T>, input: unknown): T {
   const parsed = schema.safeParse(input);
@@ -483,6 +530,46 @@ export function createAcompanhamentoService(deps: {
       }
       await repo.excluirMembro(id);
       return { nome: membro.nome };
+    },
+
+    /** Ficha completa do membro; quem ainda não tem recebe uma em branco. */
+    async getFicha(actor: AcompanhamentoActor, membroId: unknown): Promise<FichaMembro> {
+      const church = await igreja(actor);
+      const id = validar(uuid("Membro inválido"), membroId);
+      const membro = await exigeMembro(church.id, id);
+      return (await repo.getFicha(church.id, id)) ?? fichaVazia(membro.ativo);
+    },
+
+    /**
+     * Grava a ficha. Situação diferente de "ativo" guarda a data (hoje, se
+     * não informada) e tira a pessoa da chamada; o banco confere o acesso ao
+     * módulo Membros e faz o ajuste do "ativo".
+     */
+    async salvarFicha(
+      actor: AcompanhamentoActor,
+      membroId: unknown,
+      input: unknown,
+    ): Promise<{ nome: string; situacao: SituacaoMembro }> {
+      const church = await igreja(actor);
+      const id = validar(uuid("Membro inválido"), membroId);
+      const ficha = validar(fichaSchema, input);
+      const membro = await exigeMembro(church.id, id);
+      const hojeData = hoje();
+      for (const [data, nome] of [
+        [ficha.dataCasamento, "casamento"],
+        [ficha.dataConversao, "conversão"],
+        [ficha.membroDesde, "entrada como membro"],
+        [ficha.situacaoEm, "situação"],
+      ] as const) {
+        if (data && data > hojeData) throw new AppError("validation_error", `A data de ${nome} não pode ser no futuro.`);
+      }
+      const ativo = ficha.situacao === "ativo";
+      await repo.salvarFicha(id, {
+        ...ficha,
+        situacaoEm: ativo ? null : (ficha.situacaoEm ?? hojeData),
+        situacaoMotivo: ativo ? null : ficha.situacaoMotivo,
+      });
+      return { nome: membro.nome, situacao: ficha.situacao };
     },
 
     /** Quem a igreja já tem (nome e nascimento), para a tela avisar os possíveis repetidos antes de importar. */

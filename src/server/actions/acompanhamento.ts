@@ -78,6 +78,37 @@ export async function salvarMembroAction(
   }
 }
 
+const CAMPOS_FICHA = [
+  "sexo", "estadoCivil", "naturalidade", "profissao", "conjugeNome", "dataCasamento", "paiNome", "maeNome", "filhos",
+  "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "uf", "dataConversao", "entradaForma",
+  "membroDesde", "igrejaOrigem", "situacao", "situacaoEm", "situacaoMotivo",
+] as const;
+
+/** Grava a ficha completa do membro (dados pessoais, família, endereço, vida na igreja e situação). */
+export async function salvarFichaMembroAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+  try {
+    const actor = await ator();
+    const membroId = texto(formData, "membroId");
+    const { nome, situacao } = await (await getAcompanhamentoService()).salvarFicha(
+      actor,
+      membroId,
+      Object.fromEntries(CAMPOS_FICHA.map((campo) => [campo, texto(formData, campo)])),
+    );
+    // Dado pessoal não vai para a auditoria: só o fato e a situação.
+    await recordAudit({
+      companyId: actor.companyId,
+      action: "membro.ficha_updated",
+      entityType: "rol_membro",
+      entityId: membroId,
+      metadata: { situacao },
+    });
+    revalidar();
+    return { success: `Ficha de ${nome} salva.` };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
 /** Exclui um cadastro feito por engano (quem tem login não sai por aqui). */
 export async function excluirMembroAction(membroId: string): Promise<ActionState> {
   try {

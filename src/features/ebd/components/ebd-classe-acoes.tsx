@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { GraduationCap, Pencil, Plus, Power, Search, UserMinus, UserPlus, X } from "lucide-react";
+import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -133,8 +134,17 @@ export function ClasseAtivaBotao({ classe }: { classe: EbdClasse }) {
       variant="outline"
       size="sm"
       disabled={pending}
-      onClick={() => {
-        if (classe.ativa && !window.confirm(`Encerrar a classe ${classe.nome}? Ela sai do resumo; o histórico fica.`)) return;
+      onClick={async () => {
+        if (
+          classe.ativa &&
+          !(await confirmar({
+            titulo: `Encerrar a classe ${classe.nome}?`,
+            descricao: "Ela sai do resumo; o histórico fica.",
+            botao: "Encerrar classe",
+            perigo: true,
+          }))
+        )
+          return;
         rodar(() => definirClasseAtivaAction(classe.id, !classe.ativa));
       }}
     >
@@ -352,8 +362,14 @@ export function TirarDaClasse({ matriculaId, nome }: { matriculaId: string; nome
       variant="ghost"
       size="sm"
       disabled={pending}
-      onClick={() => {
-        if (!window.confirm(`Tirar ${nome} da classe? O histórico de presença continua guardado.`)) return;
+      onClick={async () => {
+        const sim = await confirmar({
+          titulo: `Tirar ${nome} da classe?`,
+          descricao: "O histórico de presença continua guardado.",
+          botao: "Tirar da classe",
+          perigo: true,
+        });
+        if (!sim) return;
         rodar(() => encerrarMatriculaAction(matriculaId));
       }}
     >

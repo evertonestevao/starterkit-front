@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { BookOpenText, Pencil, Plus, Trash2 } from "lucide-react";
+import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -157,8 +158,14 @@ function RemoverTrimestre({ trimestre }: { trimestre: EbdTrimestre }) {
       size="icon-sm"
       disabled={pending}
       aria-label={`Remover ${trimestre.nome}`}
-      onClick={() => {
-        if (!window.confirm(`Remover ${trimestre.nome}? As aulas e presenças não são apagadas.`)) return;
+      onClick={async () => {
+        const sim = await confirmar({
+          titulo: `Remover ${trimestre.nome}?`,
+          descricao: "As aulas e presenças não são apagadas.",
+          botao: "Remover",
+          perigo: true,
+        });
+        if (!sim) return;
         start(async () => {
           const r = await removerTrimestreAction(trimestre.id);
           if (r.error) toast.error(r.error);

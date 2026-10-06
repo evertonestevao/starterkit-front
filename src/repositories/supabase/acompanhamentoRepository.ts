@@ -17,6 +17,7 @@ import type {
   Presenca,
   RelatorioChamada,
   ResumoAcompanhamento,
+  FichaMembro,
   ResumoRedeIgreja,
   RolMembro,
 } from "@/types/acompanhamento";
@@ -31,6 +32,10 @@ import type { CargoResumo } from "@/types/cargos";
 const MEMBRO_COLS =
   "id, church_id, nome, whatsapp, email, user_id, participa_chamada, membro_igreja, cuidados, nascimento, batismo, ativo, observacoes, " +
   "cargos:rol_membro_cargos(cargo:cargos(id, nome, ordem, deleted_at))";
+const FICHA_COLS =
+  "sexo, estado_civil, naturalidade, profissao, conjuge_nome, data_casamento, pai_nome, mae_nome, filhos, " +
+  "cep, logradouro, numero, complemento, bairro, cidade, uf, data_conversao, entrada_forma, membro_desde, " +
+  "igreja_origem, situacao, situacao_em, situacao_motivo";
 // Cultos = itens da Programação.
 const CULTO_COLS = "id, church_id, titulo, tipo, dia_semana, data, hora, registra_chamada, deleted_at";
 const JUST_COLS = "id, membro_id, motivo, motivo_texto, data_inicio, data_fim, encerrada_em, membro:rol_membros(nome)";
@@ -64,6 +69,32 @@ const toMembro = (r: any): RolMembro => ({
   batismo: r.batismo ?? null,
   ativo: r.ativo,
   observacoes: r.observacoes,
+});
+
+const toFicha = (r: any): FichaMembro => ({
+  sexo: r.sexo,
+  estadoCivil: r.estado_civil,
+  naturalidade: r.naturalidade,
+  profissao: r.profissao,
+  conjugeNome: r.conjuge_nome,
+  dataCasamento: r.data_casamento,
+  paiNome: r.pai_nome,
+  maeNome: r.mae_nome,
+  filhos: r.filhos,
+  cep: r.cep,
+  logradouro: r.logradouro,
+  numero: r.numero,
+  complemento: r.complemento,
+  bairro: r.bairro,
+  cidade: r.cidade,
+  uf: r.uf,
+  dataConversao: r.data_conversao,
+  entradaForma: r.entrada_forma,
+  membroDesde: r.membro_desde,
+  igrejaOrigem: r.igreja_origem,
+  situacao: r.situacao,
+  situacaoEm: r.situacao_em,
+  situacaoMotivo: r.situacao_motivo,
 });
 
 const toCulto = (r: any): Culto => ({
@@ -329,6 +360,59 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         if (error) falha("Falha ao carregar os membros da igreja", error);
         todos.push(...((data ?? []) as Array<{ nome: string; nascimento: string | null; email: string | null }>));
         if (!data || data.length < 1000) return todos;
+      }
+    },
+
+    async getFicha(churchId, membroId) {
+      const { data, error } = await client
+        .from("rol_membro_fichas")
+        .select(FICHA_COLS)
+        .eq("church_id", churchId)
+        .eq("membro_id", membroId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (error) falha("Falha ao carregar a ficha do membro", error);
+      return data ? toFicha(data) : null;
+    },
+
+    async salvarFicha(membroId, f) {
+      const { error } = await client.rpc("salvar_ficha_membro", {
+        p_membro_id: membroId,
+        p_ficha: {
+          sexo: f.sexo,
+          estado_civil: f.estadoCivil,
+          naturalidade: f.naturalidade,
+          profissao: f.profissao,
+          conjuge_nome: f.conjugeNome,
+          data_casamento: f.dataCasamento,
+          pai_nome: f.paiNome,
+          mae_nome: f.maeNome,
+          filhos: f.filhos,
+          cep: f.cep,
+          logradouro: f.logradouro,
+          numero: f.numero,
+          complemento: f.complemento,
+          bairro: f.bairro,
+          cidade: f.cidade,
+          uf: f.uf,
+          data_conversao: f.dataConversao,
+          entrada_forma: f.entradaForma,
+          membro_desde: f.membroDesde,
+          igreja_origem: f.igrejaOrigem,
+          situacao: f.situacao,
+          situacao_em: f.situacaoEm,
+          situacao_motivo: f.situacaoMotivo,
+        },
+      });
+      if (error) {
+        if (error.code === "P0002") {
+          throw new AppError("not_found", "Membro não encontrado, ou você não tem acesso à ficha dele.", error);
+        }
+        // CHECK da tabela ou data impossível: o service já validou, então é dado adulterado.
+        if (error.code === "23514" || error.code?.startsWith("22")) {
+          throw new AppError("validation_error", "Confira os dados da ficha.", error);
+        }
+        falha("Falha ao salvar a ficha do membro", error);
       }
     },
 

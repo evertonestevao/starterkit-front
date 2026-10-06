@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AcessoBadge, AcessoMembroCard } from "@/features/acompanhamento/components/acesso-membro";
 import { ExcluirMembro } from "@/features/acompanhamento/components/excluir-membro";
+import { FichaCard } from "@/features/acompanhamento/components/ficha-card";
 import { MembroForm } from "@/features/acompanhamento/components/membro-form";
 import { ResponsaveisBotao } from "@/features/ebd/components/ebd-responsaveis";
 import { isAppError } from "@/lib/errors";
@@ -18,6 +19,7 @@ import {
   RESULTADO_LABEL,
 } from "@/lib/acompanhamento";
 import { idadeEm } from "@/lib/ebd";
+import { SITUACAO_LABEL } from "@/lib/fichaMembro";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
 import { getEbdService } from "@/server/ebd";
 import type { EstadoPresenca } from "@/types/acompanhamento";
@@ -37,8 +39,13 @@ export default async function MembroPage({ params }: { params: Promise<{ id: str
 
   const service = await getAcompanhamentoService();
   const ebdService = await getEbdService();
-  const [dados, cargos, acessos, ebd, responsaveis] = await Promise.all([
+  const [dados, ficha, cargos, acessos, ebd, responsaveis] = await Promise.all([
     service.getMembro(actor, id).catch((err: unknown) => {
+      if (isAppError(err) && (err.code === "not_found" || err.code === "validation_error")) return null;
+      throw err;
+    }),
+    // Membro que não existe cai no notFound() abaixo, pelos dados principais.
+    service.getFicha(actor, id).catch((err: unknown) => {
       if (isAppError(err) && (err.code === "not_found" || err.code === "validation_error")) return null;
       throw err;
     }),
@@ -57,7 +64,7 @@ export default async function MembroPage({ params }: { params: Promise<{ id: str
         return [];
       }),
   ]);
-  if (!dados) notFound();
+  if (!dados || !ficha) notFound();
   const gerenciaAcesso = actor.role === "owner" || actor.role === "admin";
   const { membro, historico, justificativas, contatos } = dados;
   const acesso = membro.userId ? acessos.porUsuario[membro.userId] : undefined;
@@ -88,7 +95,9 @@ export default async function MembroPage({ params }: { params: Promise<{ id: str
               </Badge>
             ))}
             <AcessoBadge acesso={acesso} convite={convite} />
-            {!membro.ativo ? <Badge variant="outline">Inativo</Badge> : null}
+            {!membro.ativo ? (
+              <Badge variant="outline">{ficha.situacao !== "ativo" ? SITUACAO_LABEL[ficha.situacao] : "Inativo"}</Badge>
+            ) : null}
             {membro.ativo && !membro.participaChamada ? <Badge variant="outline">Fora da chamada</Badge> : null}
             {!membro.membroIgreja ? <Badge variant="outline">Não membro</Badge> : null}
           </div>
@@ -100,6 +109,8 @@ export default async function MembroPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
       {membro.observacoes ? <p className="rounded-lg bg-muted/50 p-3 text-sm">{membro.observacoes}</p> : null}
+
+      <FichaCard membroId={membro.id} nome={membro.nome} ficha={ficha} temLogin={Boolean(membro.userId)} />
 
       {gerenciaAcesso ? <AcessoMembroCard membro={membro} acesso={acesso} convite={convite} /> : null}
 

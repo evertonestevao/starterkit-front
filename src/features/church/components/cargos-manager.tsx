@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Lock, Pencil, Plus, Power } from "lucide-react";
+import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,12 +121,16 @@ function AtivarCargo({ cargo }: { cargo: Cargo }) {
       variant="outline"
       size="sm"
       disabled={pending}
-      onClick={() => {
+      onClick={async () => {
         if (
           !ativar &&
-          !window.confirm(
-            `Desativar "${cargo.nome}"? Ninguém mais recebe este cargo, nem aqui nem nas igrejas abaixo. Quem já tem continua com ele.`,
-          )
+          !(await confirmar({
+            titulo: `Desativar "${cargo.nome}"?`,
+            descricao:
+              "Ninguém mais recebe este cargo, nem aqui nem nas igrejas abaixo. Quem já tem continua com ele.",
+            botao: "Desativar",
+            perigo: true,
+          }))
         )
           return;
         start(async () => {

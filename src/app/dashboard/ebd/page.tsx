@@ -5,6 +5,7 @@ import { BookOpen, ClipboardCheck, FileDown, Users } from "lucide-react";
 import { DataAuto } from "@/components/data-auto";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ClasseForm } from "@/features/ebd/components/ebd-classe-acoes";
@@ -16,6 +17,16 @@ import { LegendaPresenca } from "@/components/legenda-presenca";
 export const metadata: Metadata = { title: "EBD" };
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Verde quando a chamada já foi feita ("Abrir"); vermelho cheio quando falta fazer. */
+function botaoDaChamada(feita: boolean): string {
+  return feita
+    ? buttonVariants({ size: "sm" })
+    : cn(
+        buttonVariants({ size: "sm", variant: "destructive" }),
+        "bg-destructive text-white hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90",
+      );
+}
 
 export default async function EbdPage({ searchParams }: { searchParams: Promise<{ data?: string }> }) {
   const actor = await getEbdActorAutorizado();
@@ -107,6 +118,11 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
                           <Link href={`/dashboard/ebd/classes/${r.classeId}`} className="hover:underline">
                             {r.classeNome}
                           </Link>
+                          {r.chamadaFeita ? null : (
+                            <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-normal whitespace-nowrap text-muted-foreground">
+                              Chamada pendente
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{r.matriculados}</TableCell>
                         {r.chamadaFeita ? (
@@ -120,14 +136,17 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
                             <TableCell className="text-right tabular-nums">{formatarReais(r.ofertaCentavos)}</TableCell>
                           </>
                         ) : (
-                          <TableCell colSpan={7} className="text-center text-muted-foreground">
-                            chamada não feita
-                          </TableCell>
+                          // Um traço por coluna: a linha continua alinhada com o cabeçalho.
+                          Array.from({ length: 7 }, (_, i) => (
+                            <TableCell key={i} className="text-right text-muted-foreground" aria-label="sem dado">
+                              –
+                            </TableCell>
+                          ))
                         )}
                         <TableCell className="text-right">
                           <Link
                             href={`/dashboard/ebd/classes/${r.classeId}/chamada?data=${data}`}
-                            className={buttonVariants({ size: "sm", variant: r.chamadaFeita ? "outline" : "default" })}
+                            className={botaoDaChamada(r.chamadaFeita)}
                           >
                             {r.chamadaFeita ? "Abrir" : "Chamada"}
                           </Link>
@@ -161,12 +180,12 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
                       <p className="text-xs text-muted-foreground tabular-nums">
                         {r.chamadaFeita
                           ? `${r.presentes} P · ${r.ausentes} A · ${r.justificados} J · ${r.visitantes} visit. · ${formatarReais(r.ofertaCentavos)}`
-                          : `${r.matriculados} matriculados · chamada não feita`}
+                          : `${r.matriculados} matriculados · chamada pendente`}
                       </p>
                     </Link>
                     <Link
                       href={`/dashboard/ebd/classes/${r.classeId}/chamada?data=${data}`}
-                      className={buttonVariants({ size: "sm", variant: r.chamadaFeita ? "outline" : "default" })}
+                      className={botaoDaChamada(r.chamadaFeita)}
                     >
                       {r.chamadaFeita ? "Abrir" : "Chamada"}
                     </Link>

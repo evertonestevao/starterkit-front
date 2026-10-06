@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CalendarX, Pencil, Plus } from "lucide-react";
+import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -174,16 +175,20 @@ export function JustificativasLista({
 function Encerrar({ justificativa, futura }: { justificativa: Justificativa; futura: boolean }) {
   const [pending, start] = useTransition();
   const pergunta = futura
-    ? `Cancelar a justificativa de ${justificativa.membroNome}?`
-    : `Encerrar hoje a justificativa de ${justificativa.membroNome}? A partir de hoje, faltas voltam a contar.`;
+    ? { titulo: `Cancelar a justificativa de ${justificativa.membroNome}?`, botao: "Cancelar justificativa" }
+    : {
+        titulo: `Encerrar hoje a justificativa de ${justificativa.membroNome}?`,
+        descricao: "A partir de hoje, faltas voltam a contar.",
+        botao: "Encerrar",
+      };
   return (
     <Button
       type="button"
       variant="outline"
       size="sm"
       disabled={pending}
-      onClick={() => {
-        if (!window.confirm(pergunta)) return;
+      onClick={async () => {
+        if (!(await confirmar({ ...pergunta, perigo: true }))) return;
         start(async () => {
           const r = await encerrarJustificativaAction(justificativa.id);
           if (r.error) toast.error(r.error);
