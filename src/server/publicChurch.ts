@@ -23,10 +23,9 @@ export const loadPublicChurch = cache(
     const church = await repo.findByPublicCode(publicCode);
     if (!church) return null;
 
-    // Página fora do ar: para o público não existe. Só quem administra a
-    // igreja vê, em prévia, para conferir antes de publicar.
-    const previa = !church.pagina_ativa;
-    if (previa && !(await repo.podeVerPrevia(church.id).catch(() => false))) return null;
+    // Página fora do ar: para o público não existe (o banco nem devolve a
+    // linha). Quem administra a igreja a recebe marcada como prévia.
+    const { previa } = church;
 
     const { slug, accent } = await repo.resolveAppearance(church.id);
     const theme = isChurchTheme(slug) ? slug : DEFAULT_CHURCH_THEME;

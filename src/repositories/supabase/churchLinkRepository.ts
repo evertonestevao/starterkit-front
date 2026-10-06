@@ -59,7 +59,7 @@ function inviteStatus(
 }
 
 const REQUEST_SELECT =
-  "id, status, tipo_solicitado, tipo_final, motivo_recusa, requested_at, decided_at, parent_church_id, child_church_id, solicitante_nome, parent:churches!parent_church_id(name, sobrenome), child:churches!child_church_id(name, sobrenome, address, public_code)";
+  "id, status, tipo_solicitado, tipo_final, motivo_recusa, requested_at, decided_at, parent_church_id, child_church_id, solicitante_nome";
 
 interface RequestRow {
   id: string;
@@ -72,11 +72,20 @@ interface RequestRow {
   parent_church_id: string;
   child_church_id: string;
   solicitante_nome: string | null;
-  parent: { name: string; sobrenome: string | null } | null;
-  child: { name: string; sobrenome: string | null; address: string | null; public_code: string } | null;
 }
 
-function toRequest(row: RequestRow): ChurchLinkRequest {
+/** Nome, endereço e chave da página de uma igreja, vindos de `igrejas_resumo`. */
+interface ResumoRow {
+  id: string;
+  name: string;
+  sobrenome: string | null;
+  address: string | null;
+  public_code: string;
+}
+
+function toRequest(row: RequestRow, igrejas: Map<string, ResumoRow>): ChurchLinkRequest {
+  const parent = igrejas.get(row.parent_church_id) ?? null;
+  const child = igrejas.get(row.child_church_id) ?? null;
   return {
     id: row.id,
     status: row.status,
@@ -87,10 +96,10 @@ function toRequest(row: RequestRow): ChurchLinkRequest {
     decidedAt: row.decided_at,
     parentChurchId: row.parent_church_id,
     childChurchId: row.child_church_id,
-    parentName: row.parent ? formatChurchName(row.parent.name, row.parent.sobrenome) : "Igreja",
-    childName: row.child ? formatChurchName(row.child.name, row.child.sobrenome) : "Igreja",
-    childAddress: row.child?.address ?? null,
-    childPublicCode: row.child?.public_code ?? null,
+    parentName: parent ? formatChurchName(parent.name, parent.sobrenome) : "Igreja",
+    childName: child ? formatChurchName(child.name, child.sobrenome) : "Igreja",
+    childAddress: child?.address ?? null,
+    childPublicCode: child?.public_code ?? null,
     solicitanteNome: row.solicitante_nome,
   };
 }
@@ -106,6 +115,22 @@ export function createSupabaseChurchLinkRepository(
   client: SupabaseClient,
   adminClient?: SupabaseClient,
 ): ChurchLinkRepository {
+  /**
+   * Pedidos com o nome das duas igrejas. A outra parte não é da rede de quem
+   * lê (ainda está pedindo para entrar), então não vem da tabela: vem de
+   * `igrejas_resumo`, que libera nome e endereço entre as partes de um pedido.
+   */
+  async function comIgrejas(rows: RequestRow[]): Promise<ChurchLinkRequest[]> {
+    const ids = [...new Set(rows.flatMap((r) => [r.parent_church_id, r.child_church_id]))];
+    const igrejas = new Map<string, ResumoRow>();
+    if (ids.length > 0) {
+      const { data, error } = await client.rpc("igrejas_resumo", { p_ids: ids });
+      if (error) throw new AppError("internal_error", "Falha ao carregar os pedidos", error);
+      for (const i of (data ?? []) as ResumoRow[]) igrejas.set(i.id, i);
+    }
+    return rows.map((r) => toRequest(r, igrejas));
+  }
+
   return {
     async listCompanyChurches(companyId): Promise<ChurchLinkChurch[]> {
       const { data, error } = await client
@@ -127,8 +152,12 @@ export function createSupabaseChurchLinkRepository(
       if (error) throw new AppError("internal_error", "Falha ao carregar a árvore", error);
 
       const [parent, children] = await Promise.all([
+        // A igreja de cima não é lida na tabela (a de baixo não enxerga a de
+        // cima): nome e posição vêm do resumo, que só tem dados públicos.
         self?.parent_id
-          ? client.from("churches").select(CHURCH_COLUMNS).eq("id", self.parent_id).is("deleted_at", null).maybeSingle<ChurchRow>()
+          ? client
+              .rpc("igrejas_resumo", { p_ids: [self.parent_id] })
+              .then(({ data, error: erroMae }) => ({ data: ((data ?? []) as ChurchRow[])[0] ?? null, error: erroMae }))
           : Promise.resolve({ data: null, error: null }),
         client.from("churches").select(CHURCH_COLUMNS).eq("parent_id", churchId).is("deleted_at", null).order("name"),
       ]);
@@ -219,7 +248,7 @@ export function createSupabaseChurchLinkRepository(
         .order("requested_at", { ascending: false })
         .limit(30);
       if (error) throw new AppError("internal_error", "Falha ao carregar os pedidos", error);
-      return ((data ?? []) as unknown as RequestRow[]).map(toRequest);
+      return comIgrejas((data ?? []) as unknown as RequestRow[]);
     },
 
     async listRequestsByInvite(inviteId): Promise<ChurchLinkRequest[]> {
@@ -229,7 +258,7 @@ export function createSupabaseChurchLinkRepository(
         .eq("invite_id", inviteId)
         .order("requested_at", { ascending: false });
       if (error) throw new AppError("internal_error", "Falha ao carregar os pedidos", error);
-      return ((data ?? []) as unknown as RequestRow[]).map(toRequest);
+      return comIgrejas((data ?? []) as unknown as RequestRow[]);
     },
 
     async createInvite({ churchId, tipo, tokenHash, expiresAt, maxUses }) {

@@ -13,8 +13,6 @@ import type { IgrejaDaRedePublica } from "@/types/redePublica";
  * suporte pago são informação interna, e `select *` passaria a falhar com
  * permission denied — que é exatamente o comportamento desejado.
  */
-export const PUBLIC_CHURCH_COLUMNS =
-  "id, parent_id, name, sobrenome, slug, logo_url, address, sobre, service_times, social_links, path, template_mode, template_id, public_code, pagina_ativa, pix_fonte, aceita_patrocinio, created_at, updated_at";
 
 export function createSupabasePublicChurchRepository(client: SupabaseClient) {
   return {
@@ -28,35 +26,28 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
       return typeof data === "string" && data !== "" ? data : null;
     },
 
-    async findByPublicCode(publicCode: string): Promise<PublicChurch | null> {
-      const { data, error } = await client
-        .from("churches")
-        .select(PUBLIC_CHURCH_COLUMNS)
-        .eq("public_code", publicCode)
-        // Igreja excluída fica fora pela policy `churches_public_select`, que
-        // vale para qualquer consulta. Filtrar `deleted_at` aqui NÃO funciona:
-        // o anon só tem SELECT em colunas específicas, e essa não é uma delas
-        // — a consulta falharia com permission denied e derrubaria a página
-        // de toda igreja. A policy enxerga a coluna; o client não precisa.
-        .maybeSingle<PublicChurch>();
+    /**
+     * A igreja da página pública, pela chave. Sai de uma função do banco
+     * (`igreja_publica`), não da tabela: usuário logado só lê igreja da
+     * própria rede, e a página de qualquer igreja precisa abrir para todos.
+     * A função devolve a linha se a página está no ar; fora do ar, só para
+     * quem administra a igreja (`previa`).
+     */
+    async findByPublicCode(publicCode: string): Promise<(PublicChurch & { previa: boolean }) | null> {
+      const { data, error } = await client.rpc("igreja_publica", { p_chave: publicCode });
       if (error) {
         throw new AppError("internal_error", "Falha ao carregar a igreja", error);
       }
-      if (!data) return null;
+      const linha = ((data ?? []) as Array<PublicChurch & { previa: boolean; tem_dono: boolean }>)[0];
+      if (!linha) return null;
+      const { tem_dono: _temDono, ...igreja } = linha;
+      void _temDono;
 
-      // A chave Pix não é lida direto na tabela: a função só devolve a que a
-      // moderação aprovou, e só com a página no ar (migration 20261006170000).
-      const { data: pix, error: erroPix } = await client.rpc("pix_publico", { p_church_id: data.id });
+      // A chave Pix só vem aprovada pela moderação, e com a página no ar.
+      const { data: pix, error: erroPix } = await client.rpc("pix_publico", { p_church_id: igreja.id });
       if (erroPix) throw new AppError("internal_error", "Falha ao carregar a igreja", erroPix);
       const aprovado = ((pix ?? []) as Array<{ chave: string; titular: string | null }>)[0];
-      return { ...data, pix_chave: aprovado?.chave ?? null, pix_titular: aprovado?.titular ?? null };
-    },
-
-    /** Quem administra a igreja vê a página dela antes de publicar. */
-    async podeVerPrevia(churchId: string): Promise<boolean> {
-      const { data, error } = await client.rpc("posso_ver_previa_da_pagina", { p_church_id: churchId });
-      if (error) throw new AppError("internal_error", "Falha ao carregar a igreja", error);
-      return data === true;
+      return { ...igreja, pix_chave: aprovado?.chave ?? null, pix_titular: aprovado?.titular ?? null };
     },
 
     /** Vitrine: nome, logo e destino de quem patrocina agora (RPC security definer). */
@@ -141,14 +132,9 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
      */
     /** Tem alguma igreja ligada direto a esta? (para mostrar o atalho "Nossas igrejas") */
     async hasChildChurches(churchId: string): Promise<boolean> {
-      const { data, error } = await client
-        .from("churches")
-        .select("id")
-        .eq("parent_id", churchId)
-        .eq("pagina_ativa", true)
-        .limit(1);
+      const { data, error } = await client.rpc("rede_tem_igrejas", { p_church_id: churchId });
       if (error) throw new AppError("internal_error", "Falha ao carregar a rede da igreja", error);
-      return (data ?? []).length > 0;
+      return data === true;
     },
 
     async listNetworkChurches(churchId: string): Promise<IgrejaDaRedePublica[]> {

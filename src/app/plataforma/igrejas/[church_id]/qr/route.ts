@@ -27,12 +27,13 @@ export async function GET(
     const origem = parseVisitOrigin(url.searchParams.get("origem") ?? undefined);
 
     const supabase = await getSupabaseServerClient();
-    const { data: church } = await supabase
-      .from("churches")
-      .select("public_code")
-      .eq("id", church_id)
-      .maybeSingle<{ public_code: string }>();
-    if (!church) return Response.json({ error: "not_found" }, { status: 404 });
+    // A moderação não lê as tabelas das igrejas: só a função estreita, que
+    // confere `is_platform_staff()` e devolve a chave da página.
+    const { data: publicCode } = await supabase.rpc("platform_church_public_code", { p_church_id: church_id });
+    if (typeof publicCode !== "string" || publicCode === "") {
+      return Response.json({ error: "not_found" }, { status: 404 });
+    }
+    const church = { public_code: publicCode };
 
     const alvo = churchTagUrl(
       getServerEnv().APP_URL,

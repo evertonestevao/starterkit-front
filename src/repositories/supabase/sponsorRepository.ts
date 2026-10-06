@@ -123,7 +123,7 @@ export function createSupabaseSponsorRepository(client: SupabaseClient): Sponsor
       if (!account) return [];
       const { data, error } = await client
         .from("sponsorships")
-        .select("*, church:churches(name, sobrenome, public_code)")
+        .select("*")
         // Não basta a RLS: a policy de admin de igreja também devolveria
         // patrocínios de OUTROS patrocinadores para quem é pastor e
         // patrocinador ao mesmo tempo.
@@ -132,10 +132,20 @@ export function createSupabaseSponsorRepository(client: SupabaseClient): Sponsor
       if (error) {
         throw new AppError("internal_error", "Falha ao listar patrocínios", error);
       }
+      // O patrocinador não faz parte da igreja, então não lê a tabela dela: o
+      // nome e a chave da página vêm do resumo (dados públicos).
+      const ids = [...new Set((data ?? []).map((row) => row.church_id as string))];
+      const igrejas = new Map<string, { name: string; sobrenome: string | null; public_code: string }>();
+      if (ids.length > 0) {
+        const { data: resumo, error: erroResumo } = await client.rpc("igrejas_resumo", { p_ids: ids });
+        if (erroResumo) throw new AppError("internal_error", "Falha ao listar patrocínios", erroResumo);
+        for (const i of (resumo ?? []) as Array<{ id: string; name: string; sobrenome: string | null; public_code: string }>) {
+          igrejas.set(i.id, i);
+        }
+      }
       return (data ?? []).map((row) => {
-        const church = row.church as { name: string; sobrenome: string | null; public_code: string } | null;
-        const sponsorship = { ...row } as Sponsorship & { church?: unknown };
-        delete sponsorship.church;
+        const church = igrejas.get(row.church_id as string) ?? null;
+        const sponsorship = { ...row } as Sponsorship;
         return {
           ...sponsorship,
           // Nome + sobrenome: várias igrejas do ministério dividem o mesmo nome.
@@ -186,21 +196,27 @@ export function createSupabaseSponsorRepository(client: SupabaseClient): Sponsor
     },
 
     async findPublicChurch(publicCode) {
-      const { data, error } = await client
-        .from("churches")
-        .select("id, name, sobrenome, public_code, company_id")
-        .eq("public_code", publicCode)
-        .is("deleted_at", null)
-        .maybeSingle();
+      const { data: linhas, error } = await client.rpc("igreja_publica", { p_chave: publicCode });
       if (error) {
         throw new AppError("internal_error", "Falha ao carregar a igreja", error);
       }
-      if (!data) return null;
+      const data = (
+        (linhas ?? []) as Array<{
+          id: string;
+          name: string;
+          sobrenome: string | null;
+          public_code: string;
+          tem_dono: boolean;
+          previa: boolean;
+        }>
+      )[0];
+      // Página fora do ar não recebe patrocínio (nem na prévia de quem administra).
+      if (!data || data.previa) return null;
       return {
-        id: data.id as string,
-        name: formatChurchName(data.name as string, data.sobrenome as string | null),
-        publicCode: data.public_code as string,
-        hasOwner: Boolean(data.company_id),
+        id: data.id,
+        name: formatChurchName(data.name, data.sobrenome),
+        publicCode: data.public_code,
+        hasOwner: data.tem_dono,
       };
     },
   };
@@ -419,6 +435,8 @@ export function createSupabaseSponsorBillingStore(adminClient: SupabaseClient): 
         .select("id, name, sobrenome, public_code, address, logo_url, company_id")
         .eq("public_code", publicCode)
         .is("deleted_at", null)
+        // Client de serviço (sem RLS): a regra "só página no ar" é repetida aqui.
+        .eq("pagina_ativa", true)
         .maybeSingle();
       if (error) throw new AppError("internal_error", "Falha ao carregar a igreja", error);
       if (!data) return null;

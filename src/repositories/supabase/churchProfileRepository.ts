@@ -80,10 +80,8 @@ export function createSupabaseChurchProfileRepository(
       const idsDasMaes = [...new Set(linhas.map((l) => l.parent_id).filter((id): id is string => id !== null))];
       const nomesDasMaes = new Map<string, string>();
       if (idsDasMaes.length > 0) {
-        const { data: maes, error: erroMaes } = await client
-          .from("churches")
-          .select("id, name")
-          .in("id", idsDasMaes);
+        // A filial não lê a linha da igreja de cima: o nome vem do resumo.
+        const { data: maes, error: erroMaes } = await client.rpc("igrejas_resumo", { p_ids: idsDasMaes });
         if (erroMaes) throw new AppError("internal_error", "Falha ao carregar a igreja superior", erroMaes);
         for (const mae of (maes ?? []) as Array<{ id: string; name: string }>) nomesDasMaes.set(mae.id, mae.name);
       }

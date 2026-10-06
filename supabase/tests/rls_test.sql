@@ -8,6 +8,29 @@
 
 begin;
 
+-- Igreja nova nasce com a página FORA DO AR (migration 20261006170000). Os
+-- testes abaixo, escritos antes disso, criam dezenas de igrejas e abrem a
+-- página pública delas: para não publicar uma a uma, o padrão vira `true` SÓ
+-- dentro desta transação (o ROLLBACK final desfaz). O padrão real é conferido
+-- aqui, antes da troca.
+do $$
+declare v text;
+begin
+  select column_default into v from information_schema.columns
+  where table_schema = 'public' and table_name = 'churches' and column_name = 'pagina_ativa';
+  if v is distinct from 'false' then raise exception 'FALHA pagina: igreja nova deveria nascer fora do ar (padrao = %)', v; end if;
+end $$;
+alter table public.churches alter column pagina_ativa set default true;
+
+-- Os testes trocam de usuario e precisam do id de uma igreja que esse usuario,
+-- de proposito, NAO enxerga (para provar que ele nao consegue agir sobre ela).
+-- Este auxiliar so existe dentro desta transacao.
+create function public.__rls_id_da_igreja(p_slug text)
+returns uuid language sql stable security definer set search_path = public as $$
+  select id from public.churches where slug like p_slug order by created_at limit 1;
+$$;
+grant execute on function public.__rls_id_da_igreja(text) to authenticated, anon;
+
 -- ---------------------------------------------------------------------------
 -- Seed (como superuser, RLS ignorada de propósito): 2 usuários, 2 empresas.
 -- ---------------------------------------------------------------------------
@@ -1901,10 +1924,11 @@ select set_config('request.jwt.claims',
 do $$
 declare n int;
 begin
-  -- Bob é de outra empresa: o evento é público, a contagem de inscritos não.
+  -- Bob é de outra empresa: não vê a igreja alheia, então nem a linha do
+  -- evento volta por aqui (e muito menos a contagem de inscritos).
   select inscritos into n from public.list_company_events('c1c1c1c1-0000-4000-8000-000000000001')
   where id = 'e0e0e0e0-0000-4000-8000-000000000001';
-  if n is distinct from 0 then
+  if coalesce(n, 0) <> 0 then
     raise exception 'FALHA list_company_events: outra empresa viu % inscritos da igreja alheia', n;
   end if;
 end $$;
@@ -2929,7 +2953,7 @@ select set_config('request.jwt.claims',
 do $$
 declare v_id uuid;
 begin
-  select id into v_id from public.churches where slug like 'rls-onboarding-arvore%';
+  v_id := public.__rls_id_da_igreja('rls-onboarding-arvore%');
   if public.can_view_church(v_id) then
     raise exception 'FALHA onboarding: igreja recem-criada ja aparece para a sede';
   end if;
@@ -2941,7 +2965,7 @@ select set_config('request.jwt.claims',
 do $$
 declare v_id uuid;
 begin
-  select id into v_id from public.churches where slug like 'rls-onboarding-arvore%';
+  v_id := public.__rls_id_da_igreja('rls-onboarding-arvore%');
   perform public.platform_set_church_hierarchy(v_id, 'congregacao', '7d7d7d7d-0000-4000-8000-000000000002');
 end $$;
 
@@ -2950,7 +2974,7 @@ select set_config('request.jwt.claims',
 do $$
 declare v_id uuid;
 begin
-  select id into v_id from public.churches where slug like 'rls-onboarding-arvore%';
+  v_id := public.__rls_id_da_igreja('rls-onboarding-arvore%');
   if not public.can_view_church(v_id) then
     raise exception 'FALHA onboarding: igreja ligada continua invisivel para a sede';
   end if;
@@ -6540,7 +6564,9 @@ insert into public.churches (id, company_id, name, slug, public_code, tipo, pare
   ('acacacac-0000-4000-8000-0000000000e3', 'acacacac-0000-4000-8000-0000000000c1', 'Igreja apagada', 'rls-rede-apagada', 'apagada',
    'congregacao', 'acacacac-0000-4000-8000-0000000000d1', now());
 
--- Igreja nova nasce fora do ar (migration 20261006170000): sem publicar, a lista fica vazia.
+-- Página fora do ar não entra na lista da rede.
+update public.churches set pagina_ativa = false
+ where id in ('acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000e2');
 do $$
 declare n int;
 begin
@@ -6587,12 +6613,8 @@ end $$;
 -- AC Outra (d3) é de rls-ac-outra (005); AC Cong (d2), de rls-ac-cong (002).
 -- A moderação é rls-staff2 (5e5e...07).
 -- ---------------------------------------------------------------------------
-do $$
-declare v boolean;
-begin
-  select pagina_ativa into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000d3';
-  if v then raise exception 'FALHA pagina: igreja nova nasceu no ar'; end if;
-end $$;
+-- A AC Outra começa fora do ar, como uma igreja recém-criada.
+update public.churches set pagina_ativa = false where id = 'acacacac-0000-4000-8000-0000000000d3';
 
 set local role anon;
 do $$
@@ -6798,6 +6820,9 @@ begin
       'chave_publica_por_codigo', 'church_card_donation_link', 'church_pix_donation_link', 'church_primeiro_slots',
       'list_church_sponsors', 'nomes_dos_niveis', 'pix_publico', 'posso_ver_previa_da_pagina',
       'rede_igrejas_publicas', 'resolve_church_by_domain', 'cancel_profile_change_by_token',
+      'igreja_publica', 'igrejas_resumo', 'rede_tem_igrejas', 'resolve_church_appearance', 'resolve_template',
+      -- auxiliar desta suíte (só existe dentro da transação)
+      '__rls_id_da_igreja',
       -- usados por policies e gatilhos (devolvem falso/nada sem login)
       'is_company_admin', 'is_company_member', 'is_company_owner', 'handle_new_user',
       'set_company_id_from_campaign', 'set_company_id_from_church'
@@ -6806,6 +6831,147 @@ begin
     raise exception 'FALHA funcoes: SECURITY DEFINER executavel por anon fora da lista: %', v;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Igrejas só da própria rede (migration 20261006190000).
+-- AC Sede (d1, de 001) tem abaixo a AC Cong (d2, de 002) e a "Lins da Sede"
+-- (e2). AC Outra (d3, de 005) é outra rede. Alice (a1a1...) é de outra conta.
+-- ---------------------------------------------------------------------------
+update public.churches set pagina_ativa = true
+ where id in ('acacacac-0000-4000-8000-0000000000d1', 'acacacac-0000-4000-8000-0000000000d2');
+update public.churches set pagina_ativa = false, pix_chave = 'segredo@acoutra.org'
+ where id = 'acacacac-0000-4000-8000-0000000000d3';
+
+set local role authenticated;
+-- Conta de fora: não vê NENHUMA igreja desta rede, nem a que está no ar.
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.churches where id::text like 'acacacac-%';
+  if n <> 0 then raise exception 'FALHA igrejas: conta de fora leu % igreja(s) de outra rede', n; end if;
+  -- Ela continua vendo as dela.
+  select count(*) into n from public.churches where company_id = 'c1c1c1c1-0000-4000-8000-000000000001';
+  if n < 1 then raise exception 'FALHA igrejas: a conta nao ve a propria igreja'; end if;
+end $$;
+
+-- A de cima vê as de baixo; nunca outra rede.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare v text;
+begin
+  select string_agg(name, ',' order by name) into v from public.churches
+  where id in ('acacacac-0000-4000-8000-0000000000d1', 'acacacac-0000-4000-8000-0000000000d2',
+               'acacacac-0000-4000-8000-0000000000e2', 'acacacac-0000-4000-8000-0000000000d3');
+  if v is distinct from 'AC Cong,AC Sede,Lins da Sede' then
+    raise exception 'FALHA igrejas: a sede deveria ver a dela e as de baixo, viu (%)', v;
+  end if;
+end $$;
+
+-- A de baixo NÃO vê a de cima nem as irmãs — só a dela.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v text; n int;
+begin
+  select string_agg(name, ',' order by name) into v from public.churches where id::text like 'acacacac-%';
+  if v is distinct from 'AC Cong' then raise exception 'FALHA igrejas: a filial viu alem da dela (%)', v; end if;
+
+  -- O nome da igreja de cima chega pelo resumo (só colunas públicas)...
+  select name into v from public.igrejas_resumo(array['acacacac-0000-4000-8000-0000000000d1']::uuid[]);
+  if v is distinct from 'AC Sede' then raise exception 'FALHA igrejas: resumo nao devolveu a igreja de cima (%)', v; end if;
+  -- ...mas o resumo não entrega igreja de outra rede que está fora do ar.
+  select count(*) into n from public.igrejas_resumo(array['acacacac-0000-4000-8000-0000000000d3']::uuid[]);
+  if n <> 0 then raise exception 'FALHA igrejas: resumo entregou igreja fora do ar de outra rede'; end if;
+
+  -- Editar a própria igreja não bagunça a posição dela na rede (o gatilho
+  -- precisa enxergar a igreja de cima, que a filial não lê mais).
+  update public.churches set address = 'Rua Nova, 1' where id = 'acacacac-0000-4000-8000-0000000000d2';
+end $$;
+reset role;
+do $$
+declare v text;
+begin
+  select (c.path <@ s.path)::text || '|' || c.parent_id::text into v
+  from public.churches c, public.churches s
+  where c.id = 'acacacac-0000-4000-8000-0000000000d2' and s.id = 'acacacac-0000-4000-8000-0000000000d1';
+  if v is distinct from 'true|acacacac-0000-4000-8000-0000000000d1' then
+    raise exception 'FALHA igrejas: editar a filial mexeu na posicao dela na rede (%)', v;
+  end if;
+end $$;
+
+-- Pedido de vínculo: as duas partes se identificam pelo resumo, mesmo com a
+-- página de quem pede fora do ar; quem não é parte continua sem ver nada.
+insert into public.church_link_requests
+  (parent_church_id, parent_company_id, child_church_id, child_company_id, tipo_solicitado, status, requested_by)
+values
+  ('acacacac-0000-4000-8000-0000000000d1', 'acacacac-0000-4000-8000-0000000000c1',
+   'acacacac-0000-4000-8000-0000000000d3', 'acacacac-0000-4000-8000-0000000000c3',
+   'congregacao', 'pendente', 'acacacac-0000-4000-8000-000000000005');
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare v text; n int;
+begin
+  select name into v from public.igrejas_resumo(array['acacacac-0000-4000-8000-0000000000d3']::uuid[]);
+  if v is distinct from 'AC Outra' then raise exception 'FALHA igrejas: quem recebe o pedido nao ve quem pediu (%)', v; end if;
+  -- Continua sem ler a linha da tabela (Pix em análise, domínio...).
+  select count(*) into n from public.churches where id = 'acacacac-0000-4000-8000-0000000000d3';
+  if n <> 0 then raise exception 'FALHA igrejas: o pedido abriu a tabela da outra igreja'; end if;
+end $$;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.igrejas_resumo(array['acacacac-0000-4000-8000-0000000000d3']::uuid[]);
+  if n <> 0 then raise exception 'FALHA igrejas: quem nao e parte do pedido viu a igreja fora do ar'; end if;
+end $$;
+reset role;
+delete from public.church_link_requests where child_church_id = 'acacacac-0000-4000-8000-0000000000d3';
+
+-- Sem login: só página no ar, e a página pública sai pela função.
+set local role anon;
+do $$
+declare n int; v text;
+begin
+  select count(*) into n from public.churches
+  where id in ('acacacac-0000-4000-8000-0000000000d1', 'acacacac-0000-4000-8000-0000000000d3');
+  if n <> 1 then raise exception 'FALHA igrejas: anon deveria ver so a pagina no ar (viu %)', n; end if;
+
+  select name into v from public.igreja_publica((select public_code from public.churches where id = 'acacacac-0000-4000-8000-0000000000d1'));
+  if v is distinct from 'AC Sede' then raise exception 'FALHA igrejas: pagina publica no ar nao abriu (%)', v; end if;
+  -- Fora do ar: a chave é conhecida (veio de um link antigo), e mesmo assim nada volta.
+  select count(*) into n from public.igreja_publica('rls-ac-outra');
+  if n <> 0 then raise exception 'FALHA igrejas: pagina fora do ar abriu para o visitante'; end if;
+  if public.rede_tem_igrejas('acacacac-0000-4000-8000-0000000000d1') is not true then
+    raise exception 'FALHA igrejas: a sede com filial no ar deveria ter o atalho da rede';
+  end if;
+end $$;
+reset role;
+
+-- Fora do ar, só quem administra a igreja abre a própria página (prévia).
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare v boolean;
+begin
+  select previa into v from public.igreja_publica('rls-ac-outra');
+  if v is not true then raise exception 'FALHA igrejas: quem administra nao abriu a previa'; end if;
+end $$;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.igreja_publica('rls-ac-outra');
+  if n <> 0 then raise exception 'FALHA igrejas: outra conta abriu a previa'; end if;
+end $$;
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS

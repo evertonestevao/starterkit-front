@@ -26,14 +26,15 @@ export function createSupabaseCampaignDonationsRepository(
       }
       if (!campanha) return null;
 
-      const { data: igreja, error: erroIgreja } = await client
-        .from("churches")
-        .select("id, name, address")
-        .eq("id", campanha.church_id)
-        .maybeSingle<{ id: string; name: string; address: string | null }>();
+      // Pelo resumo (função do banco): quem doa pode estar logado em outra
+      // conta, e usuário logado não lê a tabela de igrejas de fora da rede dele.
+      const { data: igrejas, error: erroIgreja } = await client.rpc("igrejas_resumo", {
+        p_ids: [campanha.church_id],
+      });
       if (erroIgreja) {
         throw new AppError("internal_error", "Falha ao carregar a igreja", erroIgreja);
       }
+      const igreja = ((igrejas ?? []) as Array<{ id: string; name: string; address: string | null }>)[0];
       if (!igreja) return null;
 
       // Só a chave aprovada pela moderação, e com a página no ar.
