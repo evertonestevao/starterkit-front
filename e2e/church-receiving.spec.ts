@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { getSponsorInviteUrl, invitePath, PASSWORD, signupAndOnboard, uniqueEmail } from "./helpers";
+import { getSponsorInviteUrl, invitePath, PASSWORD, signupAndOnboard, uniqueEmail, aprovarPixComoModeracao } from "./helpers";
 
 /**
  * O caminho opcional do cartão, do começo ao fim: a igreja manda o cadastro,
@@ -15,6 +15,8 @@ test("igreja cadastra subconta, liga o cartão e o botão aparece na página", a
   page,
   context,
 }) => {
+  // Inclui a moderacao aprovando o Pix (outra conta, outro login): passa dos 30s padrao.
+  test.setTimeout(120_000);
   await signupAndOnboard(page, {
     email: uniqueEmail("pastor-cartao"),
     password: PASSWORD,
@@ -31,9 +33,14 @@ test("igreja cadastra subconta, liga o cartão e o botão aparece na página", a
   await page.getByRole("button", { name: "Confirmar e salvar" }).click();
   await expect(page.getByText(/Chave PIX salva/)).toBeVisible();
 
-  // Antes de qualquer subconta, a página mostra o PIX e NÃO mostra cartão.
+  // A chave fica aguardando a moderação: até ser aprovada, a página NÃO mostra o PIX.
   const visitante = await context.newPage();
   await visitante.goto(`/igreja/${publicCode}`);
+  await expect(visitante.getByText("igreja-cartao@e2e.local")).toHaveCount(0);
+  await aprovarPixComoModeracao(context.browser()!, publicCode);
+
+  // Aprovada: sem nenhuma subconta, a página mostra o PIX e NÃO mostra cartão.
+  await visitante.reload();
   await expect(visitante.getByText("igreja-cartao@e2e.local")).toBeVisible();
   await expect(visitante.getByRole("link", { name: "Doar com cartão" })).toHaveCount(0);
 
@@ -67,6 +74,7 @@ test("igreja cadastra subconta, liga o cartão e o botão aparece na página", a
   await page.getByLabel("CNPJ ou CPF do responsável").fill("11.222.333/0001-81");
   await page.getByLabel("E-mail da tesouraria").fill("tesouraria@e2e.local");
   await page.getByLabel("Telefone com DDD").fill("14999998888");
+  await page.getByLabel("Renda/faturamento mensal").fill("500000");
   await page.getByLabel("CEP").fill("16400-000");
   await page.getByLabel("Endereço", { exact: true }).fill("Rua das Flores");
   await page.getByLabel("Número").fill("540");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mascaraTelefone } from "./telefone";
+import { mascaraTelefone, telefoneSoDigitos } from "./telefone";
 
 describe("mascaraTelefone", () => {
   it("formata celular e fixo", () => {
@@ -43,5 +43,18 @@ describe("mascaraTelefone", () => {
     expect(mascaraTelefone("")).toBe("");
     expect(mascaraTelefone(null)).toBe("");
     expect(mascaraTelefone(undefined)).toBe("");
+  });
+});
+
+describe("telefoneSoDigitos", () => {
+  it("tira a mascara para mandar a um provedor externo", () => {
+    expect(telefoneSoDigitos("(14) 99999-8888")).toBe("14999998888");
+    expect(telefoneSoDigitos("+55 (11) 3333-4444")).toBe("551133334444");
+  });
+
+  it("vazio vira undefined", () => {
+    expect(telefoneSoDigitos("")).toBeUndefined();
+    expect(telefoneSoDigitos(null)).toBeUndefined();
+    expect(telefoneSoDigitos("()-")).toBeUndefined();
   });
 });

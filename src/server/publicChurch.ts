@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { caminhoDaIgreja } from "@/lib/churchPaths";
+import { caminhoDaIgreja, partesDaChave } from "@/lib/churchPaths";
 import { createSupabasePublicChurchRepository } from "@/repositories/supabase/churchRepository";
 import { DEFAULT_CHURCH_THEME, isChurchTheme, type ChurchTheme } from "@/lib/pageAppearance";
 import type { PublicChurch } from "@/types/database";
@@ -35,17 +35,20 @@ export const loadPublicChurch = cache(
 );
 
 /**
- * Link ou QR Code antigo: /igreja/{codigo} de uma igreja que hoje está numa
- * rede (o endereço dela passou a ser /igreja/{rede}/{codigo}). Devolve o
- * caminho novo, ou null quando o código não existe ou é de mais de uma igreja.
- * Falha na consulta não vira erro: a página só responde "não encontrada".
+ * Link ou QR Code antigo de uma igreja que mudou de lugar na rede:
+ *   - entrou numa rede: /igreja/{codigo} passou a ser /igreja/{rede}/{codigo};
+ *   - saiu (ou trocou de rede): /igreja/{rede}/{codigo} passou a ser /igreja/{codigo}.
+ * Recebe a chave pedida ("codigo" ou "rede~codigo") e devolve o caminho atual,
+ * ou null quando o código não existe ou é de mais de uma igreja (não há o que
+ * adivinhar). Falha na consulta não vira erro: a página só responde "não encontrada".
  */
-export async function enderecoAtualDoCodigoAntigo(codigo: string): Promise<string | null> {
+export async function enderecoAtualDoCodigoAntigo(chavePedida: string): Promise<string | null> {
+  const { codigo } = partesDaChave(chavePedida);
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(codigo)) return null;
   try {
     const repo = createSupabasePublicChurchRepository(await getSupabaseServerClient());
     const chave = await repo.findChaveByCodigoAntigo(codigo);
-    return chave && chave !== codigo ? caminhoDaIgreja(chave) : null;
+    return chave && chave !== chavePedida ? caminhoDaIgreja(chave) : null;
   } catch (err) {
     console.error("[church-page] falha ao procurar o endereço antigo", err);
     return null;

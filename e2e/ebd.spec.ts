@@ -15,7 +15,7 @@ async function novoMembro(page: Page, nome: string) {
   await page.getByRole("button", { name: "Novo membro" }).click();
   const dialogo = page.getByRole("dialog");
   await dialogo.getByLabel("Nome", { exact: true }).fill(nome);
-  await dialogo.getByRole("button", { name: "Salvar" }).click();
+  await dialogo.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(dialogo).toBeHidden();
   await expect(page.getByText(nome).first()).toBeVisible();
 }

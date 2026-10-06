@@ -6,6 +6,7 @@ import type {
   SponsorChargeStatus,
 } from "@/types/sponsorship";
 import type { RecurringBillingProvider } from "./RecurringBillingProvider";
+import { telefoneSoDigitos } from "@/lib/telefone";
 
 /**
  * Adapter Asaas (API v3) via fetch, sem SDK — mesma escolha do stripeGateway.
@@ -148,7 +149,7 @@ export function createAsaasBillingProvider(config: AsaasBillingProviderConfig): 
         name: input.name,
         email: input.email,
         cpfCnpj: input.document,
-        mobilePhone: input.phone ?? undefined,
+        mobilePhone: telefoneSoDigitos(input.phone),
         externalReference: input.externalReference,
       });
       if (!data.id) {

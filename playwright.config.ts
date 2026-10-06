@@ -43,6 +43,9 @@ export default defineConfig({
     env: {
       PAYMENT_GATEWAY: "fake",
       SPONSOR_BILLING_PROVIDER: "fake",
+      // Subconta de recebimento: sem isto o teste abria conta de verdade no
+      // sandbox do provedor configurado no .env.local.
+      RECEIVING_PROVIDER: "fake",
       EMAIL_PROVIDER: "console",
       RATE_LIMIT_STORE: "memory",
       // O teste preenche os formulários públicos em milissegundos e sempre do

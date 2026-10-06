@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { getSponsorInviteUrl, invitePath, PASSWORD, signupAndOnboard, uniqueEmail } from "./helpers";
+import { getSponsorInviteUrl, invitePath, PASSWORD, signupAndOnboard, uniqueEmail, aprovarPixComoModeracao } from "./helpers";
 
 /**
  * Campanha por PIX, do começo ao fim: a igreja cria e ativa, a página
@@ -13,6 +13,8 @@ import { getSponsorInviteUrl, invitePath, PASSWORD, signupAndOnboard, uniqueEmai
  * pagamento neste projeto.
  */
 test("igreja cria e ativa campanha PIX, visitante doa e a equipe confirma", async ({ page, context }) => {
+  // Inclui a moderacao aprovando o Pix (outra conta, outro login): passa dos 30s padrao.
+  test.setTimeout(120_000);
   await signupAndOnboard(page, {
     email: uniqueEmail("pastor-campanha"),
     password: PASSWORD,
@@ -28,6 +30,8 @@ test("igreja cria e ativa campanha PIX, visitante doa e a equipe confirma", asyn
   await page.getByRole("button", { name: "Revisar alteração" }).click();
   await page.getByRole("button", { name: "Confirmar e salvar" }).click();
   await expect(page.getByText(/Chave PIX salva/)).toBeVisible();
+  // A chave só vale para o público depois de conferida pela moderação.
+  await aprovarPixComoModeracao(context.browser()!, publicCode);
 
   // 1. Cria a campanha (nasce em rascunho — não aparece na página pública ainda).
   const titulo = `Reforma do telhado ${Date.now()}`;

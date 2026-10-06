@@ -54,6 +54,7 @@ test("visitante assina patrocínio sem login e a igreja passa a ver o apoio", as
     "/terms/patrocinador",
   );
 
+  await visitorPage.locator('label:has(input[name="kind"][value="person"])').click();
   await visitorPage.getByRole("textbox", { name: "Seu nome" }).fill("Padaria E2E");
   await visitorPage.getByRole("textbox", { name: "Email" }).fill(sponsorEmail);
   await visitorPage.getByRole("textbox", { name: "CPF" }).fill("529.982.247-25");
@@ -94,7 +95,8 @@ test("email que já tem conta não é cobrado nem vinculado de novo", async ({ p
 
   const assinar = async () => {
     await visitorPage.goto(`${invitePath(inviteUrl)}/novo`);
-    await visitorPage.getByRole("textbox", { name: "Seu nome" }).fill("Mercado E2E");
+    await visitorPage.locator('label:has(input[name="kind"][value="person"])').click();
+  await visitorPage.getByRole("textbox", { name: "Seu nome" }).fill("Mercado E2E");
     await visitorPage.getByRole("textbox", { name: "Email" }).fill(sponsorEmail);
     await visitorPage.getByRole("textbox", { name: "CPF" }).fill("529.982.247-25");
     await visitorPage.getByRole("checkbox", { name: /Li e aceito/ }).check();
@@ -132,6 +134,7 @@ test("patrocinador entra por link, vê o total e cancela com recálculo", async 
   const sponsorEmail = uniqueEmail("patrocinador-calc");
 
   await visitorPage.goto(`${invitePath(inviteA)}/novo`);
+  await visitorPage.locator('label:has(input[name="kind"][value="person"])').click();
   await visitorPage.getByRole("textbox", { name: "Seu nome" }).fill("Clinica E2E");
   await visitorPage.getByRole("textbox", { name: "Email" }).fill(sponsorEmail);
   await visitorPage.getByRole("textbox", { name: "CPF" }).fill("529.982.247-25");

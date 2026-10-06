@@ -34,3 +34,13 @@ export function mascaraTelefone(valor: string | null | undefined): string {
   const fim = numero.slice(corte);
   return `${prefixo}(${ddd}) ${inicio}${fim ? `-${fim}` : ""}`;
 }
+
+/**
+ * So os digitos, para mandar a um provedor externo (pagamento, cobranca): a
+ * tela guarda o telefone com mascara, e API de terceiro costuma recusar
+ * parenteses e traco. Vazio vira undefined, para o campo nem ir no pedido.
+ */
+export function telefoneSoDigitos(valor: string | null | undefined): string | undefined {
+  const digitos = (valor ?? "").replace(/\D/g, "");
+  return digitos === "" ? undefined : digitos;
+}

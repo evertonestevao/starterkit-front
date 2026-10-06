@@ -58,7 +58,7 @@ export function PaginaNoAr({
         </Button>
       )}
       <a href={paginaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-        <Eye className="size-3.5" /> {ativa ? "Ver a página" : "Ver a prévia"}
+        <Eye className="size-3.5" /> {ativa ? "Abrir a página" : "Ver a prévia"}
       </a>
     </div>
   );

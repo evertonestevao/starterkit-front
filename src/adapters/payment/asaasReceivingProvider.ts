@@ -1,4 +1,5 @@
 import { AppError } from "@/lib/errors";
+import { telefoneSoDigitos } from "@/lib/telefone";
 import { centsToReais, reaisToCents } from "./asaasBillingProvider";
 import type {
   DonationWebhookEvent,
@@ -186,7 +187,7 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
         name: input.razaoSocial,
         email: input.email,
         cpfCnpj: input.documento,
-        mobilePhone: input.telefone,
+        mobilePhone: telefoneSoDigitos(input.telefone),
         address: input.endereco,
         addressNumber: input.enderecoNumero,
         province: input.bairro,
@@ -247,7 +248,7 @@ export function createAsaasReceivingProvider(config: AsaasReceivingConfig): Rece
       // e precisa de ajuste — ver a ressalva no topo do arquivo.
       const cliente = await request<{ id?: string }>("/customers", "POST", apiKey, {
         name: payer?.name ?? "Doador",
-        mobilePhone: payer?.phone,
+        mobilePhone: telefoneSoDigitos(payer?.phone),
         externalReference,
       });
       if (!cliente.id) {
