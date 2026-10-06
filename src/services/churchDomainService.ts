@@ -167,6 +167,7 @@ export function createChurchDomainService(deps: ChurchDomainServiceDeps) {
       // Sempre presente, com domínio próprio ou sem ele.
       defaultUrl: `${appUrl.replace(/\/$/, "")}${caminhoDaIgreja(church.public_code)}`,
       sponsorInviteUrl: `${appUrl.replace(/\/$/, "")}/patrocinador/patrocinar/${encodeURIComponent(church.public_code)}`,
+      networkDomain: church.tipo === "sede" && church.parent_id === null,
       domain,
       status: church.dominio_status,
       supportPaid: church.dominio_suporte_pago,

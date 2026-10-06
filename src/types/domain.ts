@@ -44,6 +44,8 @@ export interface ChurchDomainView {
   defaultUrl: string;
   /** Link que o pastor divulga para conseguir patrocinadores. */
   sponsorInviteUrl: string;
+  /** Sede: o domínio próprio vale para a rede inteira (dominio/igreja/{codigo}). */
+  networkDomain: boolean;
   domain: string | null;
   status: ChurchDomainStatus;
   supportPaid: boolean;

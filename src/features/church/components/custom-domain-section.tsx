@@ -262,6 +262,9 @@ export function CustomDomainSection({
               <CardTitle>Domínio próprio</CardTitle>
               <CardDescription className="mt-1">
                 Opcional: use um endereço da sua igreja, como igrejaexemplo.com.br
+                {view.networkDomain
+                  ? ". Como sede, o domínio vale para a rede inteira: a sua página fica na raiz, e cada igreja ligada a você em igrejaexemplo.com.br/igreja/codigo-dela."
+                  : ""}
               </CardDescription>
             </div>
             <Badge variant={presentation.variant}>{presentation.label}</Badge>

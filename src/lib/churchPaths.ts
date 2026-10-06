@@ -64,3 +64,50 @@ export function enderecoPublicoDaRotaInterna(pathname: string): string | null {
   if (!rede || !CODIGO.test(rede) || !CODIGO.test(codigo)) return null;
   return ["", "igreja", rede, codigo, ...partes.slice(3)].join("/");
 }
+
+/**
+ * Domínio próprio de uma igreja DO TOPO (sede, ou igreja sem rede): o domínio
+ * vale para a rede inteira e esconde o código da sede, que ele já representa.
+ *
+ *   /                      → a página da sede
+ *   /eventos, /campanhas   → as subpáginas da sede
+ *   /igreja/lins           → a igreja "lins" DESTA rede
+ *
+ * Os endereços no formato da plataforma (/igreja/{sede}/lins), que as próprias
+ * páginas usam nos links, redirecionam para a forma curta. Igreja de outra
+ * rede não tem como aparecer: todo código é procurado só dentro desta.
+ *
+ * Devolve o que fazer com o caminho, ou null para seguir o fluxo normal
+ * (login, termos, arquivos...). `chaveDaSede` não tem "~".
+ */
+export function resolverNoDominioDaRede(
+  chaveDaSede: string,
+  pathname: string,
+): { acao: "reescrever" | "redirecionar"; caminho: string } | null {
+  const partes = pathname.split("/").filter(Boolean);
+  const resto = (de: number) => (partes.length > de ? `/${partes.slice(de).join("/")}` : "");
+
+  if (partes.length === 0) return { acao: "reescrever", caminho: `/igreja/${chaveDaSede}` };
+  if (SUBPAGINAS_DA_IGREJA.includes(partes[0])) {
+    return { acao: "reescrever", caminho: `/igreja/${chaveDaSede}/${partes.join("/")}` };
+  }
+  if (partes[0] !== "igreja" || !partes[1]) return null;
+
+  const primeiro = partes[1].replace(/%7e/gi, SEPARADOR_REDE);
+  // Formato da plataforma apontando para ESTA rede: encurta.
+  if (primeiro === chaveDaSede) {
+    if (!partes[2]) return { acao: "redirecionar", caminho: "/" };
+    if (SUBPAGINAS_DA_IGREJA.includes(partes[2])) return { acao: "redirecionar", caminho: resto(2) };
+    return { acao: "redirecionar", caminho: `/igreja/${partes[2]}${resto(3)}` };
+  }
+  // Rota interna aberta direto ("sede~lins"): só a desta rede encurta; outra não existe aqui.
+  if (primeiro.includes(SEPARADOR_REDE)) {
+    const { rede, codigo } = partesDaChave(primeiro);
+    return rede === chaveDaSede && CODIGO.test(codigo)
+      ? { acao: "redirecionar", caminho: `/igreja/${codigo}${resto(2)}` }
+      : { acao: "reescrever", caminho: "/igreja/nao-encontrada~nesta-rede" };
+  }
+  if (!CODIGO.test(primeiro)) return null;
+  // /igreja/{codigo}: uma igreja desta rede. Código de outra rede simplesmente não é achado.
+  return { acao: "reescrever", caminho: `/igreja/${chaveDaSede}${SEPARADOR_REDE}${primeiro}${resto(2)}` };
+}

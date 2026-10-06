@@ -1,4 +1,9 @@
-import { enderecoPublicoDaRotaInterna, rotaInternaDaIgreja } from "@/lib/churchPaths";
+import {
+  SEPARADOR_REDE,
+  enderecoPublicoDaRotaInterna,
+  resolverNoDominioDaRede,
+  rotaInternaDaIgreja,
+} from "@/lib/churchPaths";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientEnv } from "@/config/env";
@@ -86,6 +91,47 @@ export async function proxy(request: NextRequest) {
   const host = request.headers.get("host");
   const tenantByHost = getHostTenant();
 
+  if (!tenantByHost.isPlatformHost(host ?? "")) {
+    const match = await tenantByHost.resolve(host);
+
+    if (match) {
+      // Painel, login e fluxos de auth ficam no domínio da plataforma. A igreja
+      // controla o DNS do domínio dela; cookie de sessão nosso não vai para lá.
+      if (isAppPath(pathname)) {
+        return NextResponse.redirect(new URL(pathname + request.nextUrl.search, APP_URL), 307);
+      }
+
+      // Domínio de uma igreja do topo (sede): vale para a rede inteira. A raiz
+      // é a sede, /igreja/{codigo} é uma igreja DESTA rede, e nenhuma outra
+      // rede aparece aqui (regra em src/lib/churchPaths.ts).
+      if (!match.publicCode.includes(SEPARADOR_REDE)) {
+        const destino = resolverNoDominioDaRede(match.publicCode, pathname);
+        if (destino?.acao === "redirecionar") {
+          // Montado com o host PEDIDO: o redirecionamento tem que ficar no
+          // domínio da rede, mesmo atrás de um proxy que troque o host interno.
+          const protocolo = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
+          return NextResponse.redirect(
+            new URL(destino.caminho + request.nextUrl.search, `${protocolo}://${host}`),
+            308,
+          );
+        }
+        if (destino) {
+          const url = request.nextUrl.clone();
+          url.pathname = destino.caminho;
+          return NextResponse.rewrite(url);
+        }
+      } else if (pathname === "/") {
+        // Domínio de uma igreja que está abaixo de outra: só a página dela.
+        const url = request.nextUrl.clone();
+        url.pathname = `/igreja/${match.publicCode}`;
+        return NextResponse.rewrite(url);
+      }
+    }
+
+    // Host desconhecido, domínio ainda não ativo ou lookup indisponível: segue
+    // o fluxo normal. Nunca respondemos erro por causa do domínio próprio.
+  }
+
   // Página de igreja que está numa rede: o endereço é /igreja/{rede}/{codigo},
   // e a rota do App Router é uma pasta só, com a chave "rede~codigo". Quem
   // abre a rota interna direto volta para o endereço público.
@@ -100,29 +146,6 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = rotaInterna;
     return NextResponse.rewrite(url);
-  }
-
-  if (!tenantByHost.isPlatformHost(host ?? "")) {
-    const match = await tenantByHost.resolve(host);
-
-    if (match) {
-      // Painel, login e fluxos de auth ficam no domínio da plataforma. A igreja
-      // controla o DNS do domínio dela; cookie de sessão nosso não vai para lá.
-      if (isAppPath(pathname)) {
-        return NextResponse.redirect(new URL(pathname + request.nextUrl.search, APP_URL), 307);
-      }
-
-      // Hoje a presença pública da igreja é uma página só. Quando houver
-      // subrotas públicas, elas entram aqui mapeadas sob /igreja/{public_code}.
-      if (pathname === "/") {
-        const url = request.nextUrl.clone();
-        url.pathname = `/igreja/${match.publicCode}`;
-        return NextResponse.rewrite(url);
-      }
-    }
-
-    // Host desconhecido, domínio ainda não ativo ou lookup indisponível: segue
-    // o fluxo normal. Nunca respondemos erro por causa do domínio próprio.
   }
 
   let response = NextResponse.next({ request });
