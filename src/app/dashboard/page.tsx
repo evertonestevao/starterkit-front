@@ -12,6 +12,8 @@ import {
   MessageCircleHeart,
   type LucideIcon,
 } from "lucide-react";
+import { AniversariantesCard } from "@/features/acompanhamento/components/aniversariantes-card";
+import { getSaudacaoAtiva } from "@/server/saudacao";
 import { MiniBarChart, type PontoGrafico } from "@/components/mini-bar-chart";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChurchLinkNotices } from "@/features/church/components/church-link-notices";
@@ -78,8 +80,22 @@ export default async function DashboardPage() {
   // Os últimos 6 domingos, do mais antigo ao mais recente.
   const domingos = [5, 4, 3, 2, 1, 0].map((semanas) => somarDias(domingo, -7 * semanas));
 
-  const [linkNotices, meusCargos, presenca, membros, ebd, oracao, visitas, eventos, campanhas, convites, cultos, ebdDomingos] =
-    await Promise.all([
+  const [
+    linkNotices,
+    meusCargos,
+    presenca,
+    membros,
+    ebd,
+    oracao,
+    visitas,
+    eventos,
+    campanhas,
+    convites,
+    cultos,
+    ebdDomingos,
+    aniversarios,
+    saudacao,
+  ] = await Promise.all([
       // Respostas a convites de vínculo entre igrejas.
       se(!!auth.user, "os avisos de vínculo", async () =>
         (await getChurchLinkService()).listNotices({ companyId: active.id, role: active.role, userId: auth.user!.id }),
@@ -123,6 +139,12 @@ export default async function DashboardPage() {
         const service = await getEbdService();
         return Promise.all(domingos.map(async (d) => ({ data: d, ...totaisDoDia(await service.resumoDoDia(actor, d)) })));
       }),
+      // Próximos aniversários: de quem tem o módulo Membros. O cartão filtra por tipo na tela,
+      // então vêm mais do que os 6 que ele mostra.
+      se(tem("membros"), "os aniversariantes", async () =>
+        (await getAcompanhamentoService()).proximosAniversarios(acompanhamentoActor, 60),
+      ),
+      getSaudacaoAtiva(),
     ]);
 
   const dia = (data: string) => formatarData(data).slice(0, 5);
@@ -330,6 +352,10 @@ export default async function DashboardPage() {
             />
           ) : null}
         </section>
+      ) : null}
+
+      {aniversarios ? (
+        <AniversariantesCard itens={aniversarios.itens} igreja={aniversarios.igreja} saudacao={saudacao} />
       ) : null}
 
       {atalhos.length > 0 ? (

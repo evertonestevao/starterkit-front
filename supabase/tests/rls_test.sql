@@ -6309,6 +6309,127 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Saudação das mensagens (migration 20261006120000): coluna de `churches`.
+-- Só quem administra a própria igreja altera; member e outra igreja, não.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+update public.churches set saudacao = 'Invasor' where id = 'acacacac-0000-4000-8000-0000000000d2';
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+update public.churches set saudacao = 'Invasor' where id = 'acacacac-0000-4000-8000-0000000000d2';
+reset role;
+do $$
+declare v text;
+begin
+  select saudacao into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000d2';
+  if v is not null then raise exception 'FALHA saudacao: member ou outra igreja alterou (%)', v; end if;
+end $$;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+update public.churches set saudacao = 'Graça e paz' where id = 'acacacac-0000-4000-8000-0000000000d2';
+do $$
+begin
+  update public.churches set saudacao = 'X' where id = 'acacacac-0000-4000-8000-0000000000d2';
+  raise exception 'FALHA saudacao: texto de 1 letra foi aceito';
+exception when sqlstate '23514' then null;
+end $$;
+reset role;
+do $$
+declare v text;
+begin
+  select saudacao into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000d2';
+  if v is distinct from 'Graça e paz' then raise exception 'FALHA saudacao: quem administra nao gravou (%)', v; end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Situação na lista e aniversariantes (migration 20261006130000).
+-- "Membro com cargos" (a1) é da AC Cong (d2).
+-- ---------------------------------------------------------------------------
+update public.rol_membros
+   set nascimento = make_date(1990, extract(month from current_date)::int, 10),
+       batismo = make_date(2010, extract(month from current_date)::int, 12)
+ where id = 'cacacaca-0000-4000-8000-0000000000a1';
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v text; n int;
+begin
+  -- A coluna espelho não é escrita direto, nem por quem administra.
+  begin
+    update public.rol_membros set situacao = 'falecido' where id = 'cacacaca-0000-4000-8000-0000000000a1';
+    raise exception 'FALHA situacao: UPDATE direto na coluna foi aceito';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- A ficha muda a situação: a lista acompanha; reativar pelo cadastro volta para "ativo".
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a1', jsonb_build_object(
+    'situacao', 'transferido', 'estado_civil', 'casado', 'conjuge_nome', 'Rute',
+    'data_casamento', make_date(2015, extract(month from current_date)::int, 20)::text));
+  select situacao into v from public.rol_membros where id = 'cacacaca-0000-4000-8000-0000000000a1';
+  if v is distinct from 'transferido' then raise exception 'FALHA situacao: a lista nao acompanhou a ficha (%)', v; end if;
+
+  -- Quem não está ativo não entra nos aniversariantes.
+  select count(*) into n from public.aniversariantes_do_mes(
+    'acacacac-0000-4000-8000-0000000000d2', extract(month from current_date)::int)
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a1';
+  if n <> 0 then raise exception 'FALHA aniversariantes: transferido apareceu (%)', n; end if;
+
+  update public.rol_membros set ativo = true where id = 'cacacaca-0000-4000-8000-0000000000a1';
+  select situacao into v from public.rol_membros where id = 'cacacaca-0000-4000-8000-0000000000a1';
+  if v is distinct from 'ativo' then raise exception 'FALHA situacao: reativar nao voltou para ativo (%)', v; end if;
+
+  -- Ativo de novo: nascimento, batismo e casamento do mês.
+  select count(*) into n from public.aniversariantes_do_mes(
+    'acacacac-0000-4000-8000-0000000000d2', extract(month from current_date)::int)
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a1';
+  if n <> 3 then raise exception 'FALHA aniversariantes: esperado 3 datas, veio %', n; end if;
+  select conjuge_nome into v from public.aniversariantes_do_mes(
+    'acacacac-0000-4000-8000-0000000000d2', extract(month from current_date)::int)
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and tipo = 'casamento';
+  if v is distinct from 'Rute' then raise exception 'FALHA aniversariantes: casamento sem conjuge (%)', v; end if;
+
+  -- Cadastro novo inativo nasce "afastado".
+  insert into public.rol_membros (church_id, nome, ativo)
+  values ('acacacac-0000-4000-8000-0000000000d2', 'Nasceu inativo', false);
+  select situacao into v from public.rol_membros where nome = 'Nasceu inativo';
+  if v is distinct from 'afastado' then raise exception 'FALHA situacao: cadastro inativo nasceu % ', v; end if;
+end $$;
+
+-- Member sem cargo, a igreja de cima e outra rede: nenhum aniversariante da congregação.
+do $$
+declare
+  v_quem text;
+  n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.aniversariantes_do_mes(
+      'acacacac-0000-4000-8000-0000000000d2', extract(month from current_date)::int);
+    if n <> 0 then raise exception 'FALHA aniversariantes: % viu % data(s) de outra igreja', v_quem, n; end if;
+  end loop;
+end $$;
+reset role;
+
+set local role anon;
+do $$
+begin
+  perform public.aniversariantes_do_mes('acacacac-0000-4000-8000-0000000000d2', 1);
+  raise exception 'FALHA aniversariantes: anon chamou a funcao';
+exception when sqlstate '42501' then null;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

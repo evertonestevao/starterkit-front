@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Copy, KeyRound, Mail, MessageCircle, ShieldCheck, UserMinus, X } from "lucide-react";
+import { saudar } from "@/lib/saudacao";
 import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,7 @@ export function AcessoMembroCard({
   acesso?: AcessoMembro;
   convite?: ConvitePendente;
 }) {
-  const { active } = useTenant();
+  const { active, saudacao } = useTenant();
   const [pending, start] = useTransition();
 
   function rodar(acao: () => Promise<{ error?: string } | void>, ok: string) {
@@ -94,7 +95,7 @@ export function AcessoMembroCard({
         toast.error(r.error ?? "Não foi possível gerar o link do convite.");
         return;
       }
-      const mensagem = `A paz do Senhor! A ${active.name} convidou você para acessar o sistema da igreja. Abra este link e entre com o e-mail ${r.email}: ${r.url}`;
+      const mensagem = `${saudar(saudacao)} A ${active.name} convidou você para acessar o sistema da igreja. Abra este link e entre com o e-mail ${r.email}: ${r.url}`;
       if (destino === "whatsapp") {
         const wa = linkWhatsapp(membro.whatsapp, mensagem);
         if (wa) window.open(wa, "_blank", "noopener,noreferrer");

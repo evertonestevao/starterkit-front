@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { getSaudacaoAtiva } from "@/server/saudacao";
 import { Badge } from "@/components/ui/badge";
 import { ContatoAcoes } from "@/features/acompanhamento/components/contato-acoes";
 import { RESULTADO_LABEL, formatarData, hojeISO } from "@/lib/acompanhamento";
@@ -16,6 +17,7 @@ export default async function EbdAlertasPage() {
   const actor = await getEbdActorAutorizado();
   if (!actor) notFound();
   const { igreja, alertas } = await (await getEbdService()).alertas(actor);
+  const saudacao = await getSaudacaoAtiva();
   const hoje = hojeISO();
 
   return (
@@ -68,7 +70,7 @@ export default async function EbdAlertasPage() {
                   nome={a.nome}
                   // Criança (ou quem não tem WhatsApp): fala com o responsável.
                   telefone={crianca || !a.whatsapp ? (a.responsavelTelefone ?? a.whatsapp) : a.whatsapp}
-                  mensagemPadrao={mensagemSaudadeEbd(a.nome, a.classeNome, igreja.name, crianca)}
+                  mensagemPadrao={mensagemSaudadeEbd(a.nome, a.classeNome, igreja.name, crianca, saudacao)}
                   motivo="faltas"
                   registrar={registrarContatoEbdAction}
                   extras={{ classeId: a.classeId }}

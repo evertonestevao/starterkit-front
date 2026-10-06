@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { AppError, toValidationError } from "@/lib/errors";
+import {
+  lerFiltroQuadro,
+  lerFiltroSituacao,
+  ordenarAniversarios,
+  proximosAniversarios,
+  type ProximoAniversario,
+} from "@/lib/rolMembros";
 import { ESTADOS_CIVIS, FORMAS_ENTRADA, SEXOS, SITUACOES, UFS, fichaVazia, temConjuge } from "@/lib/fichaMembro";
 import {
   MOTIVOS,
@@ -34,6 +41,7 @@ import type {
   RolMembro,
   SugestaoChamada,
   Visitante,
+  Aniversario,
   FichaMembro,
   SituacaoMembro,
 } from "@/types/acompanhamento";
@@ -101,8 +109,21 @@ export interface AcompanhamentoRepository {
   /** Uma página do rol, com o total. `busca` já vem sem acento e minúscula. */
   listMembrosPagina(
     churchId: string,
-    filtro: { busca: string | null; incluirInativos: boolean; cargoId: string | null; limit: number; offset: number },
+    filtro: {
+      busca: string | null;
+      /** null = todas as situações. */
+      situacao: SituacaoMembro | null;
+      cargoId: string | null;
+      /** true = só do quadro de membros; false = só quem não é; ausente = todos. */
+      membroIgreja?: boolean;
+      limit: number;
+      offset: number;
+    },
   ): Promise<{ items: RolMembro[]; total: number }>;
+  /** Fichas de todos os membros da igreja, por id (vazio para quem não tem o módulo Membros). */
+  listFichas(churchId: string): Promise<Record<string, FichaMembro>>;
+  /** RPC aniversariantes_do_mes: nascimento, batismo e (com acesso à ficha) casamento. */
+  aniversariantes(churchId: string, mes: number): Promise<Aniversario[]>;
   kpisMembros(churchId: string): Promise<MembrosKpis>;
   /** Quem tem login na empresa e os convites pendentes (RLS: convites só para admin). */
   listAcessos(companyId: string): Promise<{ acessos: AcessoMembro[]; convites: ConvitePendente[] }>;
@@ -346,6 +367,15 @@ const fichaSchema = z
     dataCasamento: temConjuge(f.estadoCivil) ? f.dataCasamento : null,
   }));
 
+/** Teto da exportação: acima disso a planilha avisa que veio cortada. */
+export const EXPORTACAO_MAXIMO = 10_000;
+
+/** Filtro de situação da tela → o que o repositório entende (null = todas). */
+function situacaoDoFiltro(valor: string | null | undefined): SituacaoMembro | null {
+  const filtro = lerFiltroSituacao(valor);
+  return filtro === "todas" ? null : filtro;
+}
+
 function validar<T>(schema: z.ZodType<T>, input: unknown): T {
   const parsed = schema.safeParse(input);
   if (!parsed.success) throw toValidationError(parsed.error.issues);
@@ -406,7 +436,15 @@ export function createAcompanhamentoService(deps: {
      */
     async listMembrosPaginado(
       actor: AcompanhamentoActor,
-      params: { page?: number; pageSize?: number; busca?: string; inativos?: boolean; cargoId?: string },
+      params: {
+        page?: number;
+        pageSize?: number;
+        busca?: string;
+        /** Antigo "mostrar inativos": o mesmo que situação "todas". */
+        inativos?: boolean;
+        situacao?: string;
+        cargoId?: string;
+      },
     ): Promise<Paginated<RolMembro>> {
       const church = await igreja(actor);
       const tamanho = MEMBROS_POR_PAGINA.includes(params.pageSize as (typeof MEMBROS_POR_PAGINA)[number])
@@ -417,12 +455,65 @@ export function createAcompanhamentoService(deps: {
       const cargoId = params.cargoId && z.uuid().safeParse(params.cargoId).success ? params.cargoId : null;
       const { items, total } = await repo.listMembrosPagina(church.id, {
         busca,
-        incluirInativos: Boolean(params.inativos),
+        situacao: situacaoDoFiltro(params.inativos && !params.situacao ? "todas" : params.situacao),
         cargoId,
         limit: pageSize,
         offset,
       });
       return { items, total, page, pageSize };
+    },
+
+    /**
+     * O rol inteiro com os filtros da lista, para exportar (planilha ou PDF).
+     * As fichas vêm junto quando quem pede tem o módulo Membros (a RLS decide);
+     * sem ele, `fichas` volta vazio e a planilha sai só com os dados da lista.
+     */
+    async exportarMembros(
+      actor: AcompanhamentoActor,
+      params: { situacao?: string; cargoId?: string; quadro?: string; comFichas?: boolean },
+    ): Promise<{ igreja: string; membros: RolMembro[]; fichas: Record<string, FichaMembro>; cortado: boolean }> {
+      const church = await igreja(actor);
+      const cargoId = params.cargoId && z.uuid().safeParse(params.cargoId).success ? params.cargoId : null;
+      const quadro = lerFiltroQuadro(params.quadro);
+      const membros: RolMembro[] = [];
+      let total = 0;
+      for (let offset = 0; offset < EXPORTACAO_MAXIMO; offset += 500) {
+        const pagina = await repo.listMembrosPagina(church.id, {
+          busca: null,
+          situacao: situacaoDoFiltro(params.situacao),
+          cargoId,
+          ...(quadro === "todos" ? {} : { membroIgreja: quadro === "membros" }),
+          limit: 500,
+          offset,
+        });
+        total = pagina.total;
+        membros.push(...pagina.items);
+        if (pagina.items.length < 500) break;
+      }
+      const fichas = params.comFichas ? await repo.listFichas(church.id) : {};
+      return { igreja: church.name, membros, fichas, cortado: total > membros.length };
+    },
+
+    /** Os próximos aniversários, batismos e casamentos a partir de hoje (este mês e o seguinte). */
+    async proximosAniversarios(
+      actor: AcompanhamentoActor,
+      limite: number,
+    ): Promise<{ igreja: string; itens: ProximoAniversario[] }> {
+      const church = await igreja(actor);
+      const hojeData = hoje();
+      const mes = Number(hojeData.slice(5, 7));
+      const [esteMes, proximoMes] = await Promise.all([
+        repo.aniversariantes(church.id, mes),
+        repo.aniversariantes(church.id, mes === 12 ? 1 : mes + 1),
+      ]);
+      return { igreja: church.name, itens: proximosAniversarios(esteMes, proximoMes, hojeData, limite) };
+    },
+
+    /** Aniversários, batismos e casamentos do mês (1 a 12), por dia. Só pessoas ativas. */
+    async aniversariantes(actor: AcompanhamentoActor, mes: number): Promise<{ igreja: string; itens: Aniversario[] }> {
+      const church = await igreja(actor);
+      if (!Number.isInteger(mes) || mes < 1 || mes > 12) throw new AppError("validation_error", "Mês inválido.");
+      return { igreja: church.name, itens: ordenarAniversarios(await repo.aniversariantes(church.id, mes)) };
     },
 
     async getMembro(actor: AcompanhamentoActor, membroId: string) {

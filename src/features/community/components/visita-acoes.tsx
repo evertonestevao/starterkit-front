@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import { CalendarClock, Check, MessageCircle, Phone, Undo2 } from "lucide-react";
+import { saudar } from "@/lib/saudacao";
+import { useTenant } from "@/providers/tenant-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
@@ -48,10 +50,11 @@ export function VisitaAcoes({
   /** Membros com cargo que podem ser marcados como quem visitou. */
   quemVisita: PessoaQueVisita[];
 }) {
+  const { saudacao } = useTenant();
   const ligar = linkLigar(telefone);
   const whatsapp = linkWhatsapp(
     telefone,
-    `A paz do Senhor, ${nome.split(" ")[0]}! Recebemos o seu pedido de visita pela página da igreja. Qual o melhor dia para irmos até você?`,
+    `${saudar(saudacao, nome)} Recebemos o seu pedido de visita pela página da igreja. Qual o melhor dia para irmos até você?`,
   );
 
   if (etapa === "feitas") {

@@ -1,4 +1,5 @@
 import { diaDaSemana, somarDias } from "./acompanhamento";
+import { saudar } from "@/lib/saudacao";
 import type { EbdClasse, EbdLicao, EbdResumoClasse, EbdTrimestre } from "@/types/ebd";
 
 /**
@@ -103,17 +104,18 @@ export function mensagemSaudadeEbd(
   classe: string,
   igreja: string,
   crianca: boolean,
+  saudacao?: string | null,
 ): string {
   const primeiro = nome.trim().split(/\s+/)[0] ?? nome;
   if (crianca) {
     return (
-      `Olá! Paz do Senhor. Aqui é da Escola Bíblica da ${igreja}. ` +
+      `${saudar(saudacao)} Aqui é da Escola Bíblica da ${igreja}. ` +
       `Sentimos falta do(a) ${primeiro} na classe ${classe} nos últimos domingos. ` +
       `Está tudo bem com vocês? Esperamos vocês no próximo domingo!`
     );
   }
   return (
-    `Olá, ${primeiro}! Paz do Senhor. Aqui é da Escola Bíblica da ${igreja}. ` +
+    `${saudar(saudacao, nome)} Aqui é da Escola Bíblica da ${igreja}. ` +
     `Sentimos sua falta na classe ${classe} nos últimos domingos. ` +
     `Está tudo bem? Esperamos você no próximo domingo!`
   );

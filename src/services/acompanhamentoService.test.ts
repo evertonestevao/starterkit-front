@@ -49,6 +49,7 @@ const membro: RolMembro = {
   nascimento: null,
   batismo: null,
   ativo: true,
+  situacao: "ativo",
   observacoes: null,
 };
 
@@ -262,11 +263,11 @@ describe("acompanhamentoService", () => {
     });
 
     const r = await svc.listMembrosPaginado(owner, { page: 3, pageSize: 10, busca: "  ANTÔNIO " });
-    expect(pedidos[0]).toEqual({ busca: "antonio", incluirInativos: false, cargoId: null, limit: 10, offset: 20 });
+    expect(pedidos[0]).toEqual({ busca: "antonio", situacao: "ativo", cargoId: null, limit: 10, offset: 20 });
     expect(r).toMatchObject({ page: 3, pageSize: 10, total: 45 });
 
     await svc.listMembrosPaginado(owner, { pageSize: 7, inativos: true });
-    expect(pedidos[1]).toEqual({ busca: null, incluirInativos: true, cargoId: null, limit: 20, offset: 0 });
+    expect(pedidos[1]).toEqual({ busca: null, situacao: null, cargoId: null, limit: 20, offset: 0 });
   });
 
   it("lista paginada exige autorização", async () => {
@@ -370,6 +371,61 @@ describe("excluirMembro", () => {
     const { svc } = service({ getMembro: async () => null });
     const err = await svc.excluirMembro(owner, MEMBRO).catch((e) => e);
     expect(isAppError(err) && err.code).toBe("not_found");
+  });
+});
+
+describe("lista, exportação e aniversariantes", () => {
+  it("o filtro de situação vai para o repositório; lixo vira só os ativos", async () => {
+    const pedidos: unknown[] = [];
+    const { svc } = service({
+      listMembrosPagina: async (_c, filtro) => {
+        pedidos.push(filtro.situacao);
+        return { items: [], total: 0 };
+      },
+    });
+    await svc.listMembrosPaginado(owner, { situacao: "transferido" });
+    await svc.listMembrosPaginado(owner, { situacao: "todas" });
+    await svc.listMembrosPaginado(owner, { situacao: "xpto" });
+    expect(pedidos).toEqual(["transferido", null, "ativo"]);
+  });
+
+  it("exporta todas as páginas, com os filtros, e só traz fichas quando pedido", async () => {
+    const pedidos: Array<{ offset: number; membroIgreja?: boolean; situacao: unknown }> = [];
+    let fichasPedidas = 0;
+    const { svc } = service({
+      listMembrosPagina: async (_c, f) => {
+        pedidos.push({ offset: f.offset, membroIgreja: f.membroIgreja, situacao: f.situacao });
+        const itens = f.offset === 0 ? Array.from({ length: 500 }, () => membro) : [membro];
+        return { items: itens, total: 501 };
+      },
+      listFichas: async () => {
+        fichasPedidas += 1;
+        return {};
+      },
+    });
+    const r = await svc.exportarMembros(owner, { situacao: "todas", quadro: "membros" });
+    expect(r.membros).toHaveLength(501);
+    expect(r.cortado).toBe(false);
+    expect(pedidos).toEqual([
+      { offset: 0, membroIgreja: true, situacao: null },
+      { offset: 500, membroIgreja: true, situacao: null },
+    ]);
+    expect(fichasPedidas).toBe(0);
+    await svc.exportarMembros(owner, { comFichas: true });
+    expect(fichasPedidas).toBe(1);
+  });
+
+  it("aniversariantes vêm por dia; mês fora de 1 a 12 é recusado", async () => {
+    const base = { membroId: MEMBRO, whatsapp: null, tipo: "nascimento" as const, conjugeNome: null };
+    const { svc } = service({
+      aniversariantes: async () => [
+        { ...base, nome: "Zeca", data: "1990-10-20", dia: 20 },
+        { ...base, nome: "Ana", data: "1985-10-03", dia: 3 },
+      ],
+    });
+    expect((await svc.aniversariantes(owner, 10)).itens.map((a) => a.nome)).toEqual(["Ana", "Zeca"]);
+    const err = await svc.aniversariantes(owner, 13).catch((e) => e);
+    expect(isAppError(err) && err.code).toBe("validation_error");
   });
 });
 

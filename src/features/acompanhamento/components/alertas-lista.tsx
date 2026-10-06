@@ -24,7 +24,16 @@ function Situacao({ situacao, contatoData, contatoResultado }: {
   );
 }
 
-export function AlertasLista({ alertas, igreja }: { alertas: AlertaFaltas[]; igreja: string }) {
+export function AlertasLista({
+  alertas,
+  igreja,
+  saudacao,
+}: {
+  alertas: AlertaFaltas[];
+  igreja: string;
+  /** Como a igreja saúda nas mensagens prontas. */
+  saudacao: string;
+}) {
   if (alertas.length === 0) {
     return (
       <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -50,7 +59,7 @@ export function AlertasLista({ alertas, igreja }: { alertas: AlertaFaltas[]; igr
             membroId={a.membroId}
             nome={a.nome}
             telefone={a.whatsapp}
-            mensagemPadrao={mensagemSaudade(a.nome, igreja)}
+            mensagemPadrao={mensagemSaudade(a.nome, igreja, saudacao)}
             motivo="faltas"
           />
         </li>
@@ -59,7 +68,15 @@ export function AlertasLista({ alertas, igreja }: { alertas: AlertaFaltas[]; igr
   );
 }
 
-export function JustificativasLongasLista({ longas, igreja }: { longas: JustificativaLonga[]; igreja: string }) {
+export function JustificativasLongasLista({
+  longas,
+  igreja,
+  saudacao,
+}: {
+  longas: JustificativaLonga[];
+  igreja: string;
+  saudacao: string;
+}) {
   if (longas.length === 0) {
     return (
       <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -86,7 +103,7 @@ export function JustificativasLongasLista({ longas, igreja }: { longas: Justific
             membroId={l.membroId}
             nome={l.nome}
             telefone={l.whatsapp}
-            mensagemPadrao={mensagemJustificativaLonga(l.nome, igreja)}
+            mensagemPadrao={mensagemJustificativaLonga(l.nome, igreja, saudacao)}
             motivo="justificativa_longa"
           />
         </li>

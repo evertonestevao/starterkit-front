@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { getSaudacaoAtiva } from "@/server/saudacao";
 import { JustificativasLongasLista } from "@/features/acompanhamento/components/alertas-lista";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
 
@@ -16,7 +17,7 @@ export default async function JustificativasLongasPage() {
         Quem está justificando há muito tempo. Não é falta — mas vale uma palavra de carinho para ninguém se afastar sem
         ser notado.
       </p>
-      <JustificativasLongasLista longas={longas} igreja={igreja.name} />
+      <JustificativasLongasLista longas={longas} igreja={igreja.name} saudacao={await getSaudacaoAtiva()} />
     </div>
   );
 }

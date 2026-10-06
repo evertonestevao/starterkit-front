@@ -3,6 +3,7 @@ import { ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SITUACAO_LABEL } from "@/lib/fichaMembro";
 import { mascaraTelefone } from "@/lib/telefone";
 import type { AcessoMembro, ConvitePendente, RolMembro } from "@/types/acompanhamento";
 import type { CargoResumo } from "@/types/cargos";
@@ -93,7 +94,7 @@ export function MembrosLista({
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">{mascaraTelefone(m.whatsapp) || "—"}</TableCell>
                 <TableCell>
-                  <Badge variant={m.ativo ? "secondary" : "outline"}>{m.ativo ? "Ativo" : "Inativo"}</Badge>
+                  <Badge variant={m.ativo ? "secondary" : "outline"}>{SITUACAO_LABEL[m.situacao]}</Badge>
                   {m.ativo && !m.participaChamada ? (
                     <span className="mt-0.5 block text-xs text-muted-foreground">fora da chamada</span>
                   ) : null}
@@ -124,7 +125,7 @@ export function MembrosLista({
               {m.cargos.length > 0 ? <CargosDoMembro membro={m} /> : null}
               <p className="text-xs text-muted-foreground">
                 {mascaraTelefone(m.whatsapp) || "Sem telefone"}
-                {m.ativo ? "" : " · Inativo"}
+                {m.ativo ? "" : ` · ${SITUACAO_LABEL[m.situacao]}`}
               </p>
             </Link>
             <Acoes m={m} />

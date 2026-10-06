@@ -4,12 +4,15 @@ import { useEffect, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { FILTRO_SITUACAO_LABEL, lerFiltroSituacao, type FiltroSituacao } from "@/lib/rolMembros";
 import { cn } from "@/lib/utils";
+
+const FILTROS_SITUACAO: FiltroSituacao[] = ["ativo", "todas", "afastado", "transferido", "desligado", "falecido"];
 import { selectClasses } from "./campos";
 
 /**
- * Busca, "mostrar inativos" e "por página" da lista de membros. Tudo vai para
- * a URL (?q=&inativos=1&porPagina=&page=): a página é server e busca no banco
+ * Busca, cargo, situação e "por página" da lista de membros. Tudo vai para
+ * a URL (?q=&cargo=&situacao=&porPagina=&page=): a página é server e busca no banco
  * só a página pedida. Mudar um filtro volta para a página 1.
  */
 export function MembrosFiltros({
@@ -26,7 +29,9 @@ export function MembrosFiltros({
   const params = useSearchParams();
   const [busca, setBusca] = useState(params.get("q") ?? "");
   // Estado local: a caixa e o seletor mudam na hora; a URL vem logo depois.
-  const [inativos, setInativos] = useState(params.get("inativos") === "1");
+  const [situacao, setSituacao] = useState<FiltroSituacao>(
+    params.get("situacao") ? lerFiltroSituacao(params.get("situacao")) : params.get("inativos") === "1" ? "todas" : "ativo",
+  );
   const [porPagina, setPorPagina] = useState(params.get("porPagina") ?? String(padrao));
   const [cargo, setCargo] = useState(params.get("cargo") ?? "");
   const [, startTransition] = useTransition();
@@ -81,18 +86,23 @@ export function MembrosFiltros({
         ))}
       </select>
       <div className="flex items-center justify-between gap-4 lg:justify-start">
-        <label className="flex items-center gap-2 text-sm whitespace-nowrap text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={inativos}
-            onChange={(e) => {
-              setInativos(e.target.checked);
-              aplicar({ inativos: e.target.checked ? "1" : null });
-            }}
-            className="size-4"
-          />
-          Mostrar inativos
-        </label>
+        <select
+          aria-label="Filtrar por situação"
+          className={cn(selectClasses, "lg:w-48")}
+          value={situacao}
+          onChange={(e) => {
+            const valor = lerFiltroSituacao(e.target.value);
+            setSituacao(valor);
+            // "Ativos" é o padrão: fica fora da URL. O antigo ?inativos=1 sai junto.
+            aplicar({ situacao: valor === "ativo" ? null : valor, inativos: null });
+          }}
+        >
+          {FILTROS_SITUACAO.map((f) => (
+            <option key={f} value={f}>
+              {FILTRO_SITUACAO_LABEL[f]}
+            </option>
+          ))}
+        </select>
         <label className="flex items-center gap-2 text-sm whitespace-nowrap text-muted-foreground">
           Por página
           <select

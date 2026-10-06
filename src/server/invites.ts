@@ -1,4 +1,5 @@
 import "server-only";
+import { getSaudacaoDaEmpresa } from "@/server/saudacao";
 import { getEmailProvider } from "@/adapters/email";
 import { getServerEnv } from "@/config/env";
 import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
@@ -29,9 +30,10 @@ export async function getInviteService(): Promise<InviteService> {
           .select("name")
           .eq("id", invite.company_id)
           .maybeSingle<{ name: string }>();
+        const { saudacao } = await getSaudacaoDaEmpresa(invite.company_id);
         await createEmailService({ provider: getEmailProvider(), appUrl: getServerEnv().APP_URL }).sendInviteEmail(
           invite,
-          { churchName: data?.name ?? null },
+          { churchName: data?.name ?? null, saudacao },
         );
       },
     },

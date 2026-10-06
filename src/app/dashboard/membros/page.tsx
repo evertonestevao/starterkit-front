@@ -1,14 +1,16 @@
 import Link from "next/link";
-import { FileUp } from "lucide-react";
+import { Cake, FileUp } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PaginationControls } from "@/components/pagination-controls";
+import { ExportarMembros } from "@/features/acompanhamento/components/exportar-membros";
 import { MembroForm } from "@/features/acompanhamento/components/membro-form";
 import { ConvitesSemMembro } from "@/features/acompanhamento/components/convites-sem-membro";
 import { MembrosKpisFaixa } from "@/features/acompanhamento/components/membros-kpis";
 import { MembrosFiltros } from "@/features/acompanhamento/components/membros-filtros";
 import { MembrosLista } from "@/features/acompanhamento/components/membros-lista";
+import { FILTRO_SITUACAO_LABEL, lerFiltroSituacao, type FiltroSituacao } from "@/lib/rolMembros";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
 import { MEMBROS_POR_PAGINA, MEMBROS_POR_PAGINA_PADRAO } from "@/services/acompanhamentoService";
 
@@ -17,7 +19,14 @@ export const metadata: Metadata = { title: "Membros da igreja" };
 export default async function RolMembrosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; porPagina?: string; q?: string; inativos?: string; cargo?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    porPagina?: string;
+    q?: string;
+    inativos?: string;
+    situacao?: string;
+    cargo?: string;
+  }>;
 }) {
   const actor = await getAcompanhamentoActorAutorizado();
   if (!actor) notFound();
@@ -31,6 +40,7 @@ export default async function RolMembrosPage({
       pageSize: Number(sp.porPagina) || undefined,
       busca: sp.q,
       inativos: sp.inativos === "1",
+      situacao: sp.situacao,
       cargoId: sp.cargo,
     }),
     service.cargosDisponiveis(actor),
@@ -38,6 +48,8 @@ export default async function RolMembrosPage({
     service.acessos(actor),
   ]);
   const { items, total, page, pageSize } = resultado;
+  // O antigo ?inativos=1 continua valendo como "todas as situações".
+  const situacao: FiltroSituacao = sp.situacao ? lerFiltroSituacao(sp.situacao) : sp.inativos === "1" ? "todas" : "ativo";
 
   const inicio = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const fim = Math.min(page * pageSize, total);
@@ -51,6 +63,10 @@ export default async function RolMembrosPage({
           por engano pode ser excluído na ficha do membro.
         </p>
         <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/membros/aniversariantes" className={buttonVariants({ variant: "outline" })}>
+            <Cake className="size-4" /> Aniversariantes
+          </Link>
+          <ExportarMembros cargos={cargos} situacao={situacao} cargoId={sp.cargo ?? ""} />
           <Link href="/dashboard/membros/importar" className={buttonVariants({ variant: "outline" })}>
             <FileUp className="size-4" /> Importar planilha
           </Link>
@@ -60,7 +76,7 @@ export default async function RolMembrosPage({
       <MembrosFiltros opcoesPorPagina={MEMBROS_POR_PAGINA} padrao={MEMBROS_POR_PAGINA_PADRAO} cargos={cargos} />
       <MembrosLista
         membros={items}
-        filtrando={Boolean(sp.q || sp.cargo)}
+        filtrando={Boolean(sp.q || sp.cargo || situacao !== "ativo")}
         cargos={cargos}
         acessos={acessos.porUsuario}
         convites={acessos.convitePorEmail}
@@ -71,7 +87,7 @@ export default async function RolMembrosPage({
         {total > 0 && total <= pageSize ? (
           <p className="text-xs text-muted-foreground">
             Mostrando {inicio}–{fim} de {total} {total === 1 ? "membro" : "membros"}
-            {sp.inativos === "1" ? " (com inativos)" : total === 1 ? " ativo" : " ativos"}
+            {situacao === "ativo" ? (total === 1 ? " ativo" : " ativos") : ` · ${FILTRO_SITUACAO_LABEL[situacao].toLowerCase()}`}
           </p>
         ) : null}
         <PaginationControls
@@ -79,7 +95,7 @@ export default async function RolMembrosPage({
           pageSize={pageSize}
           total={total}
           basePath="/dashboard/membros"
-          params={{ q: sp.q, inativos: sp.inativos, porPagina: sp.porPagina, cargo: sp.cargo }}
+          params={{ q: sp.q, situacao: situacao === "ativo" ? undefined : situacao, porPagina: sp.porPagina, cargo: sp.cargo }}
         />
       </div>
       {gerenciaAcesso && acessos.convitesSemMembro.length > 0 && !sp.q && !sp.cargo ? (

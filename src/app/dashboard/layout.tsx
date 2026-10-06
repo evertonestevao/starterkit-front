@@ -17,6 +17,7 @@ import { createUserService } from "@/services/userService";
 import { NomesNiveisProvider } from "@/providers/niveis-provider";
 import { TenantProvider } from "@/providers/tenant-provider";
 import { getNomesNiveisDaEmpresa } from "@/server/niveisRede";
+import { getSaudacaoDaEmpresa } from "@/server/saudacao";
 
 /**
  * Layout autenticado: gate de termos vigentes (LGPD) + empresa ativa,
@@ -91,9 +92,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   // Como a rede desta igreja chama os níveis (sede, subsede, congregação).
   const nomesNiveis = await getNomesNiveisDaEmpresa(active.id);
+  const { saudacao } = await getSaudacaoDaEmpresa(active.id);
 
   return (
-    <TenantProvider value={{ companies, active, menus, visitasSemContato }}>
+    <TenantProvider value={{ companies, active, menus, visitasSemContato, saudacao }}>
       <NomesNiveisProvider nomes={nomesNiveis}>
         <AppShell
           initialCollapsed={initialCollapsed}

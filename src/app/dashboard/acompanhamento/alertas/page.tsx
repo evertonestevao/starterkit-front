@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { getSaudacaoAtiva } from "@/server/saudacao";
 import { AlertasLista } from "@/features/acompanhamento/components/alertas-lista";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
 
@@ -15,7 +16,7 @@ export default async function AlertasPage() {
       <p className="text-sm text-muted-foreground">
         Quem faltou vários cultos seguidos sem avisar. Uma mensagem ou ligação faz diferença — depois, registre o contato.
       </p>
-      <AlertasLista alertas={alertas} igreja={igreja.name} />
+      <AlertasLista alertas={alertas} igreja={igreja.name} saudacao={await getSaudacaoAtiva()} />
     </div>
   );
 }

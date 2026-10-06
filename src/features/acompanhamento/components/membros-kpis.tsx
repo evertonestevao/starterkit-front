@@ -26,12 +26,18 @@ export function MembrosKpisFaixa({ kpis }: { kpis: MembrosKpis }) {
         }
       />
       <MetricCard icon={UserPlus} label="Novos no mês" value={kpis.novosNoMes} hint="cadastrados este mês" />
-      <MetricCard
-        icon={Cake}
-        label="Aniversariantes"
-        value={kpis.aniversariantesDoMes}
-        hint="fazem aniversário este mês"
-      />
+      <Link
+        href="/dashboard/membros/aniversariantes"
+        className="rounded-xl transition-opacity hover:opacity-80 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        aria-label={`${kpis.aniversariantesDoMes} aniversariantes este mês — ver lista`}
+      >
+        <MetricCard
+          icon={Cake}
+          label="Aniversariantes"
+          value={kpis.aniversariantesDoMes}
+          hint="fazem aniversário este mês · ver lista"
+        />
+      </Link>
       <MetricCard icon={BadgeCheck} label="Com cargo" value={kpis.comCargo} hint={`${percentualCargo}% dos ativos`} />
       <MetricCard
         icon={ChartNoAxesCombined}

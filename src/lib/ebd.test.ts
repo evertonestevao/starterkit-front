@@ -94,7 +94,9 @@ describe("trimestres", () => {
 describe("mensagemSaudadeEbd", () => {
   it("para criança fala com a família", () => {
     expect(mensagemSaudadeEbd("Pedro Ferreira", "Juniores", "Igreja X", true)).toContain("Sentimos falta do(a) Pedro");
-    expect(mensagemSaudadeEbd("Ana Souza", "Adultos", "Igreja X", false)).toContain("Olá, Ana!");
+    expect(mensagemSaudadeEbd("Ana Souza", "Adultos", "Igreja X", false)).toContain("A paz do Senhor, Ana!");
+    expect(mensagemSaudadeEbd("Ana Souza", "Adultos", "Igreja X", false, "Graça e paz")).toContain("Graça e paz, Ana!");
+    expect(mensagemSaudadeEbd("Pedro Ferreira", "Juniores", "Igreja X", true, "Graça e paz")).toMatch(/^Graça e paz! Aqui é/);
   });
 });
 

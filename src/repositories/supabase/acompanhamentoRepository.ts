@@ -17,6 +17,7 @@ import type {
   Presenca,
   RelatorioChamada,
   ResumoAcompanhamento,
+  Aniversario,
   FichaMembro,
   ResumoRedeIgreja,
   RolMembro,
@@ -30,7 +31,7 @@ import type { CargoResumo } from "@/types/cargos";
  */
 
 const MEMBRO_COLS =
-  "id, church_id, nome, whatsapp, email, user_id, participa_chamada, membro_igreja, cuidados, nascimento, batismo, ativo, observacoes, " +
+  "id, church_id, nome, whatsapp, email, user_id, participa_chamada, membro_igreja, cuidados, nascimento, batismo, ativo, situacao, observacoes, " +
   "cargos:rol_membro_cargos(cargo:cargos(id, nome, ordem, deleted_at))";
 const FICHA_COLS =
   "sexo, estado_civil, naturalidade, profissao, conjuge_nome, data_casamento, pai_nome, mae_nome, filhos, " +
@@ -68,6 +69,7 @@ const toMembro = (r: any): RolMembro => ({
   nascimento: r.nascimento,
   batismo: r.batismo ?? null,
   ativo: r.ativo,
+  situacao: r.situacao ?? (r.ativo ? "ativo" : "afastado"),
   observacoes: r.observacoes,
 });
 
@@ -160,7 +162,7 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       return (data ?? []).map(toMembro);
     },
 
-    async listMembrosPagina(churchId, { busca, incluirInativos, cargoId, limit, offset }) {
+    async listMembrosPagina(churchId, { busca, situacao, cargoId, membroIgreja, limit, offset }) {
       // Filtro por cargo: primeiro quem tem o cargo nesta igreja.
       let comCargo: string[] | null = null;
       if (cargoId) {
@@ -178,7 +180,8 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         .select(MEMBRO_COLS, { count: "exact" })
         .eq("church_id", churchId)
         .is("deleted_at", null);
-      if (!incluirInativos) q = q.eq("ativo", true);
+      if (situacao) q = q.eq("situacao", situacao);
+      if (membroIgreja !== undefined) q = q.eq("membro_igreja", membroIgreja);
       if (comCargo) q = q.in("id", comCargo);
       // % e _ do termo são literais, não curingas do LIKE.
       if (busca) q = q.ilike("nome_busca", `%${busca.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
@@ -361,6 +364,44 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         todos.push(...((data ?? []) as Array<{ nome: string; nascimento: string | null; email: string | null }>));
         if (!data || data.length < 1000) return todos;
       }
+    },
+
+    async listFichas(churchId) {
+      const fichas: Record<string, FichaMembro> = {};
+      for (let inicio = 0; ; inicio += 1000) {
+        const { data, error } = await client
+          .from("rol_membro_fichas")
+          .select(`membro_id, ${FICHA_COLS}`)
+          .eq("church_id", churchId)
+          .is("deleted_at", null)
+          .order("membro_id")
+          .range(inicio, inicio + 999);
+        if (error) falha("Falha ao carregar as fichas dos membros", error);
+        for (const r of (data ?? []) as unknown as Array<{ membro_id: string }>) fichas[r.membro_id] = toFicha(r);
+        if (!data || data.length < 1000) return fichas;
+      }
+    },
+
+    async aniversariantes(churchId, mes) {
+      const { data, error } = await client.rpc("aniversariantes_do_mes", { p_church_id: churchId, p_mes: mes });
+      if (error) falha("Falha ao carregar os aniversariantes", error);
+      type Linha = {
+        membro_id: string;
+        nome: string;
+        whatsapp: string | null;
+        tipo: Aniversario["tipo"];
+        data: string;
+        conjuge_nome: string | null;
+      };
+      return ((data ?? []) as Linha[]).map((r) => ({
+        membroId: r.membro_id,
+        nome: r.nome,
+        whatsapp: r.whatsapp,
+        tipo: r.tipo,
+        data: r.data,
+        dia: Number(String(r.data).slice(8, 10)),
+        conjugeNome: r.conjuge_nome,
+      }));
     },
 
     async getFicha(churchId, membroId) {

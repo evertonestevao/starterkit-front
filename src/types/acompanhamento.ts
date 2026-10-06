@@ -39,6 +39,8 @@ export interface RolMembro {
   nascimento: string | null;
   batismo: string | null;
   ativo: boolean;
+  /** Espelho da situação da ficha (ativo, afastado, transferido...). */
+  situacao: SituacaoMembro;
   observacoes: string | null;
 }
 
@@ -79,6 +81,21 @@ export interface FichaMembro {
   situacao: SituacaoMembro;
   situacaoEm: string | null;
   situacaoMotivo: string | null;
+}
+
+export type TipoAniversario = "nascimento" | "batismo" | "casamento";
+
+/** Uma data comemorada no mês: aniversário, batismo ou casamento. */
+export interface Aniversario {
+  membroId: string;
+  nome: string;
+  whatsapp: string | null;
+  tipo: TipoAniversario;
+  /** A data original (AAAA-MM-DD), com o ano em que aconteceu. */
+  data: string;
+  dia: number;
+  /** Só no casamento, quando a ficha informa. */
+  conjugeNome: string | null;
 }
 
 /** Acesso ao sistema de quem tem login (vem de company_members). */

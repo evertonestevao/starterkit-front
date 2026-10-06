@@ -1,6 +1,7 @@
 import type { EmailProvider } from "@/adapters/email/EmailProvider";
 import { describeApproved } from "@/lib/churchLinks";
 import { NOMES_PADRAO, nomeNivel } from "@/lib/niveisRede";
+import { saudar } from "@/lib/saudacao";
 import { PAPEL_LABEL } from "@/lib/papeis";
 import type { ChurchLinkTipo } from "@/types/churchLinks";
 import type { CompanyInvite } from "@/types/database";
@@ -35,7 +36,11 @@ export function createEmailService({ provider, appUrl }: EmailServiceDeps) {
      * Convite para acessar o sistema. Quem recebe pode nunca ter ouvido falar
      * do produto: o e-mail diz QUAL igreja convidou e o que acontece ao aceitar.
      */
-    async sendInviteEmail(invite: CompanyInvite, contexto?: { churchName?: string | null }): Promise<void> {
+    async sendInviteEmail(
+      invite: CompanyInvite,
+      contexto?: { churchName?: string | null; saudacao?: string | null },
+    ): Promise<void> {
+      const abertura = saudar(contexto?.saudacao);
       const acceptUrl = `${base}/invites/accept?token=${invite.token}`;
       const nome = contexto?.churchName?.trim();
       // Sem o nome (falha ao buscar), o texto continua correto: "Uma igreja convidou...".
@@ -44,7 +49,7 @@ export function createEmailService({ provider, appUrl }: EmailServiceDeps) {
       await provider.send({
         to: invite.email,
         subject: nome ? `Convite para acessar o sistema da ${nome}` : "Convite para acessar o sistema da igreja",
-        text: `A paz do Senhor!
+        text: `${abertura}
 
 ${quem} convidou você para acessar o sistema da igreja (acesso: ${papel}).
 
@@ -54,7 +59,7 @@ ${acceptUrl}
 Se você ainda não tem conta, é só criar uma com este e-mail e voltar ao link.
 O convite vale por 7 dias. Se você não esperava este e-mail, pode ignorá-lo.`,
         html: [
-          "<p>A paz do Senhor!</p>",
+          `<p>${escapeHtml(abertura)}</p>`,
           `<p><strong>${escapeHtml(quem)}</strong> convidou você para acessar o sistema da igreja (acesso: ${escapeHtml(papel)}).</p>`,
           `<p><a href="${acceptUrl}" style="display:inline-block;padding:10px 18px;background:#41694b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:600">Aceitar o convite</a></p>`,
           `<p>Entre com este mesmo e-mail (<strong>${escapeHtml(invite.email)}</strong>). Se você ainda não tem conta, é só criar uma com ele e voltar a este link.</p>`,

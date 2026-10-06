@@ -687,6 +687,43 @@ begin
     (v_sede, 'Jovem da igreja', 'Pelas provas do vestibular.', now() - interval '30 days', now() - interval '28 days', null);
 end $$;
 
+-- Datas comemorativas da Demo Sede, relativas ao dia em que o seed roda: um
+-- aniversário, um batismo e um casamento HOJE, e outros nos próximos dias —
+-- para o cartão "Próximos aniversariantes" do Painel e a tela do mês terem os
+-- três tipos. Pode rodar de novo: só regrava as mesmas datas.
+do $$
+declare
+  v_sede uuid;
+  v_company uuid;
+begin
+  select id, company_id into v_sede, v_company from public.churches where slug = 'demo-sede';
+  if v_sede is null then return; end if;
+
+  update public.rol_membros set nascimento = (current_date - interval '32 years')::date
+   where church_id = v_sede and nome = 'Helena Duarte';
+  update public.rol_membros set batismo = (current_date - interval '14 years')::date
+   where church_id = v_sede and nome = 'Marta Ribeiro';
+  update public.rol_membros set batismo = (current_date + 3 - interval '11 years')::date
+   where church_id = v_sede and nome = 'Rafael Gomes';
+  update public.rol_membros set batismo = (current_date + 9 - interval '1 year')::date
+   where church_id = v_sede and nome = 'Júlia Nogueira';
+
+  -- Casamento fica na ficha (só quem tem o módulo Membros vê).
+  insert into public.rol_membro_fichas (membro_id, church_id, company_id, estado_civil, conjuge_nome, data_casamento)
+  select m.id, v_sede, v_company, 'casado', c.conjuge, (current_date + c.em_dias - make_interval(years => c.anos))::date
+  from (values
+    ('Tiago Azevedo', 'Sara Azevedo', 0, 8),
+    ('Paulo Moreira', 'Helena Moreira', 1, 21),
+    ('Nelson Prado', 'Quitéria Prado', 6, 35)
+  ) as c(nome, conjuge, em_dias, anos)
+  join public.rol_membros m on m.church_id = v_sede and m.nome = c.nome and m.deleted_at is null
+  on conflict (membro_id) do update set
+    estado_civil = excluded.estado_civil,
+    conjuge_nome = excluded.conjuge_nome,
+    data_casamento = excluded.data_casamento,
+    updated_at = now();
+end $$;
+
 drop function public.__demo_rol_pequeno(uuid, text, int, date);
 drop function public.__demo_cargo(uuid, text);
 drop function public.__demo_presenca(uuid, date, uuid, text);

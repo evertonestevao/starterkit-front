@@ -1,3 +1,4 @@
+import { saudar } from "@/lib/saudacao";
 import type {
   Culto,
   EstadoPresenca,
@@ -147,22 +148,18 @@ export function linkLigar(telefone: string | null): string | null {
   return digitos.length >= 8 ? `tel:${digitos}` : null;
 }
 
-function primeiroNome(nome: string): string {
-  return nome.trim().split(/\s+/)[0] ?? nome;
-}
-
 /** Mensagem acolhedora pronta (a tela deixa editar antes de abrir o WhatsApp). */
-export function mensagemSaudade(nome: string, igreja: string): string {
+export function mensagemSaudade(nome: string, igreja: string, saudacao?: string | null): string {
   return (
-    `Olá, ${primeiroNome(nome)}! Paz do Senhor. Aqui é da ${igreja}. ` +
+    `${saudar(saudacao, nome)} Aqui é da ${igreja}. ` +
     `Sentimos sua falta nos últimos cultos e queríamos saber como você está. ` +
     `Podemos orar por algo? Um abraço!`
   );
 }
 
-export function mensagemJustificativaLonga(nome: string, igreja: string): string {
+export function mensagemJustificativaLonga(nome: string, igreja: string, saudacao?: string | null): string {
   return (
-    `Olá, ${primeiroNome(nome)}! Paz do Senhor. Aqui é da ${igreja}. ` +
+    `${saudar(saudacao, nome)} Aqui é da ${igreja}. ` +
     `Faz um tempo que não nos vemos e estamos com saudade. ` +
     `Como você está? Se precisar de algo, conte com a gente. Um abraço!`
   );
