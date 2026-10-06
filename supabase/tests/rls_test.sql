@@ -6748,6 +6748,66 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Funções só para quem está logado (migration 20261006180000): o visitante
+-- (anon) para na porta, sem rodar o corpo da função.
+-- ---------------------------------------------------------------------------
+set local role anon;
+do $$
+begin
+  begin
+    perform public.create_company('Invasora', 'rls-invasora');
+    raise exception 'FALHA funcoes: anon executou create_company';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.accept_company_invite('00000000-0000-4000-8000-000000000000');
+    raise exception 'FALHA funcoes: anon executou accept_company_invite';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.leave_company('acacacac-0000-4000-8000-0000000000c1');
+    raise exception 'FALHA funcoes: anon executou leave_company';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.claim_church_domain('acacacac-0000-4000-8000-0000000000d1', 'invasor.example.com');
+    raise exception 'FALHA funcoes: anon executou claim_church_domain';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.clear_church_domain('acacacac-0000-4000-8000-0000000000d1');
+    raise exception 'FALHA funcoes: anon executou clear_church_domain';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- E a varredura geral: nenhuma função SECURITY DEFINER nova pode ficar
+-- executável por anon sem estar nesta lista (as que a página pública usa, e
+-- os auxiliares de policy/gatilho, que não expõem nada sozinhos).
+do $$
+declare v text;
+begin
+  select string_agg(p.proname, ', ' order by p.proname) into v
+  from pg_proc p
+  join pg_namespace ns on ns.oid = p.pronamespace
+  where ns.nspname = 'public' and p.prokind = 'f' and p.prosecdef
+    and has_function_privilege('anon', p.oid, 'execute')
+    and p.proname not in (
+      -- página pública e convite de vínculo
+      'chave_publica_por_codigo', 'church_card_donation_link', 'church_pix_donation_link', 'church_primeiro_slots',
+      'list_church_sponsors', 'nomes_dos_niveis', 'pix_publico', 'posso_ver_previa_da_pagina',
+      'rede_igrejas_publicas', 'resolve_church_by_domain', 'cancel_profile_change_by_token',
+      -- usados por policies e gatilhos (devolvem falso/nada sem login)
+      'is_company_admin', 'is_company_member', 'is_company_owner', 'handle_new_user',
+      'set_company_id_from_campaign', 'set_company_id_from_church'
+    );
+  if v is not null then
+    raise exception 'FALHA funcoes: SECURITY DEFINER executavel por anon fora da lista: %', v;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------
