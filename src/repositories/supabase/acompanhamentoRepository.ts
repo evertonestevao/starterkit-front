@@ -30,9 +30,22 @@ import type { CargoResumo } from "@/types/cargos";
  * church_id é repetido em toda consulta, como manda o CLAUDE.md.
  */
 
+// Só o que quem faz a chamada pode ler. E-mail, nascimento, batismo,
+// observações e cuidados são RESERVADOS: saem da visão `rol_membros_reservado`,
+// que só responde a quem tem o módulo Membros (migration 20261006200000).
 const MEMBRO_COLS =
-  "id, church_id, nome, whatsapp, email, user_id, participa_chamada, membro_igreja, cuidados, nascimento, batismo, ativo, situacao, observacoes, " +
+  "id, church_id, nome, whatsapp, user_id, participa_chamada, membro_igreja, ativo, situacao, " +
   "cargos:rol_membro_cargos(cargo:cargos(id, nome, ordem, deleted_at))";
+const RESERVADO_COLS = "id, email, nascimento, batismo, observacoes, cuidados";
+
+interface Reservado {
+  id: string;
+  email: string | null;
+  nascimento: string | null;
+  batismo: string | null;
+  observacoes: string | null;
+  cuidados: string | null;
+}
 const FICHA_COLS =
   "sexo, estado_civil, naturalidade, profissao, conjuge_nome, data_casamento, pai_nome, mae_nome, filhos, " +
   "cep, logradouro, numero, complemento, bairro, cidade, uf, data_conversao, entrada_forma, membro_desde, " +
@@ -61,16 +74,18 @@ const toMembro = (r: any): RolMembro => ({
       .map(toCargoResumo),
   ),
   whatsapp: r.whatsapp,
-  email: r.email,
+  // Os cinco reservados entram depois, por `comReservados`; sem o módulo
+  // Membros ficam em branco.
+  email: null,
   userId: r.user_id,
   participaChamada: r.participa_chamada,
   membroIgreja: r.membro_igreja,
-  cuidados: r.cuidados ?? null,
-  nascimento: r.nascimento,
-  batismo: r.batismo ?? null,
+  cuidados: null,
+  nascimento: null,
+  batismo: null,
   ativo: r.ativo,
   situacao: r.situacao ?? (r.ativo ? "ativo" : "afastado"),
-  observacoes: r.observacoes,
+  observacoes: null,
 });
 
 const toFicha = (r: any): FichaMembro => ({
@@ -136,6 +151,36 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
     return (data ?? []) as T[];
   }
 
+  /**
+   * Dados reservados dos membros pedidos, por id. Em blocos, para o filtro
+   * `in` não virar uma URL enorme. Quem não tem o módulo Membros recebe um
+   * mapa vazio (a visão não devolve linha), e não um erro.
+   */
+  async function reservadosDe(ids: string[]): Promise<Map<string, Reservado>> {
+    const mapa = new Map<string, Reservado>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error } = await client
+        .from("rol_membros_reservado")
+        .select(RESERVADO_COLS)
+        .in("id", ids.slice(i, i + 200));
+      if (error) falha("Falha ao carregar os dados dos membros", error);
+      for (const r of (data ?? []) as Reservado[]) mapa.set(r.id, r);
+    }
+    return mapa;
+  }
+
+  /** Junta os reservados aos membros já carregados. */
+  async function comReservados(membros: RolMembro[]): Promise<RolMembro[]> {
+    if (membros.length === 0) return membros;
+    const reservados = await reservadosDe(membros.map((m) => m.id));
+    return membros.map((m) => {
+      const r = reservados.get(m.id);
+      return r
+        ? { ...m, email: r.email, nascimento: r.nascimento, batismo: r.batismo, observacoes: r.observacoes, cuidados: r.cuidados }
+        : m;
+    });
+  }
+
   return {
     async getChurch(companyId) {
       const { data, error } = await client
@@ -159,7 +204,7 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         .is("deleted_at", null)
         .order("nome");
       if (error) falha("Falha ao carregar os membros", error);
-      return (data ?? []).map(toMembro);
+      return comReservados((data ?? []).map(toMembro));
     },
 
     async listMembrosPagina(churchId, { busca, situacao, cargoId, membroIgreja, limit, offset }) {
@@ -187,7 +232,7 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       if (busca) q = q.ilike("nome_busca", `%${busca.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
       const { data, error, count } = await q.order("nome").range(offset, offset + limit - 1);
       if (error) falha("Falha ao carregar os membros", error);
-      return { items: (data ?? []).map(toMembro), total: count ?? 0 };
+      return { items: await comReservados((data ?? []).map(toMembro)), total: count ?? 0 };
     },
 
     async listAcessos(companyId) {
@@ -232,11 +277,11 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
     },
 
     async listEmailsDoRol(churchId) {
+      // Pela visão dos reservados (o e-mail não é lido direto na tabela).
       const { data, error } = await client
-        .from("rol_membros")
+        .from("rol_membros_reservado")
         .select("email")
         .eq("church_id", churchId)
-        .is("deleted_at", null)
         .not("email", "is", null);
       if (error) falha("Falha ao carregar os e-mails dos membros", error);
       return (data ?? []).map((r: { email: string }) => r.email.toLowerCase());
@@ -314,7 +359,7 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         .is("deleted_at", null)
         .maybeSingle();
       if (error) falha("Falha ao carregar o membro", error);
-      return data ? toMembro(data) : null;
+      return data ? ((await comReservados([toMembro(data)]))[0] ?? null) : null;
     },
 
     async createMembros(churchId, membros) {
@@ -355,14 +400,23 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       for (let inicio = 0; ; inicio += 1000) {
         const { data, error } = await client
           .from("rol_membros")
-          .select("nome, nascimento, email")
+          .select("id, nome")
           .eq("church_id", churchId)
           .is("deleted_at", null)
           .order("id")
           .range(inicio, inicio + 999);
         if (error) falha("Falha ao carregar os membros da igreja", error);
-        todos.push(...((data ?? []) as Array<{ nome: string; nascimento: string | null; email: string | null }>));
-        if (!data || data.length < 1000) return todos;
+        const pagina = (data ?? []) as Array<{ id: string; nome: string }>;
+        // Nascimento e e-mail são reservados: vêm da visão (a importação é do módulo Membros).
+        const reservados = await reservadosDe(pagina.map((m) => m.id));
+        todos.push(
+          ...pagina.map((m) => ({
+            nome: m.nome,
+            nascimento: reservados.get(m.id)?.nascimento ?? null,
+            email: reservados.get(m.id)?.email ?? null,
+          })),
+        );
+        if (pagina.length < 1000) return todos;
       }
     },
 

@@ -5027,9 +5027,14 @@ begin
   select count(*) into n from public.ebd_alunos_da_classe('ebdebdeb-0000-4000-8000-0000000000a2');
   if n <> 0 then raise exception 'FALHA ebd: professor ve alunos de outra classe'; end if;
 
-  -- Não lê o rol (observações pastorais ficam fora).
-  select count(*) into n from public.rol_membros where observacoes is not null;
+  -- Não lê o rol (nem os nomes; as observações pastorais nem são legíveis na tabela).
+  select count(*) into n from public.rol_membros;
   if n <> 0 then raise exception 'FALHA ebd: professor le o rol de membros'; end if;
+  begin
+    perform observacoes from public.rol_membros;
+    raise exception 'FALHA ebd: professor leu observacoes direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
 
   -- Chamada da própria classe, com visitante.
   perform public.ebd_salvar_aula('ebdebdeb-0000-4000-8000-0000000000a1', current_date, 'Licao 1', 5, 4, 1250,
@@ -6972,6 +6977,111 @@ begin
   if n <> 0 then raise exception 'FALHA igrejas: outra conta abriu a previa'; end if;
 end $$;
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- Dados reservados do membro (migration 20261006200000). Na AC Cong (d2), o
+-- "Secretario AC" (004) tem o cargo Auxiliar da chamada. Tirando Membros desse
+-- cargo, ele fica só com a chamada: vê a lista, não os dados reservados.
+-- ---------------------------------------------------------------------------
+update public.rol_membros
+   set nascimento = make_date(1990, extract(month from current_date)::int, 10),
+       observacoes = 'Passando por um momento dificil', cuidados = 'Alergia a amendoim', email = 'reservado@teste.local'
+ where id = 'cacacaca-0000-4000-8000-0000000000a1';
+insert into public.cargo_acessos (church_id, cargo_id, modulo, permitido)
+select 'acacacac-0000-4000-8000-0000000000d2', c.id, m.modulo, m.permitido
+from public.cargos c, (values ('membros', false), ('acompanhamento', true)) as m(modulo, permitido)
+where c.slug = 'auxiliar_chamada'
+on conflict (church_id, cargo_id, modulo) do update set permitido = excluded.permitido;
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare n int; v text;
+begin
+  if public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'membros') then
+    raise exception 'FALHA reservado: o teste esperava alguem SEM o modulo Membros';
+  end if;
+  -- A lista continua: nome, situação e telefone.
+  select count(*) into n from public.rol_membros
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2' and nome is not null and situacao is not null;
+  if n < 2 then raise exception 'FALHA reservado: quem faz a chamada perdeu a lista (%)', n; end if;
+  perform whatsapp from public.rol_membros where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+
+  -- Os dados reservados não saem da tabela...
+  begin
+    perform cuidados from public.rol_membros where id = 'cacacaca-0000-4000-8000-0000000000a1';
+    raise exception 'FALHA reservado: quem faz a chamada leu os cuidados';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform nascimento, email, observacoes, batismo from public.rol_membros where id = 'cacacaca-0000-4000-8000-0000000000a1';
+    raise exception 'FALHA reservado: quem faz a chamada leu nascimento/email/observacoes';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform * from public.rol_membros limit 1;
+    raise exception 'FALHA reservado: select * continuou funcionando';
+  exception when sqlstate '42501' then null;
+  end;
+  -- ...nem da visão, nem dos aniversariantes.
+  select count(*) into n from public.rol_membros_reservado;
+  if n <> 0 then raise exception 'FALHA reservado: quem faz a chamada leu % linha(s) reservada(s)', n; end if;
+  select count(*) into n from public.aniversariantes_do_mes(
+    'acacacac-0000-4000-8000-0000000000d2', extract(month from current_date)::int);
+  if n <> 0 then raise exception 'FALHA reservado: quem faz a chamada viu aniversariantes'; end if;
+  -- Os indicadores (só números) continuam para quem acompanha a igreja.
+  select count(*) into n from public.membros_kpis('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 1 then raise exception 'FALHA reservado: indicadores sumiram para quem acompanha'; end if;
+end $$;
+
+-- Quem administra a igreja (tem Membros) lê os reservados dela.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v text; n int;
+begin
+  select cuidados || '|' || email into v from public.rol_membros_reservado where id = 'cacacaca-0000-4000-8000-0000000000a1';
+  if v is distinct from 'Alergia a amendoim|reservado@teste.local' then
+    raise exception 'FALHA reservado: quem tem Membros nao leu os dados (%)', v;
+  end if;
+  select count(*) into n from public.aniversariantes_do_mes(
+    'acacacac-0000-4000-8000-0000000000d2', extract(month from current_date)::int)
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and tipo = 'nascimento';
+  if n <> 1 then raise exception 'FALHA reservado: quem tem Membros nao viu o aniversariante'; end if;
+end $$;
+
+-- Outra rede, a igreja de cima e quem não acompanha: nada.
+do $$
+declare v_quem text; n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.rol_membros_reservado where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+    if n <> 0 then raise exception 'FALHA reservado: % leu dados reservados da congregacao', v_quem; end if;
+    select count(*) into n from public.membros_kpis('acacacac-0000-4000-8000-0000000000d2');
+    if n <> 0 then raise exception 'FALHA reservado: % recebeu os indicadores da congregacao', v_quem; end if;
+  end loop;
+end $$;
+reset role;
+
+set local role anon;
+do $$
+begin
+  perform 1 from public.rol_membros_reservado;
+  raise exception 'FALHA reservado: anon leu a visao';
+exception when sqlstate '42501' then null;
+end $$;
+reset role;
+
+-- O cargo volta ao padrão, para não afetar o que vem depois.
+delete from public.cargo_acessos
+ where church_id = 'acacacac-0000-4000-8000-0000000000d2'
+   and cargo_id = (select id from public.cargos where slug = 'auxiliar_chamada');
 
 -- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
