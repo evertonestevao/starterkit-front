@@ -1,3 +1,4 @@
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { formatChurchName } from "@/lib/churchName";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -68,7 +69,7 @@ export default async function ChurchCampaignsPage({ params }: Params) {
   const campanhas = await (await getPublicChurchRepository()).listActiveCampaigns(church.id);
   const emAndamento = campanhas.filter((campanha) => campanha.status !== "encerrada");
   const encerradas = campanhas.filter((campanha) => campanha.status === "encerrada");
-  const base = `/igreja/${church.public_code}`;
+  const base = caminhoDaIgreja(church.public_code);
 
   return (
     <PublicShell theme={theme} accent={accent}>

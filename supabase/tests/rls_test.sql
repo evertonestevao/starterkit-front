@@ -6430,6 +6430,107 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Código da página por rede (migration 20261006150000). AC Sede (d1,
+-- "rls-ac-sede") tem a AC Cong (d2) abaixo; AC Outra (d3) é outra rede.
+-- ---------------------------------------------------------------------------
+do $$
+declare v text;
+begin
+  -- A filial guarda o código dela, e a chave leva o código da sede na frente.
+  select codigo || ' | ' || public_code into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000d2';
+  if v is distinct from 'rls-ac-cong | rls-ac-sede~rls-ac-cong' then
+    raise exception 'FALHA codigo: chave da filial errada (%)', v;
+  end if;
+  select public_code into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000d1';
+  if v is distinct from 'rls-ac-sede' then raise exception 'FALHA codigo: chave da sede mudou (%)', v; end if;
+end $$;
+
+-- Duas redes, o mesmo código: pode. Na MESMA rede: não.
+insert into public.churches (id, company_id, name, slug, public_code, tipo, parent_id) values
+  ('acacacac-0000-4000-8000-0000000000e1', 'acacacac-0000-4000-8000-0000000000c3', 'Lins da Outra', 'rls-cod-lins-outra', 'lins',
+   'congregacao', 'acacacac-0000-4000-8000-0000000000d3'),
+  ('acacacac-0000-4000-8000-0000000000e2', 'acacacac-0000-4000-8000-0000000000c1', 'Lins da Sede', 'rls-cod-lins-sede', 'lins',
+   'congregacao', 'acacacac-0000-4000-8000-0000000000d1');
+do $$
+declare n int;
+begin
+  select count(*) into n from public.churches
+  where codigo = 'lins' and public_code in ('rls-ac-outra~lins', 'rls-ac-sede~lins');
+  if n <> 2 then raise exception 'FALHA codigo: duas redes nao puderam ter o mesmo codigo (%)', n; end if;
+  begin
+    insert into public.churches (company_id, name, slug, public_code, tipo, parent_id)
+    values ('acacacac-0000-4000-8000-0000000000c1', 'Lins repetida', 'rls-cod-lins-rep', 'lins',
+            'congregacao', 'acacacac-0000-4000-8000-0000000000d1');
+    raise exception 'FALHA codigo: codigo repetido na mesma rede foi aceito';
+  exception when sqlstate '23505' then null;
+  end;
+  -- Palavra que é subpágina não vira código.
+  begin
+    update public.churches set public_code = 'eventos' where id = 'acacacac-0000-4000-8000-0000000000e2';
+    raise exception 'FALHA codigo: "eventos" foi aceito como codigo';
+  exception when sqlstate '23514' then null;
+  end;
+  -- O "~" é só da chave montada: ninguém escolhe um código com ele.
+  begin
+    update public.churches set public_code = 'outra~coisa' where id = 'acacacac-0000-4000-8000-0000000000e2';
+    raise exception 'FALHA codigo: codigo com ~ foi aceito';
+  exception when sqlstate '23514' then null;
+  end;
+end $$;
+
+-- Endereço antigo: código que aponta para uma igreja só devolve a chave; repetido, nada.
+set local role anon;
+do $$
+declare v text;
+begin
+  select public.chave_publica_por_codigo('rls-ac-cong') into v;
+  if v is distinct from 'rls-ac-sede~rls-ac-cong' then raise exception 'FALHA codigo: endereco antigo nao resolveu (%)', v; end if;
+  select public.chave_publica_por_codigo('lins') into v;
+  if v is not null then raise exception 'FALHA codigo: codigo repetido resolveu para % ', v; end if;
+end $$;
+reset role;
+
+-- Quem administra a filial troca o código dela pelo caminho de sempre (gravando public_code).
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+update public.churches set public_code = 'invadida' where id = 'acacacac-0000-4000-8000-0000000000d2';
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+update public.churches set public_code = 'cong-nova' where id = 'acacacac-0000-4000-8000-0000000000d2';
+reset role;
+do $$
+declare v text;
+begin
+  select codigo || ' | ' || public_code into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000d2';
+  if v is distinct from 'cong-nova | rls-ac-sede~cong-nova' then
+    raise exception 'FALHA codigo: troca de codigo da filial (%)', v;
+  end if;
+
+  -- A sede troca o código: as filiais acompanham.
+  update public.churches set public_code = 'ac-sede-nova' where id = 'acacacac-0000-4000-8000-0000000000d1';
+  select string_agg(public_code, ',' order by public_code) into v from public.churches
+  where parent_id = 'acacacac-0000-4000-8000-0000000000d1';
+  if v is distinct from 'ac-sede-nova~cong-nova,ac-sede-nova~lins' then
+    raise exception 'FALHA codigo: filiais nao acompanharam a sede (%)', v;
+  end if;
+
+  -- Uma igreja entra numa rede que já tem o mesmo código: o vínculo não trava,
+  -- o código ganha um número no fim.
+  update public.churches set parent_id = 'acacacac-0000-4000-8000-0000000000d1'
+   where id = 'acacacac-0000-4000-8000-0000000000e1';
+  select codigo || ' | ' || public_code into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000e1';
+  if v is distinct from 'lins-2 | ac-sede-nova~lins-2' then
+    raise exception 'FALHA codigo: colisao ao entrar na rede nao foi resolvida (%)', v;
+  end if;
+
+  -- E ao sair da rede vira igreja do topo, com a chave igual ao código.
+  update public.churches set parent_id = null, tipo = 'subsede' where id = 'acacacac-0000-4000-8000-0000000000e1';
+  select public_code into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000e1';
+  if v is distinct from 'lins-2' then raise exception 'FALHA codigo: chave ao sair da rede (%)', v; end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

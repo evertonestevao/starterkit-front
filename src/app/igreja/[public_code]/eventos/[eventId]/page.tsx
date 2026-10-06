@@ -1,3 +1,4 @@
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { formatChurchName } from "@/lib/churchName";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -49,7 +50,7 @@ export default async function ChurchEventPage({ params }: Params) {
   if (!dados) notFound();
   const { church, theme, accent, evento, jaComecou } = dados;
 
-  const base = `/igreja/${church.public_code}`;
+  const base = caminhoDaIgreja(church.public_code);
   const selo = eventDateBadge(evento.inicio);
   const local = evento.local ?? church.address;
   const pago = evento.preco_cents > 0;

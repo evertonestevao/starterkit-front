@@ -12,6 +12,7 @@ import {
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { brand } from "@/config/brand";
 import { EventCard } from "@/features/church/components/event-card";
 import { PrayerForm, VisitorForm } from "@/features/church/components/public-actions";
@@ -226,11 +227,11 @@ export function ChurchPageRenderer({
     { rotulo: "Quero visitar", icone: UserPlus, href: "#visita" },
     // Eventos abre a tela de eventos — e só aparece com evento agendado.
     ...(eventos.length > 0
-      ? [{ rotulo: "Eventos", icone: CalendarCheck, href: `/igreja/${church.public_code}/eventos` }]
+      ? [{ rotulo: "Eventos", icone: CalendarCheck, href: `${caminhoDaIgreja(church.public_code)}/eventos` }]
       : []),
     // Campanhas só aparece com pelo menos uma (ativa ou encerrada) publicada.
     ...(campanhas.length > 0
-      ? [{ rotulo: "Campanhas", icone: HandCoins, href: `/igreja/${church.public_code}/campanhas` }]
+      ? [{ rotulo: "Campanhas", icone: HandCoins, href: `${caminhoDaIgreja(church.public_code)}/campanhas` }]
       : []),
     ...(temCultos ? [{ rotulo: "Programação", icone: Clock3, href: "#programacao" }] : []),
     ...(whatsapp
@@ -369,7 +370,7 @@ export function ChurchPageRenderer({
               <li key={evento.id}>
                 <EventCard
                   evento={evento}
-                  href={`/igreja/${church.public_code}/eventos/${evento.id}`}
+                  href={`${caminhoDaIgreja(church.public_code)}/eventos/${evento.id}`}
                   enderecoDaIgreja={church.address}
                   compacto
                 />
@@ -377,7 +378,7 @@ export function ChurchPageRenderer({
             ))}
           </ul>
           <a
-            href={`/igreja/${church.public_code}/eventos`}
+            href={`${caminhoDaIgreja(church.public_code)}/eventos`}
             className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--pg-accent)]"
           >
             Ver todos os eventos

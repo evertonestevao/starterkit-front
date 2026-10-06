@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SUBPAGINAS_DA_IGREJA } from "@/lib/churchPaths";
 import { CHURCH_SURNAME_MAX_LENGTH, normalizeSurname } from "@/lib/churchName";
 import { normalizeSocialLinks, type SocialKind } from "@/lib/churchPublicPage";
 import { AppError, toValidationError } from "@/lib/errors";
@@ -38,7 +39,12 @@ export interface ChurchProfile {
   herdarNome: boolean;
   /** Nome da igreja superior direta, para o "usar o nome de ...". Null sem superior. */
   parentName: string | null;
+  /** O código da página DENTRO da rede (o que a pessoa escolhe). */
   publicCode: string;
+  /** A chave completa, com a rede na frente quando há ("adipiranga~lins"). */
+  chavePublica: string;
+  /** Sede: o código dela é o endereço da rede e entra no endereço das igrejas ligadas. */
+  ehSedeDeRede: boolean;
   address: string | null;
   logoUrl: string | null;
   socialLinks: Record<string, string>;
@@ -111,7 +117,8 @@ export const publicCodeSchema = z
   .regex(
     /^[a-z0-9]+(-[a-z0-9]+)*$/,
     "Use só letras sem acento, números e hífen — por exemplo: betel-lins",
-  );
+  )
+  .refine((v) => !SUBPAGINAS_DA_IGREJA.includes(v), "Este endereço é reservado. Escolha outro.");
 
 const profileSchema = z.object({
   churchId: z.uuid("Igreja inválida"),

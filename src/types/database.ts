@@ -193,6 +193,8 @@ export interface Church {
   path: string;
   template_mode: ChurchTemplateMode;
   template_id: string | null;
+  /** Código da página dentro da rede; `public_code` é a chave montada com a rede. */
+  codigo?: string;
   public_code: string;
   /** Chave PIX da própria igreja (dízimos e ofertas). A plataforma não intermedeia. */
   pix_chave: string | null;

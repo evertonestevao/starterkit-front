@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { isValidCnpj, isValidCpf, onlyDigits } from "@/lib/brDocument";
 import { parseBrlToCents } from "@/lib/churchEvents";
 import { AppError, toValidationError } from "@/lib/errors";
@@ -294,7 +295,7 @@ export function createChurchReceivingService(deps: {
     const { url } = await deps.provider.ensureDonationLink({
       apiKey: deps.secrets.open(cifrada),
       churchName: conta.churchName,
-      successUrl: `${base}/igreja/${conta.churchPublicCode}`,
+      successUrl: `${base}${caminhoDaIgreja(conta.churchPublicCode)}`,
       metodo,
     });
     if (metodo === "cartao") {
@@ -384,7 +385,7 @@ export function createChurchReceivingService(deps: {
         webhookToken: token,
         // A página da igreja, não a raiz — assim quem paga vê de qual igreja
         // é, em vez do domínio genérico da plataforma.
-        site: `${base}/igreja/${igreja.publicCode}`,
+        site: `${base}${caminhoDaIgreja(igreja.publicCode)}`,
       });
 
       await deps.repo.saveProviderResult({

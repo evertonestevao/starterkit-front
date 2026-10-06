@@ -29,6 +29,8 @@ function build(sobrescrever: Partial<ChurchProfile> = {}) {
         herdarNome: false,
         parentName: null,
         publicCode: "betel",
+        chavePublica: "betel",
+        ehSedeDeRede: false,
         address: "Rua A, 10",
         logoUrl: null,
         socialLinks: {},

@@ -1,10 +1,10 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { ChurchPageRenderer } from "@/features/church/church-page-templates";
 import { VISIT_ORIGIN_PARAM } from "@/lib/churchVisits";
 import { buildPixPayload } from "@/lib/pixPayload";
 import { qrPngDataUrl } from "@/lib/qr";
 import { trackChurchVisit } from "@/server/churchVisits";
-import { getPublicChurchRepository, loadPublicChurch } from "@/server/publicChurch";
+import { enderecoAtualDoCodigoAntigo, getPublicChurchRepository, loadPublicChurch } from "@/server/publicChurch";
 
 /** Quantos eventos a página inicial mostra antes do "ver todos os eventos". */
 const EVENTOS_NA_PREVIA = 3;
@@ -18,7 +18,17 @@ export default async function PublicChurchPage({
 }) {
   const [{ public_code }, query] = await Promise.all([params, searchParams]);
   const carregado = await loadPublicChurch(public_code);
-  if (!carregado) notFound();
+  if (!carregado) {
+    // Link ou QR antigo de uma igreja que entrou numa rede: leva ao endereço
+    // novo, mantendo a origem (qr/nfc) para a contagem de visitas.
+    const destino = await enderecoAtualDoCodigoAntigo(public_code);
+    if (destino) {
+      const origem = query[VISIT_ORIGIN_PARAM];
+      const valor = Array.isArray(origem) ? origem[0] : origem;
+      permanentRedirect(valor ? `${destino}?${VISIT_ORIGIN_PARAM}=${encodeURIComponent(valor)}` : destino);
+    }
+    notFound();
+  }
   const { church, theme, accent } = carregado;
 
   // Conta a abertura (link, QR ou NFC) depois da resposta; nunca bloqueia.

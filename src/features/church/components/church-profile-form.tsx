@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { ExternalLink } from "lucide-react";
+import { caminhoDaIgreja, partesDaChave } from "@/lib/churchPaths";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,6 +104,8 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
 
   const enderecoMudou = publicCode.trim().toLowerCase() !== igreja.publicCode;
   const base = appUrl.replace(/\/+$/, "");
+  // Igreja abaixo de outra: o endereço leva o código da sede (a rede) na frente.
+  const redeDaIgreja = partesDaChave(igreja.chavePublica).rede;
 
   // Os campos abaixo são não controlados (defaultValue): depois de salvar
   // com sucesso, o servidor devolve a igreja com os dados novos, e sem isto
@@ -179,7 +182,9 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="publicCode">Endereço da página</Label>
           <div className="flex items-center gap-1.5">
-            <span className="shrink-0 text-sm text-muted-foreground">{base}/igreja/</span>
+            <span className="shrink-0 text-sm text-muted-foreground">
+              {base}/igreja/{redeDaIgreja ? `${redeDaIgreja}/` : ""}
+            </span>
             <Input
               id="publicCode"
               name="publicCode"
@@ -188,9 +193,21 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
               onChange={(e) => setPublicCode(e.target.value)}
             />
           </div>
+          {igreja.ehSedeDeRede ? (
+            <p className="text-xs text-muted-foreground">
+              Este é também o endereço da sua rede: as igrejas ligadas a você ficam em{" "}
+              <strong className="font-medium text-foreground">
+                {base}/igreja/{publicCode.trim().toLowerCase() || igreja.publicCode}/nome-da-igreja
+              </strong>
+              .
+            </p>
+          ) : null}
           {enderecoMudou ? (
             <Alert variant="destructive">
               <AlertDescription>
+                {igreja.ehSedeDeRede
+                  ? "Como sede, mudar este endereço muda também o de todas as igrejas ligadas à sua rede. "
+                  : ""}
                 Mudar o endereço quebra o QR Code e a tag NFC já impressos, e o link antigo para de
                 funcionar. Se o material já foi produzido, é melhor manter{" "}
                 <strong>{igreja.publicCode}</strong>.
@@ -198,7 +215,7 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
             </Alert>
           ) : (
             <a
-              href={`${base}/igreja/${igreja.publicCode}`}
+              href={`${base}${caminhoDaIgreja(igreja.chavePublica)}`}
               target="_blank"
               rel="noreferrer"
               className="flex w-fit items-center gap-1 text-xs text-primary hover:underline"

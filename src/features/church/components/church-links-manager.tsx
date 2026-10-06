@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Building2, Check, ChevronDown, Church, Copy, House, Link2, MessageCircle, Network, X } from "lucide-react";
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { nomeNivel, type NomesNiveis } from "@/lib/niveisRede";
 import { useNomesNiveis } from "@/providers/niveis-provider";
 import { Badge } from "@/components/ui/badge";
@@ -102,7 +103,7 @@ function PendingRequestCard({ request, tipos }: { request: ChurchLinkRequest; ti
         </p>
         {request.childPublicCode ? (
           <a
-            href={`/igreja/${request.childPublicCode}`}
+            href={caminhoDaIgreja(request.childPublicCode)}
             target="_blank"
             rel="noopener noreferrer"
             className="w-fit text-xs text-primary underline-offset-4 hover:underline"

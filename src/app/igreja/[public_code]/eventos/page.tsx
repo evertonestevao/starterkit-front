@@ -1,3 +1,4 @@
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { formatChurchName } from "@/lib/churchName";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -30,7 +31,7 @@ export default async function ChurchEventsPage({ params }: Params) {
   const { church, theme, accent } = carregado;
 
   const eventos = await (await getPublicChurchRepository()).listUpcomingEvents(church.id);
-  const base = `/igreja/${church.public_code}`;
+  const base = caminhoDaIgreja(church.public_code);
 
   return (
     <PublicShell theme={theme} accent={accent}>

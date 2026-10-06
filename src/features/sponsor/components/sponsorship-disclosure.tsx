@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronDown, HandCoins, Info } from "lucide-react";
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { brand } from "@/config/brand";
 
 /**
@@ -60,7 +61,7 @@ export function SponsorshipDisclosure({
               <strong className="font-medium text-foreground">para a igreja</strong> com dízimo ou
               oferta? Isso é outra coisa, e fica{" "}
               <Link
-                href={`/igreja/${encodeURIComponent(churchPublicCode)}`}
+                href={caminhoDaIgreja(churchPublicCode)}
                 className="underline underline-offset-4 hover:text-foreground"
               >
                 na página dela

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Info, MapPin, Network, ShieldCheck } from "lucide-react";
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,7 +55,7 @@ function Resumo({ preview, nomes }: { preview: ChurchLinkPreview; nomes: NomesNi
           </p>
         ) : null}
         <Link
-          href={`/igreja/${preview.church.publicCode}`}
+          href={caminhoDaIgreja(preview.church.publicCode)}
           target="_blank"
           rel="noopener noreferrer"
           className="w-fit text-xs text-primary underline-offset-4 hover:underline"

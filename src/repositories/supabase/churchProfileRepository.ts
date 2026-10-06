@@ -48,7 +48,7 @@ export function createSupabaseChurchProfileRepository(
       const { data, error } = await client
         .from("churches")
         .select(
-          "id, name, nome_proprio, sobrenome, herdar_nome, public_code, address, logo_url, social_links, parent_id, template_mode, template_id, accent_color",
+          "id, name, nome_proprio, sobrenome, herdar_nome, codigo, public_code, tipo, address, logo_url, social_links, parent_id, template_mode, template_id, accent_color",
         )
         .eq("company_id", companyId)
         .is("deleted_at", null)
@@ -62,7 +62,9 @@ export function createSupabaseChurchProfileRepository(
         nome_proprio: string;
         sobrenome: string | null;
         herdar_nome: boolean;
+        codigo: string;
         public_code: string;
+        tipo: string;
         address: string | null;
         logo_url: string | null;
         social_links: Record<string, string> | null;
@@ -92,7 +94,11 @@ export function createSupabaseChurchProfileRepository(
           sobrenome: row.sobrenome,
           herdarNome: row.herdar_nome,
           parentName: row.parent_id ? (nomesDasMaes.get(row.parent_id) ?? null) : null,
-          publicCode: row.public_code,
+          // O que a pessoa edita é o código dentro da rede; a chave completa
+          // (com a rede na frente) é montada pelo banco.
+          publicCode: row.codigo,
+          chavePublica: row.public_code,
+          ehSedeDeRede: row.tipo === "sede" && row.parent_id === null,
           address: row.address,
           logoUrl: row.logo_url,
           socialLinks: row.social_links ?? {},
@@ -125,6 +131,8 @@ export function createSupabaseChurchProfileRepository(
           sobrenome,
           herdar_nome: herdarNome,
           address,
+          // Gravado em `public_code`: o gatilho entende como troca de código e
+          // refaz a chave (migration 20261006150000).
           public_code: publicCode,
           social_links: socialLinks,
         })

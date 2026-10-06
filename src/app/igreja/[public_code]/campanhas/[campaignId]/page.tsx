@@ -1,3 +1,4 @@
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { formatChurchName } from "@/lib/churchName";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -42,7 +43,7 @@ export default async function ChurchCampaignPage({ params }: Params) {
   if (!dados) notFound();
   const { church, theme, accent, campanha } = dados;
 
-  const base = `/igreja/${church.public_code}`;
+  const base = caminhoDaIgreja(church.public_code);
   const percentual =
     campanha.meta_cents > 0
       ? Math.min(100, Math.round((campanha.total_arrecadado_liquido_cents / campanha.meta_cents) * 100))

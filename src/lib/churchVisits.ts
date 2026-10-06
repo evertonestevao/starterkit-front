@@ -1,3 +1,4 @@
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 /**
  * Regras puras da contagem de visitas à página pública da igreja.
  *
@@ -21,7 +22,7 @@ export function parseVisitOrigin(value: string | string[] | undefined): VisitOri
 /** URL que vai impressa no QR Code ou gravada na tag NFC. */
 export function churchTagUrl(appUrl: string, publicCode: string, origem: "qr" | "nfc"): string {
   const base = appUrl.replace(/\/+$/, "");
-  return `${base}/igreja/${encodeURIComponent(publicCode)}?${VISIT_ORIGIN_PARAM}=${origem}`;
+  return `${base}${caminhoDaIgreja(publicCode)}?${VISIT_ORIGIN_PARAM}=${origem}`;
 }
 
 const BOT_PATTERN =

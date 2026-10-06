@@ -17,6 +17,16 @@ export const PUBLIC_CHURCH_COLUMNS =
 
 export function createSupabasePublicChurchRepository(client: SupabaseClient) {
   return {
+    /**
+     * Endereço antigo (/igreja/{codigo} de uma igreja que hoje está numa
+     * rede): a chave atual, quando o código aponta para uma igreja só.
+     */
+    async findChaveByCodigoAntigo(codigo: string): Promise<string | null> {
+      const { data, error } = await client.rpc("chave_publica_por_codigo", { p_codigo: codigo });
+      if (error) throw new AppError("internal_error", "Falha ao procurar a igreja", error);
+      return typeof data === "string" && data !== "" ? data : null;
+    },
+
     async findByPublicCode(publicCode: string): Promise<PublicChurch | null> {
       const { data, error } = await client
         .from("churches")

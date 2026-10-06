@@ -52,7 +52,9 @@ export async function saveChurchProfileAction(
 
     revalidatePath(PAGINA);
     // A página pública muda junto: sem isto, a igreja salva e não vê efeito.
-    revalidatePath(`/igreja/${texto(formData, "publicCode").trim().toLowerCase()}`);
+    // Todas as páginas públicas de igreja: a chave da rota depende da rede, e trocar o
+    // código da sede muda o endereço das filiais.
+    revalidatePath("/igreja/[public_code]", "layout");
     return { success: "Página da igreja atualizada." };
   } catch (err) {
     return toActionError(err);
@@ -78,7 +80,9 @@ export async function saveChurchAppearanceAction(
 
     revalidatePath(PAGINA);
     // Só para a página mostrar o novo visual; o valor não é confiado para mais nada.
-    revalidatePath(`/igreja/${texto(formData, "publicCode").trim().toLowerCase()}`);
+    // Todas as páginas públicas de igreja: a chave da rota depende da rede, e trocar o
+    // código da sede muda o endereço das filiais.
+    revalidatePath("/igreja/[public_code]", "layout");
     return { success: "Aparência da página atualizada." };
   } catch (err) {
     return toActionError(err);

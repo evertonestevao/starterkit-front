@@ -1,3 +1,4 @@
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import type { DomainProvider } from "@/adapters/domain/DomainProvider";
 import {
   dnsInstructionsFor,
@@ -164,7 +165,7 @@ export function createChurchDomainService(deps: ChurchDomainServiceDeps) {
       churchId: church.id,
       churchName: church.name,
       // Sempre presente, com domínio próprio ou sem ele.
-      defaultUrl: `${appUrl.replace(/\/$/, "")}/igreja/${church.public_code}`,
+      defaultUrl: `${appUrl.replace(/\/$/, "")}${caminhoDaIgreja(church.public_code)}`,
       sponsorInviteUrl: `${appUrl.replace(/\/$/, "")}/patrocinador/patrocinar/${encodeURIComponent(church.public_code)}`,
       domain,
       status: church.dominio_status,

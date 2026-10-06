@@ -1,3 +1,4 @@
+import { enderecoPublicoDaRotaInterna, rotaInternaDaIgreja } from "@/lib/churchPaths";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientEnv } from "@/config/env";
@@ -84,6 +85,22 @@ export async function proxy(request: NextRequest) {
   // x-forwarded-host é ignorado de propósito: vem do cliente em muitos setups.
   const host = request.headers.get("host");
   const tenantByHost = getHostTenant();
+
+  // Página de igreja que está numa rede: o endereço é /igreja/{rede}/{codigo},
+  // e a rota do App Router é uma pasta só, com a chave "rede~codigo". Quem
+  // abre a rota interna direto volta para o endereço público.
+  const enderecoPublico = enderecoPublicoDaRotaInterna(pathname);
+  if (enderecoPublico) {
+    const url = request.nextUrl.clone();
+    url.pathname = enderecoPublico;
+    return NextResponse.redirect(url, 308);
+  }
+  const rotaInterna = rotaInternaDaIgreja(pathname);
+  if (rotaInterna) {
+    const url = request.nextUrl.clone();
+    url.pathname = rotaInterna;
+    return NextResponse.rewrite(url);
+  }
 
   if (!tenantByHost.isPlatformHost(host ?? "")) {
     const match = await tenantByHost.resolve(host);
