@@ -18,14 +18,19 @@ export type { ChurchTheme };
 export const loadPublicChurch = cache(
   async (
     publicCode: string,
-  ): Promise<{ church: PublicChurch; theme: ChurchTheme; accent: string | null } | null> => {
+  ): Promise<{ church: PublicChurch; theme: ChurchTheme; accent: string | null; previa: boolean } | null> => {
     const repo = createSupabasePublicChurchRepository(await getSupabaseServerClient());
     const church = await repo.findByPublicCode(publicCode);
     if (!church) return null;
 
+    // Página fora do ar: para o público não existe. Só quem administra a
+    // igreja vê, em prévia, para conferir antes de publicar.
+    const previa = !church.pagina_ativa;
+    if (previa && !(await repo.podeVerPrevia(church.id).catch(() => false))) return null;
+
     const { slug, accent } = await repo.resolveAppearance(church.id);
     const theme = isChurchTheme(slug) ? slug : DEFAULT_CHURCH_THEME;
-    return { church, theme, accent };
+    return { church, theme, accent, previa };
   },
 );
 

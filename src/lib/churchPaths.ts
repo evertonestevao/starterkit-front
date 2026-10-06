@@ -18,7 +18,7 @@
 export const SEPARADOR_REDE = "~";
 
 /** Subpáginas de /igreja/{codigo}/... — por isso não podem ser código de igreja. */
-export const SUBPAGINAS_DA_IGREJA = ["eventos", "campanhas"];
+export const SUBPAGINAS_DA_IGREJA = ["eventos", "campanhas", "igrejas"];
 
 const CODIGO = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 

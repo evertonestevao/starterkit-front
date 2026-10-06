@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
+import { PIX_STATUS_LABEL, explicarPixStatus, type PixStatus } from "@/lib/pixStatus";
 import { saveChurchPixAction } from "@/server/actions/churchPix";
 
 const selectClasses =
@@ -17,6 +18,8 @@ export interface PixChurch {
   name: string;
   pixChave: string | null;
   pixTitular: string | null;
+  pixStatus: PixStatus;
+  pixMotivoRecusa: string | null;
 }
 
 /**
@@ -50,6 +53,22 @@ export function PixForm({ igrejas }: { igrejas: PixChurch[] }) {
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="churchId" value={churchId} />
       <input type="hidden" name="confirmado" value={confirmando ? "true" : "false"} />
+
+      {igreja ? (
+        <div
+          role="status"
+          className={`rounded-lg border p-3 text-sm ${
+            igreja.pixStatus === "recusado"
+              ? "border-destructive/40 bg-destructive/5"
+              : igreja.pixStatus === "aguardando"
+                ? "border-amber-500/40 bg-amber-500/10"
+                : "bg-muted/40"
+          }`}
+        >
+          <p className="font-medium">Situação: {PIX_STATUS_LABEL[igreja.pixStatus]}</p>
+          <p className="mt-0.5 text-muted-foreground">{explicarPixStatus(igreja.pixStatus, igreja.pixMotivoRecusa)}</p>
+        </div>
+      ) : null}
 
       {igrejas.length > 1 ? (
         <div className="flex flex-col gap-1.5">

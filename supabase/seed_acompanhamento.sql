@@ -724,6 +724,17 @@ begin
     updated_at = now();
 end $$;
 
+-- Página da sede na demo: um texto de apresentação ("Sobre a igreja").
+update public.churches
+   set sobre = E'Somos uma igreja de portas abertas há mais de 40 anos, com cultos, Escola Bíblica e trabalho social na cidade.\n\nA Demo Sede coordena as igrejas da nossa rede na região. Venha nos visitar!'
+ where slug = 'demo-sede' and sobre is null;
+
+-- A demo já nasce publicada: igreja nova fica com a página fora do ar e o Pix
+-- aguardando a moderação (migration 20261006170000), o que deixaria a
+-- demonstração sem página para mostrar.
+update public.churches set pagina_ativa = true, pagina_ativada_em = now() where slug like 'demo-%';
+update public.churches set pix_aprovado_em = now() where slug like 'demo-%' and pix_chave is not null;
+
 drop function public.__demo_rol_pequeno(uuid, text, int, date);
 drop function public.__demo_cargo(uuid, text);
 drop function public.__demo_presenca(uuid, date, uuid, text);

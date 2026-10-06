@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PixStatus } from "@/lib/pixStatus";
 import { AppError, toValidationError } from "@/lib/errors";
 import type { RoleCode } from "@/types/database";
 
@@ -51,7 +52,17 @@ const pixSchema = z.object({
 
 export interface ChurchPixRepository {
   /** Igrejas da empresa ativa, para escolher qual recebe a chave. */
-  listCompanyChurches(companyId: string): Promise<Array<{ id: string; name: string; pixChave: string | null; pixTitular: string | null }>>;
+  listCompanyChurches(companyId: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      pixChave: string | null;
+      pixTitular: string | null;
+      /** A chave só vai para a página depois de aprovada pela moderação. */
+      pixStatus: PixStatus;
+      pixMotivoRecusa: string | null;
+    }>
+  >;
   updatePix(input: { churchId: string; companyId: string; chave: string; titular: string }): Promise<void>;
   /** Emails de quem administra a empresa — todos são avisados da troca. */
   listCompanyAdminEmails(companyId: string): Promise<string[]>;

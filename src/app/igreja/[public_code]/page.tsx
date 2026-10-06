@@ -29,15 +29,16 @@ export default async function PublicChurchPage({
     }
     notFound();
   }
-  const { church, theme, accent } = carregado;
+  const { church, theme, accent, previa } = carregado;
 
   // Conta a abertura (link, QR ou NFC) depois da resposta; nunca bloqueia.
-  await trackChurchVisit(church.id, query[VISIT_ORIGIN_PARAM]);
+  // A prévia de quem administra não é visita.
+  if (!previa) await trackChurchVisit(church.id, query[VISIT_ORIGIN_PARAM]);
 
   const repo = await getPublicChurchRepository();
   // Nenhuma das duas listas pode derrubar a página da igreja: vazia é melhor
   // do que tela de erro para quem veio pelo QR Code.
-  const [sponsors, eventos, campanhas, programacao, linkCartao, linkPix] = await Promise.all([
+  const [sponsors, eventos, campanhas, programacao, linkCartao, linkPix, temRede] = await Promise.all([
     // Porta fechada pra patrocinador: nem consulta — a seção nem aparece.
     !church.aceita_patrocinio
       ? Promise.resolve([])
@@ -68,6 +69,14 @@ export default async function PublicChurchPage({
       : repo.getPixDonationLink(church.id).catch((err: unknown) => {
           console.error("[church-page] falha ao carregar o link de pix", err);
           return null;
+        }),
+    // Igreja do topo com igrejas abaixo: ganha o atalho "Nossas igrejas", que
+    // abre a lista numa tela própria. A lista em si não é carregada aqui.
+    church.parent_id !== null
+      ? Promise.resolve(false)
+      : repo.hasChildChurches(church.id).catch((err: unknown) => {
+          console.error("[church-page] falha ao verificar a rede", err);
+          return false;
         }),
   ]);
 
@@ -103,6 +112,8 @@ export default async function PublicChurchPage({
       pixQrDataUrl={pixQrDataUrl}
       linkCartao={linkCartao}
       linkPix={linkPix}
+      temRede={temRede}
+      previa={previa}
       templateSlug={theme}
       accent={accent}
     />

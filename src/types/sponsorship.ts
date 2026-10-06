@@ -101,6 +101,8 @@ export interface PlatformPendingCounts {
   alteracoes: number;
   contasTravadas: number;
   denuncias: number;
+  /** Chaves Pix de igrejas aguardando conferência. */
+  pix: number;
 }
 
 /** Conta travada pelo "não fui eu", esperando o suporte liberar. */

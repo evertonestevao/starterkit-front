@@ -12,6 +12,13 @@ import {
   MessageCircleHeart,
   type LucideIcon,
 } from "lucide-react";
+import {
+  PrimeirosPassos,
+  temPrimeirosPassos,
+  type PrimeirosPassosDados,
+} from "@/features/church/components/primeiros-passos";
+import { getChurchPixService } from "@/server/churchPix";
+import { getChurchProfileService } from "@/server/churchProfile";
 import { AniversariantesCard } from "@/features/acompanhamento/components/aniversariantes-card";
 import { getSaudacaoAtiva } from "@/server/saudacao";
 import { MiniBarChart, type PontoGrafico } from "@/components/mini-bar-chart";
@@ -95,6 +102,7 @@ export default async function DashboardPage() {
     ebdDomingos,
     aniversarios,
     saudacao,
+    primeirosPassos,
   ] = await Promise.all([
       // Respostas a convites de vínculo entre igrejas.
       se(!!auth.user, "os avisos de vínculo", async () =>
@@ -145,6 +153,24 @@ export default async function DashboardPage() {
         (await getAcompanhamentoService()).proximosAniversarios(acompanhamentoActor, 60),
       ),
       getSaudacaoAtiva(),
+      // Primeiros passos de quem administra: página no ar e Pix (a primeira igreja da conta).
+      se(isAdmin, "os primeiros passos", async (): Promise<PrimeirosPassosDados | null> => {
+        const [perfis, pix] = await Promise.all([
+          (await getChurchProfileService()).list(active.id),
+          (await getChurchPixService()).listChurches(active.id),
+        ]);
+        const perfil = perfis[0];
+        if (!perfil) return null;
+        const doPix = pix.find((c) => c.id === perfil.id);
+        return {
+          churchId: perfil.id,
+          chavePublica: perfil.chavePublica,
+          temEndereco: Boolean(perfil.address),
+          paginaAtiva: perfil.paginaAtiva,
+          pix: doPix?.pixStatus ?? "sem_chave",
+          pixMotivoRecusa: doPix?.pixMotivoRecusa ?? null,
+        };
+      }),
     ]);
 
   const dia = (data: string) => formatarData(data).slice(0, 5);
@@ -298,6 +324,8 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <ChurchLinkNotices notices={linkNotices ?? []} />
+
+      {primeirosPassos && temPrimeirosPassos(primeirosPassos) ? <PrimeirosPassos dados={primeirosPassos} /> : null}
 
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">{active.name}</h2>

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { statusDoPix } from "@/lib/pixStatus";
 import { AppError } from "@/lib/errors";
 import type { ChurchPixRepository } from "@/services/churchPixService";
 
@@ -12,7 +13,7 @@ export function createSupabaseChurchPixRepository(client: SupabaseClient): Churc
     async listCompanyChurches(companyId) {
       const { data, error } = await client
         .from("churches")
-        .select("id, name, pix_chave, pix_titular")
+        .select("id, name, pix_chave, pix_titular, pix_aprovado_em, pix_recusado_em, pix_recusa_motivo")
         .eq("company_id", companyId)
         .is("deleted_at", null)
         .order("name");
@@ -22,11 +23,16 @@ export function createSupabaseChurchPixRepository(client: SupabaseClient): Churc
         name: string;
         pix_chave: string | null;
         pix_titular: string | null;
+        pix_aprovado_em: string | null;
+        pix_recusado_em: string | null;
+        pix_recusa_motivo: string | null;
       }>).map((row) => ({
         id: row.id,
         name: row.name,
         pixChave: row.pix_chave,
         pixTitular: row.pix_titular,
+        pixStatus: statusDoPix({ chave: row.pix_chave, aprovadoEm: row.pix_aprovado_em, recusadoEm: row.pix_recusado_em }),
+        pixMotivoRecusa: row.pix_recusa_motivo,
       }));
     },
 

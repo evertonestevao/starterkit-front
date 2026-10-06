@@ -180,6 +180,22 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
         </div>
 
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="sobre">Sobre a igreja (opcional)</Label>
+          <textarea
+            id="sobre"
+            name="sobre"
+            // A `key` troca o texto quando a pessoa escolhe outra igreja na lista.
+            key={igreja.id}
+            defaultValue={igreja.sobre ?? ""}
+            maxLength={1500}
+            rows={5}
+            placeholder="Conte em poucas linhas a história da igreja, quem é o pastor e o que vocês acreditam."
+            className="min-h-28 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
+          />
+          <p className="text-xs text-muted-foreground">Aparece na página pública, numa seção própria. Até 1.500 caracteres.</p>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="publicCode">Endereço da página</Label>
           <div className="flex items-center gap-1.5">
             <span className="shrink-0 text-sm text-muted-foreground">

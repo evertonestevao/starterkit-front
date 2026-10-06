@@ -36,7 +36,10 @@ export async function saveChurchPixAction(
     );
 
     revalidatePath("/dashboard/settings/pix");
-    return { success: "Chave PIX salva. Avisamos os administradores por email." };
+    return {
+      success:
+        "Chave PIX salva. Ela aparece na página assim que a nossa equipe conferir. Avisamos os administradores por email.",
+    };
   } catch (err) {
     return toActionError(err);
   }

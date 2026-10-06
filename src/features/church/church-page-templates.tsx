@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import {
   ArrowRight,
   CalendarCheck,
+  Church,
   Clock3,
   CreditCard,
   HandCoins,
@@ -64,6 +65,10 @@ export type ChurchPageTemplateProps = {
   campanhas: Campaign[];
   /** Programação publicada: cultos semanais e especiais. */
   programacao: ChurchScheduleItem[];
+  /** Sede com igrejas ligadas: mostra o atalho para a tela "Nossas igrejas". */
+  temRede?: boolean;
+  /** Página ainda fora do ar, vista por quem administra a igreja. */
+  previa?: boolean;
   /** BR Code do PIX e o QR dele, montados no servidor a partir da chave. */
   pixCopiaECola?: string | null;
   pixQrDataUrl?: string | null;
@@ -190,6 +195,8 @@ export function ChurchPageRenderer({
   eventos,
   campanhas,
   programacao,
+  temRede = false,
+  previa = false,
   pixCopiaECola = null,
   pixQrDataUrl = null,
   linkCartao = null,
@@ -234,6 +241,10 @@ export function ChurchPageRenderer({
       ? [{ rotulo: "Campanhas", icone: HandCoins, href: `${caminhoDaIgreja(church.public_code)}/campanhas` }]
       : []),
     ...(temCultos ? [{ rotulo: "Programação", icone: Clock3, href: "#programacao" }] : []),
+    // Abre a lista numa tela própria: um ministério pode ter centenas de igrejas.
+    ...(temRede
+      ? [{ rotulo: "Nossas igrejas", icone: Church, href: `${caminhoDaIgreja(church.public_code)}/igrejas` }]
+      : []),
     ...(whatsapp
       ? [{ rotulo: "WhatsApp", icone: "whatsapp" as const, href: whatsapp.href, externo: true }]
       : []),
@@ -353,6 +364,19 @@ export function ChurchPageRenderer({
       ),
     },
   );
+
+  if (church.sobre) {
+    secoes.push({
+      id: "sobre",
+      conteudo: (
+        <>
+          <TituloSecao icone={Church} antes="Sobre a" destaque="igreja" />
+          {/* Texto simples, com as quebras de linha de quem escreveu. */}
+          <p className={`${cartao} text-base leading-7 whitespace-pre-line text-[var(--pg-text)]`}>{church.sobre}</p>
+        </>
+      ),
+    });
+  }
 
   if (eventos.length > 0) {
     secoes.push({
@@ -531,6 +555,12 @@ export function ChurchPageRenderer({
 
   return (
     <PublicShell theme={templateSlug} accent={accent}>
+      {previa ? (
+        <p role="status" className="bg-amber-400 px-4 py-2.5 text-center text-sm font-medium text-amber-950">
+          Prévia: esta página ainda não está no ar. Só quem administra a igreja vê. Publique em Painel → Primeiros
+          passos.
+        </p>
+      ) : null}
       <header className="bg-[var(--pg-hero)]">
         <div className="mx-auto flex w-full max-w-xl flex-col items-center px-5 pt-14 pb-10 text-center">
           {church.logo_url ? (

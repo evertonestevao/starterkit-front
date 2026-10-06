@@ -29,6 +29,7 @@ describe("rotaInternaDaIgreja", () => {
     expect(rotaInternaDaIgreja("/igreja/adipiranga")).toBeNull();
     expect(rotaInternaDaIgreja("/igreja/adipiranga/eventos")).toBeNull();
     expect(rotaInternaDaIgreja("/igreja/adipiranga/campanhas/123")).toBeNull();
+    expect(rotaInternaDaIgreja("/igreja/adipiranga/igrejas")).toBeNull();
   });
 
   it("ignora outras rotas e pedaços que não são código", () => {
@@ -60,6 +61,7 @@ describe("resolverNoDominioDaRede", () => {
     expect(r("/")).toEqual({ acao: "reescrever", caminho: "/igreja/adipiranga" });
     expect(r("/eventos")).toEqual({ acao: "reescrever", caminho: "/igreja/adipiranga/eventos" });
     expect(r("/campanhas/123")).toEqual({ acao: "reescrever", caminho: "/igreja/adipiranga/campanhas/123" });
+    expect(r("/igrejas")).toEqual({ acao: "reescrever", caminho: "/igreja/adipiranga/igrejas" });
   });
 
   it("/igreja/{codigo} é uma igreja DESTA rede, com as subpáginas dela", () => {

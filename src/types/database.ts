@@ -188,6 +188,10 @@ export interface Church {
   slug: string;
   logo_url: string | null;
   address: string | null;
+  /** Texto de apresentação ("Sobre"), mostrado na página pública. */
+  sobre?: string | null;
+  /** A página pública está no ar? Igreja nova nasce com ela fora do ar. */
+  pagina_ativa?: boolean;
   service_times: Record<string, string> | null;
   social_links: Record<string, string> | null;
   path: string;

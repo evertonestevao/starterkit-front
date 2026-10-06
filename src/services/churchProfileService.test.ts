@@ -31,6 +31,8 @@ function build(sobrescrever: Partial<ChurchProfile> = {}) {
         publicCode: "betel",
         chavePublica: "betel",
         ehSedeDeRede: false,
+        sobre: null,
+        paginaAtiva: true,
         address: "Rua A, 10",
         logoUrl: null,
         socialLinks: {},
@@ -43,6 +45,7 @@ function build(sobrescrever: Partial<ChurchProfile> = {}) {
     ]),
     updateProfile: vi.fn(async () => undefined),
     updateLogo: vi.fn(async () => undefined),
+    setPaginaAtiva: vi.fn(async () => undefined),
     updateAppearance: vi.fn(async () => undefined),
   };
   const audit = { record: vi.fn(async () => undefined) };
@@ -155,6 +158,29 @@ describe("save", () => {
     await service.save(ADMIN, base);
 
     expect(repo.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ socialLinks: {} }));
+  });
+});
+
+describe("definirPaginaAtiva", () => {
+  it("quem administra publica e tira do ar; fica registrado", async () => {
+    const { service, repo, audit } = build({ paginaAtiva: false });
+    await expect(service.definirPaginaAtiva(ADMIN, IGREJA, true)).resolves.toEqual({ nome: "Igreja Betel" });
+    await service.definirPaginaAtiva(ADMIN, IGREJA, false);
+    expect(repo.setPaginaAtiva).toHaveBeenNthCalledWith(1, IGREJA, true);
+    expect(repo.setPaginaAtiva).toHaveBeenNthCalledWith(2, IGREJA, false);
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "church.pagina_publicada" }));
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "church.pagina_fora_do_ar" }));
+  });
+
+  it("member não publica, e igreja de outra conta é não encontrada", async () => {
+    const { service, repo } = build();
+    await expect(service.definirPaginaAtiva({ ...ADMIN, role: "member" }, IGREJA, true)).rejects.toMatchObject({
+      code: "forbidden",
+    });
+    await expect(
+      service.definirPaginaAtiva(ADMIN, "99999999-9999-4999-8999-999999999999", true),
+    ).rejects.toMatchObject({ code: "not_found" });
+    expect(repo.setPaginaAtiva).not.toHaveBeenCalled();
   });
 });
 

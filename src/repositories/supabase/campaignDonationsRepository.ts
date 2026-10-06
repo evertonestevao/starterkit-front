@@ -28,25 +28,24 @@ export function createSupabaseCampaignDonationsRepository(
 
       const { data: igreja, error: erroIgreja } = await client
         .from("churches")
-        .select("id, name, pix_chave, pix_titular, address")
+        .select("id, name, address")
         .eq("id", campanha.church_id)
-        .maybeSingle<{
-          id: string;
-          name: string;
-          pix_chave: string | null;
-          pix_titular: string | null;
-          address: string | null;
-        }>();
+        .maybeSingle<{ id: string; name: string; address: string | null }>();
       if (erroIgreja) {
         throw new AppError("internal_error", "Falha ao carregar a igreja", erroIgreja);
       }
       if (!igreja) return null;
 
+      // Só a chave aprovada pela moderação, e com a página no ar.
+      const { data: pix, error: erroPix } = await client.rpc("pix_publico", { p_church_id: igreja.id });
+      if (erroPix) throw new AppError("internal_error", "Falha ao carregar a igreja", erroPix);
+      const aprovado = ((pix ?? []) as Array<{ chave: string; titular: string | null }>)[0];
+
       return {
         churchId: igreja.id,
         churchName: igreja.name,
-        pixChave: igreja.pix_chave,
-        pixTitular: igreja.pix_titular,
+        pixChave: aprovado?.chave ?? null,
+        pixTitular: aprovado?.titular ?? null,
         endereco: igreja.address,
       };
     },

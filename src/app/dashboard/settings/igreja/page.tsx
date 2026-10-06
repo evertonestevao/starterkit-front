@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { PaginaNoAr } from "@/features/church/components/pagina-no-ar";
+import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getServerEnv } from "@/config/env";
 import { ChurchProfileForm } from "@/features/church/components/church-profile-form";
@@ -22,6 +24,32 @@ export default async function ChurchProfileSettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Página no ar</CardTitle>
+          <CardDescription>
+            A página só aparece para o público depois de publicada. Fora do ar, o link, o QR Code e a tag mostram que a
+            página não está disponível, e só quem administra a igreja consegue vê-la.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col divide-y">
+          {igrejas.map((igreja) => (
+            <div key={igreja.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+              <div className="min-w-0">
+                <p className="font-medium break-words">{igreja.name}</p>
+                <p className={`text-sm ${igreja.paginaAtiva ? "text-primary" : "text-muted-foreground"}`}>
+                  {igreja.paginaAtiva ? "No ar" : "Fora do ar"}
+                </p>
+              </div>
+              <PaginaNoAr
+                churchId={igreja.id}
+                ativa={igreja.paginaAtiva}
+                paginaUrl={caminhoDaIgreja(igreja.chavePublica)}
+              />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Página da igreja</CardTitle>

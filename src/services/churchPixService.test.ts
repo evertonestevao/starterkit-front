@@ -22,7 +22,14 @@ const ADMIN: PixActor = {
 function build() {
   const repo: ChurchPixRepository = {
     listCompanyChurches: vi.fn(async () => [
-      { id: IGREJA, name: "Igreja Betel", pixChave: "antiga@chave.org", pixTitular: "Igreja Betel" },
+      {
+        id: IGREJA,
+        name: "Igreja Betel",
+        pixChave: "antiga@chave.org",
+        pixTitular: "Igreja Betel",
+        pixStatus: "aprovado" as const,
+        pixMotivoRecusa: null,
+      },
     ]),
     updatePix: vi.fn(async () => undefined),
     listCompanyAdminEmails: vi.fn(async () => ["pastor@igreja.org", "tesoureiro@igreja.org"]),

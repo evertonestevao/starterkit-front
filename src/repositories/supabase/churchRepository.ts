@@ -3,6 +3,7 @@ import { AppError } from "@/lib/errors";
 import type { SponsorLinkKind } from "@/lib/sponsorLink";
 import type { Campaign, ChurchEvent, ChurchScheduleItem, PublicChurch } from "@/types/database";
 import type { PublicSponsor } from "@/types/sponsorship";
+import type { IgrejaDaRedePublica } from "@/types/redePublica";
 
 /**
  * Leitura pública de igreja.
@@ -13,7 +14,7 @@ import type { PublicSponsor } from "@/types/sponsorship";
  * permission denied — que é exatamente o comportamento desejado.
  */
 export const PUBLIC_CHURCH_COLUMNS =
-  "id, parent_id, name, sobrenome, slug, logo_url, address, service_times, social_links, path, template_mode, template_id, public_code, pix_chave, pix_titular, pix_fonte, aceita_patrocinio, created_at, updated_at";
+  "id, parent_id, name, sobrenome, slug, logo_url, address, sobre, service_times, social_links, path, template_mode, template_id, public_code, pagina_ativa, pix_fonte, aceita_patrocinio, created_at, updated_at";
 
 export function createSupabasePublicChurchRepository(client: SupabaseClient) {
   return {
@@ -41,7 +42,21 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
       if (error) {
         throw new AppError("internal_error", "Falha ao carregar a igreja", error);
       }
-      return data;
+      if (!data) return null;
+
+      // A chave Pix não é lida direto na tabela: a função só devolve a que a
+      // moderação aprovou, e só com a página no ar (migration 20261006170000).
+      const { data: pix, error: erroPix } = await client.rpc("pix_publico", { p_church_id: data.id });
+      if (erroPix) throw new AppError("internal_error", "Falha ao carregar a igreja", erroPix);
+      const aprovado = ((pix ?? []) as Array<{ chave: string; titular: string | null }>)[0];
+      return { ...data, pix_chave: aprovado?.chave ?? null, pix_titular: aprovado?.titular ?? null };
+    },
+
+    /** Quem administra a igreja vê a página dela antes de publicar. */
+    async podeVerPrevia(churchId: string): Promise<boolean> {
+      const { data, error } = await client.rpc("posso_ver_previa_da_pagina", { p_church_id: churchId });
+      if (error) throw new AppError("internal_error", "Falha ao carregar a igreja", error);
+      return data === true;
     },
 
     /** Vitrine: nome, logo e destino de quem patrocina agora (RPC security definer). */
@@ -118,6 +133,28 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
 
     listSchedule(churchId: string): Promise<ChurchScheduleItem[]> {
       return listPublicSchedule(client, churchId);
+    },
+
+    /**
+     * As igrejas ligadas a uma igreja do topo (função do banco, migration
+     * 20261006160000). Para uma igreja que não é do topo, volta vazia.
+     */
+    /** Tem alguma igreja ligada direto a esta? (para mostrar o atalho "Nossas igrejas") */
+    async hasChildChurches(churchId: string): Promise<boolean> {
+      const { data, error } = await client
+        .from("churches")
+        .select("id")
+        .eq("parent_id", churchId)
+        .eq("pagina_ativa", true)
+        .limit(1);
+      if (error) throw new AppError("internal_error", "Falha ao carregar a rede da igreja", error);
+      return (data ?? []).length > 0;
+    },
+
+    async listNetworkChurches(churchId: string): Promise<IgrejaDaRedePublica[]> {
+      const { data, error } = await client.rpc("rede_igrejas_publicas", { p_church_id: churchId });
+      if (error) throw new AppError("internal_error", "Falha ao carregar as igrejas da rede", error);
+      return (data ?? []) as IgrejaDaRedePublica[];
     },
 
     /** Próximos eventos (a partir de agora), do mais perto para o mais longe. */

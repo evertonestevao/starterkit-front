@@ -8,6 +8,7 @@ import {
   getPlatformSettingsService,
   requirePlatformStaff,
 } from "@/server/platform";
+import { getPixModeracaoService } from "@/server/pixModeracao";
 import { getPublicSponsorProfileService } from "@/server/sponsorProfile";
 import { toActionError, type ActionState } from "./action-state";
 
@@ -188,6 +189,27 @@ export async function updateAutopatrocinioAmountAction(
     await service.updateAutopatrocinioAmount(String(formData.get("amount") ?? ""));
     revalidatePath("/plataforma/configuracoes");
     return { success: "Valor do autopatrocínio salvo." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Aprova ou recusa a chave Pix de uma igreja (só depois disso ela aparece na página). */
+export async function decidirPixAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+  try {
+    await requirePlatformStaff();
+    const { aprovado } = await (await getPixModeracaoService()).decidir({
+      churchId: String(formData.get("churchId") ?? ""),
+      aprovar: formData.get("decisao") === "aprovar",
+      motivo: String(formData.get("motivo") ?? ""),
+    });
+    revalidatePath("/plataforma", "layout");
+    revalidatePath("/igreja/[public_code]", "layout");
+    return {
+      success: aprovado
+        ? "Chave aprovada. Ela já aparece na página da igreja."
+        : "Chave recusada. A igreja vê o motivo na tela do Pix.",
+    };
   } catch (err) {
     return toActionError(err);
   }

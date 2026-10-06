@@ -42,6 +42,7 @@ export async function saveChurchProfileAction(
       // Checkbox nativo: marcado posta "on".
       herdarNome: texto(formData, "herdarNome") === "on",
       address: texto(formData, "address"),
+      sobre: texto(formData, "sobre"),
       publicCode: texto(formData, "publicCode"),
       instagram: texto(formData, "instagram"),
       whatsapp: texto(formData, "whatsapp"),
@@ -132,6 +133,23 @@ export async function uploadChurchLogoAction(
 
     revalidatePath(PAGINA);
     return { success: "Logo atualizado." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Coloca a página pública da igreja no ar, ou tira. */
+export async function definirPaginaAtivaAction(churchId: string, ativa: boolean): Promise<ActionState> {
+  try {
+    const actor = await ator();
+    await (await getChurchProfileService()).definirPaginaAtiva(actor, churchId, ativa === true);
+    revalidatePath("/igreja/[public_code]", "layout");
+    revalidatePath("/dashboard", "layout");
+    return {
+      success: ativa
+        ? "Página no ar! O link, o QR Code e a tag já funcionam."
+        : "Página fora do ar. Você pode publicar de novo quando quiser.",
+    };
   } catch (err) {
     return toActionError(err);
   }

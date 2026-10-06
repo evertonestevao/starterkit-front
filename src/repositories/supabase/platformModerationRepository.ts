@@ -172,6 +172,7 @@ export function createSupabasePlatformModerationRepository(
         alteracoes: number;
         contas_travadas: number;
         denuncias: number;
+        pix: number;
       }>();
       if (error) {
         throw new AppError("internal_error", "Falha ao contar pendências", error);
@@ -181,6 +182,7 @@ export function createSupabasePlatformModerationRepository(
         alteracoes: data?.alteracoes ?? 0,
         contasTravadas: data?.contas_travadas ?? 0,
         denuncias: data?.denuncias ?? 0,
+        pix: data?.pix ?? 0,
       };
     },
 

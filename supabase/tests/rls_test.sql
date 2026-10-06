@@ -6531,6 +6531,223 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Página da rede (migration 20261006160000). AC Sede (d1) é o topo; AC Cong
+-- (d2) e "Lins da Sede" (e2) estão abaixo dela; AC Outra (d3) é outra rede.
+-- A lista devolve só o que já é público, e só para a igreja do topo.
+-- ---------------------------------------------------------------------------
+-- Uma igreja apagada da rede não entra.
+insert into public.churches (id, company_id, name, slug, public_code, tipo, parent_id, deleted_at) values
+  ('acacacac-0000-4000-8000-0000000000e3', 'acacacac-0000-4000-8000-0000000000c1', 'Igreja apagada', 'rls-rede-apagada', 'apagada',
+   'congregacao', 'acacacac-0000-4000-8000-0000000000d1', now());
+
+-- Igreja nova nasce fora do ar (migration 20261006170000): sem publicar, a lista fica vazia.
+do $$
+declare n int;
+begin
+  select count(*) into n from public.rede_igrejas_publicas('acacacac-0000-4000-8000-0000000000d1');
+  if n <> 0 then raise exception 'FALHA rede: pagina fora do ar apareceu na lista (%)', n; end if;
+end $$;
+update public.churches set pagina_ativa = true
+ where id in ('acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000e2');
+
+set local role anon;
+do $$
+declare n int; v text;
+begin
+  -- As de baixo, sem a apagada e sem a outra rede.
+  select string_agg(name, ',' order by name) into v from public.rede_igrejas_publicas('acacacac-0000-4000-8000-0000000000d1');
+  if v is distinct from 'AC Cong,Lins da Sede' then raise exception 'FALHA rede: igrejas da rede (%)', v; end if;
+  -- Chamada com uma filial (não é o topo): nada.
+  select count(*) into n from public.rede_igrejas_publicas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA rede: filial listou igrejas (%)', n; end if;
+
+  -- O "Sobre" é público, como o resto da página.
+  perform sobre from public.churches where id = 'acacacac-0000-4000-8000-0000000000d1';
+end $$;
+reset role;
+
+-- "Sobre": só quem administra a própria igreja escreve.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+update public.churches set sobre = 'Invasor' where id = 'acacacac-0000-4000-8000-0000000000d2';
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+update public.churches set sobre = 'Nossa historia.' where id = 'acacacac-0000-4000-8000-0000000000d2';
+reset role;
+do $$
+declare v text;
+begin
+  select sobre into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000d2';
+  if v is distinct from 'Nossa historia.' then raise exception 'FALHA sobre: (%)', v; end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Página fora do ar e Pix com aprovação (migration 20261006170000).
+-- AC Outra (d3) é de rls-ac-outra (005); AC Cong (d2), de rls-ac-cong (002).
+-- A moderação é rls-staff2 (5e5e...07).
+-- ---------------------------------------------------------------------------
+do $$
+declare v boolean;
+begin
+  select pagina_ativa into v from public.churches where id = 'acacacac-0000-4000-8000-0000000000d3';
+  if v then raise exception 'FALHA pagina: igreja nova nasceu no ar'; end if;
+end $$;
+
+set local role anon;
+do $$
+begin
+  -- A chave não é mais lida direto na tabela por quem não está logado.
+  begin
+    perform pix_chave from public.churches where id = 'acacacac-0000-4000-8000-0000000000d3';
+    raise exception 'FALHA pix: anon leu pix_chave direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.definir_pagina_ativa('acacacac-0000-4000-8000-0000000000d3', true);
+    raise exception 'FALHA pagina: anon publicou uma pagina';
+  exception when sqlstate '42501' then null;
+  end;
+  if public.posso_ver_previa_da_pagina('acacacac-0000-4000-8000-0000000000d3') then
+    raise exception 'FALHA pagina: anon ganhou a previa';
+  end if;
+end $$;
+reset role;
+
+set local role authenticated;
+-- Quem administra OUTRA igreja não publica esta, nem vê a prévia.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if public.posso_ver_previa_da_pagina('acacacac-0000-4000-8000-0000000000d3') then
+    raise exception 'FALHA pagina: outra igreja viu a previa';
+  end if;
+  begin
+    perform public.definir_pagina_ativa('acacacac-0000-4000-8000-0000000000d3', true);
+    raise exception 'FALHA pagina: outra igreja publicou a pagina';
+  exception when sqlstate 'P0002' then null;
+  end;
+  -- Escrever a coluna direto também não passa.
+  begin
+    update public.churches set pagina_ativa = true where id = 'acacacac-0000-4000-8000-0000000000d2';
+    raise exception 'FALHA pagina: UPDATE direto em pagina_ativa foi aceito';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.churches set pix_aprovado_em = now() where id = 'acacacac-0000-4000-8000-0000000000d2';
+    raise exception 'FALHA pix: a propria igreja aprovou o Pix dela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.platform_decidir_pix('acacacac-0000-4000-8000-0000000000d2', true, null);
+    raise exception 'FALHA pix: quem nao e da moderacao aprovou';
+  exception when sqlstate '42501' then null;
+  end;
+  if (select count(*) from public.platform_list_pix_pendentes()) <> 0 then
+    raise exception 'FALHA pix: quem nao e da moderacao viu a fila';
+  end if;
+end $$;
+
+-- O dono cadastra o Pix (fica aguardando) e publica a página.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if not public.posso_ver_previa_da_pagina('acacacac-0000-4000-8000-0000000000d3') then
+    raise exception 'FALHA pagina: quem administra nao viu a previa';
+  end if;
+  update public.churches set pix_chave = 'pix@acoutra.org', pix_titular = 'AC Outra'
+   where id = 'acacacac-0000-4000-8000-0000000000d3';
+  perform public.definir_pagina_ativa('acacacac-0000-4000-8000-0000000000d3', true);
+end $$;
+reset role;
+
+set local role anon;
+do $$
+declare n int;
+begin
+  -- Página no ar, mas o Pix ainda não foi aprovado: nada para o público.
+  select count(*) into n from public.pix_publico('acacacac-0000-4000-8000-0000000000d3');
+  if n <> 0 then raise exception 'FALHA pix: chave sem aprovacao foi para o publico'; end if;
+end $$;
+reset role;
+
+-- A moderação vê na fila e aprova.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.platform_list_pix_pendentes()
+  where church_id = 'acacacac-0000-4000-8000-0000000000d3' and pix_chave = 'pix@acoutra.org';
+  if n <> 1 then raise exception 'FALHA pix: chave nao apareceu na fila da moderacao'; end if;
+  select pix into n from public.platform_pending_counts();
+  if n < 1 then raise exception 'FALHA pix: contagem de pendencias sem o Pix'; end if;
+  perform public.platform_decidir_pix('acacacac-0000-4000-8000-0000000000d3', true, null);
+  -- Decidir de novo o que já foi decidido não existe.
+  begin
+    perform public.platform_decidir_pix('acacacac-0000-4000-8000-0000000000d3', false, 'x');
+    raise exception 'FALHA pix: decidiu duas vezes';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+reset role;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.platform_staff_actions
+  where action = 'church_pix.aprovado' and entity_id = 'acacacac-0000-4000-8000-0000000000d3'
+    and metadata::text not like '%pix@acoutra.org%';
+  if n <> 1 then raise exception 'FALHA pix: aprovacao nao foi registrada (ou registrou a chave)'; end if;
+end $$;
+
+set local role anon;
+do $$
+declare v text;
+begin
+  select chave into v from public.pix_publico('acacacac-0000-4000-8000-0000000000d3');
+  if v is distinct from 'pix@acoutra.org' then raise exception 'FALHA pix: chave aprovada nao apareceu (%)', v; end if;
+end $$;
+reset role;
+
+-- Trocar a chave volta para "aguardando": a nova não é publicada sozinha.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+update public.churches set pix_chave = 'golpista@exemplo.com' where id = 'acacacac-0000-4000-8000-0000000000d3';
+reset role;
+set local role anon;
+do $$
+declare n int;
+begin
+  select count(*) into n from public.pix_publico('acacacac-0000-4000-8000-0000000000d3');
+  if n <> 0 then raise exception 'FALHA pix: chave trocada foi publicada sem aprovacao'; end if;
+end $$;
+reset role;
+
+-- A moderação recusa, com motivo; a igreja tira a página do ar.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+select public.platform_decidir_pix('acacacac-0000-4000-8000-0000000000d3', false, '  Titular nao confere com a igreja  ');
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+select public.definir_pagina_ativa('acacacac-0000-4000-8000-0000000000d3', false);
+reset role;
+do $$
+declare v text;
+begin
+  select pix_recusa_motivo || '|' || pagina_ativa::text into v from public.churches
+  where id = 'acacacac-0000-4000-8000-0000000000d3' and pix_recusado_em is not null and pix_aprovado_em is null;
+  if v is distinct from 'Titular nao confere com a igreja|false' then
+    raise exception 'FALHA pix: recusa ou desativacao nao gravadas (%)', v;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

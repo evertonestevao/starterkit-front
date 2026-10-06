@@ -25,6 +25,8 @@ export function createSupabasePublicSubmissionRepository(
       .select("id")
       .eq("id", churchId)
       .is("deleted_at", null)
+      // Página fora do ar não recebe pedido de ninguém.
+      .eq("pagina_ativa", true)
       .maybeSingle();
     if (error) throw new AppError("internal_error", "Não foi possível enviar agora. Tente de novo.", error);
     if (!data) throw new AppError("not_found", "Igreja não encontrada.");

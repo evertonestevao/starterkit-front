@@ -46,6 +46,10 @@ export interface ChurchProfile {
   /** Sede: o código dela é o endereço da rede e entra no endereço das igrejas ligadas. */
   ehSedeDeRede: boolean;
   address: string | null;
+  /** Texto de apresentação, mostrado na página ("Sobre a igreja"). */
+  sobre: string | null;
+  /** A página pública está no ar? Igreja nova nasce com ela fora do ar. */
+  paginaAtiva: boolean;
   logoUrl: string | null;
   socialLinks: Record<string, string>;
   /** Tem igreja-mãe? Só quem tem pode herdar a aparência dela. */
@@ -67,10 +71,13 @@ export interface ChurchProfileRepository {
     sobrenome: string | null;
     herdarNome: boolean;
     address: string | null;
+    sobre: string | null;
     publicCode: string;
     socialLinks: Record<string, string>;
   }): Promise<void>;
   updateLogo(input: { churchId: string; companyId: string; logoUrl: string }): Promise<void>;
+  /** RPC definir_pagina_ativa: confere de novo quem administra. Lança not_found se a igreja não é de quem pede. */
+  setPaginaAtiva(churchId: string, ativa: boolean): Promise<void>;
   /** `theme`/`accent` são ignorados em `inherit`: a igreja passa a usar os da mãe. */
   updateAppearance(input: {
     churchId: string;
@@ -108,6 +115,9 @@ export function canEditChurchProfile(role: RoleCode): boolean {
  * O endereço público vira URL e vai impresso no QR Code e gravado na tag NFC.
  * Formato conferido aqui e repetido por CHECK no banco.
  */
+/** Limite do "Sobre a igreja" (repetido por CHECK no banco). */
+export const CHURCH_ABOUT_MAX_LENGTH = 1500;
+
 export const publicCodeSchema = z
   .string()
   .trim()
@@ -134,6 +144,12 @@ const profileSchema = z.object({
     .max(200, "Endereço muito longo")
     .transform((v) => (v === "" ? null : v)),
   publicCode: publicCodeSchema,
+  // Texto simples (a página mostra sem interpretar HTML). Ausente = sem texto.
+  sobre: z
+    .string()
+    .max(CHURCH_ABOUT_MAX_LENGTH, `O texto pode ter no máximo ${CHURCH_ABOUT_MAX_LENGTH} caracteres`)
+    .optional()
+    .transform((v) => (v ?? "").replace(/\r\n/g, "\n").trim() || null),
   instagram: z.string().trim().max(200, "Valor muito longo"),
   whatsapp: z.string().trim().max(200, "Valor muito longo"),
   youtube: z.string().trim().max(200, "Valor muito longo"),
@@ -203,6 +219,27 @@ export function createChurchProfileService(deps: {
   }
 
   return {
+    /** Coloca a página pública no ar, ou tira. Só quem administra a igreja. */
+    async definirPaginaAtiva(actor: ProfileActor, churchId: unknown, ativa: boolean): Promise<{ nome: string }> {
+      exigePermissao(actor);
+      const id = z.uuid("Igreja inválida").safeParse(churchId);
+      if (!id.success) throw toValidationError(id.error.issues);
+      const igreja = (await deps.repo.listCompanyChurches(actor.companyId)).find((c) => c.id === id.data);
+      if (!igreja) throw new AppError("not_found", "Igreja não encontrada.");
+      await deps.repo.setPaginaAtiva(id.data, ativa);
+      await deps.audit
+        ?.record({
+          companyId: actor.companyId,
+          userId: actor.userId,
+          action: ativa ? "church.pagina_publicada" : "church.pagina_fora_do_ar",
+          entityType: "church",
+          entityId: id.data,
+          metadata: {},
+        })
+        .catch(() => undefined);
+      return { nome: igreja.name };
+    },
+
     list(companyId: string): Promise<ChurchProfile[]> {
       if (!companyId) throw new AppError("unauthorized", "Selecione uma igreja para continuar.");
       return deps.repo.listCompanyChurches(companyId);
@@ -237,6 +274,7 @@ export function createChurchProfileService(deps: {
         sobrenome: dados.sobrenome,
         herdarNome: dados.herdarNome,
         address: dados.address,
+        sobre: dados.sobre,
         publicCode: dados.publicCode,
         socialLinks,
       });
