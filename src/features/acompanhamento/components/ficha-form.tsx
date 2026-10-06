@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
+import { useBuscaCep } from "@/hooks/useBuscaCep";
 import {
   ESTADOS_CIVIS,
   ESTADO_CIVIL_LABEL,
@@ -42,16 +44,42 @@ export function FichaForm({
   nome,
   ficha,
   temLogin,
+  abrirAoEntrar = false,
 }: {
   membroId: string;
   nome: string;
   ficha: FichaMembro;
   /** Quem tem login continua entrando no sistema mesmo fora do quadro: a tela avisa. */
   temLogin: boolean;
+  /** Vindo de "Salvar e preencher a ficha" (?ficha=1): já abre o formulário. */
+  abrirAoEntrar?: boolean;
 }) {
-  const [aberto, setAberto] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const [aberto, setAbertoInterno] = useState(abrirAoEntrar);
+  // Ao fechar, tira o ?ficha=1 do endereço: atualizar a página não reabre o formulário.
+  function setAberto(valor: boolean) {
+    setAbertoInterno(valor);
+    if (!valor && abrirAoEntrar) router.replace(pathname, { scroll: false });
+  }
   const [estadoCivil, setEstadoCivil] = useState<EstadoCivil | "">(ficha.estadoCivil ?? "");
   const [situacao, setSituacao] = useState<SituacaoMembro>(ficha.situacao);
+  // O que o CEP preenche fica em estado; número e complemento são sempre à mão.
+  const [endereco, setEndereco] = useState({
+    logradouro: ficha.logradouro ?? "",
+    bairro: ficha.bairro ?? "",
+    cidade: ficha.cidade ?? "",
+    uf: ficha.uf ?? "",
+  });
+  const cep = useBuscaCep((achado) =>
+    // CEP geral de cidade pequena vem sem rua nem bairro: mantém o que já estava digitado.
+    setEndereco((atual) => ({
+      logradouro: achado.logradouro || atual.logradouro,
+      bairro: achado.bairro || atual.bairro,
+      cidade: achado.cidade,
+      uf: achado.uf,
+    })),
+  );
   const [state, formAction, pending] = useActionState(
     async (prev: ActionState | undefined, formData: FormData): Promise<ActionState> => {
       const result = await salvarFichaMembroAction(prev, formData);
@@ -73,7 +101,7 @@ export function FichaForm({
           <DialogHeader>
             <DialogTitle>Ficha de {nome}</DialogTitle>
             <DialogDescription>
-              Nada aqui é obrigatório: preencha o que tiver e complete depois. Nome, telefone, nascimento e batismo
+              Nada aqui é obrigatório: preencha o que tiver e complete depois. O CEP preenche o endereço sozinho. Nome, telefone, nascimento e batismo
               ficam no botão Editar.
             </DialogDescription>
           </DialogHeader>
@@ -155,11 +183,22 @@ export function FichaForm({
                   defaultValue={mascaraCep(ficha.cep)}
                   onChange={(e) => {
                     e.target.value = mascaraCep(e.target.value);
+                    void cep.conferir(e.target.value);
                   }}
+                  aria-describedby={id("cep-aviso")}
                 />
+                <span id={id("cep-aviso")} role="status" className="min-h-4 text-xs text-muted-foreground">
+                  {cep.buscando ? "Buscando o endereço..." : (cep.aviso ?? "")}
+                </span>
               </Campo>
               <Campo rotulo="Rua / avenida" htmlFor={id("logradouro")}>
-                <Input id={id("logradouro")} name="logradouro" maxLength={160} defaultValue={ficha.logradouro ?? ""} />
+                <Input
+                  id={id("logradouro")}
+                  name="logradouro"
+                  maxLength={160}
+                  value={endereco.logradouro}
+                  onChange={(e) => setEndereco((a) => ({ ...a, logradouro: e.target.value }))}
+                />
               </Campo>
               <Campo rotulo="Número" htmlFor={id("numero")}>
                 <Input id={id("numero")} name="numero" maxLength={20} defaultValue={ficha.numero ?? ""} />
@@ -168,14 +207,32 @@ export function FichaForm({
                 <Input id={id("complemento")} name="complemento" maxLength={80} defaultValue={ficha.complemento ?? ""} />
               </Campo>
               <Campo rotulo="Bairro" htmlFor={id("bairro")}>
-                <Input id={id("bairro")} name="bairro" maxLength={80} defaultValue={ficha.bairro ?? ""} />
+                <Input
+                  id={id("bairro")}
+                  name="bairro"
+                  maxLength={80}
+                  value={endereco.bairro}
+                  onChange={(e) => setEndereco((a) => ({ ...a, bairro: e.target.value }))}
+                />
               </Campo>
               <div className="grid grid-cols-[1fr_5.5rem] gap-3">
                 <Campo rotulo="Cidade" htmlFor={id("cidade")}>
-                  <Input id={id("cidade")} name="cidade" maxLength={80} defaultValue={ficha.cidade ?? ""} />
+                  <Input
+                    id={id("cidade")}
+                    name="cidade"
+                    maxLength={80}
+                    value={endereco.cidade}
+                    onChange={(e) => setEndereco((a) => ({ ...a, cidade: e.target.value }))}
+                  />
                 </Campo>
                 <Campo rotulo="UF" htmlFor={id("uf")}>
-                  <select id={id("uf")} name="uf" className={selectClasses} defaultValue={ficha.uf ?? ""}>
+                  <select
+                    id={id("uf")}
+                    name="uf"
+                    className={selectClasses}
+                    value={endereco.uf}
+                    onChange={(e) => setEndereco((a) => ({ ...a, uf: e.target.value }))}
+                  >
                     <option value="">—</option>
                     {UFS.map((uf) => (
                       <option key={uf} value={uf}>

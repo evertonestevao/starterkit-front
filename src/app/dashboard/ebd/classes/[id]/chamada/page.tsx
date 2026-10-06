@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { BotaoVoltar } from "@/components/botao-voltar";
 import { DataAuto } from "@/components/data-auto";
 import { Badge } from "@/components/ui/badge";
 import { EbdChamadaForm } from "@/features/ebd/components/ebd-chamada-form";
@@ -39,9 +39,7 @@ export default async function ChamadaEbdPage({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <Link href={`/dashboard/ebd/classes/${id}`} className="text-xs text-muted-foreground hover:underline">
-          ← {aula?.classe.nome ?? "Classe"}
-        </Link>
+        <BotaoVoltar href={`/dashboard/ebd/classes/${id}`} />
         {aula ? (
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-lg font-semibold">Chamada — {aula.classe.nome}</h3>

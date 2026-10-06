@@ -1,3 +1,4 @@
+import { NOMES_PADRAO, nomeNivel, type NomesNiveis } from "@/lib/niveisRede";
 import type { ChurchTipo } from "@/types/database";
 import type { ChurchLinkTipo } from "@/types/churchLinks";
 
@@ -24,22 +25,6 @@ export function linkExpiration(validityDays: ChurchLinkValidity, now: Date): str
 export function describeValidity(validityDays: ChurchLinkValidity): string {
   return validityDays === null ? "Sem validade" : `${validityDays} dias`;
 }
-
-export const TIPO_LABEL: Record<ChurchTipo, string> = {
-  sede: "Sede",
-  subsede: "Subsede",
-  congregacao: "Congregação",
-};
-
-export const LINK_TIPO_LABEL: Record<ChurchLinkTipo, string> = {
-  subsede: "Subsede",
-  congregacao: "Congregação",
-};
-
-export const LINK_TIPO_PLURAL: Record<ChurchLinkTipo, string> = {
-  subsede: "Subsedes",
-  congregacao: "Congregações",
-};
 
 export function churchLinkPath(token: string): string {
   return `/vinculo/${encodeURIComponent(token)}`;
@@ -95,8 +80,11 @@ export function describeApproved(input: {
   parentName: string;
   childName: string;
   tipo: ChurchLinkTipo;
+  /** Como a rede chama os níveis; sem informar, os nomes padrão. */
+  nomes?: NomesNiveis;
 }): string {
-  return `${input.childName} agora é ${LINK_TIPO_LABEL[input.tipo].toLowerCase()} de ${input.parentName}.`;
+  const funcao = nomeNivel(input.nomes ?? NOMES_PADRAO, input.tipo, { minusculo: true });
+  return `${input.childName} agora é ${funcao} de ${input.parentName}.`;
 }
 
 /**

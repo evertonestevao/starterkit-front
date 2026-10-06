@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, HandCoins } from "lucide-react";
+import { ExternalLink, HandCoins } from "lucide-react";
+import { BotaoVoltar } from "@/components/botao-voltar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -43,13 +43,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <div>
-        <Link
-          href="/dashboard/campaigns"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden />
-          Campanhas
-        </Link>
+        <BotaoVoltar href="/dashboard/campaigns" />
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-2 text-sm font-medium text-primary">
             <HandCoins className="size-4" /> {campanha.churchName}

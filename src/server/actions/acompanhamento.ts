@@ -30,11 +30,13 @@ function revalidar() {
 export async function salvarMembroAction(
   _prev: ActionState | undefined,
   formData: FormData,
-): Promise<ActionState> {
+  // `membroId` volta sempre que o cadastro foi gravado (mesmo se o convite falhar):
+  // a tela usa para seguir direto para a ficha completa.
+): Promise<ActionState & { membroId?: string }> {
   try {
     const id = texto(formData, "id") || null;
     const actor = await ator();
-    await (await getAcompanhamentoService()).salvarMembro(
+    const membroId = await (await getAcompanhamentoService()).salvarMembro(
       actor,
       id,
       {
@@ -65,14 +67,14 @@ export async function salvarMembroAction(
       } catch (err) {
         revalidar();
         const motivo = toActionError(err).error ?? "erro desconhecido";
-        return { error: `${salvo.slice(0, -1)}, mas o convite não foi enviado: ${motivo}` };
+        return { error: `${salvo.slice(0, -1)}, mas o convite não foi enviado: ${motivo}`, membroId };
       }
       revalidar();
-      return { success: `${salvo.slice(0, -1)} e convite enviado para ${email}.` };
+      return { success: `${salvo.slice(0, -1)} e convite enviado para ${email}.`, membroId };
     }
 
     revalidar();
-    return { success: salvo };
+    return { success: salvo, membroId };
   } catch (err) {
     return toActionError(err);
   }

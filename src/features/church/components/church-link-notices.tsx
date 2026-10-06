@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { Network, X } from "lucide-react";
+import { nomeNivel, type NomesNiveis } from "@/lib/niveisRede";
+import { useNomesNiveis } from "@/providers/niveis-provider";
 import { Button } from "@/components/ui/button";
 import { dismissChurchLinkNoticeAction } from "@/server/actions/churchLinks";
 import type { ChurchLinkNotice, ChurchLinkNoticeKind } from "@/types/churchLinks";
@@ -16,18 +18,19 @@ const TITULO: Record<ChurchLinkNoticeKind, (notice: ChurchLinkNotice) => string>
 };
 
 /** Segunda linha: o que a pessoa precisa saber além do título. */
-function detalheDe(notice: ChurchLinkNotice): string | null {
+function detalheDe(notice: ChurchLinkNotice, nomes: NomesNiveis): string | null {
   if (notice.kind === "recusado" && notice.detalhe) return `Motivo: ${notice.detalhe}`;
   if (notice.kind === "movida" && notice.detalhe) return `${notice.detalhe} de ${notice.outraIgrejaNome}.`;
   if (notice.kind === "aprovado" && notice.detalhe) {
-    return `Agora é ${notice.detalhe === "subsede" ? "subsede" : "congregação"} de ${notice.outraIgrejaNome}.`;
+    const funcao = nomeNivel(nomes, notice.detalhe === "subsede" ? "subsede" : "congregacao", { minusculo: true });
+    return `Agora é ${funcao} de ${notice.outraIgrejaNome}.`;
   }
   return null;
 }
 
 function Notice({ notice }: { notice: ChurchLinkNotice }) {
   const [, formAction, pending] = useActionState(dismissChurchLinkNoticeAction, undefined);
-  const detalhe = detalheDe(notice);
+  const detalhe = detalheDe(notice, useNomesNiveis());
   return (
     <li className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
       <Network className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />

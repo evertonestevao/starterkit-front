@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft, HandCoins, Lock } from "lucide-react";
+import { HandCoins, Lock } from "lucide-react";
+import { BotaoVoltar } from "@/components/botao-voltar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { NewCampaignForm } from "@/features/campaigns/components/new-campaign-form";
@@ -20,13 +20,7 @@ export default async function NewCampaignPage() {
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <div>
-        <Link
-          href="/dashboard/campaigns"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden />
-          Campanhas
-        </Link>
+        <BotaoVoltar href="/dashboard/campaigns" />
         <div className="mt-4 flex items-center gap-2 text-sm font-medium text-primary">
           <HandCoins className="size-4" /> Arrecadação para projetos
         </div>

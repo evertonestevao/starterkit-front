@@ -6,7 +6,6 @@ import {
   describeValidity,
   inviteOptions,
   linkExpiration,
-  LINK_TIPO_PLURAL,
   LINK_VISIBILITY_NOTES,
   moveDestinations,
   safeChurchLinkPath,
@@ -127,9 +126,8 @@ describe("validade do link", () => {
     expect(linkExpiration(null, agora)).toBeNull();
   });
 
-  it("descreve a validade e o plural das funções", () => {
+  it("descreve a validade", () => {
     expect(describeValidity(15)).toBe("15 dias");
     expect(describeValidity(null)).toBe("Sem validade");
-    expect(LINK_TIPO_PLURAL.congregacao).toBe("Congregações");
   });
 });

@@ -6190,6 +6190,125 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Nomes dos níveis da rede (migration 20261006110000). AC Sede (d1) é a sede;
+-- AC Cong (d2) está abaixo dela; AC Outra (d3) é outra rede, sem sede.
+-- Só o Responsável da SEDE grava; a rede inteira (e só ela) lê.
+-- ---------------------------------------------------------------------------
+set local role anon;
+do $$
+declare n int;
+begin
+  -- Ler os rótulos é público (página de convite); sem configuração, nenhuma linha.
+  select count(*) into n from public.nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA niveis: rede sem configuracao devolveu nomes'; end if;
+  begin
+    perform public.salvar_nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d1', null);
+    raise exception 'FALHA niveis: anon gravou os nomes';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform 1 from public.rede_nomes_niveis;
+    raise exception 'FALHA niveis: anon leu a tabela';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+set local role authenticated;
+-- Quem administra a congregação: não nomeia a própria (não é sede) nem a sede (não é dele).
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v_nomes jsonb := jsonb_build_object(
+  'sede_singular', 'Invasor', 'sede_plural', 'Invasores', 'subsede_singular', 'Aa', 'subsede_plural', 'Aas',
+  'congregacao_singular', 'Bb', 'congregacao_plural', 'Bbs');
+begin
+  begin
+    perform public.salvar_nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d2', v_nomes);
+    raise exception 'FALHA niveis: a congregacao definiu os nomes da rede';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.salvar_nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d1', v_nomes);
+    raise exception 'FALHA niveis: quem administra a congregacao gravou na sede';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+
+-- Member (mesmo com cargo) não grava.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+begin
+  perform public.salvar_nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d2', null);
+  raise exception 'FALHA niveis: member gravou os nomes';
+exception when sqlstate 'P0002' then null;
+end $$;
+
+-- Igreja sem superior que não é sede: usa o padrão, não define os dela.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+begin
+  perform public.salvar_nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d3', null);
+  raise exception 'FALHA niveis: igreja sozinha (nao sede) definiu nomes';
+exception when sqlstate '42501' then null;
+end $$;
+
+-- O Responsável da sede grava; texto fora do tamanho ou faltando não entra.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare v_nomes jsonb := jsonb_build_object(
+  'sede_singular', '  Igreja-mãe ', 'sede_plural', 'Igrejas-mãe', 'subsede_singular', 'Filial', 'subsede_plural', 'Filiais',
+  'congregacao_singular', 'Ponto de pregação', 'congregacao_plural', 'Pontos de pregação');
+begin
+  begin
+    perform public.salvar_nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d1', v_nomes || '{"subsede_singular":"F"}'::jsonb);
+    raise exception 'FALHA niveis: nome de 1 letra foi aceito';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.salvar_nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d1', v_nomes - 'congregacao_plural');
+    raise exception 'FALHA niveis: nome faltando foi aceito';
+  exception when sqlstate '23502' then null;
+  end;
+  perform public.salvar_nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d1', v_nomes);
+  begin
+    perform 1 from public.rede_nomes_niveis;
+    raise exception 'FALHA niveis: authenticated leu a tabela direto';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- A igreja de baixo enxerga os nomes da sede; a outra rede, não.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v text; n int;
+begin
+  select sede_singular || '/' || subsede_plural || '/' || congregacao_singular into v
+  from public.nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d2');
+  if v is distinct from 'Igreja-mãe/Filiais/Ponto de pregação' then
+    raise exception 'FALHA niveis: a congregacao nao recebeu os nomes da sede (%)', v;
+  end if;
+  select count(*) into n from public.nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d3');
+  if n <> 0 then raise exception 'FALHA niveis: os nomes vazaram para outra rede'; end if;
+end $$;
+
+-- Restaurar o padrão: a rede volta a não ter nomes próprios.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  perform public.salvar_nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d1', null);
+  select count(*) into n from public.nomes_dos_niveis('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA niveis: restaurar o padrao nao apagou os nomes'; end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

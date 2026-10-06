@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useRastreioDeTelas } from "@/components/botao-voltar";
 import { useCallback, useState } from "react";
 import { ChevronDown, ChevronsLeft, ChevronsRight, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
+  useRastreioDeTelas(pathname);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((current) => {

@@ -1,5 +1,6 @@
 import type { EmailProvider } from "@/adapters/email/EmailProvider";
-import { describeApproved, LINK_TIPO_LABEL } from "@/lib/churchLinks";
+import { describeApproved } from "@/lib/churchLinks";
+import { NOMES_PADRAO, nomeNivel } from "@/lib/niveisRede";
 import { PAPEL_LABEL } from "@/lib/papeis";
 import type { ChurchLinkTipo } from "@/types/churchLinks";
 import type { CompanyInvite } from "@/types/database";
@@ -245,7 +246,7 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
     }): Promise<void> {
       if (input.to.length === 0) return;
       const painel = `${base}/dashboard/settings/vinculos`;
-      const posicao = LINK_TIPO_LABEL[input.tipo].toLowerCase();
+      const posicao = nomeNivel(NOMES_PADRAO, input.tipo, { minusculo: true });
       const resumo = `${input.childName} pediu para ser ${posicao} de ${input.parentName}.`;
       const explicacao = "Nada mudou ainda: a igreja só entra na sua rede se você aprovar, e você pode ajustar a função ou recusar.";
 

@@ -1,3 +1,4 @@
+import { NOMES_PADRAO, contarNivel, nomeNivel, type NomesNiveis } from "@/lib/niveisRede";
 import { formatChurchName } from "@/lib/churchName";
 import { normalizeSearch } from "@/lib/search";
 import type { ChurchLinkNode } from "@/types/churchLinks";
@@ -25,17 +26,18 @@ export function buildNetwork(
   return children.map((church) => ({ church, congregacoes: congregacoesPorIgreja[church.id] ?? [] }));
 }
 
-function plural(n: number, singular: string, pluralForm: string): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`;
-}
-
 /** "3 congregações", "1 congregação" ou "Sem congregações": o texto da badge da subsede. */
-export function describeCongregations(n: number): string {
-  return n === 0 ? "Sem congregações" : plural(n, "congregação", "congregações");
+export function describeCongregations(n: number, nomes: NomesNiveis = NOMES_PADRAO): string {
+  return n === 0
+    ? `Sem ${nomeNivel(nomes, "congregacao", { plural: true, minusculo: true })}`
+    : contarNivel(nomes, "congregacao", n);
 }
 
 /** Totais da rede: as subsedes, e todas as congregações (as ligadas direto e as de cada subsede). */
-export function summarizeNetwork(entries: NetworkEntry[]): { subsedes: number; congregacoes: number; text: string } {
+export function summarizeNetwork(
+  entries: NetworkEntry[],
+  nomes: NomesNiveis = NOMES_PADRAO,
+): { subsedes: number; congregacoes: number; text: string } {
   let subsedes = 0;
   let congregacoes = 0;
   for (const { church, congregacoes: filhas } of entries) {
@@ -44,8 +46,8 @@ export function summarizeNetwork(entries: NetworkEntry[]): { subsedes: number; c
     congregacoes += filhas.length;
   }
   const partes: string[] = [];
-  if (subsedes > 0) partes.push(plural(subsedes, "subsede", "subsedes"));
-  if (congregacoes > 0) partes.push(plural(congregacoes, "congregação", "congregações"));
+  if (subsedes > 0) partes.push(contarNivel(nomes, "subsede", subsedes));
+  if (congregacoes > 0) partes.push(contarNivel(nomes, "congregacao", congregacoes));
   return { subsedes, congregacoes, text: partes.join(" · ") };
 }
 

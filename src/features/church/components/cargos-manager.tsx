@@ -39,7 +39,7 @@ export function CargosManager({ cargos, podeGerenciar }: { cargos: Cargo[]; pode
           <div>
             <h3 className="font-medium">Cargos desta igreja</h3>
             <p className="text-sm text-muted-foreground">
-              Criados aqui. As igrejas abaixo desta (subsedes e congregações) também podem usar.
+              Criados aqui. As igrejas abaixo desta na rede também podem usar.
             </p>
           </div>
           {podeGerenciar ? <CargoForm /> : null}

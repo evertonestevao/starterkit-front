@@ -10,8 +10,7 @@ import { idadeEm, sugerirClassePorIdade } from "@/lib/ebd";
 import { promoverAction } from "@/server/actions/ebd";
 import type { EbdClasse, EbdPromocaoLinha } from "@/types/ebd";
 
-const campo =
-  "h-9 min-w-0 rounded-md border border-input bg-transparent px-2 text-sm";
+const campo = "h-9 min-w-0 rounded-md border border-input bg-transparent px-2 text-sm";
 
 /**
  * Promoção de classe em lote. Para cada aluno, sugere a classe pela idade na
@@ -30,13 +29,7 @@ export function EbdPromocao({
   const router = useRouter();
   const [data, setData] = useState(dataInicial);
   const sugestoes = useMemo(
-    () =>
-      Object.fromEntries(
-        linhas.map((l) => [
-          l.membroId,
-          sugerirClassePorIdade(classes, l.nascimento, data),
-        ]),
-      ),
+    () => Object.fromEntries(linhas.map((l) => [l.membroId, sugerirClassePorIdade(classes, l.nascimento, data)])),
     [classes, linhas, data],
   );
   // Destino escolhido; começa na sugestão (ou continua onde está).
@@ -46,8 +39,7 @@ export function EbdPromocao({
   // Classe aberta ou fechada; quem ainda não foi tocada segue o padrão abaixo.
   const [abertas, setAbertas] = useState<Record<string, boolean>>({});
 
-  const destinoDe = (l: EbdPromocaoLinha) =>
-    destino[l.membroId] ?? sugestoes[l.membroId] ?? l.classeAtualId;
+  const destinoDe = (l: EbdPromocaoLinha) => destino[l.membroId] ?? sugestoes[l.membroId] ?? l.classeAtualId;
   const muda = (l: EbdPromocaoLinha) => destinoDe(l) !== l.classeAtualId;
   const marcado = (l: EbdPromocaoLinha) => marcados[l.membroId] ?? muda(l);
   const aplicar = linhas.filter((l) => marcado(l) && muda(l));
@@ -64,36 +56,23 @@ export function EbdPromocao({
     }));
   // Padrão: abre só a classe em que a sugestão pela idade muda alguém.
   const aberta = (classeId: string, alunos: EbdPromocaoLinha[]) =>
-    abertas[classeId] ??
-    alunos.some(
-      (l) => (sugestoes[l.membroId] ?? l.classeAtualId) !== l.classeAtualId,
-    );
+    abertas[classeId] ?? alunos.some((l) => (sugestoes[l.membroId] ?? l.classeAtualId) !== l.classeAtualId);
   const todasAbertas = porClasse.every((g) => aberta(g.classe.id, g.alunos));
-  const semFaixa = classes.filter(
-    (c) => c.idadeMinima === null && c.idadeMaxima === null,
-  );
+  const semFaixa = classes.filter((c) => c.idadeMinima === null && c.idadeMaxima === null);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <label className="flex flex-col gap-1 text-sm">
           Data da promoção (os alunos mudam a partir dela)
-          <input
-            type="date"
-            value={data}
-            onChange={(e) => setData(e.target.value)}
-            className={campo}
-          />
+          <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={campo} />
         </label>
         <Button
           type="button"
           disabled={pending || aplicar.length === 0}
           onClick={async () => {
             const sim = await confirmar({
-              titulo:
-                aplicar.length === 1
-                  ? "Mudar 1 aluno de classe?"
-                  : `Mudar ${aplicar.length} alunos de classe?`,
+              titulo: aplicar.length === 1 ? "Mudar 1 aluno de classe?" : `Mudar ${aplicar.length} alunos de classe?`,
               descricao: `Vale a partir de ${data.split("-").reverse().join("/")}. A classe anterior fica no histórico de cada aluno.`,
               botao: "Aplicar promoção",
             });
@@ -121,9 +100,8 @@ export function EbdPromocao({
       </div>
       {semFaixa.length > 0 ? (
         <p className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
-          Sem idade definida (não entram na sugestão):{" "}
-          {semFaixa.map((c) => c.nome).join(", ")}. Edite a classe para informar
-          a idade mínima e máxima.
+          Sem idade definida (não entram na sugestão): {semFaixa.map((c) => c.nome).join(", ")}. Edite a classe para
+          informar a idade mínima e máxima.
         </p>
       ) : null}
 
@@ -131,13 +109,7 @@ export function EbdPromocao({
         <button
           type="button"
           className="self-end text-sm text-primary underline underline-offset-4"
-          onClick={() =>
-            setAbertas(
-              Object.fromEntries(
-                porClasse.map((g) => [g.classe.id, !todasAbertas]),
-              ),
-            )
-          }
+          onClick={() => setAbertas(Object.fromEntries(porClasse.map((g) => [g.classe.id, !todasAbertas])))}
         >
           {todasAbertas ? "Fechar todas" : "Abrir todas"}
         </button>
@@ -152,9 +124,7 @@ export function EbdPromocao({
                 type="button"
                 aria-expanded={estaAberta}
                 aria-controls={`promocao-${classe.id}`}
-                onClick={() =>
-                  setAbertas((a) => ({ ...a, [classe.id]: !estaAberta }))
-                }
+                onClick={() => setAbertas((a) => ({ ...a, [classe.id]: !estaAberta }))}
                 className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-left text-sm"
               >
                 <ChevronDown
@@ -165,10 +135,7 @@ export function EbdPromocao({
                 {classe.idadeMinima !== null || classe.idadeMaxima !== null ? (
                   <span className="text-muted-foreground">
                     · {classe.idadeMinima ?? 0}
-                    {classe.idadeMaxima !== null
-                      ? ` a ${classe.idadeMaxima}`
-                      : "+"}{" "}
-                    anos
+                    {classe.idadeMaxima !== null ? ` a ${classe.idadeMaxima}` : "+"} anos
                   </span>
                 ) : null}
                 <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
@@ -181,18 +148,11 @@ export function EbdPromocao({
                 </span>
               </button>
             </h3>
-            <ul
-              id={`promocao-${classe.id}`}
-              hidden={!estaAberta}
-              className="flex flex-col divide-y border-t"
-            >
+            <ul id={`promocao-${classe.id}`} hidden={!estaAberta} className="flex flex-col divide-y border-t">
               {alunos.map((l) => {
                 const idade = idadeEm(l.nascimento, data);
                 return (
-                  <li
-                    key={l.membroId}
-                    className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm"
-                  >
+                  <li key={l.membroId} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                     <input
                       type="checkbox"
                       className="size-4"
@@ -213,10 +173,7 @@ export function EbdPromocao({
                         · {idade !== null ? `${idade} anos` : "sem nascimento"}
                       </span>
                     </span>
-                    <ArrowRight
-                      className="size-4 text-muted-foreground"
-                      aria-hidden
-                    />
+                    <ArrowRight className="size-4 text-muted-foreground" aria-hidden />
                     <select
                       className={campo}
                       value={destinoDe(l)}
@@ -230,9 +187,7 @@ export function EbdPromocao({
                     >
                       {classes.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.id === l.classeAtualId
-                            ? `${c.nome} (Atual)`
-                            : c.nome}
+                          {c.id === l.classeAtualId ? `${c.nome} (Atual)` : c.nome}
                         </option>
                       ))}
                     </select>

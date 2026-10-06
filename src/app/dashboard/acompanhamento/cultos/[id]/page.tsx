@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BotaoVoltar } from "@/components/botao-voltar";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isAppError } from "@/lib/errors";
@@ -21,6 +22,7 @@ export default async function HistoricoCultoPage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-4">
+      <BotaoVoltar href="/dashboard/acompanhamento" />
       <div>
         <h3 className="text-lg font-semibold">{culto.nome}</h3>
         <p className="text-sm text-muted-foreground">{descreverQuando(culto)} · chamadas do último ano</p>

@@ -1,3 +1,4 @@
+import { NOMES_PADRAO } from "@/lib/niveisRede";
 import { z } from "zod";
 import { AppError, toValidationError } from "@/lib/errors";
 import type { ChurchTipo } from "@/types/database";
@@ -15,10 +16,14 @@ import type { ChurchTipo } from "@/types/database";
 
 export const CHURCH_TIPOS = ["sede", "subsede", "congregacao"] as const satisfies readonly ChurchTipo[];
 
+/**
+ * Nomes PADRÃO dos níveis. O painel da plataforma atravessa as redes, então
+ * não usa os nomes que cada rede escolheu (src/lib/niveisRede.ts).
+ */
 export const CHURCH_TIPO_LABEL: Record<ChurchTipo, string> = {
-  sede: "Sede",
-  subsede: "Subsede",
-  congregacao: "Congregação",
+  sede: NOMES_PADRAO.sede.singular,
+  subsede: NOMES_PADRAO.subsede.singular,
+  congregacao: NOMES_PADRAO.congregacao.singular,
 };
 
 export interface HierarchyChurch {

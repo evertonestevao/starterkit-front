@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Pencil, UserPlus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ClipboardList, Pencil, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,6 +40,7 @@ export function MembroForm({
   podeConvidar?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
+  const router = useRouter();
   // Cargo é acesso ao sistema: só Responsável/Administrador mexe.
   const { active } = useTenant();
   const podeDefinirCargos = permissionService.canManageMembers(active.role);
@@ -52,6 +54,12 @@ export function MembroForm({
       if (result.success) {
         setAberto(false);
         setConvidar(false);
+      }
+      // "Salvar e preencher a ficha": o cadastro já existe; segue para a ficha
+      // completa dele (mesmo que o convite tenha falhado — o aviso aparece lá).
+      if (result.membroId && formData.get("depois") === "ficha") {
+        setAberto(false);
+        router.push(`/dashboard/membros/${result.membroId}?ficha=1`);
       }
       return result;
     },
@@ -76,7 +84,10 @@ export function MembroForm({
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{membro ? `Editar ${membro.nome}` : "Novo membro"}</DialogTitle>
-            <DialogDescription>Só o nome é obrigatório. O WhatsApp ajuda a falar com a pessoa quando ela sumir.</DialogDescription>
+            <DialogDescription>
+              Só o nome é obrigatório. O WhatsApp ajuda a falar com a pessoa quando ela sumir.
+              {!membro ? " Endereço, família e vida na igreja ficam na ficha completa, no passo seguinte." : ""}
+            </DialogDescription>
           </DialogHeader>
           <form action={formAction} className="flex flex-col gap-3">
             {membro ? <input type="hidden" name="id" value={membro.id} /> : null}
@@ -211,6 +222,12 @@ export function MembroForm({
             </label>
             <DialogFooter>
               <DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Cancelar</DialogClose>
+              {/* Só no cadastro novo: quem já existe tem "Editar ficha" na própria página. */}
+              {!membro ? (
+                <Button type="submit" name="depois" value="ficha" variant="outline" disabled={pending}>
+                  <ClipboardList className="size-3.5" /> Salvar e preencher a ficha
+                </Button>
+              ) : null}
               <Button type="submit" disabled={pending}>
                 {pending ? "Salvando..." : "Salvar"}
               </Button>

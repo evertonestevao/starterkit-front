@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Building2, Check, ChevronDown, Church, Copy, House, Link2, MessageCircle, Network, X } from "lucide-react";
+import { nomeNivel, type NomesNiveis } from "@/lib/niveisRede";
+import { useNomesNiveis } from "@/providers/niveis-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,9 +17,6 @@ import { formatChurchName } from "@/lib/churchName";
 import {
   CHURCH_LINK_MAX_USES_LIMIT,
   CHURCH_LINK_VALIDITY_OPTIONS,
-  LINK_TIPO_LABEL,
-  LINK_TIPO_PLURAL,
-  TIPO_LABEL,
   describeValidity,
   type ChurchLinkValidity,
 } from "@/lib/churchLinks";
@@ -87,13 +86,14 @@ function PendingRequestCard({ request, tipos }: { request: ChurchLinkRequest; ti
   // O cartão some quando o pedido é decidido: o aviso não pode depender dele.
   const [formAction, pending] = useToastedAction(decideChurchLinkRequestAction);
   const [recusando, setRecusando] = useState(false);
+  const nomes = useNomesNiveis();
 
   return (
     <li className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
       <div className="flex flex-col gap-1">
         <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
           {request.childName}
-          <Badge variant="secondary">Pede para ser {LINK_TIPO_LABEL[request.tipoSolicitado].toLowerCase()}</Badge>
+          <Badge variant="secondary">Pede para ser {nomeNivel(nomes, request.tipoSolicitado, { minusculo: true })}</Badge>
         </p>
         {request.childAddress ? <p className="text-xs text-muted-foreground">{request.childAddress}</p> : null}
         <p className="text-xs text-muted-foreground">
@@ -133,7 +133,7 @@ function PendingRequestCard({ request, tipos }: { request: ChurchLinkRequest; ti
             <select id={`tipo-${request.id}`} name="tipo" defaultValue={request.tipoSolicitado} className={selectClasses}>
               {tipos.map((tipo) => (
                 <option key={tipo} value={tipo}>
-                  {LINK_TIPO_LABEL[tipo]}
+                  {nomeNivel(nomes, tipo)}
                 </option>
               ))}
             </select>
@@ -257,6 +257,7 @@ function CreateInviteCard({
 }) {
   const [state, formAction, pending] = useActionState(createChurchLinkInviteAction, undefined);
   useActionToast(state);
+  const nomes = useNomesNiveis();
   const [tipo, setTipo] = useState<ChurchLinkTipo>(options[0]);
   // Sem padrão: a igreja escolhe. "sem" = sem validade / sem limite.
   const [validade, setValidade] = useState<"sem" | "7" | "15" | "30" | null>(null);
@@ -312,7 +313,7 @@ function CreateInviteCard({
                       onChange={() => setTipo(opcao)}
                       className="sr-only"
                     />
-                    {LINK_TIPO_LABEL[opcao]}
+                    {nomeNivel(nomes, opcao)}
                   </label>
                 ))}
               </div>
@@ -418,7 +419,7 @@ function CreateInviteCard({
                       <Badge variant={invite.status === "ativo" ? "default" : "outline"}>
                         {INVITE_STATUS_LABEL[invite.status]}
                       </Badge>
-                      <span>Para {LINK_TIPO_PLURAL[invite.tipoSubordinada].toLowerCase()}</span>
+                      <span>Para {nomeNivel(nomes, invite.tipoSubordinada, { plural: true, minusculo: true })}</span>
                     </span>
                     <span className="text-xs text-muted-foreground">{inviteSummary(invite)}</span>
                   </span>
@@ -445,8 +446,8 @@ function CancelRequestButton({ requestId }: { requestId: string }) {
   );
 }
 
-function describeRequest(request: ChurchLinkRequest, churchId: string): string {
-  const funcao = LINK_TIPO_LABEL[request.tipoFinal ?? request.tipoSolicitado].toLowerCase();
+function describeRequest(request: ChurchLinkRequest, churchId: string, nomes: NomesNiveis): string {
+  const funcao = nomeNivel(nomes, request.tipoFinal ?? request.tipoSolicitado, { minusculo: true });
   return request.childChurchId === churchId
     ? `Pedido para ser ${funcao} de ${request.parentName}`
     : `${request.childName} pediu para ser ${funcao}`;
@@ -468,6 +469,7 @@ function NetworkNode({
   pastor?: string | null;
   children?: React.ReactNode;
 }) {
+  const nomes = useNomesNiveis();
   const Icon = TIPO_ICON[church.tipo];
   return (
     <div
@@ -491,7 +493,7 @@ function NetworkNode({
           <p className="text-sm font-medium break-words">{formatChurchName(church.name, church.sobrenome)}</p>
           {pastor ? <p className="text-xs text-muted-foreground">{pastor}</p> : null}
           <Badge variant="outline" className="mt-1">
-            {TIPO_LABEL[church.tipo]}
+            {nomeNivel(nomes, church.tipo)}
           </Badge>
         </div>
       </div>
@@ -554,6 +556,7 @@ export function ChurchLinksManager({
   canInvite: ChurchLinkTipo[];
 }) {
   const semLigacao = !parent && entries.length === 0;
+  const nomes = useNomesNiveis();
 
   return (
     <div className="flex flex-col gap-6">
@@ -649,7 +652,7 @@ export function ChurchLinksManager({
           {myPending ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-3">
               <div className="text-sm">
-                <p className="font-medium">{describeRequest(myPending, church.id)}</p>
+                <p className="font-medium">{describeRequest(myPending, church.id, nomes)}</p>
                 <p className="text-xs text-muted-foreground">
                   Aguardando a aprovação da igreja-mãe · pedido de {formatDate(myPending.requestedAt)}
                 </p>
@@ -674,13 +677,13 @@ export function ChurchLinksManager({
               {history.map((request) => (
                 <li key={request.id} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-medium">{describeRequest(request, church.id)}</span>
+                    <span className="text-sm font-medium">{describeRequest(request, church.id, nomes)}</span>
                     <Badge variant={REQUEST_STATUS_VARIANT[request.status]}>{REQUEST_STATUS_LABEL[request.status]}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {formatDate(request.requestedAt)}
                     {request.tipoFinal && request.tipoFinal !== request.tipoSolicitado
-                      ? ` · aprovado como ${LINK_TIPO_LABEL[request.tipoFinal].toLowerCase()}`
+                      ? ` · aprovado como ${nomeNivel(nomes, request.tipoFinal, { minusculo: true })}`
                       : ""}
                   </p>
                   {request.status === "recusado" && request.motivoRecusa ? (

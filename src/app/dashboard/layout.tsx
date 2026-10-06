@@ -14,7 +14,9 @@ import { isPlatformStaff } from "@/server/platform";
 import { exigeUsuarioValido } from "@/server/session";
 import { getTermsService } from "@/server/terms";
 import { createUserService } from "@/services/userService";
+import { NomesNiveisProvider } from "@/providers/niveis-provider";
 import { TenantProvider } from "@/providers/tenant-provider";
+import { getNomesNiveisDaEmpresa } from "@/server/niveisRede";
 
 /**
  * Layout autenticado: gate de termos vigentes (LGPD) + empresa ativa,
@@ -76,7 +78,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Aviso no menu "Quem quer visita": pedidos em que ninguém fez contato
   // ainda. Só para quem tem o menu; se a contagem falhar, fica sem aviso.
   const visitasSemContato = menus.includes("relationships")
-    ? await (await getCommunityService())
+    ? await (
+        await getCommunityService()
+      )
         .countVisitas(active.id)
         .then((c) => c.novos)
         .catch(() => 0)
@@ -85,18 +89,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const cookieStore = await cookies();
   const initialCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "true";
 
+  // Como a rede desta igreja chama os níveis (sede, subsede, congregação).
+  const nomesNiveis = await getNomesNiveisDaEmpresa(active.id);
+
   return (
     <TenantProvider value={{ companies, active, menus, visitasSemContato }}>
-      <AppShell
-        initialCollapsed={initialCollapsed}
-        userName={profile?.full_name ?? "Usuário"}
-        userEmail={userData.user.email ?? ""}
-        avatarUrl={profile?.avatar_url ?? null}
-        pendingInvitesCount={myInvites.length}
-        unseenPrayerRequestsCount={unseenPrayerRequestsCount}
-      >
-        {children}
-      </AppShell>
+      <NomesNiveisProvider nomes={nomesNiveis}>
+        <AppShell
+          initialCollapsed={initialCollapsed}
+          userName={profile?.full_name ?? "Usuário"}
+          userEmail={userData.user.email ?? ""}
+          avatarUrl={profile?.avatar_url ?? null}
+          pendingInvitesCount={myInvites.length}
+          unseenPrayerRequestsCount={unseenPrayerRequestsCount}
+        >
+          {children}
+        </AppShell>
+      </NomesNiveisProvider>
     </TenantProvider>
   );
 }

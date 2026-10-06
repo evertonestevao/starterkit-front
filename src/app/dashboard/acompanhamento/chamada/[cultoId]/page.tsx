@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { BotaoVoltar } from "@/components/botao-voltar";
 import { Badge } from "@/components/ui/badge";
 import { ChamadaForm } from "@/features/acompanhamento/components/chamada-form";
 import { isAppError } from "@/lib/errors";
@@ -42,6 +43,7 @@ export default async function ChamadaPage({
 
   return (
     <div className="flex flex-col gap-4">
+      <BotaoVoltar href="/dashboard/acompanhamento/chamada" />
       <div className="flex flex-col gap-2">
         {chamada ? (
           <div className="flex flex-wrap items-center gap-2">

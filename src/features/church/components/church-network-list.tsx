@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { Building2, ChevronLeft, ChevronRight, Church, House, Search } from "lucide-react";
+import { nomeNivel } from "@/lib/niveisRede";
+import { useNomesNiveis } from "@/providers/niveis-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatChurchName } from "@/lib/churchName";
-import { TIPO_LABEL } from "@/lib/churchLinks";
 import {
   describeCongregations,
   filterNetwork,
@@ -103,6 +104,7 @@ function NetworkRow({
   pastores: PastorsByChurch;
 }) {
   const [aberta, setAberta] = useState(false);
+  const nomes = useNomesNiveis();
   const igreja = entry.church;
   const total = entry.congregacoes.length;
   const painelId = `painel-${igreja.id}`;
@@ -137,10 +139,10 @@ function NetworkRow({
         </span>
         <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           <Badge variant="outline" className="hidden sm:inline-flex">
-            {TIPO_LABEL[igreja.tipo]}
+            {nomeNivel(nomes, igreja.tipo)}
           </Badge>
           {igreja.tipo === "subsede" ? (
-            <Badge variant={total > 0 ? "secondary" : "outline"}>{describeCongregations(total)}</Badge>
+            <Badge variant={total > 0 ? "secondary" : "outline"}>{describeCongregations(total, nomes)}</Badge>
           ) : null}
         </span>
       </button>
@@ -155,7 +157,7 @@ function NetworkRow({
           {igreja.tipo === "subsede" ? (
             total > 0 ? (
               <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-medium text-muted-foreground">{describeCongregations(total)}</p>
+                <p className="text-xs font-medium text-muted-foreground">{describeCongregations(total, nomes)}</p>
                 <ul className="flex flex-col divide-y rounded-lg border">
                   {entry.congregacoes.map((congregacao) => (
                     <CongregationRow
@@ -172,7 +174,8 @@ function NetworkRow({
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Esta subsede ainda não tem congregações ligadas. Ela mesma pode convidá-las pelo painel dela.
+                Esta igreja ainda não tem {nomeNivel(nomes, "congregacao", { plural: true, minusculo: true })} ligadas a
+                ela. Ela mesma pode convidá-las pelo painel dela.
               </p>
             )
           ) : null}
@@ -202,6 +205,7 @@ export function ChurchNetworkList({
   const [tamanhoPagina, setTamanhoPagina] = useState<PageSize>(PAGE_SIZE_PADRAO);
   const [pagina, setPagina] = useState(1);
 
+  const nomes = useNomesNiveis();
   if (entries.length === 0) return null;
 
   const resultado = sortNetwork(filterNetwork(entries, busca, pastores), ordem);
@@ -209,7 +213,7 @@ export function ChurchNetworkList({
   const totalPaginas = Math.max(1, Math.ceil(resultado.length / tamanhoPagina));
   const paginaAtual = Math.min(pagina, totalPaginas);
   const mostradas = resultado.slice((paginaAtual - 1) * tamanhoPagina, paginaAtual * tamanhoPagina);
-  const resumo = summarizeNetwork(entries);
+  const resumo = summarizeNetwork(entries, nomes);
   // Destinos de uma mudança de função: as subsedes ligadas diretamente a esta igreja.
   const destinos = entries.map((e) => e.church);
   const comBusca = entries.length >= BUSCA_A_PARTIR_DE;
@@ -236,8 +240,8 @@ export function ChurchNetworkList({
                 setBusca(e.target.value);
                 setPagina(1);
               }}
-              aria-label="Buscar igreja, congregação ou pastor"
-              placeholder="Buscar igreja, congregação ou pastor"
+              aria-label="Buscar igreja ou pastor"
+              placeholder="Buscar igreja ou pastor"
               className="h-9 w-full rounded-md border border-input bg-transparent pr-2.5 pl-8 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
           </div>
@@ -245,7 +249,7 @@ export function ChurchNetworkList({
             {(
               [
                 ["nome", "A–Z"],
-                ["congregacoes", "Mais congregações"],
+                ["congregacoes", `Mais ${nomeNivel(nomes, "congregacao", { plural: true, minusculo: true })}`],
               ] as const
             ).map(([valor, rotulo]) => (
               <Button

@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { mascaraTelefone } from "@/lib/telefone";
 import type { AcessoMembro, ConvitePendente, RolMembro } from "@/types/acompanhamento";
 import type { CargoResumo } from "@/types/cargos";
 import { AcessoBadge, ConvidarDialog } from "./acesso-membro";
@@ -34,8 +37,16 @@ export function MembrosLista({
   /** Ainda sem acesso e sem convite: dá para convidar. */
   const convidavel = (m: RolMembro) => gerenciaAcesso && !acessoDe(m) && !conviteDe(m);
   const Acoes = ({ m }: { m: RolMembro }) => (
-    <span className="flex items-center justify-end gap-1.5">
+    <span className="flex flex-wrap items-center justify-end gap-1.5">
       {convidavel(m) && m.email ? <ConvidarDialog membro={m} /> : null}
+      {/* A ficha completa (endereço, família, histórico) fica na página do membro. */}
+      <Link
+        href={`/dashboard/membros/${m.id}`}
+        className={buttonVariants({ variant: "secondary", size: "sm" })}
+        aria-label={`Ver a ficha de ${m.nome}`}
+      >
+        <ClipboardList className="size-3.5" /> Ver ficha
+      </Link>
       <MembroForm membro={m} cargos={cargos} podeConvidar={convidavel(m)} />
     </span>
   );
@@ -58,7 +69,7 @@ export function MembrosLista({
               <TableHead>Cargos</TableHead>
               <TableHead>WhatsApp</TableHead>
               <TableHead>Situação</TableHead>
-              <TableHead className="w-56" />
+              <TableHead className="w-72" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -80,7 +91,7 @@ export function MembrosLista({
                 <TableCell>
                   <CargosDoMembro membro={m} />
                 </TableCell>
-                <TableCell className="text-muted-foreground">{m.whatsapp ?? "—"}</TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{mascaraTelefone(m.whatsapp) || "—"}</TableCell>
                 <TableCell>
                   <Badge variant={m.ativo ? "secondary" : "outline"}>{m.ativo ? "Ativo" : "Inativo"}</Badge>
                   {m.ativo && !m.participaChamada ? (
@@ -98,7 +109,7 @@ export function MembrosLista({
 
       <ul className="flex flex-col gap-2 md:hidden">
         {membros.map((m) => (
-          <li key={m.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+          <li key={m.id} className="flex flex-col gap-2 rounded-lg border p-3">
             <Link href={`/dashboard/membros/${m.id}`} className="min-w-0">
               <p className="flex flex-wrap items-center gap-1.5 font-medium">
                 <span className="truncate">{m.nome}</span>
@@ -112,7 +123,7 @@ export function MembrosLista({
               {/* No cartão, sem cargo não mostra nada (o "—" fica só na tabela). */}
               {m.cargos.length > 0 ? <CargosDoMembro membro={m} /> : null}
               <p className="text-xs text-muted-foreground">
-                {m.whatsapp ?? "Sem telefone"}
+                {mascaraTelefone(m.whatsapp) || "Sem telefone"}
                 {m.ativo ? "" : " · Inativo"}
               </p>
             </Link>

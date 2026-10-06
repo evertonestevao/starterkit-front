@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { BotaoVoltar } from "@/components/botao-voltar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AcessoBadge, AcessoMembroCard } from "@/features/acompanhamento/components/acesso-membro";
@@ -20,6 +21,7 @@ import {
 } from "@/lib/acompanhamento";
 import { idadeEm } from "@/lib/ebd";
 import { SITUACAO_LABEL } from "@/lib/fichaMembro";
+import { mascaraTelefone } from "@/lib/telefone";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
 import { getEbdService } from "@/server/ebd";
 import type { EstadoPresenca } from "@/types/acompanhamento";
@@ -32,8 +34,16 @@ const COR: Record<EstadoPresenca, string> = {
   justificado: "text-amber-700 dark:text-amber-400",
 };
 
-export default async function MembroPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MembroPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ ficha?: string }>;
+}) {
   const { id } = await params;
+  // Vindo de "Salvar e preencher a ficha" no cadastro novo.
+  const abrirFicha = (await searchParams).ficha === "1";
   const actor = await getAcompanhamentoActorAutorizado();
   if (!actor) notFound();
 
@@ -79,11 +89,12 @@ export default async function MembroPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="flex flex-col gap-4">
+      <BotaoVoltar href="/dashboard/membros" />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold">{membro.nome}</h3>
           <p className="text-sm text-muted-foreground">
-            {membro.whatsapp ?? "Sem telefone"}
+            {mascaraTelefone(membro.whatsapp) || "Sem telefone"}
             {membro.email ? ` · ${membro.email}` : ""}
             {membro.nascimento ? ` · nascimento ${formatarData(membro.nascimento)}` : ""}
             {membro.batismo ? ` · batismo ${formatarData(membro.batismo)}` : ""}
@@ -110,7 +121,13 @@ export default async function MembroPage({ params }: { params: Promise<{ id: str
       </div>
       {membro.observacoes ? <p className="rounded-lg bg-muted/50 p-3 text-sm">{membro.observacoes}</p> : null}
 
-      <FichaCard membroId={membro.id} nome={membro.nome} ficha={ficha} temLogin={Boolean(membro.userId)} />
+      <FichaCard
+        membroId={membro.id}
+        nome={membro.nome}
+        ficha={ficha}
+        temLogin={Boolean(membro.userId)}
+        abrirFormulario={abrirFicha}
+      />
 
       {gerenciaAcesso ? <AcessoMembroCard membro={membro} acesso={acesso} convite={convite} /> : null}
 

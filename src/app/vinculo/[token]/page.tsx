@@ -5,7 +5,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChurchLinkRequestForm } from "@/features/church/components/church-link-request-form";
-import { LINK_TIPO_LABEL, LINK_VISIBILITY_NOTES, TIPO_LABEL, churchLinkPath } from "@/lib/churchLinks";
+import { LINK_VISIBILITY_NOTES, churchLinkPath } from "@/lib/churchLinks";
+import { nomeNivel, type NomesNiveis } from "@/lib/niveisRede";
+import { getNomesNiveis } from "@/server/niveisRede";
 import { formatChurchName } from "@/lib/churchName";
 import { getChurchLinkService } from "@/server/churchLinks";
 import { getSupabaseServerClient } from "@/server/supabase-server";
@@ -35,15 +37,15 @@ function Aviso({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Resumo({ preview }: { preview: ChurchLinkPreview }) {
-  const posicao = LINK_TIPO_LABEL[preview.tipoSubordinada].toLowerCase();
+function Resumo({ preview, nomes }: { preview: ChurchLinkPreview; nomes: NomesNiveis }) {
+  const posicao = nomeNivel(nomes, preview.tipoSubordinada, { minusculo: true });
   const nome = formatChurchName(preview.church.name, preview.church.sobrenome);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1 rounded-lg border p-3">
         <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
           {nome}
-          <Badge variant="secondary">{TIPO_LABEL[preview.church.tipo]}</Badge>
+          <Badge variant="secondary">{nomeNivel(nomes, preview.church.tipo)}</Badge>
         </p>
         {preview.church.address ? (
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
@@ -121,6 +123,8 @@ export default async function ChurchLinkInvitePage({ params }: { params: Promise
       </Card>
     );
   }
+  // Os níveis aparecem com os nomes da rede de quem convidou.
+  const nomes = await getNomesNiveis(preview.church.id);
 
   // Quem pode pedir: igrejas da empresa sem igreja-mãe (o banco confere de novo).
   const minhas = await service.listChurches(actor);
@@ -142,7 +146,7 @@ export default async function ChurchLinkInvitePage({ params }: { params: Promise
         <CardDescription>Leia como funciona e decida se quer pedir o vínculo.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <Resumo preview={preview} />
+        <Resumo preview={preview} nomes={nomes} />
 
         {preview.isMine ? (
           <Aviso>

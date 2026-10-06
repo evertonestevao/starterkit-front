@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ClipboardCheck, KeyRound } from "lucide-react";
+import { BotaoVoltar } from "@/components/botao-voltar";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,7 @@ export default async function ClasseEbdPage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="flex flex-col gap-5">
+      <BotaoVoltar href="/dashboard/ebd" />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link href="/dashboard/ebd" className="text-xs text-muted-foreground hover:underline">

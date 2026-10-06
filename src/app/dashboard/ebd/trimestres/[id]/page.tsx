@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { BotaoVoltar } from "@/components/botao-voltar";
 import { notFound } from "next/navigation";
 import { EbdLicoes } from "@/features/ebd/components/ebd-licoes";
 import { formatarData } from "@/lib/acompanhamento";
@@ -34,11 +34,7 @@ export default async function EbdLicoesPage({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        {gestao ? (
-          <Link href="/dashboard/ebd/trimestres" className="text-xs text-muted-foreground hover:underline">
-            ← Trimestres
-          </Link>
-        ) : null}
+        <BotaoVoltar href={gestao ? "/dashboard/ebd/trimestres" : "/dashboard/ebd"} />
         <h3 className="text-lg font-semibold">Lições — {dados.trimestre.nome}</h3>
         <p className="text-sm text-muted-foreground">
           {formatarData(dados.trimestre.inicio)} a {formatarData(dados.trimestre.fim)}

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BotaoVoltar } from "@/components/botao-voltar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImportarMembros } from "@/features/acompanhamento/components/importar-membros";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
@@ -20,9 +20,7 @@ export default async function ImportarMembrosPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Link href="/dashboard/membros" className="text-xs text-muted-foreground hover:underline">
-        ← Membros
-      </Link>
+      <BotaoVoltar href="/dashboard/membros" />
       <Card>
         <CardHeader>
           <CardTitle>Importar membros de uma planilha</CardTitle>

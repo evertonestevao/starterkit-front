@@ -17,11 +17,13 @@ export function FichaCard({
   nome,
   ficha,
   temLogin,
+  abrirFormulario = false,
 }: {
   membroId: string;
   nome: string;
   ficha: FichaMembro;
   temLogin: boolean;
+  abrirFormulario?: boolean;
 }) {
   const itens: Array<[string, string | null]> = [
     ["Sexo", ficha.sexo ? SEXO_LABEL[ficha.sexo] : null],
@@ -46,7 +48,7 @@ export function FichaCard({
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">Ficha</CardTitle>
-          <FichaForm membroId={membroId} nome={nome} ficha={ficha} temLogin={temLogin} />
+          <FichaForm membroId={membroId} nome={nome} ficha={ficha} temLogin={temLogin} abrirAoEntrar={abrirFormulario} />
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">

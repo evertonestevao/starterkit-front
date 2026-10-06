@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { nomeNivel } from "@/lib/niveisRede";
+import { useNomesNiveis } from "@/providers/niveis-provider";
 import { Button } from "@/components/ui/button";
 import { useToastedAction } from "@/hooks/useToastedAction";
 import { formatChurchName } from "@/lib/churchName";
-import { LINK_TIPO_LABEL, moveDestinations } from "@/lib/churchLinks";
+import { moveDestinations } from "@/lib/churchLinks";
 import { changeChurchPositionAction, endChurchLinkAction } from "@/server/actions/churchLinks";
 import type { ChurchLinkChurch, ChurchLinkNode } from "@/types/churchLinks";
 
@@ -56,6 +58,7 @@ export function MovePositionForm({
   currentParentId: string;
 }) {
   const [formAction, pending] = useToastedAction(changeChurchPositionAction);
+  const nomes = useNomesNiveis();
   const [aberto, setAberto] = useState(false);
 
   // Só monta a lista de destinos depois de aberto: com centenas de subsedes, cada linha
@@ -71,7 +74,7 @@ export function MovePositionForm({
           const paiNome = pai ? formatChurchName(pai.name, pai.sobrenome) : "";
           return d.tipos.map((tipo) => ({
             valor: `${d.parentId}|${tipo}`,
-            rotulo: `${LINK_TIPO_LABEL[tipo]} de ${paiNome}`,
+            rotulo: `${nomeNivel(nomes, tipo)} de ${paiNome}`,
             parentId: d.parentId,
             tipo,
           }));
