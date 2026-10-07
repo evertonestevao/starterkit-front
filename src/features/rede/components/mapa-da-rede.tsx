@@ -153,7 +153,8 @@ function Bloco({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{unidade.churchName}</p>
+          {/* Duas linhas, não reticências: o fim do nome é justamente o que distingue uma igreja da outra. */}
+          <p className="line-clamp-2 text-sm leading-5 font-semibold break-words">{unidade.churchName}</p>
           <p className="text-xs text-muted-foreground">
             {nomeNivel(nomes, unidade.tipo as ChurchTipo)} · {unidade.membrosAtivos} membros
           </p>
