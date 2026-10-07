@@ -21,6 +21,7 @@ export const MODULOS_LIBERAVEIS = [
   "events",
   "campaigns",
   "relationships",
+  "tesouraria",
 ] as const;
 export type Modulo = (typeof MODULOS_LIBERAVEIS)[number];
 
@@ -67,6 +68,9 @@ export const MENUS: readonly MenuDef[] = [
   // Só o que tem inscrição e/ou pagamento.
   { key: "events", title: "Eventos", href: "/dashboard/events", roles: ["owner", "admin"] },
   { key: "campaigns", title: "Campanhas", href: "/dashboard/campaigns", roles: ["owner", "admin"] },
+  // Dízimos e ofertas dos cultos (a oferta da EBD fica na EBD). Só a própria
+  // igreja: a de cima não lê.
+  { key: "tesouraria", title: "Tesouraria", href: "/dashboard/tesouraria", roles: ["owner", "admin"] },
   { key: "sponsors", title: "Patrocinadores", href: "/dashboard/sponsors", roles: ["owner", "admin"] },
   // Pedidos de visita (nome e telefone de quem pediu).
   { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin"] },
@@ -105,6 +109,11 @@ export const MODULO_INFO: Record<Modulo, { titulo: string; libera: string; aviso
     titulo: "Campanhas",
     libera: "Criar, publicar e encerrar campanhas e confirmar doações.",
     aviso: "A campanha aparece na página pública e recebe pelo Pix já cadastrado da igreja, que este cargo não altera.",
+  },
+  tesouraria: {
+    titulo: "Tesouraria",
+    libera: "Lançar dízimos e ofertas dos cultos, corrigir e excluir lançamentos e emitir o relatório mensal.",
+    aviso: "Mostra quanto cada pessoa entregou de dízimo. Libere só para quem cuida do caixa.",
   },
   relationships: {
     titulo: "Quem quer visita",

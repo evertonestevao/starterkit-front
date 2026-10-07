@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   ScrollText,
   Settings,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { MENUS, ROTA_MINHA_CONTA, type MenuDef } from "@/lib/menuPermissoes";
@@ -35,6 +36,7 @@ const ICONES: Record<string, LucideIcon> = {
   programacao: CalendarClock,
   events: CalendarDays,
   campaigns: HandCoins,
+  tesouraria: Wallet,
   sponsors: Landmark,
   relationships: HeartHandshake,
   billing: CreditCard,

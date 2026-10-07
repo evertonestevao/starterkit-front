@@ -7432,6 +7432,187 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Tesouraria (migration 20261007120000). AC Cong (d2) é da conta c2, de 002.
+-- O "Secretario AC" (004) tem o cargo Auxiliar da chamada, sem tesouraria.
+-- AC Sede (d1, de 001) fica ACIMA; AC Outra (d3, de 005) é outra rede.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v_id uuid; v text; n int;
+begin
+  v_id := public.tesouraria_salvar(null, 'acacacac-0000-4000-8000-0000000000d2', jsonb_build_object(
+    'data', current_date::text, 'tipo', 'dizimo', 'valor_centavos', 15000, 'forma', 'pix',
+    'membro_id', 'cacacaca-0000-4000-8000-0000000000a1'));
+  perform set_config('rls.lancamento', v_id::text, true);
+  select nome into v from public.tesouraria_lancamentos where id = v_id;
+  if v is null then raise exception 'FALHA tesouraria: o nome do membro nao foi copiado para o lancamento'; end if;
+  perform public.tesouraria_salvar(null, 'acacacac-0000-4000-8000-0000000000d2', jsonb_build_object(
+    'data', current_date::text, 'tipo', 'oferta', 'valor_centavos', 32050));
+
+  -- Gravar é só pela função.
+  begin
+    insert into public.tesouraria_lancamentos (church_id, company_id, data, tipo, valor_centavos)
+    values ('acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2', current_date, 'oferta', 100);
+    raise exception 'FALHA tesouraria: insert direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.tesouraria_lancamentos set valor_centavos = 1 where id = v_id;
+    raise exception 'FALHA tesouraria: update direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Valor zero, tipo inventado, membro e igreja de fora: nada entra.
+  begin
+    perform public.tesouraria_salvar(null, 'acacacac-0000-4000-8000-0000000000d2',
+      jsonb_build_object('data', current_date::text, 'tipo', 'oferta', 'valor_centavos', 0));
+    raise exception 'FALHA tesouraria: aceitou valor zero';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.tesouraria_salvar(null, 'acacacac-0000-4000-8000-0000000000d2',
+      jsonb_build_object('data', current_date::text, 'tipo', 'saida', 'valor_centavos', 100));
+    raise exception 'FALHA tesouraria: aceitou tipo desconhecido';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.tesouraria_salvar(null, 'acacacac-0000-4000-8000-0000000000d3',
+      jsonb_build_object('data', current_date::text, 'tipo', 'oferta', 'valor_centavos', 100));
+    raise exception 'FALHA tesouraria: lancou na igreja de outra rede';
+  exception when sqlstate 'P0002' then null;
+  end;
+  begin
+    perform public.tesouraria_salvar(null, 'acacacac-0000-4000-8000-0000000000d2', jsonb_build_object(
+      'data', current_date::text, 'tipo', 'dizimo', 'valor_centavos', 100,
+      'membro_id', (select id from public.rol_membros where church_id <> 'acacacac-0000-4000-8000-0000000000d2' limit 1)));
+    -- (a RLS do rol já esconde os de fora; se a subconsulta vier vazia, o lançamento entra sem membro)
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  select count(*) into n from public.tesouraria_buscar_pessoas('acacacac-0000-4000-8000-0000000000d2', 'a');
+  if n <> 0 then raise exception 'FALHA tesouraria: busca com 1 letra devolveu gente'; end if;
+end $$;
+
+-- Sem o módulo: não lê, não lança, não busca nomes.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.tesouraria_lancamentos;
+  if n <> 0 then raise exception 'FALHA tesouraria: quem nao tem o modulo leu % lancamento(s)', n; end if;
+  begin
+    perform public.tesouraria_salvar(null, 'acacacac-0000-4000-8000-0000000000d2',
+      jsonb_build_object('data', current_date::text, 'tipo', 'oferta', 'valor_centavos', 100));
+    raise exception 'FALHA tesouraria: quem nao tem o modulo lancou';
+  exception when sqlstate 'P0002' then null;
+  end;
+  begin
+    perform public.tesouraria_excluir(current_setting('rls.lancamento')::uuid);
+    raise exception 'FALHA tesouraria: quem nao tem o modulo excluiu';
+  exception when sqlstate 'P0002' then null;
+  end;
+  select count(*) into n from public.tesouraria_buscar_pessoas('acacacac-0000-4000-8000-0000000000d2', 'me');
+  if n <> 0 then raise exception 'FALHA tesouraria: quem nao tem o modulo buscou nomes'; end if;
+  select count(*) into n from public.meus_acessos() where modulo = 'tesouraria';
+  if n <> 0 then raise exception 'FALHA tesouraria: modulo apareceu sem estar liberado'; end if;
+end $$;
+reset role;
+
+-- A igreja libera a tesouraria para o cargo dele: passa a ler e a lançar.
+insert into public.cargo_acessos (church_id, cargo_id, modulo, permitido)
+select 'acacacac-0000-4000-8000-0000000000d2', c.id, 'tesouraria', true
+from public.cargos c where c.slug = 'auxiliar_chamada'
+on conflict (church_id, cargo_id, modulo) do update set permitido = true;
+
+set local role authenticated;
+do $$
+declare n int;
+begin
+  select count(*) into n from public.tesouraria_lancamentos where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if n < 2 then raise exception 'FALHA tesouraria: cargo liberado nao leu os lancamentos (%)', n; end if;
+  select count(*) into n from public.meus_acessos() where modulo = 'tesouraria';
+  if n <> 1 then raise exception 'FALHA tesouraria: modulo liberado nao apareceu em meus_acessos'; end if;
+  -- Editar registra o valor anterior.
+  perform public.tesouraria_salvar(current_setting('rls.lancamento')::uuid, 'acacacac-0000-4000-8000-0000000000d2',
+    jsonb_build_object('data', current_date::text, 'tipo', 'dizimo', 'valor_centavos', 20000, 'nome', 'Fulano de Tal'));
+  -- Editar passando a igreja errada não acha o lançamento.
+  begin
+    perform public.tesouraria_salvar(current_setting('rls.lancamento')::uuid, 'acacacac-0000-4000-8000-0000000000d3',
+      jsonb_build_object('data', current_date::text, 'tipo', 'dizimo', 'valor_centavos', 1));
+    raise exception 'FALHA tesouraria: editou por outra igreja';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+
+-- A igreja de CIMA e a de outra rede não veem nem mexem.
+do $$
+declare v_quem text; n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.tesouraria_lancamentos where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+    if n <> 0 then raise exception 'FALHA tesouraria: % leu os lancamentos da congregacao', v_quem; end if;
+    begin
+      perform public.tesouraria_excluir(current_setting('rls.lancamento')::uuid);
+      raise exception 'FALHA tesouraria: % excluiu lancamento da congregacao', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    select count(*) into n from public.tesouraria_buscar_pessoas('acacacac-0000-4000-8000-0000000000d2', 'me');
+    if n <> 0 then raise exception 'FALHA tesouraria: % buscou nomes da congregacao', v_quem; end if;
+  end loop;
+end $$;
+
+-- Excluir some da leitura e fica na auditoria (sem o nome de quem deu).
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  perform public.tesouraria_excluir(current_setting('rls.lancamento')::uuid);
+  select count(*) into n from public.tesouraria_lancamentos where id = current_setting('rls.lancamento')::uuid;
+  if n <> 0 then raise exception 'FALHA tesouraria: lancamento excluido continua visivel'; end if;
+  begin
+    perform public.tesouraria_excluir(current_setting('rls.lancamento')::uuid);
+    raise exception 'FALHA tesouraria: excluiu duas vezes';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+reset role;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.audit_logs
+  where entity_id = current_setting('rls.lancamento')::uuid
+    and action in ('tesouraria.lancamento_alterado', 'tesouraria.lancamento_excluido')
+    and metadata::text not like '%Fulano%';
+  if n <> 2 then raise exception 'FALHA tesouraria: alteracao e exclusao nao foram registradas (%)', n; end if;
+  if not exists (
+    select 1 from public.cargos where church_id is null and slug = 'tesoureiro' and 'tesouraria' = any (acessos_padrao)
+  ) then
+    raise exception 'FALHA tesouraria: o Tesoureiro nao nasce com o modulo';
+  end if;
+end $$;
+
+set local role anon;
+do $$
+begin
+  perform 1 from public.tesouraria_lancamentos;
+  raise exception 'FALHA tesouraria: anon leu os lancamentos';
+exception when sqlstate '42501' then null;
+end $$;
+reset role;
+
+delete from public.cargo_acessos
+ where church_id = 'acacacac-0000-4000-8000-0000000000d2' and modulo = 'tesouraria';
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------
