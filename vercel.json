@@ -3,11 +3,11 @@
   "crons": [
     {
       "path": "/api/cron/domains",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/sponsor-billing",
-      "schedule": "*/15 * * * *"
+      "schedule": "30 8 * * *"
     }
   ]
 }
