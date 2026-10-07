@@ -37,7 +37,11 @@ export function CompanySwitcher() {
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="outline" size="sm" className="max-w-44 gap-2 sm:max-w-56" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="max-w-44 gap-2 sm:max-w-56"
+            />
           }
         >
           <Building2 className="size-4 shrink-0" />
@@ -46,7 +50,7 @@ export function CompanySwitcher() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuGroup>
-            <DropdownMenuLabel>Suas empresas</DropdownMenuLabel>
+            <DropdownMenuLabel>Suas igrejas</DropdownMenuLabel>
             {companies.map((company) => (
               <DropdownMenuItem
                 key={company.id}
@@ -60,20 +64,24 @@ export function CompanySwitcher() {
                         router.push("/dashboard"); // navegação no client (sem redirect na action)
                       }
                     } catch {
-                      toast.error("Não foi possível trocar de empresa. Tente novamente.");
+                      toast.error(
+                        "Não foi possível trocar de igreja. Tente novamente.",
+                      );
                     }
                   })
                 }
               >
                 <span className="truncate">{company.name}</span>
-                {company.id === active.id ? <Check className="ml-auto size-4" /> : null}
+                {company.id === active.id ? (
+                  <Check className="ml-auto size-4" />
+                ) : null}
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setCreating(true)}>
             <Plus className="size-4" />
-            Nova empresa
+            Nova igreja
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -81,8 +89,10 @@ export function CompanySwitcher() {
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Nova empresa</DialogTitle>
-            <DialogDescription>Você será o owner da nova empresa.</DialogDescription>
+            <DialogTitle>Nova igreja</DialogTitle>
+            <DialogDescription>
+              Você será o responsável dessa igreja.
+            </DialogDescription>
           </DialogHeader>
           <CreateCompanyForm />
         </DialogContent>

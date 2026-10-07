@@ -21,7 +21,7 @@ async function requireOwner(companyId: string) {
   const tenant = await getTenantService();
   const role = await tenant.requireMembership(companyId);
   if (!permissionService.canManageBilling(role)) {
-    throw new AppError("forbidden", "Só o owner gerencia o billing");
+    throw new AppError("forbidden", "Só o responsável pela igreja gerencia a assinatura");
   }
 }
 

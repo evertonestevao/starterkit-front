@@ -16,6 +16,7 @@ import {
   normalizeSeriesList,
   resolveFormatter,
   SERIES_TOKENS,
+  yAxisWidthFor,
   type ChartSeries,
   type ValueFormat,
 } from "./chart-base";
@@ -62,19 +63,7 @@ export function LineChartCard(props: LineChartCardProps) {
   );
   const chartId = useId();
 
-  // Largura do eixo Y proporcional ao maior rótulo formatado (ex.: "R$ 3.800"),
-  // senão valores longos são cortados. ~7.5px por caractere em fonte 12px.
-  const longestLabel = data.reduce((longest, row) => {
-    for (const s of series) {
-      const value = row[s.key];
-      if (typeof value === "number") {
-        const label = valueFormatter(value);
-        if (label.length > longest) longest = label.length;
-      }
-    }
-    return longest;
-  }, 1);
-  const yAxisWidth = Math.min(110, Math.max(40, 14 + longestLabel * 7.5));
+  const yAxisWidth = yAxisWidthFor(data, series, valueFormatter);
 
   return (
     <Card>

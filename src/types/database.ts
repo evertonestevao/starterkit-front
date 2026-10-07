@@ -3,6 +3,8 @@
  * Fonte única — não redeclarar essas interfaces em outros arquivos.
  */
 
+import type { DomainVerificationChallenge } from "./domain";
+
 export type RoleCode = "owner" | "admin" | "member";
 
 export type InviteStatus = "pending" | "accepted" | "revoked" | "expired";
@@ -143,3 +145,198 @@ export interface Setting {
   created_at: string;
   updated_at: string;
 }
+
+export interface Template {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  created_at: string;
+}
+
+export type ChurchTemplateMode = "inherit" | "custom";
+
+/** Estados do domínio próprio (enum church_domain_status no banco). */
+export type ChurchDomainStatus =
+  | "nao_configurado"
+  | "pendente_dns"
+  | "verificando"
+  | "ativo"
+  | "erro";
+
+/** Nível na árvore Sede > Subsede > Congregação. Só a plataforma altera. */
+export type ChurchTipo = "sede" | "subsede" | "congregacao";
+
+export interface Church {
+  id: string;
+  /** Empresa dona. NOT NULL desde a migration 20260923100000. */
+  company_id: string;
+  parent_id: string | null;
+  tipo: ChurchTipo;
+  /** Nome EFETIVO (o que aparece): o próprio, ou o da igreja superior se herdar_nome. */
+  name: string;
+  /** O nome que a própria igreja escolheu. Quem escreve é ele; `name` é derivado por trigger. */
+  nome_proprio: string;
+  /** Sobrenome opcional ("Prainha - Promissão"): distingue igrejas de mesmo nome. Sempre individual. */
+  sobrenome: string | null;
+  /** Usa o nome da igreja superior. */
+  herdar_nome: boolean;
+  /** Declarado no cadastro: a igreja diz pertencer a uma rede de igrejas. Não é vínculo na árvore. */
+  faz_parte_de_rede: boolean;
+  /** Nome da rede declarada (opcional). Só a moderação lê. */
+  rede_nome: string | null;
+  slug: string;
+  logo_url: string | null;
+  address: string | null;
+  /** Texto de apresentação ("Sobre"), mostrado na página pública. */
+  sobre?: string | null;
+  /** A página pública está no ar? Igreja nova nasce com ela fora do ar. */
+  pagina_ativa?: boolean;
+  service_times: Record<string, string> | null;
+  social_links: Record<string, string> | null;
+  path: string;
+  template_mode: ChurchTemplateMode;
+  template_id: string | null;
+  /** Código da página dentro da rede; `public_code` é a chave montada com a rede. */
+  codigo?: string;
+  public_code: string;
+  /** Chave PIX da própria igreja (dízimos e ofertas). A plataforma não intermedeia. */
+  pix_chave: string | null;
+  /** Titular da chave, para quem doa conferir no app do banco. */
+  pix_titular: string | null;
+  /** Qual Pix aparece na vitrine: chave própria ou o da subconta Asaas. Nunca os dois. */
+  pix_fonte: "propria" | "asaas";
+  /** Host próprio da igreja, minúsculo e sem protocolo. Null = só o padrão. */
+  dominio_customizado: string | null;
+  dominio_status: ChurchDomainStatus;
+  /** Só histórico comercial: não muda nada no fluxo de DNS. */
+  dominio_suporte_pago: boolean;
+  dominio_verificacao: DomainVerificationChallenge[] | null;
+  dominio_verificado_em: string | null;
+  dominio_ultimo_erro: string | null;
+  dominio_solicitado_em: string | null;
+  /** false = a igreja fechou a porta pra patrocinador (some da LP). Só editável sem patrocinador ativo. */
+  aceita_patrocinio: boolean;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Colunas de `churches` legíveis pelo anon (GRANT por coluna na migration). */
+/** Item da programação: culto semanal ou especial. Sem inscrição. */
+export interface ChurchScheduleItem {
+  id: string;
+  church_id: string;
+  titulo: string;
+  tipo: "semanal" | "especial";
+  /** 0 = domingo … 6 = sábado. Só no semanal. */
+  dia_semana: number | null;
+  /** "2026-10-04". Só no especial. */
+  data: string | null;
+  /** "19:30:00" (time do Postgres). */
+  hora: string;
+  descricao: string | null;
+  local: string | null;
+}
+
+/** Evento publicado pela igreja na página pública. */
+export interface ChurchEvent {
+  id: string;
+  church_id: string;
+  titulo: string;
+  descricao: string | null;
+  inicio: string;
+  fim: string | null;
+  /** Null = no endereço da própria igreja. */
+  local: string | null;
+  /** Zero = gratuito. Pago direto à igreja; a plataforma não cobra. */
+  preco_cents: number;
+  inscricoes_abertas: boolean;
+}
+
+/** Campanha de arrecadação, como aparece na página pública (ativa ou encerrada). */
+export interface Campaign {
+  id: string;
+  church_id: string;
+  titulo: string;
+  foto_capa_url: string | null;
+  historia: string;
+  meta_cents: number;
+  /** Só o valor líquido (já sem taxa do provedor, quando for cartão). */
+  total_arrecadado_liquido_cents: number;
+  metodo_recebimento: "pix" | "gateway";
+  mostrar_progresso: boolean;
+  /** Até 3 valores sugeridos, em centavos. */
+  valores_sugeridos: number[];
+  valor_padrao_cents: number | null;
+  permitir_valor_livre: boolean;
+  status: "rascunho" | "ativa" | "encerrada";
+  feedback_texto: string | null;
+  feedback_foto_url: string | null;
+  encerrada_at: string | null;
+  created_at: string;
+}
+
+export type PublicChurch = Omit<
+  Church,
+  | "company_id"
+  | "dominio_customizado"
+  | "dominio_status"
+  | "dominio_suporte_pago"
+  | "dominio_verificacao"
+  | "dominio_verificado_em"
+  | "dominio_ultimo_erro"
+  | "dominio_solicitado_em"
+  | "deleted_at"
+  | "tipo"
+  | "nome_proprio"
+  | "herdar_nome"
+>;
+
+export interface PrayerRequest {
+  id: string;
+  church_id: string;
+  /** Empresa dona da igreja, preenchida por trigger (nunca pelo cliente). */
+  company_id: string | null;
+  name: string | null;
+  message: string;
+  /** Quando a liderança marcou "já oramos"; null = aguardando oração. */
+  orado_em: string | null;
+  /** Anotação curta da liderança no pedido. */
+  anotacao: string | null;
+  created_at: string;
+}
+
+export interface EventSignup {
+  id: string;
+  church_id: string;
+  /** Empresa dona da igreja, preenchida por trigger (nunca pelo cliente). */
+  company_id: string | null;
+  event_name: string;
+  person_name: string;
+  contact: string;
+  created_at: string;
+}
+
+export interface Visitor {
+  id: string;
+  church_id: string;
+  /** Empresa dona da igreja, preenchida por trigger (nunca pelo cliente). */
+  company_id: string | null;
+  name: string;
+  /** Telefone/WhatsApp (obrigatório nos pedidos novos; antigos podem ter email). */
+  contact: string;
+  endereco: string | null;
+  mensagem: string | null;
+  /** Dia em que a equipe falou com a pessoa; null = ainda aguardando contato. */
+  contato_em: string | null;
+  /** Dia combinado para a visita, se já houver. */
+  agendada_para: string | null;
+  contato_obs: string | null;
+  /** Preenchido quando a visita foi feita (data + quem foi). */
+  visitado_em: string | null;
+  visitado_por: string | null;
+  visita_obs: string | null;
+  created_at: string;
+}
+

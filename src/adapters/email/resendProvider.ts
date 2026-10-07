@@ -7,7 +7,17 @@ const RESEND_API = "https://api.resend.com/emails";
 
 interface ResendProviderConfig {
   apiKey: string;
+  /** Endereço do remetente, num domínio verificado na Resend. */
   from: string;
+  /** Nome exibido ao lado do endereço. */
+  fromName?: string;
+  replyTo?: string;
+}
+
+/** "Nome <email>"; aspas e sinais de menor/maior no nome quebrariam o cabeçalho. */
+export function remetente(from: string, fromName?: string): string {
+  const nome = fromName?.replace(/["<>\r\n]/g, "").trim();
+  return nome ? `${nome} <${from}>` : from;
 }
 
 export function createResendProvider(config: ResendProviderConfig): EmailProvider {
@@ -22,8 +32,9 @@ export function createResendProvider(config: ResendProviderConfig): EmailProvide
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: config.from,
+          from: remetente(config.from, config.fromName),
           to: [message.to],
+          ...(config.replyTo ? { reply_to: config.replyTo } : {}),
           subject: message.subject,
           html: message.html,
           text: message.text,

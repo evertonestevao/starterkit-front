@@ -4,6 +4,12 @@ import type { ConsentType, TermsAcceptance, TermsVersion } from "@/types/databas
 /**
  * Termos de Uso versionados + consentimentos LGPD por finalidade.
  *
+ * Há um documento por PÚBLICO: igreja e patrocinador assinam contratos
+ * diferentes (a igreja não paga e é controladora dos dados da comunidade; o
+ * patrocinador paga, é consumidor e tem direito de arrependimento). Cada
+ * público tem sua própria numeração e sua própria versão vigente, e o aceite
+ * registra qual documento a pessoa leu.
+ *
  * Regras:
  * - O acesso ao dashboard exige aceite da versão VIGENTE (is_current). Se uma
  *   versão nova for publicada, quem aceitou a antiga é forçado a reaceitar.
@@ -17,8 +23,11 @@ export interface RequestEvidence {
   userAgent: string | null;
 }
 
+/** Para quem o documento vale. */
+export type TermsAudience = "igreja" | "patrocinador";
+
 export interface TermsRepository {
-  getCurrentVersion(): Promise<TermsVersion | null>;
+  getCurrentVersion(audience: TermsAudience): Promise<TermsVersion | null>;
   /** Aceite do usuário logado para a versão dada (RLS restringe ao próprio). */
   findMyAcceptance(termsVersionId: string): Promise<TermsAcceptance | null>;
   insertAcceptance(data: {
@@ -37,13 +46,13 @@ export interface TermsRepository {
 }
 
 export function createTermsService(repo: TermsRepository) {
-  async function getCurrentTerms(): Promise<TermsVersion | null> {
-    return repo.getCurrentVersion();
+  async function getCurrentTerms(audience: TermsAudience): Promise<TermsVersion | null> {
+    return repo.getCurrentVersion(audience);
   }
 
   /** true se o usuário logado aceitou a versão VIGENTE dos termos. */
-  async function hasAcceptedCurrent(): Promise<boolean> {
-    const current = await repo.getCurrentVersion();
+  async function hasAcceptedCurrent(audience: TermsAudience): Promise<boolean> {
+    const current = await repo.getCurrentVersion(audience);
     if (!current) {
       // Sem versão publicada não há o que aceitar — não bloqueia o sistema.
       return true;
@@ -52,8 +61,11 @@ export function createTermsService(repo: TermsRepository) {
   }
 
   /** Registra o aceite da versão vigente. Idempotente por unique no banco. */
-  async function acceptCurrentTerms(evidence: RequestEvidence): Promise<void> {
-    const current = await repo.getCurrentVersion();
+  async function acceptCurrentTerms(
+    audience: TermsAudience,
+    evidence: RequestEvidence,
+  ): Promise<void> {
+    const current = await repo.getCurrentVersion(audience);
     if (!current) {
       throw new AppError("not_found", "Nenhuma versão de termos publicada");
     }

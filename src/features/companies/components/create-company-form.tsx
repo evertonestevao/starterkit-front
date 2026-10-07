@@ -1,32 +1,93 @@
 "use client";
 
-import { useActionState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TermsCheckboxes } from "@/features/terms/components/terms-checkboxes";
+import { useActionToast } from "@/hooks/useActionToast";
+import {
+  CHURCH_NETWORK_NAME_MAX_LENGTH,
+  CHURCH_SURNAME_MAX_LENGTH,
+} from "@/lib/churchName";
 import { createCompanyAction } from "@/server/actions/tenant";
 
-export function CreateCompanyForm({ requireTerms = false }: { requireTerms?: boolean }) {
-  const [state, formAction, pending] = useActionState(createCompanyAction, undefined);
+export function CreateCompanyForm({
+  requireTerms = false,
+  next,
+}: {
+  requireTerms?: boolean;
+  /** Para onde voltar depois de criar a igreja (só um link de vínculo; o servidor confere). */
+  next?: string;
+}) {
+  const [state, formAction, pending] = useActionState(
+    createCompanyAction,
+    undefined,
+  );
+  useActionToast(state);
+  const [inNetwork, setInNetwork] = useState(false);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <div className="flex flex-col gap-2">
-        <Label htmlFor="name">Nome da empresa</Label>
-        <Input id="name" name="name" placeholder="Minha Empresa" minLength={2} required />
+        <Label htmlFor="name">Nome da igreja</Label>
+        <Input
+          id="name"
+          name="name"
+          placeholder="Assembleia de Deus Ministério no Ipiranga"
+          minLength={2}
+          required
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="sobrenome">Complemento do nome (opcional)</Label>
+        <Input
+          id="sobrenome"
+          name="sobrenome"
+          placeholder="Zona Sul - São Paulo"
+          maxLength={CHURCH_SURNAME_MAX_LENGTH}
+          aria-describedby="sobrenome-help"
+        />
+        <p id="sobrenome-help" className="text-xs text-muted-foreground">
+          Separa a sua igreja das de mesmo nome. Aparece junto do nome.
+        </p>
+      </div>
+      <div className="flex flex-col gap-3">
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="faz_parte_de_rede"
+            checked={inNetwork}
+            onChange={(event) => setInNetwork(event.target.checked)}
+            className="mt-0.5 size-4 accent-primary"
+          />
+          <span>Minha igreja faz parte de uma rede de igrejas</span>
+        </label>
+        {inNetwork ? (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="rede_nome">
+              Nome da rede ou ministério (opcional)
+            </Label>
+            <Input
+              id="rede_nome"
+              name="rede_nome"
+              placeholder="Ministério do Belém"
+              maxLength={CHURCH_NETWORK_NAME_MAX_LENGTH}
+              aria-describedby="rede-help"
+            />
+            <p id="rede-help" className="text-xs text-muted-foreground">
+              Ajuda a encontrar as outras igrejas da sua rede. Não aparece na
+              página pública.
+            </p>
+          </div>
+        ) : null}
       </div>
       {/* Onboarding (1º acesso): aceite dos termos vigentes antes de criar.
           O required do checkbox é UX; a validação real é na server action. */}
       {requireTerms ? <TermsCheckboxes /> : null}
       <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Criando..." : "Criar empresa"}
+        {pending ? "Criando..." : "Criar igreja"}
       </Button>
     </form>
   );

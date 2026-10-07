@@ -1,206 +1,506 @@
 import Link from "next/link";
 import {
-  Building2,
-  CreditCard,
-  Flag,
-  Layers,
-  Mail,
-  MonitorSmartphone,
-  ScrollText,
-  ShieldCheck,
+  ArrowRight,
+  BookOpen,
+  CalendarDays,
+  ChartNoAxesCombined,
+  ClipboardCheck,
+  Contact,
+  HandHeart,
+  HeartHandshake,
+  KeyRound,
+  LayoutDashboard,
+  MapPin,
+  Megaphone,
+  MessageCircleHeart,
+  Network,
+  QrCode,
+  Sparkles,
+  Users,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { brand } from "@/config/brand";
+import { ChurchFinderPreview } from "@/features/landing/components/church-finder-preview";
+import { cn } from "@/lib/utils";
 
-const features = [
+const benefits = [
   {
-    icon: Building2,
-    title: "Multi-tenant de verdade",
+    icon: HeartHandshake,
+    title: "Para quem chega",
     description:
-      "Usuário em N empresas, empresa ativa em contexto, papéis owner/admin/member e soft delete em toda tabela de negócio.",
+      "Uma página da igreja com a programação, os eventos, o pedido de oração e o pedido de visita, sempre disponível no celular.",
   },
   {
-    icon: ShieldCheck,
-    title: "RLS testada, não só escrita",
+    icon: Users,
+    title: "Para quem cuida",
     description:
-      "Policies de Row Level Security em todas as tabelas, com testes SQL versionados que provam o isolamento entre empresas.",
+      "Membros, presença nos cultos, Escola Dominical e visitas em um só lugar, com aviso de quem está faltando.",
   },
   {
-    icon: CreditCard,
-    title: "Billing atrás de interface",
+    icon: LayoutDashboard,
+    title: "Para quem lidera",
     description:
-      "PaymentGateway único (Stripe incluído via REST) com webhooks normalizados. Trocar de provedor não toca a lógica de negócio.",
+      "Um painel com números e gráficos, e cada pessoa da equipe vendo só o que o cargo dela precisa ver.",
+  },
+];
+
+/** Os módulos do sistema, como a igreja os encontra no menu. */
+const modules = [
+  {
+    icon: QrCode,
+    title: "Página da igreja",
+    description:
+      "Endereço próprio com programação, eventos e contatos. Compartilhe por link, QR Code ou NFC e escolha o tema visual.",
   },
   {
-    icon: Mail,
-    title: "Convites e email transacional",
+    icon: Contact,
+    title: "Membros e cargos",
     description:
-      "Convite por email com expiração e revogação, rate limit no envio e EmailProvider trocável (Resend incluído).",
+      "Cadastro com busca, aniversariantes do mês e os cargos de cada um: pastor, diácono, secretário, professor e os que a igreja criar.",
   },
   {
-    icon: ScrollText,
-    title: "Auditoria pronta",
+    icon: ClipboardCheck,
+    title: "Presença nos cultos",
     description:
-      "audit_logs por empresa, imutável para o client, com sanitização automática de dados sensíveis antes de gravar.",
+      "Chamada pelo celular em poucos toques, justificativas e alerta de quem faltou várias vezes seguidas, com atalho para o WhatsApp.",
   },
   {
-    icon: Flag,
-    title: "Feature flags por plano",
+    icon: BookOpen,
+    title: "Escola Dominical",
     description:
-      "canAccessFeature como ponto único de checagem de limite, com overrides por empresa e por usuário via settings.",
+      "Classes, matrículas, chamada de cada professor, visitantes, lições do trimestre, relatório do domingo em PDF e os alunos mais assíduos.",
   },
   {
-    icon: MonitorSmartphone,
-    title: "UI responsiva de verdade",
+    icon: HeartHandshake,
+    title: "Quem quer visita",
     description:
-      "Sidebar única: rail colapsável no desktop, drawer no mobile. Tabelas viram cards em telas pequenas. Dark/light por tokens.",
+      "Quem deseja a visita do pastor pede pela página. A equipe liga, combina o dia e registra quem foi e quando.",
   },
   {
-    icon: Layers,
-    title: "Arquitetura em camadas",
+    icon: HandHeart,
+    title: "Pedidos de oração",
     description:
-      "componentes → hooks → services → repositories/adapters. Nenhum componente fala com Supabase; backend é trocável.",
+      "Os pedidos chegam pela página e ficam reservados à liderança da igreja, com aviso dos que ainda não foram lidos.",
+  },
+  {
+    icon: CalendarDays,
+    title: "Programação e eventos",
+    description:
+      "Cultos da semana e datas especiais sempre atualizados, e eventos com inscrição e lista de quem confirmou presença.",
+  },
+  {
+    icon: Megaphone,
+    title: "Campanhas",
+    description:
+      "Apresente a causa, defina a meta e mostre o avanço para a comunidade acompanhar até o fim.",
+  },
+  {
+    icon: Network,
+    title: "Rede de igrejas",
+    description:
+      "Sede, subsedes e congregações ligadas. A igreja de cima acompanha os números das demais, sem ver os dados pessoais dos membros.",
+  },
+  {
+    icon: KeyRound,
+    title: "Acessos por cargo",
+    description:
+      "O pastor decide o que cada cargo pode usar. O professor vê a classe dele; a secretaria, o que é da secretaria.",
+  },
+  {
+    icon: ChartNoAxesCombined,
+    title: "Painel e relatórios",
+    description:
+      "Presença por culto e por domingo em gráficos, frequência de cada pessoa e os destaques do trimestre.",
   },
 ];
 
 const steps = [
-  {
-    title: "Clone e instale",
-    code: "git clone <repo> && npm install",
-    description: "Requisitos: Node 22+, Docker (para o Supabase local).",
-  },
-  {
-    title: "Suba o banco local",
-    code: "npx supabase start",
-    description:
-      "Migrations com RLS aplicam automaticamente. Copie as chaves geradas para .env.local.",
-  },
-  {
-    title: "Rode o app",
-    code: "npm run dev",
-    description: "Crie sua conta, sua primeira empresa e explore o dashboard.",
-  },
-  {
-    title: "Deixe com a sua cara",
-    code: "src/config/brand.ts + globals.css",
-    description:
-      "Nome, tagline e cor primária em um lugar só. Depois crie seus módulos em src/features.",
-  },
+  [
+    "01",
+    "Sua igreja ganha uma página",
+    "Nome, endereço, programação e identidade prontos para compartilhar em qualquer canal.",
+  ],
+  [
+    "02",
+    "A comunidade encontra caminhos",
+    "Quem chega escolhe como se aproximar: pedir oração, pedir uma visita ou se inscrever em um evento.",
+  ],
+  [
+    "03",
+    "A equipe acompanha de perto",
+    "Chamada nos cultos e na Escola Dominical, visitas registradas e um painel que mostra quem precisa de atenção.",
+  ],
 ];
 
 export default function LandingPage() {
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
-          <span className="font-semibold tracking-tight">{brand.name}</span>
-          <nav className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/login" />}>
+    <div className="min-h-screen overflow-hidden bg-[#f8f7f2] text-[#243128]">
+      <header className="relative z-20 border-b border-[#dfe5d8]/70 bg-[#f8f7f2]/90 backdrop-blur-md">
+        <div className="mx-auto flex h-[76px] max-w-7xl items-center justify-between px-5 sm:px-8">
+          <Link
+            href="/"
+            className="flex items-center gap-3"
+            aria-label={brand.name}
+          >
+            <span className="flex size-9 items-center justify-center rounded-xl bg-[#41694b] text-[#f6e6ad]">
+              <Sparkles className="size-4" />
+            </span>
+            <span className="text-[17px] font-semibold tracking-[-0.03em]">
+              {brand.name}
+            </span>
+          </Link>
+          <nav className="flex items-center gap-2 sm:gap-5">
+            <Link
+              href="#como-funciona"
+              className="hidden text-sm text-[#637066] hover:text-[#243128] sm:block"
+            >
+              Como funciona
+            </Link>
+            <Link
+              href="#modulos"
+              className="hidden text-sm text-[#637066] hover:text-[#243128] sm:block"
+            >
+              Recursos
+            </Link>
+            <Link
+              href="/login"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "border-[#cfd9cb] bg-transparent text-[#36543d] hover:bg-[#edf1e9]",
+              )}
+            >
               Entrar
-            </Button>
-            <Button size="sm" nativeButton={false} render={<Link href="/signup" />}>
-              Criar conta
-            </Button>
+            </Link>
           </nav>
         </div>
       </header>
 
-      <main className="flex-1">
-        {/* Hero */}
-        <section className="mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 py-20 text-center lg:py-28">
-          <Badge variant="secondary">Starter kit SaaS multi-tenant</Badge>
-          <h1 className="max-w-3xl text-4xl font-semibold tracking-tight lg:text-5xl">
-            Lance seu próximo SaaS sem reescrever a fundação
-          </h1>
-          <p className="max-w-2xl text-balance text-muted-foreground lg:text-lg">
-            {brand.name} é um template de produção com autenticação, multiempresa, RLS testada,
-            billing desacoplado e UI responsiva. Troque nome, cores e entidades de domínio — o
-            resto já está pronto.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button size="lg" nativeButton={false} render={<Link href="/signup" />}>
-              Começar agora
-            </Button>
-            <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/login" />}>
-              Ver o dashboard
-            </Button>
-          </div>
-        </section>
-
-        {/* Como usar */}
-        <section className="border-t bg-muted/40">
-          <div className="mx-auto w-full max-w-6xl px-4 py-16">
-            <h2 className="text-2xl font-semibold tracking-tight">Como usar o template</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Do clone ao seu produto em quatro passos.
+      <main>
+        <section className="relative mx-auto grid max-w-7xl items-center gap-14 px-5 pb-20 pt-16 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:gap-8 lg:pb-28 lg:pt-24">
+          <div className="relative z-10 max-w-2xl">
+            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#d9dfd2] bg-[#eef2e8] px-3 py-1.5 text-xs font-medium tracking-[0.08em] text-[#54705a] uppercase">
+              <span className="size-1.5 rounded-full bg-[#c39a3a]" />A
+              plataforma para acolher e acompanhar a comunidade
+            </div>
+            <h1 className="max-w-[680px] text-[clamp(2.8rem,6vw,5.6rem)] font-semibold leading-[0.98] tracking-[-0.065em] text-[#243128]">
+              A página da sua igreja e o cuidado com as pessoas, em um só lugar.
+            </h1>
+            <p className="mt-7 max-w-xl text-lg leading-8 text-[#637066] sm:text-xl">
+              O{" "}
+              <strong className="font-semibold text-[#36543d]">
+                {brand.name}
+              </strong>{" "}
+              dá a qualquer igreja uma página pronta para a comunidade e as
+              ferramentas do dia a dia da liderança: membros, presença nos
+              cultos, Escola Dominical, visitas e eventos.
             </p>
-            <ol className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {steps.map((step, index) => (
-                <li key={step.title}>
-                  <Card className="h-full">
-                    <CardHeader>
-                      <CardDescription>Passo {index + 1}</CardDescription>
-                      <CardTitle className="text-base">{step.title}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-2">
-                      <code className="block overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs">
-                        {step.code}
-                      </code>
-                      <p className="text-sm text-muted-foreground">{step.description}</p>
-                    </CardContent>
-                  </Card>
-                </li>
-              ))}
-            </ol>
+            <div className="mt-9 flex flex-wrap items-center gap-3">
+              <Link
+                href="/signup"
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "h-12 rounded-xl bg-[#41694b] px-6 text-[15px] text-white shadow-[0_10px_25px_rgba(65,105,75,0.2)] hover:bg-[#34573d]",
+                )}
+              >
+                Conhecer a plataforma <ArrowRight className="size-4" />
+              </Link>
+              <Link
+                href="#como-funciona"
+                className="group inline-flex h-12 items-center gap-2 px-3 text-[15px] font-medium text-[#4c6653]"
+              >
+                Ver como funciona{" "}
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
+              </Link>
+            </div>
+            <p className="mt-5 text-xs text-[#7d897f]">
+              Funciona no celular, sem exigir estrutura técnica própria.
+            </p>
+          </div>
+
+          <div className="relative flex min-h-[480px] items-center justify-center lg:min-h-[560px]">
+            <div className="absolute right-[4%] top-[7%] size-64 rounded-full bg-[#e4eadc] blur-3xl" />
+            <div className="absolute bottom-[5%] left-[3%] size-40 rounded-full bg-[#f1e6c9] blur-3xl" />
+            <div className="relative w-full max-w-[470px]">
+              <div className="absolute -right-1 top-7 z-10 hidden w-52 -rotate-3 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-[0_20px_45px_rgba(40,63,45,0.13)] sm:block">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#36543d]">
+                  <MessageCircleHeart className="size-4 text-[#c39a3a]" /> Novo
+                  pedido de visita
+                </div>
+                <p className="mt-2 text-xs leading-5 text-[#718075]">
+                  Mariana gostaria de receber uma visita.
+                </p>
+              </div>
+              <div className="relative overflow-hidden rounded-[2rem] border-[7px] border-[#d8dfd2] bg-white shadow-[0_28px_70px_rgba(43,67,47,0.18)]">
+                <div className="flex items-center justify-between bg-[#41694b] px-6 pb-7 pt-5 text-white">
+                  <div>
+                    <p className="text-[10px] tracking-[0.2em] text-[#dce7d8] uppercase">
+                      Página + gestão
+                    </p>
+                    <p className="mt-1 text-xl font-semibold">
+                      Igreja Esperança
+                    </p>
+                  </div>
+                  <div className="flex size-10 items-center justify-center rounded-full bg-[#f0d991] text-[#41694b]">
+                    <Sparkles className="size-5" />
+                  </div>
+                </div>
+                <div className="-mt-4 rounded-t-[1.5rem] bg-[#fbfcf9] px-5 pb-6 pt-5">
+                  <p className="text-sm leading-6 text-[#637066]">
+                    Um espaço vivo para a comunidade e uma visão clara para quem
+                    cuida dela.
+                  </p>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    {[
+                      [HeartHandshake, "Pedir oração"],
+                      [CalendarDays, "Ver eventos"],
+                      [Users, "Quero uma visita"],
+                      [ChartNoAxesCombined, "Painel da igreja"],
+                    ].map(([Icon, label]) => (
+                      <div
+                        key={label as string}
+                        className="rounded-xl border border-[#e5ebe1] bg-white p-3.5"
+                      >
+                        <div className="flex size-8 items-center justify-center rounded-lg bg-[#edf3e9] text-[#41694b]">
+                          <Icon className="size-4" />
+                        </div>
+                        <p className="mt-3 text-xs font-semibold text-[#35463a]">
+                          {label as string}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex items-center justify-between rounded-xl bg-[#f3ebd5] px-4 py-3">
+                    <div className="flex items-center gap-2 text-xs font-medium text-[#79632c]">
+                      <MapPin className="size-4" /> Rua da Comunidade, 84
+                    </div>
+                    <ArrowRight className="size-4 text-[#a48432]" />
+                  </div>
+                </div>
+              </div>
+              <div className="absolute -bottom-8 -left-5 flex items-center gap-3 rounded-2xl border border-white/80 bg-white px-4 py-3 shadow-[0_18px_40px_rgba(40,63,45,0.12)] sm:-left-12">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-[#f3ebd5] text-[#a48432]">
+                  <QrCode className="size-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#35463a]">
+                    Acesso por onde fizer sentido
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[#89938a]">
+                    Link, QR Code ou NFC
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* Features */}
-        <section className="mx-auto w-full max-w-6xl px-4 py-16">
-          <h2 className="text-2xl font-semibold tracking-tight">O que já vem pronto</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Tudo que um SaaS precisa antes da primeira feature de domínio.
-          </p>
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {features.map((feature) => (
-              <Card key={feature.title}>
-                <CardHeader>
-                  <feature.icon className="size-5 text-primary" aria-hidden />
-                  <CardTitle className="text-base">{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{feature.description}</p>
-                </CardContent>
-              </Card>
+        <section
+          id="recursos"
+          className="border-y border-[#e3e8df] bg-white/55"
+        >
+          <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-24">
+            <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-24">
+              <div>
+                <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
+                  Mais que uma página
+                </p>
+                <h2 className="mt-4 max-w-md text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
+                  Do primeiro contato ao cuidado de cada semana.
+                </h2>
+                <p className="mt-5 max-w-sm leading-7 text-[#718075]">
+                  Sua igreja já transforma vidas no encontro presencial. Aqui
+                  esse cuidado continua entre um encontro e outro, sem ninguém
+                  passar despercebido.
+                </p>
+              </div>
+              <div className="grid gap-8 sm:grid-cols-3">
+                {benefits.map(({ icon: Icon, title, description }) => (
+                  <div key={title} className="border-t border-[#cfd9cb] pt-5">
+                    <Icon className="size-6 text-[#41694b]" strokeWidth={1.7} />
+                    <h3 className="mt-5 text-base font-semibold text-[#35463a]">
+                      {title}
+                    </h3>
+                    <p className="mt-3 text-sm leading-6 text-[#718075]">
+                      {description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="modulos" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-24">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
+              O que a igreja encontra
+            </p>
+            <h2 className="mt-4 text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
+              Tudo o que a secretaria e a liderança usam, no mesmo sistema.
+            </h2>
+            <p className="mt-5 leading-7 text-[#718075]">
+              Comece pelo que a sua igreja precisa hoje. Cada parte funciona
+              sozinha e conversa com as outras.
+            </p>
+          </div>
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {modules.map(({ icon: Icon, title, description }) => (
+              <div
+                key={title}
+                className="rounded-2xl border border-[#dfe5d8] bg-white/70 p-5"
+              >
+                <div className="flex size-10 items-center justify-center rounded-xl bg-[#edf3e9] text-[#41694b]">
+                  <Icon className="size-5" strokeWidth={1.7} />
+                </div>
+                <h3 className="mt-4 text-base font-semibold text-[#35463a]">
+                  {title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-[#718075]">
+                  {description}
+                </p>
+              </div>
             ))}
           </div>
         </section>
 
-        {/* Arquitetura */}
-        <section className="border-t bg-muted/40">
-          <div className="mx-auto w-full max-w-6xl px-4 py-16">
-            <h2 className="text-2xl font-semibold tracking-tight">Fluxo único de dados</h2>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Nenhum componente React chama o Supabase diretamente. A troca de backend (ou de
-              gateway de pagamento) acontece nos adapters, sem reescrever telas.
+        <ChurchFinderPreview />
+
+        <section className="bg-[#f0f3eb]">
+          <div className="mx-auto grid max-w-7xl items-center gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-24 lg:py-24">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
+                Mobilize o que importa
+              </p>
+              <h2 className="mt-4 max-w-lg text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
+                Toda grande obra começa com uma comunidade que acredita junto.
+              </h2>
+              <p className="mt-5 max-w-lg leading-7 text-[#718075]">
+                Crie campanhas para reformas, missões, ações sociais ou qualquer
+                sonho da igreja. Apresente a causa com clareza, convide as
+                pessoas a participar e mostre o avanço até a meta.
+              </p>
+              <div className="mt-7 flex items-center gap-3 text-sm font-medium text-[#41694b]">
+                <Megaphone className="size-5" />
+                Mais transparência para a liderança. Mais confiança para a
+                comunidade.
+              </div>
+            </div>
+
+            <div className="rounded-[1.75rem] border border-[#d8e1d3] bg-white p-5 shadow-[0_20px_50px_rgba(43,67,47,0.08)] sm:p-7">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold tracking-[0.15em] text-[#a48432] uppercase">
+                    Campanha em andamento
+                  </p>
+                  <h3 className="mt-3 text-xl font-semibold tracking-[-0.03em] text-[#35463a]">
+                    Um novo espaço para as crianças
+                  </h3>
+                </div>
+                <span className="rounded-full bg-[#edf3e9] px-3 py-1 text-xs font-semibold text-[#41694b]">
+                  68% alcançado
+                </span>
+              </div>
+              <p className="mt-3 max-w-md text-sm leading-6 text-[#718075]">
+                Cada passo aproxima a nossa comunidade de um lugar mais seguro,
+                bonito e preparado para receber a próxima geração.
+              </p>
+              <div className="mt-6 h-2 overflow-hidden rounded-full bg-[#e6ece2]">
+                <div className="h-full w-[68%] rounded-full bg-[#c39a3a]" />
+              </div>
+              <div className="mt-3 flex items-center justify-between text-sm">
+                <span className="font-semibold text-[#35463a]">
+                  Mais de dois terços do caminho
+                </span>
+                <span className="text-[#89938a]">Meta definida pela igreja</span>
+              </div>
+              <div className="mt-6 flex flex-wrap gap-2 border-t border-[#edf0ea] pt-5 text-xs text-[#718075]">
+                <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">
+                  Página pública
+                </span>
+                <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">
+                  Notícias da campanha
+                </span>
+                <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">
+                  Acompanhamento da meta
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="como-funciona"
+          className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-28"
+        >
+          <div className="flex flex-col justify-between gap-8 border-b border-[#dfe5d8] pb-12 md:flex-row md:items-end">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
+                Simples desde o primeiro dia
+              </p>
+              <h2 className="mt-4 max-w-xl text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
+                Comece pequeno. Acolha de verdade.
+              </h2>
+            </div>
+            <p className="max-w-xs text-sm leading-6 text-[#718075]">
+              Uma estrutura clara para você cuidar do essencial e deixar a
+              tecnologia trabalhar a favor da comunidade.
             </p>
-            <div className="mt-6 overflow-x-auto">
-              <code className="block w-max rounded-lg border bg-background px-4 py-3 text-sm">
-                componentes → hooks → services → repositories/adapters → Supabase | API | Gateway
-              </code>
+          </div>
+          <div className="grid gap-0 md:grid-cols-3">
+            {steps.map(([number, title, description], index) => (
+              <div
+                key={number}
+                className={`py-8 md:pr-10 ${index > 0 ? "border-t border-[#dfe5d8] md:border-l md:border-t-0 md:pl-10" : ""}`}
+              >
+                <span className="text-sm font-semibold text-[#b08d3a]">
+                  {number}
+                </span>
+                <h3 className="mt-10 text-xl font-semibold tracking-[-0.03em] text-[#35463a]">
+                  {title}
+                </h3>
+                <p className="mt-3 max-w-xs text-sm leading-6 text-[#718075]">
+                  {description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mx-5 mb-20 overflow-hidden rounded-[2rem] bg-[#41694b] sm:mx-8 lg:mx-auto lg:max-w-7xl">
+          <div className="relative px-7 py-14 sm:px-14 sm:py-16 lg:px-20">
+            <div className="absolute -right-16 -top-32 size-80 rounded-full border-[40px] border-[#719371]/25" />
+            <div className="relative max-w-2xl">
+              <p className="text-xs font-semibold tracking-[0.18em] text-[#d9c17b] uppercase dark:text-primary-foreground/70">
+                Comece pelo essencial
+              </p>
+              <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-[-0.04em] text-white sm:text-5xl">
+                Tecnologia a serviço do cuidado, do jeito que a sua igreja já
+                trabalha.
+              </h2>
+              <p className="mt-5 max-w-lg leading-7 text-[#dce7d8]">
+                Publique a página da igreja, cadastre os membros e faça a
+                primeira chamada. O restante você liga quando a equipe
+                precisar.
+              </p>
+              <Link
+                href="/signup"
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "mt-8 h-12 rounded-xl bg-[#f0d991] px-6 text-[#354b38] hover:bg-[#f7e6ae]",
+                )}
+              >
+                Conhecer a plataforma <ArrowRight className="size-4" />
+              </Link>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="border-t">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-sm text-muted-foreground sm:flex-row">
-          <span>
-            {brand.name} — {brand.tagline}
-          </span>
-          <span>Feito com Next.js, Supabase e Tailwind</span>
+      <footer className="border-t border-[#dfe5d8] px-5 py-8 sm:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm text-[#718075] sm:flex-row sm:items-center sm:justify-between">
+          <span className="font-semibold text-[#41694b]">{brand.name}</span>
+          <span>Página, membros e acompanhamento para igrejas.</span>
+          <span>© 2026</span>
         </div>
       </footer>
     </div>
