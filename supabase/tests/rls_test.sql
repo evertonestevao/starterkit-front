@@ -7613,6 +7613,227 @@ delete from public.cargo_acessos
  where church_id = 'acacacac-0000-4000-8000-0000000000d2' and modulo = 'tesouraria';
 
 -- ---------------------------------------------------------------------------
+-- Histórico do membro e modelos de documento (migration 20261007130000).
+-- AC Cong (d2, conta c2, de 002) fica abaixo da AC Sede (d1, de 001). O
+-- "Secretario AC" (004) tem Membros pelo cargo, mas não administra. AC Outra
+-- (d3, de 005) é outra rede. O membro a1 é da AC Cong.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare n int; r record; v_id uuid;
+begin
+  select count(*) into n from public.rol_membro_historico
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and tipo = 'cadastro';
+  if n <> 1 then raise exception 'FALHA historico: cadastro do membro nao gerou a primeira linha (%)', n; end if;
+
+  -- Ponto de partida conhecido (seções anteriores mexeram na ficha deste membro).
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a1', '{"situacao":"ativo"}'::jsonb);
+
+  -- Mudar a situação grava data, motivo e quem fez. (Dentro da transação todas
+  -- as linhas têm a mesma hora: a linha é achada pelo conteúdo.)
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a1',
+    '{"situacao":"transferido","situacao_em":"2026-09-30","situacao_motivo":"Mudou de cidade"}'::jsonb);
+  select count(*) into n from public.rol_membro_historico
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and tipo = 'situacao'
+    and titulo = 'Situação: de Ativo para Transferido' and data = date '2026-09-30'
+    and detalhe = 'Mudou de cidade' and registrado_por = 'acacacac-0000-4000-8000-000000000002';
+  if n <> 1 then raise exception 'FALHA historico: mudanca de situacao mal registrada (%)', n; end if;
+
+  -- Salvar a ficha de novo sem mudar a situação não repete a linha.
+  select count(*) into n from public.rol_membro_historico
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and tipo = 'situacao';
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a1',
+    '{"situacao":"transferido","situacao_em":"2026-09-30","situacao_motivo":"Mudou de cidade","profissao":"Pedreiro"}'::jsonb);
+  if n <> (select count(*) from public.rol_membro_historico
+           where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and tipo = 'situacao') then
+    raise exception 'FALHA historico: salvar sem mudar a situacao gerou linha nova';
+  end if;
+  select count(*) into n from public.rol_membro_historico
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and titulo = 'Situação: de Transferido para Ativo';
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a1', '{"situacao":"ativo"}'::jsonb);
+  if n + 1 <> (select count(*) from public.rol_membro_historico
+               where membro_id = 'cacacaca-0000-4000-8000-0000000000a1'
+                 and titulo = 'Situação: de Transferido para Ativo') then
+    raise exception 'FALHA historico: retorno a ativo nao foi registrado';
+  end if;
+
+  -- Anotação à mão, documento emitido, e o que não pode.
+  v_id := public.registrar_historico_membro('cacacaca-0000-4000-8000-0000000000a1', 'Consagrado a diácono', null, date '2026-01-10');
+  perform set_config('rls.anotacao', v_id::text, true);
+  begin
+    perform public.registrar_historico_membro('cacacaca-0000-4000-8000-0000000000a1', 'Do futuro', null, current_date + 1);
+    raise exception 'FALHA historico: aceitou anotacao com data no futuro';
+  exception when sqlstate '22023' then null;
+  end;
+  perform public.registrar_documento_emitido('cacacaca-0000-4000-8000-0000000000a1', 'transferencia', 'Igreja de Bauru');
+  begin
+    perform public.registrar_documento_emitido('cacacaca-0000-4000-8000-0000000000a1', 'diploma', null);
+    raise exception 'FALHA historico: aceitou documento desconhecido';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    insert into public.rol_membro_historico (membro_id, church_id, company_id, tipo, titulo)
+    values ('cacacaca-0000-4000-8000-0000000000a1', 'acacacac-0000-4000-8000-0000000000d2',
+            'acacacac-0000-4000-8000-0000000000c2', 'anotacao', 'Direto na tabela');
+    raise exception 'FALHA historico: insert direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.rol_membro_historico set titulo = 'Adulterado' where membro_id = 'cacacaca-0000-4000-8000-0000000000a1';
+    raise exception 'FALHA historico: update direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  -- O que o sistema registrou não sai; a anotação à mão, sim.
+  begin
+    perform public.excluir_historico_membro(
+      (select id from public.rol_membro_historico
+        where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and tipo = 'situacao' limit 1));
+    raise exception 'FALHA historico: excluiu registro de situacao';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Modelo da própria igreja.
+  perform public.salvar_documento_modelo('acacacac-0000-4000-8000-0000000000d2', 'declaracao',
+    'Declaração da Cong', 'Declaramos que {nome} é membro da {igreja}.');
+end $$;
+
+-- A igreja de CIMA e a de outra rede: não leem o histórico nem escrevem nele.
+do $$
+declare v_quem text; n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.rol_membro_historico where membro_id = 'cacacaca-0000-4000-8000-0000000000a1';
+    if n <> 0 then raise exception 'FALHA historico: % leu o historico de membro da congregacao', v_quem; end if;
+    begin
+      perform public.registrar_historico_membro('cacacaca-0000-4000-8000-0000000000a1', 'De fora', null, null);
+      raise exception 'FALHA historico: % anotou no historico da congregacao', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.excluir_historico_membro(current_setting('rls.anotacao')::uuid);
+      raise exception 'FALHA historico: % excluiu anotacao da congregacao', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.registrar_documento_emitido('cacacaca-0000-4000-8000-0000000000a1', 'declaracao', null);
+      raise exception 'FALHA historico: % registrou documento na congregacao', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.salvar_documento_modelo('acacacac-0000-4000-8000-0000000000d2', 'declaracao', 'De fora', 'Texto de fora, com mais de vinte letras.');
+      raise exception 'FALHA modelos: % gravou modelo na congregacao', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    select count(*) into n from public.documento_dados_da_igreja('acacacac-0000-4000-8000-0000000000d2');
+    if n <> 0 then raise exception 'FALHA modelos: % leu os dados de documento da congregacao', v_quem; end if;
+  end loop;
+end $$;
+
+-- A sede grava os modelos DELA: valem para a congregação que não tem o seu.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+select public.salvar_documento_modelo('acacacac-0000-4000-8000-0000000000d1', 'transferencia',
+  'Carta da Sede', 'A sede transfere {nome} para {destino}.');
+select public.salvar_documento_modelo('acacacac-0000-4000-8000-0000000000d1', 'declaracao',
+  'Declaração da Sede', 'A sede declara que {nome} é membro.');
+
+-- A secretaria (Membros pelo cargo, sem administrar): usa, mas não altera.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare n int; r record;
+begin
+  if not public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'membros') then
+    raise exception 'FALHA modelos: o teste esperava a secretaria COM o modulo Membros';
+  end if;
+  select count(*) into n from public.rol_membro_historico where membro_id = 'cacacaca-0000-4000-8000-0000000000a1';
+  if n < 4 then raise exception 'FALHA historico: a secretaria nao leu o historico (%)', n; end if;
+
+  -- Declaração: a da própria igreja ganha da sede. Transferência: herdada da sede.
+  select * into r from public.documento_modelos_vigentes('acacacac-0000-4000-8000-0000000000d2') where tipo = 'declaracao';
+  if r.titulo is distinct from 'Declaração da Cong' then
+    raise exception 'FALHA modelos: o modelo da propria igreja nao venceu o da sede (%)', r.titulo;
+  end if;
+  select * into r from public.documento_modelos_vigentes('acacacac-0000-4000-8000-0000000000d2') where tipo = 'transferencia';
+  if r.titulo is distinct from 'Carta da Sede' or r.origem_church_id <> 'acacacac-0000-4000-8000-0000000000d1' then
+    raise exception 'FALHA modelos: a congregacao nao herdou o modelo da sede (%)', r.titulo;
+  end if;
+  -- Direto na tabela só o da própria igreja (o da sede não vaza por ali).
+  select count(*) into n from public.documento_modelos;
+  if n <> 1 then raise exception 'FALHA modelos: leitura direta devolveu % modelo(s)', n; end if;
+
+  select count(*) into n from public.documento_dados_da_igreja('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 1 then raise exception 'FALHA modelos: a secretaria nao leu os dados da igreja para o documento'; end if;
+
+  begin
+    perform public.salvar_documento_modelo('acacacac-0000-4000-8000-0000000000d2', 'declaracao', 'Da secretaria', 'Texto da secretaria, com mais de vinte letras.');
+    raise exception 'FALHA modelos: quem nao administra alterou o modelo';
+  exception when sqlstate 'P0002' then null;
+  end;
+  begin
+    perform public.restaurar_documento_modelo('acacacac-0000-4000-8000-0000000000d2', 'declaracao');
+    raise exception 'FALHA modelos: quem nao administra restaurou o modelo';
+  exception when sqlstate 'P0002' then null;
+  end;
+  -- A anotação à mão ela pode retirar.
+  perform public.excluir_historico_membro(current_setting('rls.anotacao')::uuid);
+end $$;
+
+-- A outra rede não herda nada da AC Sede.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.documento_modelos_vigentes('acacacac-0000-4000-8000-0000000000d3');
+  if n <> 0 then raise exception 'FALHA modelos: outra rede herdou % modelo(s)', n; end if;
+  select count(*) into n from public.documento_modelos_vigentes('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA modelos: outra rede leu os modelos da congregacao'; end if;
+end $$;
+
+-- Restaurar: a congregação volta a usar a declaração da sede.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v text;
+begin
+  perform public.restaurar_documento_modelo('acacacac-0000-4000-8000-0000000000d2', 'declaracao');
+  select titulo into v from public.documento_modelos_vigentes('acacacac-0000-4000-8000-0000000000d2') where tipo = 'declaracao';
+  if v is distinct from 'Declaração da Sede' then
+    raise exception 'FALHA modelos: restaurar nao voltou ao modelo da sede (%)', v;
+  end if;
+  -- Texto curto demais não entra.
+  begin
+    perform public.salvar_documento_modelo('acacacac-0000-4000-8000-0000000000d2', 'declaracao', 'Curto', 'oi');
+    raise exception 'FALHA modelos: aceitou corpo curto demais';
+  exception when sqlstate '23514' then null;
+  end;
+end $$;
+reset role;
+
+set local role anon;
+do $$
+begin
+  begin
+    perform 1 from public.rol_membro_historico;
+    raise exception 'FALHA historico: anon leu o historico';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform 1 from public.documento_modelos;
+    raise exception 'FALHA modelos: anon leu os modelos';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

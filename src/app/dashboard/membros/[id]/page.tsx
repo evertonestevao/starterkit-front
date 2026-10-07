@@ -4,8 +4,10 @@ import { BotaoVoltar } from "@/components/botao-voltar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AcessoBadge, AcessoMembroCard } from "@/features/acompanhamento/components/acesso-membro";
+import { DocumentosCard } from "@/features/acompanhamento/components/documentos-card";
 import { ExcluirMembro } from "@/features/acompanhamento/components/excluir-membro";
 import { FichaCard } from "@/features/acompanhamento/components/ficha-card";
+import { HistoricoCard } from "@/features/acompanhamento/components/historico-card";
 import { MembroForm } from "@/features/acompanhamento/components/membro-form";
 import { ResponsaveisBotao } from "@/features/ebd/components/ebd-responsaveis";
 import { isAppError } from "@/lib/errors";
@@ -19,11 +21,14 @@ import {
   MOTIVO_LABEL,
   RESULTADO_LABEL,
 } from "@/lib/acompanhamento";
+import { camposFaltando } from "@/lib/documentosMembro";
 import { idadeEm } from "@/lib/ebd";
 import { SITUACAO_LABEL } from "@/lib/fichaMembro";
 import { mascaraTelefone } from "@/lib/telefone";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
 import { getEbdService } from "@/server/ebd";
+import { getSecretariaActorAutorizado, getSecretariaService } from "@/server/secretaria";
+import { canEditarModelos } from "@/services/secretariaService";
 import type { EstadoPresenca } from "@/types/acompanhamento";
 
 export const metadata: Metadata = { title: "Membro" };
@@ -75,6 +80,20 @@ export default async function MembroPage({
       }),
   ]);
   if (!dados || !ficha) notFound();
+
+  // Histórico e documentos são do módulo Membros: quem só faz a chamada não os vê.
+  // Complementos da ficha — se falharem, ela segue sem eles.
+  const secretario = await getSecretariaActorAutorizado();
+  const secretaria = secretario
+    ? await (async () => {
+        const svc = await getSecretariaService();
+        const [itens, emissao] = await Promise.all([svc.historico(secretario, id), svc.paraEmitir(secretario)]);
+        return { itens, emissao };
+      })().catch((err: unknown) => {
+        console.error("[membro] falha ao carregar histórico e documentos", err);
+        return null;
+      })
+    : null;
   const gerenciaAcesso = actor.role === "owner" || actor.role === "admin";
   const { membro, historico, justificativas, contatos } = dados;
   const acesso = membro.userId ? acessos.porUsuario[membro.userId] : undefined;
@@ -129,10 +148,44 @@ export default async function MembroPage({
         abrirFormulario={abrirFicha}
       />
 
+      {secretaria ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <HistoricoCard membroId={membro.id} nome={membro.nome} itens={secretaria.itens} hoje={hojeISO()} />
+          <DocumentosCard
+            membroId={membro.id}
+            nome={membro.nome}
+            temPastor={Boolean(secretaria.emissao.igreja.pastor)}
+            podeEditarModelos={canEditarModelos(actor.role)}
+            documentos={secretaria.emissao.modelos.map((m) => ({
+              tipo: m.tipo,
+              // Sem destino: se o modelo usa {destino}, o aviso some quando a pessoa digitar.
+              faltando: camposFaltando(`${m.titulo}\n${m.corpo}`, {
+                membro: {
+                  nome: membro.nome,
+                  sexo: ficha.sexo,
+                  nascimento: membro.nascimento,
+                  estadoCivil: ficha.estadoCivil,
+                  batismo: membro.batismo,
+                  membroDesde: ficha.membroDesde,
+                  cargos: membro.cargos.map((c) => c.nome),
+                },
+                // O Pastor que falta tem aviso próprio, com o que fazer.
+                igreja: { ...secretaria.emissao.igreja, pastor: secretaria.emissao.igreja.pastor ?? "-" },
+                destino: null,
+                hoje: hojeISO(),
+              }),
+            }))}
+          />
+        </div>
+      ) : null}
+
       {gerenciaAcesso ? <AcessoMembroCard membro={membro} acesso={acesso} convite={convite} /> : null}
 
       {/* Responsáveis e cuidados: para crianças e quem não é do quadro, ou se já há algo anotado. */}
-      {!membro.membroIgreja || responsaveis.length > 0 || membro.cuidados || (idadeEm(membro.nascimento, hojeISO()) ?? 99) < 18 ? (
+      {!membro.membroIgreja ||
+      responsaveis.length > 0 ||
+      membro.cuidados ||
+      (idadeEm(membro.nascimento, hojeISO()) ?? 99) < 18 ? (
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-2">

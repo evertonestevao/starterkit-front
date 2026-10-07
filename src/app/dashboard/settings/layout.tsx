@@ -25,6 +25,7 @@ export default async function SettingsLayout({
     tabs.push({ href: "/dashboard/settings/igreja", label: "Página da igreja" });
     tabs.push({ href: "/dashboard/settings/cargos", label: "Cargos" });
     if (canConfigurarAcessos(active.role)) tabs.push({ href: "/dashboard/settings/acessos", label: "Acessos" });
+    tabs.push({ href: "/dashboard/settings/documentos", label: "Documentos" });
     tabs.push({ href: "/dashboard/settings/vinculos", label: "Vínculos" });
     tabs.push({ href: "/dashboard/settings/domain", label: "Domínio próprio" });
     tabs.push({ href: "/dashboard/settings/pix", label: "Dízimos (PIX)" });
