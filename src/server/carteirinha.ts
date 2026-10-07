@@ -9,6 +9,7 @@ import {
   type CarteirinhaActor,
   type CarteirinhaService,
 } from "@/services/carteirinhaService";
+import { CHURCH_LOGOS_BUCKET } from "./churchProfile";
 import { getSupabaseAdminClient } from "./supabase-admin";
 import { getSupabaseServerClient } from "./supabase-server";
 import { getActiveTenant } from "./tenant";
@@ -29,6 +30,7 @@ export async function getCarteirinhaService(): Promise<CarteirinhaService> {
   return createCarteirinhaService({
     repo: createSupabaseCarteirinhaRepository(client, admin),
     storage: createSupabaseStorageProvider(admin, FOTOS_BUCKET),
+    logos: createSupabaseStorageProvider(admin, CHURCH_LOGOS_BUCKET),
     tokens: { make: makeUrlToken, hash: hashUrlToken },
     novoId: randomUUID,
     hoje: hojeISO,

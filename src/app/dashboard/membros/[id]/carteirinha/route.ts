@@ -21,6 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const pdf = await gerarCarteirinhaPdf({
       carteirinha,
       foto: carteirinha.temFoto ? await service.foto(actor, id) : null,
+      logo: await service.logo(carteirinha.logoUrl),
       urlVerificacao: `${getServerEnv().APP_URL.replace(/\/+$/, "")}/verificar/${carteirinha.codigo}`,
     });
     return new NextResponse(Buffer.from(pdf), {

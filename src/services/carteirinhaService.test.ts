@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  caminhoDaLogo,
   canCarteirinha,
   createCarteirinhaService,
   type CarteirinhaActor,
@@ -48,6 +49,9 @@ function build(over: Partial<CarteirinhaRepository> = {}, consent: Termo | null 
     porToken: vi.fn(async () => null),
     fotoPathPorToken: vi.fn(async () => null),
     verificar: vi.fn(async () => null),
+    modeloVigente: vi.fn(async () => ({ modelo: null, origemNome: "Igreja", podeEditar: true, logoUrl: null })),
+    salvarModelo: vi.fn(async () => undefined),
+    restaurarModelo: vi.fn(async () => undefined),
     ...over,
   } as unknown as CarteirinhaRepository;
   const storage = {
@@ -256,5 +260,123 @@ describe("sem login", () => {
     expect(semLink.storage.download).not.toHaveBeenCalled();
     const comLink = build({ fotoPathPorToken: vi.fn(async () => "a/b/c.jpg") });
     expect((await comLink.svc.fotoPorToken(TOKEN))?.tipo).toBe("image/jpeg");
+  });
+});
+
+describe("modelo da carteirinha", () => {
+  const admin: CarteirinhaActor = { companyId: EMPRESA, role: "admin", liberado: false };
+  const escolha = {
+    layout: "lateral",
+    corPrimaria: "#1A2B3C",
+    corDestaque: "#AABBCC",
+    titulo: " Carteira de membro ",
+    campos: ["cargos", "batismo", "batismo"],
+    rodape: " ",
+    textoVerso: "Pessoal e intransferível.",
+    mostrarLogo: false,
+  };
+
+  it("sem modelo gravado, devolve o padrão e diz que não é personalizado", async () => {
+    const { svc } = build();
+    const r = await svc.modelo(secretario);
+    expect(r).toMatchObject({ personalizado: false, origemNome: "Igreja", podeEditar: true });
+    expect(r.modelo.layout).toBe("classico");
+  });
+
+  it("salva na igreja ativa: cores em minúsculas, informações sem repetir, texto vazio vira nulo", async () => {
+    const { svc, repo } = build();
+    await svc.salvarModelo(admin, escolha);
+    expect(repo.salvarModelo).toHaveBeenCalledWith("igreja", {
+      layout: "lateral",
+      corPrimaria: "#1a2b3c",
+      corDestaque: "#aabbcc",
+      titulo: "Carteira de membro",
+      campos: ["cargos", "batismo"],
+      rodape: null,
+      textoVerso: "Pessoal e intransferível.",
+      mostrarLogo: false,
+    });
+  });
+
+  it("a congregação (que não é o topo da rede) não salva nem restaura", async () => {
+    const { svc, repo } = build({
+      modeloVigente: vi.fn(async () => ({ modelo: null, origemNome: "Sede", podeEditar: false, logoUrl: null })),
+    });
+    const erro = await svc.salvarModelo(admin, escolha).catch((e) => e);
+    expect(erro).toMatchObject({ code: "forbidden" });
+    expect(String(erro.message)).toContain("Sede");
+    await expect(svc.restaurarModelo(admin)).rejects.toMatchObject({ code: "forbidden" });
+    expect(repo.salvarModelo).not.toHaveBeenCalled();
+    expect(repo.restaurarModelo).not.toHaveBeenCalled();
+  });
+
+  it("a secretaria (Membros pelo cargo, sem administrar) lê o modelo mas não altera", async () => {
+    const { svc, repo } = build();
+    await expect(svc.salvarModelo(secretario, escolha)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(svc.restaurarModelo(secretario)).rejects.toMatchObject({ code: "forbidden" });
+    expect(repo.salvarModelo).not.toHaveBeenCalled();
+  });
+
+  it("recusa cor, desenho e informação fora da lista, e título vazio", async () => {
+    const { svc, repo } = build();
+    const ruins = [
+      { ...escolha, corPrimaria: "vermelho" },
+      { ...escolha, corDestaque: "#12345" },
+      { ...escolha, corPrimaria: "#12345g" },
+      { ...escolha, layout: "holografico" },
+      { ...escolha, campos: ["whatsapp"] },
+      { ...escolha, titulo: " " },
+      { ...escolha, rodape: "x".repeat(81) },
+    ];
+    for (const ruim of ruins) {
+      await expect(svc.salvarModelo(admin, ruim)).rejects.toMatchObject({ code: "validation_error" });
+    }
+    expect(repo.salvarModelo).not.toHaveBeenCalled();
+  });
+
+  it("restaurar volta ao padrão na igreja ativa", async () => {
+    const { svc, repo } = build();
+    await svc.restaurarModelo(admin);
+    expect(repo.restaurarModelo).toHaveBeenCalledWith("igreja");
+  });
+});
+
+describe("logo da igreja no PDF", () => {
+  const URL_BOA = "https://x.supabase.co/storage/v1/object/public/church-logos/igreja-1/logo.png?v=3";
+
+  it("só aceita endereço do nosso bucket de logos, no formato pasta/arquivo", () => {
+    expect(caminhoDaLogo(URL_BOA)).toBe("igreja-1/logo.png");
+    for (const ruim of [
+      null,
+      "",
+      "https://malicioso.test/logo.png",
+      "http://169.254.169.254/latest/meta-data",
+      "https://x.supabase.co/storage/v1/object/public/membros-fotos/a/b.jpg",
+      "https://x.supabase.co/storage/v1/object/public/church-logos/../membros-fotos/a.jpg",
+      "https://x.supabase.co/storage/v1/object/public/church-logos/a/b/c.png",
+      "https://x.supabase.co/storage/v1/object/public/church-logos/logo.png",
+    ]) {
+      expect(caminhoDaLogo(ruim)).toBeNull();
+    }
+  });
+
+  it("lê do bucket de logos e entrega só PNG ou JPEG", async () => {
+    const baixar = vi.fn(async () => PNG);
+    const svc = createCarteirinhaService({
+      repo: build().repo,
+      storage: build().storage,
+      logos: { download: baixar },
+      tokens: { make: () => TOKEN, hash: (t) => t },
+      novoId: () => NOVO_ID,
+      hoje: () => HOJE,
+    });
+    expect((await svc.logo(URL_BOA))?.tipo).toBe("image/png");
+    expect(baixar).toHaveBeenCalledWith("igreja-1/logo.png");
+    baixar.mockResolvedValueOnce(WEBP);
+    expect(await svc.logo(URL_BOA)).toBeNull();
+    // Endereço de fora nem tenta baixar.
+    baixar.mockClear();
+    expect(await svc.logo("https://malicioso.test/logo.png")).toBeNull();
+    expect(baixar).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
 import type { CarteirinhaRepository } from "@/services/carteirinhaService";
-import type { Carteirinha, CarteirinhaDoMembro, EstadoCarteirinha, VerificacaoCarteirinha } from "@/types/carteirinha";
+import { isCampo, isLayout } from "@/lib/carteirinhaModelo";
+import type {
+  Carteirinha,
+  CarteirinhaDoMembro,
+  CarteirinhaModelo,
+  EstadoCarteirinha,
+  VerificacaoCarteirinha,
+} from "@/types/carteirinha";
 
 interface CarteirinhaRow {
   nome: string;
@@ -10,10 +17,41 @@ interface CarteirinhaRow {
   igreja_sobrenome: string | null;
   pastor: string | null;
   membro_desde: string | null;
+  batismo: string | null;
+  nascimento: string | null;
+  estado_civil: string | null;
   validade: string;
   codigo: string;
   estado: EstadoCarteirinha;
   tem_foto: boolean;
+  logo_url: string | null;
+  modelo: ModeloRow | null;
+}
+
+interface ModeloRow {
+  layout: string | null;
+  cor_primaria: string | null;
+  cor_destaque: string | null;
+  titulo: string | null;
+  campos: string[] | null;
+  rodape: string | null;
+  texto_verso: string | null;
+  mostrar_logo: boolean | null;
+}
+
+/** Modelo gravado → tipo da aplicação. Linha sem desenho ou cor (padrão) vira null. */
+function toModelo(r: ModeloRow | null): CarteirinhaModelo | null {
+  if (!r || !isLayout(r.layout) || !r.cor_primaria || !r.cor_destaque) return null;
+  return {
+    layout: r.layout,
+    corPrimaria: r.cor_primaria,
+    corDestaque: r.cor_destaque,
+    titulo: r.titulo ?? "",
+    campos: (r.campos ?? []).filter(isCampo),
+    rodape: r.rodape,
+    textoVerso: r.texto_verso,
+    mostrarLogo: r.mostrar_logo ?? true,
+  };
 }
 
 const toCarteirinha = (r: CarteirinhaRow): Carteirinha => ({
@@ -23,6 +61,11 @@ const toCarteirinha = (r: CarteirinhaRow): Carteirinha => ({
   igrejaSobrenome: r.igreja_sobrenome,
   pastor: r.pastor,
   membroDesde: r.membro_desde,
+  batismo: r.batismo,
+  nascimento: r.nascimento,
+  estadoCivil: r.estado_civil,
+  modelo: toModelo(r.modelo),
+  logoUrl: r.logo_url,
   validade: r.validade,
   codigo: r.codigo,
   estado: r.estado,
@@ -167,6 +210,63 @@ export function createSupabaseCarteirinhaRepository(
       const { data, error } = await admin.rpc("carteirinha_foto_por_token", { p_token: token });
       if (error) throw new AppError("internal_error", "Falha ao carregar a foto", error);
       return (data as string | null) ?? null;
+    },
+
+    async modeloVigente(churchId) {
+      const { data, error } = await client.rpc("carteirinha_modelo_vigente", { p_church_id: churchId });
+      if (error) throw new AppError("internal_error", "Falha ao carregar o modelo da carteirinha", error);
+      const row = (
+        (data ?? []) as Array<
+          ModeloRow & {
+            origem_church_id: string;
+            origem_nome: string;
+            pode_editar: boolean;
+            logo_url: string | null;
+          }
+        >
+      )[0];
+      if (!row) return null;
+      return {
+        modelo: toModelo(row),
+        origemNome: row.origem_nome,
+        podeEditar: row.pode_editar,
+        logoUrl: row.logo_url,
+      };
+    },
+
+    async salvarModelo(churchId, modelo) {
+      const { error } = await client.rpc("salvar_carteirinha_modelo", {
+        p_church_id: churchId,
+        p: {
+          layout: modelo.layout,
+          cor_primaria: modelo.corPrimaria,
+          cor_destaque: modelo.corDestaque,
+          titulo: modelo.titulo,
+          campos: modelo.campos,
+          rodape: modelo.rodape ?? "",
+          texto_verso: modelo.textoVerso ?? "",
+          mostrar_logo: modelo.mostrarLogo,
+        },
+      });
+      if (error) {
+        if (error.code === "P0002") throw new AppError("not_found", "Igreja não encontrada.");
+        if (error.code === "42501") {
+          throw new AppError("forbidden", "O modelo da carteirinha é definido pela sede da rede.");
+        }
+        if (error.code === "23514") throw new AppError("validation_error", "Confira as cores e os textos do modelo.");
+        throw new AppError("internal_error", "Falha ao salvar o modelo da carteirinha", error);
+      }
+    },
+
+    async restaurarModelo(churchId) {
+      const { error } = await client.rpc("restaurar_carteirinha_modelo", { p_church_id: churchId });
+      if (error) {
+        if (error.code === "P0002") throw new AppError("not_found", "Igreja não encontrada.");
+        if (error.code === "42501") {
+          throw new AppError("forbidden", "O modelo da carteirinha é definido pela sede da rede.");
+        }
+        throw new AppError("internal_error", "Falha ao restaurar o modelo da carteirinha", error);
+      }
     },
 
     async verificar(codigo) {

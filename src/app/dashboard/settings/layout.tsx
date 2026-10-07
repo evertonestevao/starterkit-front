@@ -1,18 +1,31 @@
 import { RouteTabs, type RouteTab } from "@/components/route-tabs";
+import { getCarteirinhaActorAutorizado, getCarteirinhaService } from "@/server/carteirinha";
 import { getActiveTenant } from "@/server/tenant";
 import { canConfigurarAcessos } from "@/services/menuPermissoesService";
 import { permissionService } from "@/services/permissionService";
+
+/**
+ * O modelo da carteirinha é da igreja do topo da rede (sede ou independente):
+ * só ela vê a aba. Falhar aqui só esconde a aba, não derruba Configurações.
+ */
+async function defineCarteirinha(): Promise<boolean> {
+  const actor = await getCarteirinhaActorAutorizado();
+  if (!actor) return false;
+  return (await getCarteirinhaService())
+    .modelo(actor)
+    .then((m) => m.podeEditar)
+    .catch((err: unknown) => {
+      console.error("[configuracoes] falha ao ver quem define a carteirinha", err);
+      return false;
+    });
+}
 
 /**
  * Casca de Configurações: cabeçalho + abas, compartilhados por todas as
  * sub-rotas. Aba nova = uma pasta em src/app/dashboard/settings + uma linha
  * aqui.
  */
-export default async function SettingsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
   const { active } = await getActiveTenant();
 
   const tabs: RouteTab[] = [{ href: "/dashboard/settings", label: "Geral" }];
@@ -26,6 +39,7 @@ export default async function SettingsLayout({
     tabs.push({ href: "/dashboard/settings/cargos", label: "Cargos" });
     if (canConfigurarAcessos(active.role)) tabs.push({ href: "/dashboard/settings/acessos", label: "Acessos" });
     tabs.push({ href: "/dashboard/settings/documentos", label: "Documentos" });
+    if (await defineCarteirinha()) tabs.push({ href: "/dashboard/settings/carteirinha", label: "Carteirinha" });
     tabs.push({ href: "/dashboard/settings/vinculos", label: "Vínculos" });
     tabs.push({ href: "/dashboard/settings/domain", label: "Domínio próprio" });
     tabs.push({ href: "/dashboard/settings/pix", label: "Dízimos (PIX)" });

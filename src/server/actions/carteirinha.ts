@@ -93,3 +93,35 @@ export async function cancelarCarteirinhaAction(membroId: string): Promise<Actio
     return toActionError(err);
   }
 }
+
+/** Grava o modelo da carteirinha da rede (só a sede ou a igreja independente). */
+export async function salvarCarteirinhaModeloAction(modelo: {
+  layout: string;
+  corPrimaria: string;
+  corDestaque: string;
+  titulo: string;
+  campos: string[];
+  rodape: string;
+  textoVerso: string;
+  mostrarLogo: boolean;
+}): Promise<ActionState> {
+  try {
+    await (await getCarteirinhaService()).salvarModelo(await ator(), modelo);
+    revalidatePath("/dashboard/settings/carteirinha");
+    revalidatePath("/dashboard/membros", "layout");
+    return { success: "Modelo salvo. As carteirinhas já saem com ele, inclusive as que já foram emitidas." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export async function restaurarCarteirinhaModeloAction(): Promise<ActionState> {
+  try {
+    await (await getCarteirinhaService()).restaurarModelo(await ator());
+    revalidatePath("/dashboard/settings/carteirinha");
+    revalidatePath("/dashboard/membros", "layout");
+    return { success: "Voltou ao modelo padrão." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}

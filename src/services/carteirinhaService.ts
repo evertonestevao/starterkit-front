@@ -1,13 +1,24 @@
 import { z } from "zod";
 import { CODIGO_RE, MAX_FOTO_BYTES } from "@/lib/carteirinha";
+import {
+  HEX_RE,
+  RODAPE_MAX,
+  TEXTO_VERSO_MAX,
+  TITULO_MAX,
+  isCampo,
+  isLayout,
+  resolverModelo,
+} from "@/lib/carteirinhaModelo";
 import { AppError, toValidationError } from "@/lib/errors";
 import { EXTENSAO_POR_TIPO, sniffImageType } from "@/lib/imageValidation";
 import type {
   Carteirinha,
   CarteirinhaDoMembro,
+  CarteirinhaModelo,
   Consentimento,
   ConsentimentoInput,
   FotoMembro,
+  ModeloDaRede,
   VerificacaoCarteirinha,
 } from "@/types/carteirinha";
 import type { RoleCode } from "@/types/database";
@@ -52,7 +63,39 @@ export interface CarteirinhaRepository {
   /** Caminho da foto pelo link pessoal (só o servidor consegue chamar). */
   fotoPathPorToken(token: string): Promise<string | null>;
   verificar(codigo: string): Promise<VerificacaoCarteirinha | null>;
+  /**
+   * O modelo que vale para a igreja (o gravado pela igreja do topo da rede, ou
+   * null = padrão), o nome dessa igreja e se quem pede pode editar. Null se a
+   * igreja não é de quem pede.
+   */
+  modeloVigente(churchId: string): Promise<{
+    modelo: CarteirinhaModelo | null;
+    origemNome: string;
+    podeEditar: boolean;
+    logoUrl: string | null;
+  } | null>;
+  salvarModelo(churchId: string, modelo: CarteirinhaModelo): Promise<void>;
+  restaurarModelo(churchId: string): Promise<void>;
 }
+
+const textoCurto = (max: number, mensagem: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, mensagem)
+    .nullish()
+    .transform((v) => v || null);
+
+const modeloSchema = z.object({
+  layout: z.string().refine(isLayout, "Escolha um dos modelos"),
+  corPrimaria: z.string().regex(HEX_RE, "Cor principal inválida"),
+  corDestaque: z.string().regex(HEX_RE, "Cor dos detalhes inválida"),
+  titulo: z.string().trim().min(2, "Informe o título da carteirinha").max(TITULO_MAX, "Título longo demais"),
+  campos: z.array(z.string().refine(isCampo, "Informação desconhecida")).max(5),
+  rodape: textoCurto(RODAPE_MAX, "Rodapé longo demais"),
+  textoVerso: textoCurto(TEXTO_VERSO_MAX, "Texto do verso longo demais"),
+  mostrarLogo: z.boolean(),
+});
 
 /** O bucket privado das fotos, acessado só pelo servidor. */
 export interface FotoStorage {
@@ -97,9 +140,25 @@ const tokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 /** Cinco anos: o mesmo teto do banco. */
 const VALIDADE_MAX_DIAS = 1830;
 
+const MARCA_DO_BUCKET_DE_LOGOS = "/storage/v1/object/public/church-logos/";
+
+/**
+ * O caminho dentro do bucket de logos, tirado do endereço público. Qualquer
+ * coisa fora do formato "<pasta>/<arquivo>" devolve null.
+ */
+export function caminhoDaLogo(logoUrl: string | null | undefined): string | null {
+  if (!logoUrl) return null;
+  const i = logoUrl.indexOf(MARCA_DO_BUCKET_DE_LOGOS);
+  if (i < 0) return null;
+  const path = logoUrl.slice(i + MARCA_DO_BUCKET_DE_LOGOS.length).split(/[?#]/)[0] ?? "";
+  return /^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/.test(path) && !path.includes("..") ? path : null;
+}
+
 export function createCarteirinhaService(deps: {
   repo: CarteirinhaRepository;
   storage: FotoStorage;
+  /** Bucket das logos das igrejas, lido pelo servidor para pôr a logo no PDF. */
+  logos?: Pick<FotoStorage, "download">;
   tokens: { make(): string; hash(token: string): string };
   novoId: () => string;
   hoje: () => string;
@@ -267,6 +326,60 @@ export function createCarteirinhaService(deps: {
       await repo.cancelar(membroId);
     },
 
+    // ------------------------------------------------------------------ modelo
+    /** O modelo da carteirinha que vale para a igreja ativa, já com o padrão aplicado. */
+    async modelo(actor: CarteirinhaActor): Promise<ModeloDaRede> {
+      exige(actor);
+      const church = await repo.getChurch(actor.companyId);
+      const vigente = church ? await repo.modeloVigente(church.id) : null;
+      if (!vigente) throw new AppError("not_found", "Igreja não encontrada.");
+      return {
+        modelo: resolverModelo(vigente.modelo),
+        personalizado: vigente.modelo !== null,
+        origemNome: vigente.origemNome,
+        logoUrl: vigente.logoUrl,
+        podeEditar: vigente.podeEditar,
+      };
+    },
+
+    /**
+     * Grava o modelo. Só a igreja do topo da rede (sede ou independente), e só
+     * quem a administra: uma congregação não muda a carteirinha do ministério.
+     */
+    async salvarModelo(actor: CarteirinhaActor, input: unknown): Promise<void> {
+      const churchId = await igrejaQueDefine(actor);
+      const parsed = modeloSchema.safeParse(input);
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      const dados = parsed.data;
+      await repo.salvarModelo(churchId, {
+        ...dados,
+        layout: dados.layout as CarteirinhaModelo["layout"],
+        corPrimaria: dados.corPrimaria.toLowerCase(),
+        corDestaque: dados.corDestaque.toLowerCase(),
+        // Sem repetição, na ordem em que vieram.
+        campos: [...new Set(dados.campos)] as CarteirinhaModelo["campos"],
+      });
+    },
+
+    /** Volta ao padrão da plataforma. */
+    async restaurarModelo(actor: CarteirinhaActor): Promise<void> {
+      await repo.restaurarModelo(await igrejaQueDefine(actor));
+    },
+
+    /**
+     * A logo da igreja, para o PDF. O endereço vem do cadastro da igreja; daqui
+     * só se lê o que está no NOSSO bucket de logos — nunca um endereço qualquer
+     * buscado pela rede. WebP não entra no PDF: sai sem logo.
+     */
+    async logo(logoUrl: string | null): Promise<FotoMembro | null> {
+      const path = caminhoDaLogo(logoUrl);
+      if (!path || !deps.logos) return null;
+      const bytes = await deps.logos.download(path).catch(() => null);
+      if (!bytes) return null;
+      const tipo = sniffImageType(bytes);
+      return tipo === "image/jpeg" || tipo === "image/png" ? { bytes, tipo } : null;
+    },
+
     // ------------------------------------------------------- sem login (público)
     /** A carteirinha pelo link pessoal. Link malformado, trocado ou cancelado: null. */
     async porToken(token: unknown): Promise<Carteirinha | null> {
@@ -287,6 +400,21 @@ export function createCarteirinhaService(deps: {
       return repo.verificar(codigo.trim().toUpperCase());
     },
   };
+
+  /** A igreja ativa, se ela é o topo da rede e quem pede a administra. */
+  async function igrejaQueDefine(actor: CarteirinhaActor): Promise<string> {
+    exige(actor);
+    if (actor.role !== "owner" && actor.role !== "admin") {
+      throw new AppError("forbidden", "Só quem administra a igreja altera o modelo da carteirinha.");
+    }
+    const church = await repo.getChurch(actor.companyId);
+    const vigente = church ? await repo.modeloVigente(church.id) : null;
+    if (!church || !vigente) throw new AppError("not_found", "Igreja não encontrada.");
+    if (!vigente.podeEditar) {
+      throw new AppError("forbidden", `O modelo da carteirinha é definido por ${vigente.origemNome}.`);
+    }
+    return church.id;
+  }
 
   async function lerFoto(path: string): Promise<FotoMembro | null> {
     const bytes = await storage.download(path);

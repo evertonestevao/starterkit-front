@@ -8144,6 +8144,210 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Modelo da carteirinha (migration 20261008100000). AC Sede (d1, de 001) é o
+-- topo da rede da AC Cong (d2, de 002; 004 é a secretaria dela). AC Outra
+-- (d3, de 005) é independente: é o topo da própria rede.
+-- ---------------------------------------------------------------------------
+-- A sede tem logo; a congregação, não: a carteirinha dela usa a da sede.
+update public.churches set logo_url = 'https://exemplo.test/storage/v1/object/public/church-logos/sede/logo.png'
+ where id = 'acacacac-0000-4000-8000-0000000000d1';
+update public.churches set logo_url = null where id = 'acacacac-0000-4000-8000-0000000000d2';
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare r record;
+begin
+  -- A congregação NÃO define o modelo, nem administrando a própria igreja.
+  begin
+    perform public.salvar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d2',
+      '{"layout":"lateral","cor_primaria":"#112233","cor_destaque":"#445566"}'::jsonb);
+    raise exception 'FALHA modelo carteirinha: a congregacao gravou o modelo';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.restaurar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d2');
+    raise exception 'FALHA modelo carteirinha: a congregacao restaurou o modelo';
+  exception when sqlstate '42501' then null;
+  end;
+  -- Nem o da sede.
+  begin
+    perform public.salvar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d1',
+      '{"layout":"lateral","cor_primaria":"#112233","cor_destaque":"#445566"}'::jsonb);
+    raise exception 'FALHA modelo carteirinha: a congregacao gravou o modelo da sede';
+  exception when sqlstate 'P0002' then null;
+  end;
+  -- Antes de a sede gravar: vale o padrão (colunas nulas), e ela não pode editar.
+  select * into r from public.carteirinha_modelo_vigente('acacacac-0000-4000-8000-0000000000d2');
+  if r.origem_church_id <> 'acacacac-0000-4000-8000-0000000000d1' or r.pode_editar or r.layout is not null then
+    raise exception 'FALHA modelo carteirinha: vigente da congregacao errado antes de a sede gravar';
+  end if;
+end $$;
+
+-- A sede define: cores, desenho, título, informações e textos.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare r record; n int;
+begin
+  select pode_editar into r from public.carteirinha_modelo_vigente('acacacac-0000-4000-8000-0000000000d1');
+  if not r.pode_editar then raise exception 'FALHA modelo carteirinha: a sede nao pode editar'; end if;
+
+  -- Cor, desenho e informação fora da lista não entram.
+  begin
+    perform public.salvar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d1',
+      '{"layout":"classico","cor_primaria":"vermelho","cor_destaque":"#445566"}'::jsonb);
+    raise exception 'FALHA modelo carteirinha: aceitou cor invalida';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.salvar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d1',
+      '{"layout":"holografico","cor_primaria":"#112233","cor_destaque":"#445566"}'::jsonb);
+    raise exception 'FALHA modelo carteirinha: aceitou desenho desconhecido';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.salvar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d1',
+      '{"layout":"classico","cor_primaria":"#112233","cor_destaque":"#445566","campos":["whatsapp"]}'::jsonb);
+    raise exception 'FALHA modelo carteirinha: aceitou informacao fora da lista';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    update public.carteirinha_modelos set layout = 'lateral' where true;
+    raise exception 'FALHA modelo carteirinha: update direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+
+  perform public.salvar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d1', jsonb_build_object(
+    'layout', 'lateral', 'cor_primaria', '#1A2B3C', 'cor_destaque', '#aabbcc', 'titulo', 'Carteira de membro',
+    'campos', jsonb_build_array('cargos', 'batismo', 'batismo'), 'rodape', 'Campo de Lins', 'texto_verso', 'Pessoal e intransferivel'));
+  select * into r from public.carteirinha_modelos where church_id = 'acacacac-0000-4000-8000-0000000000d1';
+  if r.cor_primaria <> '#1a2b3c' or r.campos <> array['batismo', 'cargos'] and r.campos <> array['cargos', 'batismo'] then
+    raise exception 'FALHA modelo carteirinha: gravou errado (% / %)', r.cor_primaria, r.campos;
+  end if;
+end $$;
+
+-- A congregação herda; a secretaria dela lê o modelo e emite com ele.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare r record; n int;
+begin
+  select * into r from public.carteirinha_modelo_vigente('acacacac-0000-4000-8000-0000000000d2');
+  if r.layout is distinct from 'lateral' or r.titulo is distinct from 'Carteira de membro' or r.pode_editar then
+    raise exception 'FALHA modelo carteirinha: a congregacao nao herdou o modelo da sede (%)', r.layout;
+  end if;
+  -- Direto na tabela, o modelo da sede não aparece para a congregação.
+  select count(*) into n from public.carteirinha_modelos;
+  if n <> 0 then raise exception 'FALHA modelo carteirinha: leitura direta devolveu o modelo de outra igreja'; end if;
+
+  update public.rol_membros set batismo = date '2010-08-15', nascimento = date '1990-05-02'
+   where id = 'cacacaca-0000-4000-8000-0000000000a1';
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a1', '{"situacao":"ativo"}'::jsonb);
+  perform public.salvar_consentimento_membro('cacacaca-0000-4000-8000-0000000000a1',
+    jsonb_build_object('cadastro', true, 'carteirinha', true, 'assinado_em', (current_date - 1)::text));
+  perform public.emitir_carteirinha('cacacaca-0000-4000-8000-0000000000a1',
+    encode(sha256(convert_to('link-modelo', 'UTF8')), 'hex'), current_date + 365);
+  select * into r from public.carteirinha_do_membro('cacacaca-0000-4000-8000-0000000000a1');
+  if r.modelo ->> 'layout' is distinct from 'lateral' then
+    raise exception 'FALHA modelo carteirinha: a carteirinha da congregacao nao levou o modelo da sede';
+  end if;
+end $$;
+
+-- Outra rede: não lê o modelo desta, e define o próprio (é o topo dela).
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare r record; n int;
+begin
+  select count(*) into n from public.carteirinha_modelo_vigente('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA modelo carteirinha: outra rede leu o modelo da congregacao'; end if;
+  begin
+    perform public.salvar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d1',
+      '{"layout":"classico","cor_primaria":"#000000","cor_destaque":"#ffffff"}'::jsonb);
+    raise exception 'FALHA modelo carteirinha: outra rede gravou o modelo da sede';
+  exception when sqlstate 'P0002' then null;
+  end;
+  perform public.salvar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d3',
+    '{"layout":"minimalista","cor_primaria":"#7a1f1f","cor_destaque":"#333333"}'::jsonb);
+  select * into r from public.carteirinha_modelo_vigente('acacacac-0000-4000-8000-0000000000d3');
+  if r.layout is distinct from 'minimalista' or not r.pode_editar then
+    raise exception 'FALHA modelo carteirinha: a igreja independente nao gravou o proprio modelo';
+  end if;
+end $$;
+reset role;
+
+-- Quem abre o link recebe o modelo e SÓ as informações que ele pede.
+set local role anon;
+do $$
+declare r record;
+begin
+  begin
+    perform 1 from public.carteirinha_modelos;
+    raise exception 'FALHA modelo carteirinha: anon leu a tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  select * into r from public.carteirinha_por_token('link-modelo');
+  if r.modelo ->> 'cor_primaria' is distinct from '#1a2b3c' or r.modelo ->> 'rodape' is distinct from 'Campo de Lins' then
+    raise exception 'FALHA modelo carteirinha: o link nao levou o modelo (%)', r.modelo;
+  end if;
+  if r.batismo is distinct from date '2010-08-15' then
+    raise exception 'FALHA modelo carteirinha: informacao pedida pelo modelo nao veio (batismo %)', r.batismo;
+  end if;
+  if r.nascimento is not null or r.estado_civil is not null then
+    raise exception 'FALHA modelo carteirinha: o link entregou dado que o modelo nao mostra';
+  end if;
+  if r.logo_url is distinct from 'https://exemplo.test/storage/v1/object/public/church-logos/sede/logo.png' then
+    raise exception 'FALHA modelo carteirinha: a congregacao sem logo nao usou a da sede (%)', r.logo_url;
+  end if;
+end $$;
+reset role;
+
+-- A sede desliga a logo: ela deixa de sair para quem abre o link.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+select public.salvar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d1', jsonb_build_object(
+  'layout', 'lateral', 'cor_primaria', '#1a2b3c', 'cor_destaque', '#aabbcc', 'titulo', 'Carteira de membro',
+  'campos', jsonb_build_array('cargos', 'batismo'), 'rodape', 'Campo de Lins', 'mostrar_logo', false));
+do $$
+declare r record;
+begin
+  select * into r from public.carteirinha_modelo_vigente('acacacac-0000-4000-8000-0000000000d1');
+  if r.mostrar_logo or r.logo_url is null then
+    raise exception 'FALHA modelo carteirinha: a sede nao leu a propria logo e a opcao desligada';
+  end if;
+end $$;
+reset role;
+set local role anon;
+do $$
+declare r record;
+begin
+  select * into r from public.carteirinha_por_token('link-modelo');
+  if r.logo_url is not null or (r.modelo ->> 'mostrar_logo')::boolean then
+    raise exception 'FALHA modelo carteirinha: a logo saiu com a opcao desligada';
+  end if;
+end $$;
+reset role;
+
+-- A sede restaura: volta o padrão, e o batismo deixa de sair.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+select public.restaurar_carteirinha_modelo('acacacac-0000-4000-8000-0000000000d1');
+reset role;
+set local role anon;
+do $$
+declare r record;
+begin
+  select * into r from public.carteirinha_por_token('link-modelo');
+  if r.modelo is not null or r.batismo is not null then
+    raise exception 'FALHA modelo carteirinha: restaurar nao voltou ao padrao';
+  end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

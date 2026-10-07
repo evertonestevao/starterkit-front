@@ -13,6 +13,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     const pdf = await gerarCarteirinhaPdf({
       carteirinha,
       foto: carteirinha.temFoto ? await service.fotoPorToken(token) : null,
+      logo: await service.logo(carteirinha.logoUrl),
       urlVerificacao: `${getServerEnv().APP_URL.replace(/\/+$/, "")}/verificar/${carteirinha.codigo}`,
     });
     return new NextResponse(Buffer.from(pdf), {
