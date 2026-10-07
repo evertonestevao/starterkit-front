@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  agruparPorRamo,
   buscarUnidades,
   domingoDaSemana,
+  fraseDaRede,
   menusComRede,
   percentual,
   porUrgencia,
@@ -9,6 +11,7 @@ import {
   saudeDaUnidade,
   serieMensal,
   serieSemanal,
+  tendenciaDaPresenca,
   totaisDaRede,
   type MesDaRede,
   type SemanaDaRede,
@@ -223,5 +226,67 @@ describe("menusComRede", () => {
   it("o item Rede some para a igreja sem unidades abaixo, e só ele", () => {
     expect(menusComRede(["dashboard", "rede", "membros"], false)).toEqual(["dashboard", "membros"]);
     expect(menusComRede(["dashboard", "rede", "membros"], true)).toEqual(["dashboard", "rede", "membros"]);
+  });
+});
+
+describe("fraseDaRede", () => {
+  it("diz a situação numa frase", () => {
+    expect(fraseDaRede({ boa: 5, atencao: 0, parada: 0 })).toBe("As 5 igrejas estão bem.");
+    expect(fraseDaRede({ boa: 1, atencao: 0, parada: 0 })).toBe("A igreja ligada está bem.");
+    expect(fraseDaRede({ boa: 1, atencao: 3, parada: 1 })).toBe("Das 5 igrejas, 3 pedem atenção e 1 está parada.");
+    expect(fraseDaRede({ boa: 2, atencao: 1, parada: 0 })).toBe("Das 3 igrejas, 1 pede atenção.");
+    expect(fraseDaRede({ boa: 0, atencao: 0, parada: 2 })).toBe("Das 2 igrejas, 2 estão paradas.");
+    expect(fraseDaRede({ boa: 0, atencao: 1, parada: 0 })).toBe("A igreja ligada pede atenção.");
+    expect(fraseDaRede({ boa: 0, atencao: 0, parada: 0 })).toBe("Nenhuma igreja ligada.");
+  });
+});
+
+describe("tendenciaDaPresenca", () => {
+  // Semana de hoje fecha em 11/10; as 4 últimas: 20/09 a 11/10; as 4 anteriores: 23/08 a 13/09.
+  const semanas = [
+    semana({ semana: "2026-10-04", cultoPresentes: 90, cultoAusentes: 10 }),
+    semana({ semana: "2026-09-20", cultoPresentes: 70, cultoAusentes: 30 }),
+    semana({ semana: "2026-09-13", cultoPresentes: 60, cultoAusentes: 40 }),
+    semana({ semana: "2026-08-23", cultoPresentes: 60, cultoAusentes: 40 }),
+    semana({ churchId: "b", semana: "2026-10-04", cultoPresentes: 0, cultoAusentes: 100 }),
+  ];
+
+  it("compara as últimas 4 semanas com as 4 anteriores, de uma unidade", () => {
+    expect(tendenciaDaPresenca(semanas, "u1", HOJE)).toEqual({ atual: 80, anterior: 60, delta: 20, sentido: "subiu" });
+  });
+
+  it("no geral, soma as pessoas de todas", () => {
+    // (90 + 70 + 0) / 300 = 53,3% contra 60%.
+    expect(tendenciaDaPresenca(semanas, null, HOJE)).toMatchObject({ atual: 53.3, delta: -6.7, sentido: "caiu" });
+  });
+
+  it("variação pequena é estável; sem um dos lados, não há tendência", () => {
+    const quase = [
+      semana({ semana: "2026-10-04", cultoPresentes: 61, cultoAusentes: 39 }),
+      semana({ semana: "2026-09-13", cultoPresentes: 60, cultoAusentes: 40 }),
+    ];
+    expect(tendenciaDaPresenca(quase, "u1", HOJE).sentido).toBe("estavel");
+    expect(tendenciaDaPresenca(quase.slice(0, 1), "u1", HOJE)).toMatchObject({ delta: null, sentido: "sem_dados" });
+  });
+});
+
+describe("agruparPorRamo", () => {
+  it("cada unidade de cima com as que estão abaixo dela", () => {
+    const lista = [
+      unidade({ churchId: "norte", parentId: "sede", nivel: 1 }),
+      unidade({ churchId: "aurora", parentId: "norte", nivel: 2 }),
+      unidade({ churchId: "vila", parentId: "norte", nivel: 2 }),
+      unidade({ churchId: "sul", parentId: "sede", nivel: 1 }),
+      unidade({ churchId: "centro", parentId: "sul", nivel: 2 }),
+    ];
+    expect(agruparPorRamo(lista).map((g) => [g.unidade.churchId, g.abaixo.map((u) => u.churchId)])).toEqual([
+      ["norte", ["aurora", "vila"]],
+      ["sul", ["centro"]],
+    ]);
+  });
+
+  it("para a subsede, as congregações são cada uma o seu ramo", () => {
+    const lista = [unidade({ churchId: "a", parentId: "norte" }), unidade({ churchId: "b", parentId: "norte" })];
+    expect(agruparPorRamo(lista).map((g) => g.unidade.churchId)).toEqual(["a", "b"]);
   });
 });

@@ -16,6 +16,7 @@ import {
 import { BarChartCard } from "@/components/charts/bar-chart-card";
 import { LineChartCard } from "@/components/charts/line-chart-card";
 import { EmptyState } from "@/components/empty-state";
+import { MapaDaRede } from "@/features/rede/components/mapa-da-rede";
 import { MetricCard } from "@/components/metric-card";
 import { PaginacaoLocal } from "@/components/paginacao-local";
 import { RankingBarras } from "@/components/ranking-barras";
@@ -48,23 +49,18 @@ import type { ChurchTipo } from "@/types/database";
 
 const POR_PAGINA = 10;
 
-const NIVEIS_DE_SAUDE: NivelDeSaude[] = ["boa", "atencao", "parada"];
-
-const SAUDE: Record<NivelDeSaude, { rotulo: string; classe: string; barra: string }> = {
+const SAUDE: Record<NivelDeSaude, { rotulo: string; classe: string }> = {
   boa: {
     rotulo: "Bem",
     classe: "border-emerald-600/30 bg-emerald-600/10 text-emerald-800 dark:text-emerald-300",
-    barra: "bg-emerald-600",
   },
   atencao: {
     rotulo: "Pede atenção",
     classe: "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300",
-    barra: "bg-amber-500",
   },
   parada: {
     rotulo: "Parada",
     classe: "border-destructive/40 bg-destructive/10 text-destructive",
-    barra: "bg-destructive",
   },
 };
 
@@ -157,6 +153,11 @@ export function PainelRede({ painel, hoje }: { painel: PainelDaRede; hoje: strin
         ) : null}
       </div>
 
+      {/* De relance: a situação numa frase e o mapa das igrejas. */}
+      {escolhida ? null : (
+        <MapaDaRede unidades={unidades} semanas={semanas} hoje={hoje} saude={totais.saude} aoEscolher={verUnidade} />
+      )}
+
       {escolhida && saudeDaEscolhida ? (
         <Card>
           <CardContent className="flex flex-col gap-2">
@@ -184,14 +185,6 @@ export function PainelRede({ painel, hoje }: { painel: PainelDaRede; hoje: strin
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {escolhida ? null : (
-          <MetricCard
-            icon={Network}
-            label="Igrejas ligadas"
-            value={totais.unidades}
-            hint={`${totais.saude.boa} bem · ${totais.saude.atencao} pedem atenção · ${totais.saude.parada} paradas`}
-          />
-        )}
         <MetricCard
           icon={Contact}
           label="Membros ativos"
@@ -281,69 +274,29 @@ export function PainelRede({ painel, hoje }: { painel: PainelDaRede; hoje: strin
           yKey="membrosNovos"
         />
         {!escolhida && unidades.length > 1 ? (
-          <>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Situação das igrejas</CardTitle>
-                <CardDescription>
-                  Parada: sem culto nem EBD registrados há mais de 45 dias. Pede atenção: presença baixa, muitas faltas
-                  seguidas, pedido de visita sem contato, registro atrasado ou mensalidade pendente.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                {/* Cores fixas por situação (e sempre com o nome e o número ao lado). */}
-                <div className="flex h-3 overflow-hidden rounded-full bg-muted" aria-hidden>
-                  {NIVEIS_DE_SAUDE.map((nivel) =>
-                    totais.saude[nivel] > 0 ? (
-                      <div
-                        key={nivel}
-                        className={SAUDE[nivel].barra}
-                        style={{ width: `${(100 * totais.saude[nivel]) / totais.unidades}%` }}
-                      />
-                    ) : null,
-                  )}
-                </div>
-                <ul className="flex flex-col gap-2 text-sm">
-                  {NIVEIS_DE_SAUDE.map((nivel) => (
-                    <li key={nivel} className="flex items-center justify-between gap-3">
-                      <span className="flex items-center gap-2">
-                        <span className={cn("size-2.5 rounded-full", SAUDE[nivel].barra)} aria-hidden />
-                        {SAUDE[nivel].rotulo}
-                      </span>
-                      <span className="tabular-nums">
-                        {totais.saude[nivel]} de {totais.unidades}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Presença nos cultos por igreja</CardTitle>
-                <CardDescription>
-                  Últimas 8 semanas. Só entram as igrejas que fizeram chamada no período.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RankingBarras
-                  maximo={100}
-                  vazio="Nenhuma igreja registrou presença nas últimas 8 semanas."
-                  itens={unidades
-                    .filter((u) => u.cultoPresenca8s !== null)
-                    .sort((a, b) => (b.cultoPresenca8s ?? 0) - (a.cultoPresenca8s ?? 0))
-                    .slice(0, 12)
-                    .map((u) => ({
-                      key: u.churchId,
-                      nome: u.churchName,
-                      detalhe: `${u.membrosAtivos} membros`,
-                      valor: u.cultoPresenca8s ?? 0,
-                      valorTexto: formatarPorcento(u.cultoPresenca8s),
-                    }))}
-                />
-              </CardContent>
-            </Card>
-          </>
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-base">Presença nos cultos por igreja</CardTitle>
+              <CardDescription>Últimas 8 semanas. Só entram as igrejas que fizeram chamada no período.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RankingBarras
+                maximo={100}
+                vazio="Nenhuma igreja registrou presença nas últimas 8 semanas."
+                itens={unidades
+                  .filter((u) => u.cultoPresenca8s !== null)
+                  .sort((a, b) => (b.cultoPresenca8s ?? 0) - (a.cultoPresenca8s ?? 0))
+                  .slice(0, 12)
+                  .map((u) => ({
+                    key: u.churchId,
+                    nome: u.churchName,
+                    detalhe: `${u.membrosAtivos} membros`,
+                    valor: u.cultoPresenca8s ?? 0,
+                    valorTexto: formatarPorcento(u.cultoPresenca8s),
+                  }))}
+              />
+            </CardContent>
+          </Card>
         ) : null}
       </div>
 

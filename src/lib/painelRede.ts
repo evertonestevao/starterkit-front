@@ -289,6 +289,89 @@ export function serieMensal(meses: MesDaRede[], churchId: string | null, hoje: s
   });
 }
 
+/**
+ * A situação da rede numa frase, para quem só bate o olho.
+ * "3 de 5 igrejas pedem atenção e 1 está parada." / "As 5 igrejas estão bem."
+ */
+export function fraseDaRede(saude: Record<NivelDeSaude, number>): string {
+  const total = saude.boa + saude.atencao + saude.parada;
+  if (total === 0) return "Nenhuma igreja ligada.";
+  if (saude.atencao === 0 && saude.parada === 0) {
+    return total === 1 ? "A igreja ligada está bem." : `As ${total} igrejas estão bem.`;
+  }
+  const partes: string[] = [];
+  if (saude.atencao > 0) partes.push(saude.atencao === 1 ? "1 pede atenção" : `${saude.atencao} pedem atenção`);
+  if (saude.parada > 0) partes.push(saude.parada === 1 ? "1 está parada" : `${saude.parada} estão paradas`);
+  return `Das ${total} igrejas, ${partes.join(" e ")}.`.replace(/^Das 1 igrejas, 1 /, "A igreja ligada ");
+}
+
+export type Tendencia = {
+  /** Presença das últimas 4 semanas (0–100), ou null sem registro. */
+  atual: number | null;
+  /** Presença das 4 semanas anteriores a essas. */
+  anterior: number | null;
+  /** Diferença em pontos percentuais; null se faltar um dos dois lados. */
+  delta: number | null;
+  sentido: "subiu" | "caiu" | "estavel" | "sem_dados";
+};
+
+/** Abaixo disto (em pontos percentuais) a variação é tratada como estável. */
+export const VARIACAO_MINIMA = 2;
+
+/**
+ * Para onde vai a presença nos cultos: as últimas 4 semanas contra as 4
+ * anteriores, sobre as pessoas (de uma unidade, ou de todas as do recorte).
+ */
+export function tendenciaDaPresenca(semanas: SemanaDaRede[], churchId: string | null, hoje: string): Tendencia {
+  const fim = data(domingoDaSemana(hoje));
+  const noIntervalo = (deSemanasAtras: number, ateSemanasAtras: number) => {
+    const de = iso(fim - deSemanasAtras * 7 * DIA);
+    const ate = iso(fim - ateSemanasAtras * 7 * DIA);
+    const linhas = semanas.filter((x) => x.semana >= de && x.semana <= ate && (!churchId || x.churchId === churchId));
+    return percentual(
+      linhas.reduce((t, x) => t + x.cultoPresentes, 0),
+      linhas.reduce((t, x) => t + x.cultoAusentes, 0),
+    );
+  };
+  const atual = noIntervalo(3, 0);
+  const anterior = noIntervalo(7, 4);
+  if (atual === null || anterior === null) return { atual, anterior, delta: null, sentido: "sem_dados" };
+  const delta = Math.round((atual - anterior) * 10) / 10;
+  return {
+    atual,
+    anterior,
+    delta,
+    sentido: delta >= VARIACAO_MINIMA ? "subiu" : delta <= -VARIACAO_MINIMA ? "caiu" : "estavel",
+  };
+}
+
+export type GrupoDaRede = { unidade: UnidadeDaRede; abaixo: UnidadeDaRede[] };
+
+/**
+ * A árvore em dois andares, como a tela desenha: cada unidade logo abaixo de
+ * quem olha, com tudo o que está abaixo DELA ao lado (na ordem que veio do
+ * banco, que é a da árvore).
+ */
+export function agruparPorRamo(unidades: UnidadeDaRede[]): GrupoDaRede[] {
+  const porId = new Map(unidades.map((u) => [u.churchId, u]));
+  const ramoDe = (u: UnidadeDaRede): string => {
+    let atual = u;
+    while (atual.parentId && porId.has(atual.parentId)) atual = porId.get(atual.parentId)!;
+    return atual.churchId;
+  };
+  const grupos = new Map<string, GrupoDaRede>();
+  for (const u of unidades) {
+    const raiz = ramoDe(u);
+    if (raiz === u.churchId) grupos.set(raiz, { unidade: u, abaixo: grupos.get(raiz)?.abaixo ?? [] });
+    else {
+      const g = grupos.get(raiz) ?? { unidade: porId.get(raiz)!, abaixo: [] };
+      g.abaixo.push(u);
+      grupos.set(raiz, g);
+    }
+  }
+  return [...grupos.values()];
+}
+
 /** O menu do painel da rede. */
 export const MENU_REDE = "rede";
 
