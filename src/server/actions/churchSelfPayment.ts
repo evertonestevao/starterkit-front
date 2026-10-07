@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
+import { qrPngDataUrl } from "@/lib/qr";
 import { getChurchSelfPaymentService } from "@/server/churchSelfPayment";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant } from "@/server/tenant";
+import type { PixParaAutorizar } from "@/services/churchSelfPaymentService";
 import { toActionError, type ActionState } from "./action-state";
 
 const PAGINAS = ["/dashboard/mensalidade", "/dashboard/sponsors"];
@@ -26,15 +28,36 @@ async function requireSession() {
   if (!data.user) throw new AppError("unauthorized", "Sessão expirada.");
 }
 
+/** O QR Code do Pix Automático, pronto para a tela: a imagem e o "copia e cola". */
+export interface PixNaTela {
+  qrDataUrl: string;
+  payload: string;
+  expiresAt: string | null;
+}
+
+export type MensalidadeActionState = ActionState & { pix?: PixNaTela };
+
+async function pixParaTela(pix: PixParaAutorizar): Promise<PixNaTela> {
+  return { qrDataUrl: await qrPngDataUrl(pix.payload, 320), payload: pix.payload, expiresAt: pix.expiresAt };
+}
+
+/** Pago o cartão, o provedor devolve a pessoa para a tela da mensalidade. */
+const voltarPara = () => `${getServerEnv().APP_URL.replace(/\/+$/, "")}/dashboard/mensalidade`;
+
+/**
+ * Cadastra quem paga e começa a cobrança na forma escolhida. Cartão: leva à
+ * página do provedor onde o cartão é informado. Pix Automático: devolve o QR
+ * Code para a tela mostrar.
+ */
 export async function enableChurchSelfPaymentAction(
-  _prev: ActionState | undefined,
+  _prev: MensalidadeActionState | undefined,
   formData: FormData,
-): Promise<ActionState> {
+): Promise<MensalidadeActionState> {
   let pagamento: string | null;
   try {
     await requireSession();
     const churchId = texto(formData, "churchId");
-    const { invoiceUrl } = await (
+    const { invoiceUrl, pix } = await (
       await getChurchSelfPaymentService()
     ).enable(
       churchId,
@@ -45,10 +68,10 @@ export async function enableChurchSelfPaymentAction(
         phone: texto(formData, "phone"),
         document: texto(formData, "document"),
       },
-      // Pago o cartão, o provedor devolve a pessoa para a tela da mensalidade.
-      { successUrl: `${getServerEnv().APP_URL.replace(/\/+$/, "")}/dashboard/mensalidade` },
+      { successUrl: voltarPara(), method: texto(formData, "method") || "card" },
     );
     revalidar();
+    if (pix) return { success: "Cadastro feito. Falta autorizar o Pix.", pix: await pixParaTela(pix) };
     pagamento = invoiceUrl;
   } catch (err) {
     return toActionError(err);
@@ -58,6 +81,27 @@ export async function enableChurchSelfPaymentAction(
   // algo vindo de quem preencheu o formulário.
   if (pagamento) redirect(pagamento);
   return { success: "Pagamento cadastrado." };
+}
+
+/**
+ * Recomeça um pagamento que ficou sem concluir (QR Code vencido, ou a
+ * autorização do Pix cancelada por mudança de valor), na forma escolhida.
+ */
+export async function retomarMensalidadeAction(churchId: string, method: string): Promise<MensalidadeActionState> {
+  let pagamento: string | null;
+  try {
+    await requireSession();
+    const { invoiceUrl, pix } = await (
+      await getChurchSelfPaymentService()
+    ).retomar(churchId, method, { successUrl: voltarPara() });
+    revalidar();
+    if (pix) return { pix: await pixParaTela(pix) };
+    pagamento = invoiceUrl;
+  } catch (err) {
+    return toActionError(err);
+  }
+  if (pagamento) redirect(pagamento);
+  return { success: "Pagamento retomado." };
 }
 
 export async function setChurchAceitaPatrocinioAction(

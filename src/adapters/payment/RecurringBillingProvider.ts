@@ -1,7 +1,9 @@
 import type {
   BillingCustomerInput,
   BillingWebhookEvent,
+  CreatePixAutomaticInput,
   CreateRecurringSubscriptionInput,
+  CreatedPixAutomatic,
   CreatedRecurringSubscription,
 } from "@/types/sponsorship";
 
@@ -34,6 +36,17 @@ export interface RecurringBillingProvider {
 
   /** Encerra a assinatura. Assinatura inexistente NÃO é erro. */
   cancelSubscription(subscriptionId: string): Promise<void>;
+
+  /**
+   * Pix Automático: o pagador lê um QR Code no aplicativo do banco, paga a
+   * primeira cobrança e autoriza os débitos dos meses seguintes, de valor
+   * FIXO. OPCIONAL — provedor que não implementa simplesmente não oferece essa
+   * forma (a tela só mostra a opção quando o método existe).
+   */
+  createPixAutomatic?(input: CreatePixAutomaticInput): Promise<CreatedPixAutomatic>;
+
+  /** Cancela a autorização (e a assinatura ligada a ela). Inexistente NÃO é erro. */
+  cancelPixAutomatic?(authorizationId: string): Promise<void>;
 
   /**
    * Autentica e traduz o webhook. Requisição não autenticada deve lançar

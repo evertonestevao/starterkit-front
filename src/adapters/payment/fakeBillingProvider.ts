@@ -52,6 +52,26 @@ export function createFakeBillingProvider(): RecurringBillingProvider {
       };
     },
 
+    /**
+     * Pix Automático de mentira: devolve um "copia e cola" que carrega a
+     * assinatura, e NÃO paga sozinho — assim a tela de "aguardando" existe em
+     * dev. Para confirmar, mande o evento de cobrança paga ao webhook do fake
+     * (o teste e2e faz isso a partir do que está no copia e cola).
+     */
+    async createPixAutomatic(input) {
+      const subscriptionId = nextId("fake_sub");
+      return {
+        authorizationId: nextId("fake_aut"),
+        subscriptionId,
+        qrPayload: `FAKEPIX|${subscriptionId}|${input.amountCents}|${input.startDate}`,
+        expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+      };
+    },
+
+    async cancelPixAutomatic(authorizationId) {
+      console.info(`[billing:fake] autorização de Pix Automático ${authorizationId} cancelada`);
+    },
+
     async updateSubscriptionAmount(subscriptionId, amountCents) {
       console.info(`[billing:fake] assinatura ${subscriptionId} -> ${amountCents} centavos`);
     },

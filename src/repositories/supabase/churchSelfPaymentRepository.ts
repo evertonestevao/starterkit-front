@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
 import type {
   ChurchSelfPaymentRepository,
-  ChurchSelfPaymentStatus,
+  ChurchSelfPaymentStatusBase,
   SelfPaymentSponsorshipStatus,
 } from "@/services/churchSelfPaymentService";
 import type { SponsorAccount } from "@/types/sponsorship";
@@ -26,7 +26,19 @@ export function createSupabaseChurchSelfPaymentRepository(client: SupabaseClient
   }
 
   return {
-    async getStatus(churchId): Promise<ChurchSelfPaymentStatus> {
+    async setPaymentMethod(churchId, method) {
+      const { data, error } = await client.rpc("definir_forma_mensalidade", { p_church_id: churchId, p_forma: method });
+      if (error) {
+        if (error.code === "P0002") throw new AppError("not_found", "Cadastre primeiro quem paga a mensalidade.");
+        if (error.code === "P0001") {
+          throw new AppError("validation_error", "Já existe uma cobrança recorrente em outra forma de pagamento.");
+        }
+        throw new AppError("internal_error", "Falha ao gravar a forma de pagamento", error);
+      }
+      return data as string;
+    },
+
+    async getStatus(churchId): Promise<ChurchSelfPaymentStatusBase> {
       const [countResult, churchResult, account, amountResult, faturaResult] = await Promise.all([
         client.rpc("church_real_billable_sponsorships", { p_church_id: churchId }),
         client.from("churches").select("aceita_patrocinio").eq("id", churchId).single<{ aceita_patrocinio: boolean }>(),
@@ -70,6 +82,11 @@ export function createSupabaseChurchSelfPaymentRepository(client: SupabaseClient
         aceitaPatrocinio: churchResult.data?.aceita_patrocinio ?? true,
         amountCents: (amountResult.data as number) ?? 0,
         openInvoiceUrl: faturaResult.error ? null : ((faturaResult.data as string | null) ?? null),
+        paymentMethod: account?.payment_method ?? "card",
+        needsAuthorization:
+          account !== null &&
+          (sponsorshipStatus === "pending_payment" || sponsorshipStatus === "active") &&
+          !account.gateway_subscription_id,
       };
     },
 

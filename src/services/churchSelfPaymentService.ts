@@ -2,7 +2,7 @@ import { z } from "zod";
 import { isValidDocumentFor, onlyDigits } from "@/lib/brDocument";
 import { AppError, toValidationError } from "@/lib/errors";
 import { phoneSchema, sponsorKindSchema } from "@/features/sponsor/schemas";
-import type { SponsorAccount, SponsorKind } from "@/types/sponsorship";
+import type { PaymentMethod, SponsorAccount, SponsorKind } from "@/types/sponsorship";
 
 /**
  * Autopatrocínio: uma igreja sem nenhum patrocinador pode assumir a própria
@@ -30,6 +30,30 @@ export interface ChurchSelfPaymentStatus {
   amountCents: number;
   /** Página de pagamento (cartão) da fatura em aberto, no provedor; null se não há. */
   openInvoiceUrl: string | null;
+  /** Forma escolhida pela igreja (cartão, enquanto nada foi escolhido). */
+  paymentMethod: PaymentMethod;
+  /**
+   * A mensalidade está contratada, mas não há cobrança recorrente no provedor:
+   * o cadastro não foi concluído, ou a autorização do Pix foi cancelada por
+   * mudança de valor. A igreja precisa escolher a forma e concluir.
+   */
+  needsAuthorization: boolean;
+  /** O provedor de pagamento atual oferece Pix Automático. */
+  pixDisponivel: boolean;
+}
+
+/** O QR Code do Pix Automático, para a tela mostrar. */
+export interface PixParaAutorizar {
+  payload: string;
+  expiresAt: string | null;
+}
+
+export interface ResultadoDoPagamento {
+  status: ChurchSelfPaymentStatus;
+  /** Cartão: a página do provedor onde ele é informado. */
+  invoiceUrl: string | null;
+  /** Pix Automático: o QR Code para pagar o primeiro mês e autorizar os seguintes. */
+  pix: PixParaAutorizar | null;
 }
 
 /** cobrável = a mensalidade da igreja está de fato correndo (ou prestes a). */
@@ -37,8 +61,13 @@ export function isSelfPaymentBillable(status: SelfPaymentSponsorshipStatus): boo
   return status === "pending_payment" || status === "active";
 }
 
+/** O que o repositório lê do banco; `pixDisponivel` vem do provedor, não dele. */
+export type ChurchSelfPaymentStatusBase = Omit<ChurchSelfPaymentStatus, "pixDisponivel">;
+
 export interface ChurchSelfPaymentRepository {
-  getStatus(churchId: string): Promise<ChurchSelfPaymentStatus>;
+  getStatus(churchId: string): Promise<ChurchSelfPaymentStatusBase>;
+  /** RPC definir_forma_mensalidade: grava a forma escolhida e devolve a conta de cobrança. */
+  setPaymentMethod(churchId: string, method: PaymentMethod): Promise<string>;
   /** RPC enable_church_self_payment: cria ou reaproveita a conta+patrocínio. */
   enable(input: {
     churchId: string;
@@ -57,8 +86,15 @@ export interface SelfPaymentBiller {
   syncBilling(
     accountId: string,
     options: { createIfMissing: boolean; successUrl?: string },
-  ): Promise<{ invoiceUrl: string | null; syncPending: boolean }>;
+  ): Promise<{ invoiceUrl: string | null; syncPending: boolean; pix?: PixParaAutorizar | null }>;
+  /** Encerra o que estiver pendente no provedor e começa de novo (QR vencido, valor alterado). */
+  restartSelfPayment(
+    accountId: string,
+    options: { successUrl?: string },
+  ): Promise<{ invoiceUrl: string | null; syncPending: boolean; pix?: PixParaAutorizar | null }>;
 }
+
+const methodSchema = z.enum(["card", "pix_automatico"], "Escolha cartão ou Pix Automático");
 
 export interface Actor {
   companyId: string;
@@ -82,12 +118,63 @@ const enableSchema = z
     }
   });
 
-export function createChurchSelfPaymentService(deps: { repo: ChurchSelfPaymentRepository; biller: SelfPaymentBiller }) {
+export function createChurchSelfPaymentService(deps: {
+  repo: ChurchSelfPaymentRepository;
+  biller: SelfPaymentBiller;
+  /** O provedor de pagamento atual sabe fazer Pix Automático. Sem isto, só cartão. */
+  pixDisponivel?: boolean;
+}) {
   const { repo, biller } = deps;
+  const pixDisponivel = deps.pixDisponivel ?? false;
+
+  async function status(churchId: string): Promise<ChurchSelfPaymentStatus> {
+    return { ...(await repo.getStatus(churchId)), pixDisponivel };
+  }
+
+  /** A forma pedida, recusando o Pix quando o provedor não o oferece. */
+  function formaValida(method: unknown): PaymentMethod {
+    const parsed = methodSchema.safeParse(method ?? "card");
+    if (!parsed.success) throw new AppError("validation_error", "Escolha cartão ou Pix Automático.");
+    if (parsed.data === "pix_automatico" && !pixDisponivel) {
+      throw new AppError("validation_error", "O Pix Automático ainda não está disponível. Use o cartão de crédito.");
+    }
+    return parsed.data;
+  }
 
   return {
     getStatus(churchId: string): Promise<ChurchSelfPaymentStatus> {
-      return repo.getStatus(churchId);
+      return status(churchId);
+    },
+
+    /**
+     * Recomeça o pagamento de uma mensalidade que ficou sem concluir: o QR Code
+     * do Pix venceu, a pessoa quer trocar de forma antes de pagar, ou a
+     * autorização foi cancelada por mudança de valor. O banco confere quem
+     * pede e recusa a troca de forma com uma cobrança recorrente viva.
+     */
+    async retomar(
+      churchId: string,
+      method: unknown,
+      options: { successUrl?: string } = {},
+    ): Promise<ResultadoDoPagamento> {
+      const forma = formaValida(method);
+      const atual = await repo.getStatus(churchId);
+      if (!atual.account || !isSelfPaymentBillable(atual.sponsorshipStatus)) {
+        throw new AppError("validation_error", "Cadastre primeiro quem paga a mensalidade.");
+      }
+      if (atual.sponsorshipStatus === "active" && !atual.needsAuthorization) {
+        throw new AppError("validation_error", "A mensalidade já está sendo paga.");
+      }
+      // Trocar de forma com algo pendente: primeiro encerra o pendente, depois grava a forma.
+      if (atual.paymentMethod !== forma && !atual.needsAuthorization) {
+        throw new AppError(
+          "validation_error",
+          "Para trocar a forma de pagamento, conclua ou aguarde vencer a cobrança que está aberta.",
+        );
+      }
+      const accountId = await repo.setPaymentMethod(churchId, forma);
+      const { invoiceUrl, pix } = await biller.restartSelfPayment(accountId, options);
+      return { status: await status(churchId), invoiceUrl, pix: pix ?? null };
     },
 
     /**
@@ -100,19 +187,22 @@ export function createChurchSelfPaymentService(deps: { repo: ChurchSelfPaymentRe
     async enable(
       churchId: string,
       input: unknown,
-      options: { successUrl?: string } = {},
-    ): Promise<{ status: ChurchSelfPaymentStatus; invoiceUrl: string | null }> {
+      options: { successUrl?: string; method?: unknown } = {},
+    ): Promise<ResultadoDoPagamento> {
+      const forma = formaValida(options.method);
       const parsed = enableSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
 
       const account = await repo.enable({ churchId, ...parsed.data });
+      // Conta já com cobrança recorrente viva não troca de forma por aqui (o banco recusaria).
+      if (!account.gateway_subscription_id) await repo.setPaymentMethod(churchId, forma);
       // A assinatura é no cartão: o provedor devolve a página onde o cartão é
       // digitado, e é para lá que a pessoa vai em seguida.
-      const { invoiceUrl } = await biller.syncBilling(account.id, {
+      const { invoiceUrl, pix } = await biller.syncBilling(account.id, {
         createIfMissing: true,
         ...(options.successUrl ? { successUrl: options.successUrl } : {}),
       });
-      return { status: await repo.getStatus(churchId), invoiceUrl };
+      return { status: await status(churchId), invoiceUrl, pix: pix ?? null };
     },
 
     async setAceitaPatrocinio(churchId: string, aceita: unknown): Promise<void> {

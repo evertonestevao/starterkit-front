@@ -48,18 +48,23 @@ const STATUS_ATIVO: ChurchSelfPaymentStatus = {
   aceitaPatrocinio: true,
   amountCents: 3990,
   openInvoiceUrl: null,
+  paymentMethod: "card",
+  needsAuthorization: false,
+  pixDisponivel: false,
 };
 
-function build() {
+function build(pixDisponivel = false) {
   const repo: ChurchSelfPaymentRepository = {
     getStatus: vi.fn(async () => STATUS_ATIVO),
     enable: vi.fn(async () => ACCOUNT),
+    setPaymentMethod: vi.fn(async () => ACCOUNT.id),
     setAceitaPatrocinio: vi.fn(async () => {}),
   };
   const biller: SelfPaymentBiller = {
     syncBilling: vi.fn(async () => ({ invoiceUrl: null, syncPending: false })),
+    restartSelfPayment: vi.fn(async () => ({ invoiceUrl: null, syncPending: false })),
   };
-  return { repo, biller, service: createChurchSelfPaymentService({ repo, biller }) };
+  return { repo, biller, service: createChurchSelfPaymentService({ repo, biller, pixDisponivel }) };
 }
 
 const INPUT_VALIDO = {
@@ -154,5 +159,98 @@ describe("setAceitaPatrocinio", () => {
     const err = await erroDe(service.setAceitaPatrocinio(CHURCH, "sim"));
     expect(isAppError(err) && err.code).toBe("validation_error");
     expect(repo.setAceitaPatrocinio).not.toHaveBeenCalled();
+  });
+});
+
+describe("forma de pagamento", () => {
+  const PIX = { payload: "00020126...", expiresAt: "2026-10-08T15:00:00.000Z" };
+
+  it("sem escolher, é cartão", async () => {
+    const { repo, service } = build();
+    await service.enable(CHURCH, INPUT_VALIDO);
+    expect(repo.setPaymentMethod).toHaveBeenCalledWith(CHURCH, "card");
+  });
+
+  it("Pix Automático: grava a forma e devolve o QR Code", async () => {
+    const { repo, biller, service } = build(true);
+    vi.mocked(biller.syncBilling).mockResolvedValueOnce({ invoiceUrl: null, syncPending: false, pix: PIX });
+    const r = await service.enable(CHURCH, INPUT_VALIDO, { method: "pix_automatico" });
+    expect(repo.setPaymentMethod).toHaveBeenCalledWith(CHURCH, "pix_automatico");
+    expect(r.pix).toEqual(PIX);
+    expect(r.invoiceUrl).toBeNull();
+    expect(r.status.pixDisponivel).toBe(true);
+  });
+
+  it("Pix pedido quando o provedor não oferece é recusado antes de gravar qualquer coisa", async () => {
+    const { repo, biller, service } = build(false);
+    const err = await erroDe(service.enable(CHURCH, INPUT_VALIDO, { method: "pix_automatico" }));
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(repo.enable).not.toHaveBeenCalled();
+    expect(biller.syncBilling).not.toHaveBeenCalled();
+  });
+
+  it("forma desconhecida é recusada", async () => {
+    const { repo, service } = build(true);
+    const err = await erroDe(service.enable(CHURCH, INPUT_VALIDO, { method: "boleto" }));
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(repo.enable).not.toHaveBeenCalled();
+  });
+
+  it("conta que já tem cobrança recorrente não troca de forma no recadastro", async () => {
+    const { repo, service } = build(true);
+    vi.mocked(repo.enable).mockResolvedValueOnce({ ...ACCOUNT, gateway_subscription_id: "sub_1" });
+    await service.enable(CHURCH, INPUT_VALIDO, { method: "pix_automatico" });
+    expect(repo.setPaymentMethod).not.toHaveBeenCalled();
+  });
+});
+
+describe("retomar", () => {
+  const PIX = { payload: "00020126...", expiresAt: null };
+
+  it("QR Code vencido: gera outro na mesma forma", async () => {
+    const { repo, biller, service } = build(true);
+    vi.mocked(repo.getStatus).mockResolvedValue({ ...STATUS_ATIVO, paymentMethod: "pix_automatico" });
+    vi.mocked(biller.restartSelfPayment).mockResolvedValueOnce({ invoiceUrl: null, syncPending: false, pix: PIX });
+    const r = await service.retomar(CHURCH, "pix_automatico", { successUrl: "https://app.test/volta" });
+    expect(biller.restartSelfPayment).toHaveBeenCalledWith(ACCOUNT.id, { successUrl: "https://app.test/volta" });
+    expect(r.pix).toEqual(PIX);
+  });
+
+  it("valor mudou (sem cobrança no provedor): pode escolher a outra forma", async () => {
+    const { repo, biller, service } = build(true);
+    vi.mocked(repo.getStatus).mockResolvedValue({
+      ...STATUS_ATIVO,
+      sponsorshipStatus: "active",
+      paymentMethod: "pix_automatico",
+      needsAuthorization: true,
+    });
+    await service.retomar(CHURCH, "card");
+    expect(repo.setPaymentMethod).toHaveBeenCalledWith(CHURCH, "card");
+    expect(biller.restartSelfPayment).toHaveBeenCalled();
+  });
+
+  it("quem já está em dia não recomeça", async () => {
+    const { repo, biller, service } = build(true);
+    vi.mocked(repo.getStatus).mockResolvedValue({ ...STATUS_ATIVO, sponsorshipStatus: "active" });
+    const err = await erroDe(service.retomar(CHURCH, "card"));
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(biller.restartSelfPayment).not.toHaveBeenCalled();
+  });
+
+  it("com cobrança aberta numa forma, não troca para a outra", async () => {
+    const { repo, biller, service } = build(true);
+    vi.mocked(repo.getStatus).mockResolvedValue({ ...STATUS_ATIVO, paymentMethod: "card" });
+    const err = await erroDe(service.retomar(CHURCH, "pix_automatico"));
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(repo.setPaymentMethod).not.toHaveBeenCalled();
+    expect(biller.restartSelfPayment).not.toHaveBeenCalled();
+  });
+
+  it("sem cadastro de quem paga, não há o que retomar", async () => {
+    const { repo, biller, service } = build(true);
+    vi.mocked(repo.getStatus).mockResolvedValue({ ...STATUS_ATIVO, account: null, sponsorshipStatus: null });
+    const err = await erroDe(service.retomar(CHURCH, "card"));
+    expect(isAppError(err) && err.code).toBe("validation_error");
+    expect(biller.restartSelfPayment).not.toHaveBeenCalled();
   });
 });

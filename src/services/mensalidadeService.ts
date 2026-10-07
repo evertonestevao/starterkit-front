@@ -37,7 +37,10 @@ export interface MensalidadeRepository {
 
 /** Quem atualiza o valor no provedor de pagamento — o `SponsorService` de sistema. */
 export interface MensalidadeBiller {
-  syncBilling(accountId: string, options: { createIfMissing: boolean }): Promise<{ syncPending: boolean }>;
+  syncBilling(
+    accountId: string,
+    options: { createIfMissing: boolean },
+  ): Promise<{ syncPending: boolean; reauthorizationNeeded?: boolean }>;
 }
 
 const motivoSchema = z.string().trim().min(3, "Informe o motivo do valor diferente").max(200, "Motivo longo demais");
@@ -57,15 +60,17 @@ export function createMensalidadeService(deps: {
 
     /**
      * Define o valor próprio de uma igreja, ou a devolve ao padrão (`valor`
-     * vazio). Se ela já paga, o valor é atualizado no provedor na hora; se
-     * isso falhar, o preço fica gravado e a cobrança é acertada pelo job de
-     * sincronização — `cobrancaPendente` avisa a tela.
+     * vazio). Se ela já paga no cartão, o valor é atualizado no provedor na
+     * hora; por Pix Automático (valor fixo), a autorização é cancelada e a
+     * igreja autoriza de novo — `precisaAutorizarDeNovo`. Se o provedor falhar,
+     * o preço fica gravado e a cobrança é acertada pelo job de sincronização —
+     * `cobrancaPendente` avisa a tela.
      */
     async definir(input: {
       churchId: unknown;
       valor: unknown;
       motivo: unknown;
-    }): Promise<{ cobrancaPendente: boolean }> {
+    }): Promise<{ cobrancaPendente: boolean; precisaAutorizarDeNovo: boolean }> {
       const churchId = z.uuid("Igreja inválida").safeParse(input.churchId);
       if (!churchId.success) throw new AppError("validation_error", "Igreja inválida.");
 
@@ -88,13 +93,15 @@ export function createMensalidadeService(deps: {
       }
 
       const accountId = await repo.definir(churchId.data, amountCents, motivo);
-      if (!accountId) return { cobrancaPendente: false };
+      if (!accountId) return { cobrancaPendente: false, precisaAutorizarDeNovo: false };
       try {
-        const { syncPending } = await biller.syncBilling(accountId, { createIfMissing: false });
-        return { cobrancaPendente: syncPending };
+        const r = await biller.syncBilling(accountId, { createIfMissing: false });
+        // Pix Automático é de valor fixo: a autorização antiga foi cancelada e
+        // a igreja precisa autorizar de novo, já no valor novo.
+        return { cobrancaPendente: r.syncPending, precisaAutorizarDeNovo: r.reauthorizationNeeded === true };
       } catch (err) {
         log.error("[mensalidade] falha ao atualizar o valor no provedor", err);
-        return { cobrancaPendente: true };
+        return { cobrancaPendente: true, precisaAutorizarDeNovo: false };
       }
     },
   };

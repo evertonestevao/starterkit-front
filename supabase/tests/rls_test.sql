@@ -8471,6 +8471,76 @@ begin
 end $$;
 reset role;
 
+-- Forma de pagamento (migration 20261008120000): quem administra a igreja
+-- escolhe, e só enquanto não há cobrança recorrente viva.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v uuid;
+begin
+  v := public.definir_forma_mensalidade('acacacac-0000-4000-8000-0000000000d2', 'pix_automatico');
+  if v <> '8b8b8b8b-0000-4000-8000-0000000000f1' then raise exception 'FALHA forma: nao devolveu a conta da igreja'; end if;
+  begin
+    perform public.definir_forma_mensalidade('acacacac-0000-4000-8000-0000000000d2', 'boleto');
+    raise exception 'FALHA forma: aceitou forma desconhecida';
+  exception when sqlstate '22023' then null;
+  end;
+  -- Direto na tabela, nem a forma nem a autorização do provedor.
+  begin
+    update public.sponsor_accounts set payment_method = 'card', gateway_authorization_id = 'x'
+     where id = '8b8b8b8b-0000-4000-8000-0000000000f1';
+    raise exception 'FALHA forma: a igreja escreveu a forma direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  -- Igreja sem cadastro de pagamento não tem o que escolher.
+  begin
+    perform public.definir_forma_mensalidade('acacacac-0000-4000-8000-0000000000d1', 'card');
+    raise exception 'FALHA forma: escolheu forma na igreja de outra conta';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+do $$
+declare v_quem text;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    begin
+      perform public.definir_forma_mensalidade('acacacac-0000-4000-8000-0000000000d2', 'card');
+      raise exception 'FALHA forma: % trocou a forma de pagamento da congregacao', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+  end loop;
+end $$;
+reset role;
+do $$
+begin
+  if (select payment_method from public.sponsor_accounts where id = '8b8b8b8b-0000-4000-8000-0000000000f1') <> 'pix_automatico' then
+    raise exception 'FALHA forma: a forma escolhida nao ficou gravada';
+  end if;
+end $$;
+-- Com a cobrança recorrente viva, não troca (ficariam duas cobranças).
+update public.sponsor_accounts set gateway = 'fake', gateway_subscription_id = 'sub_rls_pix', gateway_authorization_id = 'aut_rls_pix'
+ where id = '8b8b8b8b-0000-4000-8000-0000000000f1';
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+begin
+  begin
+    perform public.definir_forma_mensalidade('acacacac-0000-4000-8000-0000000000d2', 'card');
+    raise exception 'FALHA forma: trocou de forma com cobranca recorrente viva';
+  exception when sqlstate 'P0001' then null;
+  end;
+  -- Reafirmar a mesma forma não é troca.
+  perform public.definir_forma_mensalidade('acacacac-0000-4000-8000-0000000000d2', 'pix_automatico');
+end $$;
+reset role;
+
 set local role anon;
 do $$
 begin

@@ -10,7 +10,11 @@ function build(over: Partial<MensalidadeRepository> = {}) {
     definir: vi.fn(async () => null),
     ...over,
   } as unknown as MensalidadeRepository;
-  const biller = { syncBilling: vi.fn(async () => ({ syncPending: false })) };
+  const biller = {
+    syncBilling: vi.fn(async (): Promise<{ syncPending: boolean; reauthorizationNeeded?: boolean }> => ({
+      syncPending: false,
+    })),
+  };
   const log = { error: vi.fn() };
   return { repo, biller, log, svc: createMensalidadeService({ repo, biller, log }) };
 }
@@ -29,7 +33,7 @@ describe("mensalidadeService.definir", () => {
     expect(repo.definir).toHaveBeenCalledWith(IGREJA, 500, "Igreja de teste");
     // A igreja ainda não paga: não há cobrança para atualizar.
     expect(biller.syncBilling).not.toHaveBeenCalled();
-    expect(r).toEqual({ cobrancaPendente: false });
+    expect(r).toEqual({ cobrancaPendente: false, precisaAutorizarDeNovo: false });
   });
 
   it("valor em branco devolve a igreja ao padrão, sem pedir motivo", async () => {
@@ -74,5 +78,12 @@ describe("mensalidadeService.definir", () => {
 
     biller.syncBilling.mockResolvedValueOnce({ syncPending: true });
     expect((await svc.definir({ churchId: IGREJA, valor: "49,90", motivo: "Desconto" })).cobrancaPendente).toBe(true);
+  });
+
+  it("igreja que paga por Pix Automático precisa autorizar de novo", async () => {
+    const { svc, biller } = build({ definir: vi.fn(async () => CONTA) });
+    biller.syncBilling.mockResolvedValueOnce({ syncPending: false, reauthorizationNeeded: true });
+    const r = await svc.definir({ churchId: IGREJA, valor: "49,90", motivo: "Desconto de parceria" });
+    expect(r).toEqual({ cobrancaPendente: false, precisaAutorizarDeNovo: true });
   });
 });

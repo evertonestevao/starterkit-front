@@ -185,9 +185,7 @@ function makeWorld(
       if (live) throw new Error("duplicado");
       // Mesma regra da RPC: é o primeiro patrocínio da conta quem ocupa vaga.
       const primeiro = !sponsorships.some(
-        (s) =>
-          s.sponsor_id === conta.id &&
-          ["pending_payment", "active", "cancel_scheduled"].includes(s.status),
+        (s) => s.sponsor_id === conta.id && ["pending_payment", "active", "cancel_scheduled"].includes(s.status),
       );
       if (primeiro) {
         const limite = options.vagas?.[churchId];
@@ -249,9 +247,7 @@ function makeWorld(
       return account;
     },
     async findAccountBySubscription(gateway, subscriptionId) {
-      return account?.gateway === gateway && account.gateway_subscription_id === subscriptionId
-        ? account
-        : null;
+      return account?.gateway === gateway && account.gateway_subscription_id === subscriptionId ? account : null;
     },
     async updateAccountBilling(_id, patch) {
       if (account) account = { ...account, ...patch } as SponsorAccount;
@@ -259,7 +255,13 @@ function makeWorld(
     async listBillableSponsorships() {
       return sponsorships
         .filter((s) => s.status === "active" || s.status === "pending_payment")
-        .map((s) => ({ id: s.id, church_id: s.church_id, company_id: s.company_id, status: s.status, created_at: s.created_at }));
+        .map((s) => ({
+          id: s.id,
+          church_id: s.church_id,
+          company_id: s.company_id,
+          status: s.status,
+          created_at: s.created_at,
+        }));
     },
     async activatePendingSponsorships(_id, at) {
       let n = 0;
@@ -286,15 +288,10 @@ function makeWorld(
       if (row) Object.assign(row, { status: "canceled", canceled_at: at, ends_at: at });
     },
     async findCharge(gateway: string, gatewayPaymentId: string) {
-      return (
-        charges.find((c) => c.gateway === gateway && c.gateway_payment_id === gatewayPaymentId) ??
-        null
-      );
+      return charges.find((c) => c.gateway === gateway && c.gateway_payment_id === gatewayPaymentId) ?? null;
     },
     async hasPaidChargeOnOrAfter(sponsorId: string, dueDate: string) {
-      return charges.some(
-        (c) => c.sponsor_id === sponsorId && c.status === "paid" && c.due_date >= dueDate,
-      );
+      return charges.some((c) => c.sponsor_id === sponsorId && c.status === "paid" && c.due_date >= dueDate);
     },
     async upsertCharge(input: ChargeUpsert) {
       const existing = charges.find(
@@ -330,7 +327,14 @@ function makeWorld(
       return items.filter((i) => i.chargeId === chargeId).length;
     },
     async insertChargeItems(rows) {
-      items.push(...rows.map((r) => ({ chargeId: r.chargeId, sponsorshipId: r.sponsorshipId, position: r.position, amountCents: r.amountCents })));
+      items.push(
+        ...rows.map((r) => ({
+          chargeId: r.chargeId,
+          sponsorshipId: r.sponsorshipId,
+          position: r.position,
+          amountCents: r.amountCents,
+        })),
+      );
     },
     async listAccountsNeedingSync() {
       return account && account.billing_sync_status !== "synced" ? [account.id] : [];
@@ -524,9 +528,7 @@ describe("cadastro", () => {
   it("não deixa cadastrar duas vezes", async () => {
     const world = makeWorld();
     await signUp(world);
-    await expect(signUp(world)).rejects.toSatisfy(
-      (err: unknown) => isAppError(err) && err.code === "conflict",
-    );
+    await expect(signUp(world)).rejects.toSatisfy((err: unknown) => isAppError(err) && err.code === "conflict");
   });
 });
 
@@ -549,9 +551,7 @@ describe("primeiro patrocínio", () => {
       security_hold_at: null,
     });
     expect(world.charges).toHaveLength(1);
-    expect(world.items).toEqual([
-      expect.objectContaining({ position: 1, amountCents: 3990 }),
-    ]);
+    expect(world.items).toEqual([expect.objectContaining({ position: 1, amountCents: 3990 })]);
     expect(result.billingSyncPending).toBe(false);
     expect(world.audits[0]).toMatchObject({ companyId: "co-a", action: "sponsorship.started" });
   });
@@ -878,9 +878,7 @@ describe("assinatura pública (sem login)", () => {
       billed_amount_cents: 3990,
     });
     expect(world.sponsorships).toHaveLength(1);
-    expect(world.termsAccepted).toEqual([
-      { userId: "user-maria@exemplo.com", emailConsent: true, ip: "203.0.113.7" },
-    ]);
+    expect(world.termsAccepted).toEqual([{ userId: "user-maria@exemplo.com", emailConsent: true, ip: "203.0.113.7" }]);
     expect(world.emailsSent).toHaveLength(1);
     expect(world.emailsSent[0]).toMatchObject({ to: "maria@exemplo.com", isNewSponsor: true });
     expect(world.audits[0]).toMatchObject({ action: "sponsorship.started" });
@@ -912,9 +910,9 @@ describe("assinatura pública (sem login)", () => {
 
   it("recusa dados inválidos antes de tocar no provedor", async () => {
     const world = makeWorld();
-    await expect(
-      world.service.startPublicSponsorship({ ...publicInput, document: "111" }, evidence),
-    ).rejects.toSatisfy((err: unknown) => isAppError(err) && err.code === "validation_error");
+    await expect(world.service.startPublicSponsorship({ ...publicInput, document: "111" }, evidence)).rejects.toSatisfy(
+      (err: unknown) => isAppError(err) && err.code === "validation_error",
+    );
     await expect(
       world.service.startPublicSponsorship({ ...publicInput, acceptTerms: false }, evidence),
     ).rejects.toThrow();
@@ -976,9 +974,7 @@ describe("login por link (sem senha)", () => {
   it("email SEM conta: nada é gerado nem enviado, e a tela diz o mesmo", async () => {
     const world = makeWorld();
 
-    await expect(
-      world.service.requestAccessLink("desconhecido@exemplo.com", evidence),
-    ).resolves.toBeUndefined();
+    await expect(world.service.requestAccessLink("desconhecido@exemplo.com", evidence)).resolves.toBeUndefined();
 
     // Importante: o provedor CRIA usuário ao gerar link, então nem chegamos
     // a pedir um — senão qualquer um criaria contas testando emails.
@@ -998,10 +994,7 @@ describe("login por link (sem senha)", () => {
     const consumed: string[] = [];
     const world = makeWorld({ publicLimiter: { consume: async (k: string) => void consumed.push(k) } });
     await world.service.requestAccessLink("maria@exemplo.com", evidence);
-    expect(consumed).toEqual([
-      "sponsor-access-link:maria@exemplo.com",
-      "sponsor-access-link-ip:203.0.113.7",
-    ]);
+    expect(consumed).toEqual(["sponsor-access-link:maria@exemplo.com", "sponsor-access-link-ip:203.0.113.7"]);
   });
 });
 
@@ -1107,9 +1100,7 @@ describe("webhook fora de ordem", () => {
     await world.service.startSponsorship(A, USER);
 
     await world.service.applyBillingEvent(cobranca(world, { paymentId: "pay-x", status: "paid" }));
-    const resultado = await world.service.applyBillingEvent(
-      cobranca(world, { paymentId: "pay-x", status: "overdue" }),
-    );
+    const resultado = await world.service.applyBillingEvent(cobranca(world, { paymentId: "pay-x", status: "overdue" }));
 
     expect(resultado).toBe("stale");
     expect(world.charges.find((c) => c.gateway_payment_id === "pay-x")?.status).toBe("paid");
@@ -1178,8 +1169,14 @@ describe("autopatrocínio: conta com is_self_payment usa valor fixo, não a tabe
     updated_at: "2026-09-24T00:00:00Z",
   };
 
-  function buildMinimal(getAutopatrocinioAmountCents?: () => Promise<number>) {
-    const billable = [{ id: "sp-1", church_id: "church-1", company_id: "co-1", status: "pending_payment" as const, created_at: "2026-09-24T00:00:00Z" }];
+  function buildMinimal(
+    getAutopatrocinioAmountCents?: () => Promise<number>,
+    conta: Partial<SponsorAccount> = {},
+    situacao: "pending_payment" | "active" = "pending_payment",
+  ) {
+    const billable = [
+      { id: "sp-1", church_id: "church-1", company_id: "co-1", status: situacao, created_at: "2026-09-24T00:00:00Z" },
+    ];
     const provider: RecurringBillingProvider = {
       name: "fake",
       createCustomer: vi.fn(async () => ({ customerId: "cus-1" })),
@@ -1191,12 +1188,19 @@ describe("autopatrocínio: conta com is_self_payment usa valor fixo, não a tabe
       })) as unknown as RecurringBillingProvider["createSubscription"],
       updateSubscriptionAmount: vi.fn(async () => {}),
       cancelSubscription: vi.fn(async () => {}),
+      createPixAutomatic: vi.fn(async () => ({
+        authorizationId: "aut-1",
+        subscriptionId: "sub-pix-1",
+        qrPayload: "00020126PIX",
+        expiresAt: "2026-10-08T15:00:00.000Z",
+      })),
+      cancelPixAutomatic: vi.fn(async () => {}),
       parseWebhook: vi.fn(async () => {
         throw new Error("não usado neste teste");
       }),
     };
     const store: Partial<SponsorBillingStore> = {
-      getAccount: vi.fn(async () => SELF_ACCOUNT),
+      getAccount: vi.fn(async () => ({ ...SELF_ACCOUNT, ...conta })),
       listBillableSponsorships: vi.fn(async () => billable),
       listPriceTiers: vi.fn(async () => TIERS),
       updateAccountBilling: vi.fn(async () => {}),
@@ -1229,5 +1233,119 @@ describe("autopatrocínio: conta com is_self_payment usa valor fixo, não a tabe
 
     expect(isAppError(err) && err.code).toBe("internal_error");
     expect(provider.createSubscription).not.toHaveBeenCalled();
+  });
+
+  describe("Pix Automático", () => {
+    const PIX_VIVO = {
+      payment_method: "pix_automatico" as const,
+      gateway: "fake",
+      gateway_customer_id: "cus-1",
+      gateway_subscription_id: "sub-pix-1",
+      gateway_authorization_id: "aut-1",
+      billed_amount_cents: 8990,
+    };
+
+    it("cria a autorização no valor da igreja, guarda os dois ids e devolve o QR Code", async () => {
+      const { service, provider, store } = buildMinimal(async () => 8990, { payment_method: "pix_automatico" });
+
+      const r = await service.syncBilling("self-1", { createIfMissing: true });
+
+      expect(provider.createPixAutomatic).toHaveBeenCalledWith(
+        expect.objectContaining({ customerId: "cus-1", amountCents: 8990, description: "Mensalidade Conecta Igreja" }),
+      );
+      expect(provider.createSubscription).not.toHaveBeenCalled();
+      expect(store.updateAccountBilling).toHaveBeenCalledWith(
+        "self-1",
+        expect.objectContaining({ gateway_subscription_id: "sub-pix-1", gateway_authorization_id: "aut-1" }),
+      );
+      expect(r.pix).toEqual({ payload: "00020126PIX", expiresAt: "2026-10-08T15:00:00.000Z" });
+      expect(r.invoiceUrl).toBeNull();
+    });
+
+    it("provedor sem Pix Automático recusa com mensagem clara, sem cair no cartão", async () => {
+      const { service, provider } = buildMinimal(async () => 8990, { payment_method: "pix_automatico" });
+      delete provider.createPixAutomatic;
+
+      const err = await service.syncBilling("self-1", { createIfMissing: true }).catch((e: unknown) => e);
+
+      expect(isAppError(err) && err.code).toBe("validation_error");
+      expect(provider.createSubscription).not.toHaveBeenCalled();
+    });
+
+    it("valor mudou: cancela a autorização (valor fixo) e pede uma nova, em vez de trocar o valor", async () => {
+      const { service, provider, store } = buildMinimal(async () => 4990, PIX_VIVO, "active");
+
+      const r = await service.syncBilling("self-1", { createIfMissing: false });
+
+      expect(provider.cancelPixAutomatic).toHaveBeenCalledWith("aut-1");
+      expect(provider.updateSubscriptionAmount).not.toHaveBeenCalled();
+      expect(store.updateAccountBilling).toHaveBeenCalledWith(
+        "self-1",
+        expect.objectContaining({ gateway_subscription_id: null, gateway_authorization_id: null }),
+      );
+      expect(r).toMatchObject({ reauthorizationNeeded: true, syncPending: false });
+    });
+
+    it("se o provedor não deixar cancelar, nada é apagado e fica pendente", async () => {
+      const { service, provider, store } = buildMinimal(async () => 4990, PIX_VIVO, "active");
+      vi.mocked(provider.cancelPixAutomatic!).mockRejectedValueOnce(new Error("provedor fora"));
+
+      const r = await service.syncBilling("self-1", { createIfMissing: false });
+
+      expect(r).toMatchObject({ syncPending: true });
+      expect(store.updateAccountBilling).toHaveBeenCalledWith("self-1", { billing_sync_status: "pending" });
+    });
+
+    it("no cartão, a mudança de valor continua sendo só uma atualização", async () => {
+      const { service, provider } = buildMinimal(
+        async () => 4990,
+        { ...PIX_VIVO, payment_method: "card", gateway_authorization_id: null, gateway_subscription_id: "sub-1" },
+        "active",
+      );
+
+      const r = await service.syncBilling("self-1", { createIfMissing: false });
+
+      expect(provider.updateSubscriptionAmount).toHaveBeenCalledWith("sub-1", 4990);
+      expect(provider.cancelPixAutomatic).not.toHaveBeenCalled();
+      expect(r.reauthorizationNeeded).toBeUndefined();
+    });
+  });
+
+  describe("restartSelfPayment", () => {
+    it("QR Code vencido: cancela a autorização pendente e cria outra", async () => {
+      const { service, provider } = buildMinimal(async () => 8990, {
+        payment_method: "pix_automatico",
+        gateway: "fake",
+        gateway_customer_id: "cus-1",
+        gateway_subscription_id: "sub-velha",
+        gateway_authorization_id: "aut-velha",
+      });
+
+      await service.restartSelfPayment("self-1");
+
+      expect(provider.cancelPixAutomatic).toHaveBeenCalledWith("aut-velha");
+    });
+
+    it("quem já está pagando não tem a recorrência derrubada", async () => {
+      const { service, provider } = buildMinimal(
+        async () => 8990,
+        { gateway: "fake", gateway_subscription_id: "sub-1" },
+        "active",
+      );
+
+      const err = await service.restartSelfPayment("self-1").catch((e: unknown) => e);
+
+      expect(isAppError(err) && err.code).toBe("validation_error");
+      expect(provider.cancelSubscription).not.toHaveBeenCalled();
+    });
+
+    it("só vale para a mensalidade da igreja, nunca para a conta de um patrocinador", async () => {
+      const { service, provider } = buildMinimal(async () => 8990, { is_self_payment: false });
+
+      const err = await service.restartSelfPayment("self-1").catch((e: unknown) => e);
+
+      expect(isAppError(err) && err.code).toBe("not_found");
+      expect(provider.createSubscription).not.toHaveBeenCalled();
+    });
   });
 });

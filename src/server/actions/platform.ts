@@ -223,7 +223,7 @@ export async function definirMensalidadeAction(
   try {
     await requirePlatformStaff();
     const valor = String(formData.get("valor") ?? "");
-    const { cobrancaPendente } = await (
+    const { cobrancaPendente, precisaAutorizarDeNovo } = await (
       await getMensalidadeService()
     ).definir({
       churchId: String(formData.get("churchId") ?? ""),
@@ -234,7 +234,11 @@ export async function definirMensalidadeAction(
     const base =
       valor.trim() === "" ? "A igreja voltou ao valor padrão." : "Valor da mensalidade salvo para esta igreja.";
     return {
-      success: cobrancaPendente ? `${base} A cobrança que já existe será ajustada na próxima sincronização.` : base,
+      success: precisaAutorizarDeNovo
+        ? `${base} Ela paga por Pix Automático: o débito antigo foi cancelado e a igreja precisa autorizar de novo, na tela da Mensalidade.`
+        : cobrancaPendente
+          ? `${base} A cobrança que já existe será ajustada na próxima sincronização.`
+          : base,
     };
   } catch (err) {
     return toActionError(err);

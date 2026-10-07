@@ -82,10 +82,23 @@ export interface BillableSponsorshipRow {
   created_at: string;
 }
 
+/** O que a sincronização da cobrança devolve a quem a pediu. */
+export interface SyncBillingResult {
+  /** Página do provedor onde o cartão é informado, quando é o caso. */
+  invoiceUrl: string | null;
+  /** O provedor não recebeu a mudança; o job de sincronização tenta de novo. */
+  syncPending: boolean;
+  /** Pix Automático: o QR Code que o pagador lê para pagar e autorizar. */
+  pix?: { payload: string; expiresAt: string | null } | null;
+  /** Pix Automático com valor alterado: a autorização foi cancelada e precisa ser refeita. */
+  reauthorizationNeeded?: boolean;
+}
+
 export interface AccountBillingPatch {
   gateway?: string | null;
   gateway_customer_id?: string | null;
   gateway_subscription_id?: string | null;
+  gateway_authorization_id?: string | null;
   billing_status?: SponsorAccount["billing_status"];
   billed_amount_cents?: number | null;
   billing_sync_status?: SponsorAccount["billing_sync_status"];
@@ -288,10 +301,24 @@ export function createSponsorService(deps: SponsorServiceDeps) {
    *   conta para o provedor padrão atual.
    * - Com assinatura e valor diferente: atualiza. Falha vira sync pendente.
    */
+  /**
+   * Encerra a recorrência da conta no provedor: a autorização do Pix
+   * Automático (que leva a assinatura junto), ou a assinatura do cartão.
+   */
+  async function encerrarRecorrencia(account: SponsorAccount): Promise<void> {
+    if (!account.gateway) return;
+    const provider = resolveProvider(account.gateway);
+    if (account.gateway_authorization_id && provider.cancelPixAutomatic) {
+      await provider.cancelPixAutomatic(account.gateway_authorization_id);
+      return;
+    }
+    if (account.gateway_subscription_id) await provider.cancelSubscription(account.gateway_subscription_id);
+  }
+
   async function syncBilling(
     accountId: string,
     options: { createIfMissing: boolean; successUrl?: string },
-  ): Promise<{ invoiceUrl: string | null; syncPending: boolean }> {
+  ): Promise<SyncBillingResult> {
     const account = await store.getAccount(accountId);
     if (!account) {
       throw new AppError("not_found", "Conta de patrocinador não encontrada.");
@@ -304,7 +331,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
     if (billable.length === 0) {
       if (account.gateway_subscription_id && account.gateway) {
         try {
-          await resolveProvider(account.gateway).cancelSubscription(account.gateway_subscription_id);
+          await encerrarRecorrencia(account);
         } catch (err) {
           log.error("[sponsor] falha ao encerrar assinatura", { accountId, err });
           await store.updateAccountBilling(accountId, { billing_sync_status: "pending" });
@@ -312,6 +339,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         }
         await store.updateAccountBilling(accountId, {
           gateway_subscription_id: null,
+          gateway_authorization_id: null,
           billing_status: account.billing_status === "none" ? "none" : "canceled",
           billed_amount_cents: 0,
           billing_sync_status: "synced",
@@ -348,6 +376,39 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       }
 
       const dueDate = todayInBillingZone(now());
+
+      // Mensalidade da igreja por Pix Automático: em vez da assinatura no
+      // cartão, uma autorização. O que volta é o QR Code que a igreja lê no
+      // aplicativo do banco (paga o primeiro mês e autoriza os seguintes).
+      if (account.is_self_payment && account.payment_method === "pix_automatico") {
+        if (!provider.createPixAutomatic) {
+          throw new AppError(
+            "validation_error",
+            "O Pix Automático ainda não está disponível. Use o cartão de crédito.",
+          );
+        }
+        const pix = await provider.createPixAutomatic({
+          customerId,
+          amountCents: total,
+          startDate: dueDate,
+          description: `Mensalidade ${brand.name}`,
+          externalReference: account.id,
+        });
+        await store.updateAccountBilling(accountId, {
+          gateway: providerName,
+          gateway_subscription_id: pix.subscriptionId,
+          gateway_authorization_id: pix.authorizationId,
+          billed_amount_cents: total,
+          billing_sync_status: "synced",
+          billing_synced_at: syncedAt,
+          next_due_date: dueDate,
+        });
+        for (const event of pix.immediateEvents ?? []) {
+          await applyBillingEvent(event);
+        }
+        return { invoiceUrl: null, syncPending: false, pix: { payload: pix.qrPayload, expiresAt: pix.expiresAt } };
+      }
+
       const created = await provider.createSubscription({
         customerId,
         amountCents: total,
@@ -381,6 +442,27 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       return { invoiceUrl: null, syncPending: false };
     }
 
+    // Pix Automático: o pagador autorizou um valor FIXO, então não dá para só
+    // trocar o valor. A autorização antiga é cancelada e a igreja autoriza de
+    // novo, já no valor novo (a tela dela passa a pedir isso).
+    if (account.payment_method === "pix_automatico") {
+      try {
+        await encerrarRecorrencia(account);
+      } catch (err) {
+        log.error("[sponsor] falha ao cancelar a autorização de Pix para trocar o valor", { accountId, total, err });
+        await store.updateAccountBilling(accountId, { billing_sync_status: "pending" });
+        return { invoiceUrl: null, syncPending: true };
+      }
+      await store.updateAccountBilling(accountId, {
+        gateway_subscription_id: null,
+        gateway_authorization_id: null,
+        billed_amount_cents: 0,
+        billing_sync_status: "synced",
+        billing_synced_at: syncedAt,
+      });
+      return { invoiceUrl: null, syncPending: false, reauthorizationNeeded: true };
+    }
+
     try {
       await resolveProvider(account.gateway).updateSubscriptionAmount(account.gateway_subscription_id, total);
     } catch (err) {
@@ -395,6 +477,46 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       billing_synced_at: syncedAt,
     });
     return { invoiceUrl: null, syncPending: false };
+  }
+
+  /**
+   * Recomeça o pagamento da mensalidade de uma igreja: para quando a pessoa
+   * fechou a tela do QR Code (ele vence), ou quando a autorização foi
+   * cancelada por mudança de valor. O que estiver pendente no provedor é
+   * encerrado antes, para não sobrarem duas cobranças.
+   *
+   * Quem já está pagando não recomeça: a recorrência em vigor não é derrubada.
+   */
+  async function restartSelfPayment(
+    accountId: string,
+    options: { successUrl?: string } = {},
+  ): Promise<SyncBillingResult> {
+    const account = await store.getAccount(accountId);
+    if (!account || !account.is_self_payment) {
+      throw new AppError("not_found", "Mensalidade não encontrada.");
+    }
+    if (account.gateway_subscription_id) {
+      const billable = await store.listBillableSponsorships(accountId);
+      if (billable.some((row) => row.status === "active")) {
+        throw new AppError("validation_error", "A mensalidade já está sendo paga.");
+      }
+      try {
+        await encerrarRecorrencia(account);
+      } catch (err) {
+        log.error("[sponsor] falha ao encerrar a cobrança pendente da mensalidade", { accountId, err });
+        throw new AppError(
+          "payment_error",
+          "Não foi possível recomeçar o pagamento agora. Tente de novo em instantes.",
+          err,
+        );
+      }
+      await store.updateAccountBilling(accountId, {
+        gateway_subscription_id: null,
+        gateway_authorization_id: null,
+        billed_amount_cents: 0,
+      });
+    }
+    return syncBilling(accountId, { createIfMissing: true, ...options });
   }
 
   /**
@@ -515,6 +637,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
   return {
     applyBillingEvent,
     syncBilling,
+    restartSelfPayment,
 
     async getMyAccount(): Promise<SponsorAccount | null> {
       return repo.getMyAccount();

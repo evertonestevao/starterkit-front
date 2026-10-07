@@ -22,7 +22,7 @@ test("igreja sem patrocinador assume a mensalidade, some da lista de patrocinado
   await page.goto("/dashboard/mensalidade");
   await expect(page.getByText("R$ 89,90 por mês")).toBeVisible();
 
-  await page.getByRole("button", { name: "Pagar com cartão" }).click();
+  await page.getByRole("button", { name: "Cadastrar pagamento" }).click();
   await page.getByText("Pessoa (CPF)").click();
   await page.getByLabel("Nome do responsável").fill("Pastor E2E");
   await page.getByRole("textbox", { name: "CPF" }).fill("111.444.777-35");
@@ -65,4 +65,72 @@ test("igreja sem patrocinador assume a mensalidade, some da lista de patrocinado
   await expect(page.getByRole("button", { name: "Fechar a porta pra patrocinador" })).toBeVisible();
   await lp.reload();
   await expect(lp.getByText("Quem apoia esta página")).toBeVisible();
+});
+
+/**
+ * Pix Automático, com o provedor de teste (o único que o implementa por
+ * enquanto): a igreja escolhe a forma, vê o QR Code, e a tela muda para "em
+ * dia" quando o provedor avisa que o pagamento caiu. O provedor de teste não
+ * paga sozinho — o aviso é mandado aqui, como o provedor de verdade faria.
+ */
+test("igreja paga a mensalidade por Pix Automático: QR Code, aguardando e em dia", async ({ page, request }) => {
+  const sufixo = Date.now().toString(36);
+  await signupAndOnboard(page, {
+    email: uniqueEmail("pastor-pix-automatico"),
+    password: PASSWORD,
+    name: "Pastor Pix E2E",
+    company: `Igreja Pix Automático E2E ${sufixo}`,
+  });
+
+  await page.goto("/dashboard/mensalidade");
+  await page.getByRole("button", { name: "Cadastrar pagamento" }).click();
+  await page.getByText("Pix Automático", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "Gerar QR Code do Pix" })).toBeVisible();
+  await page.waitForTimeout(400); // a troca de cor da opção marcada é animada
+  await page.screenshot({ path: "prints-ebd/mensalidade-formas.png" });
+  await page.getByText("Pessoa (CPF)").click();
+  await page.getByLabel("Nome do responsável").fill("Pastor Pix E2E");
+  await page.getByRole("textbox", { name: "CPF" }).fill("111.444.777-35");
+  await page.getByLabel("Email de cobrança").fill(`cobranca-pix-${sufixo}@e2e.local`);
+  await page.getByRole("button", { name: "Gerar QR Code do Pix" }).click();
+
+  // O QR Code e o "copia e cola" aparecem na própria tela.
+  await expect(page.getByAltText("QR Code para autorizar o Pix Automático")).toBeVisible();
+  const copiaECola = (await page.getByLabel("Pix copia e cola").textContent()) ?? "";
+  expect(copiaECola).toMatch(/^FAKEPIX\|/);
+  await page.screenshot({ path: "prints-ebd/mensalidade-pix-qrcode.png" });
+
+  // Fechou a tela sem pagar: fica "aguardando", e dá para gerar outro QR Code.
+  await page.reload();
+  await expect(page.getByText(/aguardando o pagamento/)).toBeVisible();
+  await expect(page.getByText(/por Pix Automático/)).toBeVisible();
+  await page.getByRole("button", { name: "Gerar QR Code do Pix" }).click();
+  await expect(page.getByAltText("QR Code para autorizar o Pix Automático")).toBeVisible();
+  const novo = (await page.getByLabel("Pix copia e cola").textContent()) ?? "";
+  expect(novo).not.toBe(copiaECola);
+
+  // O provedor avisa que a cobrança foi paga (no fake, o copia e cola carrega a assinatura).
+  const [, subscriptionId, amountCents, dueDate] = novo.split("|");
+  const aviso = await request.post("/api/webhooks/sponsor-billing/fake", {
+    headers: { "x-fake-billing-token": "fake-billing-token", "content-type": "application/json" },
+    data: {
+      kind: "charge",
+      provider: "fake",
+      charge: {
+        paymentId: `fake_pay_e2e_${sufixo}`,
+        subscriptionId,
+        amountCents: Number(amountCents),
+        dueDate,
+        status: "paid",
+        paidAt: new Date().toISOString(),
+        invoiceUrl: null,
+      },
+    },
+  });
+  expect(aviso.ok()).toBe(true);
+
+  await page.getByRole("button", { name: "Já autorizei" }).click();
+  await expect(page.getByText(/Mensalidade de .+: em dia/)).toBeVisible();
+  await expect(page.getByText(/por Pix Automático/)).toBeVisible();
+  await page.screenshot({ path: "prints-ebd/mensalidade-pix-em-dia.png" });
 });

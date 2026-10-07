@@ -15,6 +15,9 @@ export type SponsorshipStatus = "pending_payment" | "active" | "cancel_scheduled
 
 export type SponsorChargeStatus = "pending" | "paid" | "overdue" | "refunded" | "canceled";
 
+/** Como a recorrência é cobrada. As duas cobram sozinhas depois da primeira vez. */
+export type PaymentMethod = "card" | "pix_automatico";
+
 export interface SponsorAccount {
   id: string;
   /** Null só em conta de autopatrocínio (dona é a igreja, não uma pessoa). */
@@ -38,6 +41,10 @@ export interface SponsorAccount {
   gateway: string | null;
   gateway_customer_id: string | null;
   gateway_subscription_id: string | null;
+  /** Ausente = cartão (contas anteriores à escolha da forma de pagamento). */
+  payment_method?: PaymentMethod;
+  /** Autorização do Pix Automático no provedor, quando é essa a forma. */
+  gateway_authorization_id?: string | null;
   billing_status: SponsorBillingStatus;
   billed_amount_cents: number | null;
   billing_sync_status: SponsorBillingSyncStatus;
@@ -54,12 +61,7 @@ export interface SponsorAccount {
  * Pedido de alteração de nome/logo à espera da moderação da plataforma.
  * Enquanto está pendente, a conta segue exibindo o valor antigo.
  */
-export type SponsorProfileChangeStatus =
-  | "pendente"
-  | "aprovada"
-  | "recusada"
-  | "substituida"
-  | "revertida";
+export type SponsorProfileChangeStatus = "pendente" | "aprovada" | "recusada" | "substituida" | "revertida";
 
 export interface SponsorProfileChange {
   id: string;
@@ -169,9 +171,7 @@ export interface SponsorshipInviteChurch {
  * - done: provedor confirmou na hora (dev/fake), já está ativo.
  */
 export type PublicSponsorshipResult =
-  | { kind: "checkout"; invoiceUrl: string }
-  | { kind: "check_email" }
-  | { kind: "done" };
+  { kind: "checkout"; invoiceUrl: string } | { kind: "check_email" } | { kind: "done" };
 
 /** O que a página pública da igreja mostra de um patrocinador. */
 export interface PublicSponsor {
@@ -269,8 +269,28 @@ export interface BillingChargeSnapshot {
 
 /** Evento de webhook já traduzido. `ignored` = evento que não nos interessa. */
 export type BillingWebhookEvent =
-  | { kind: "charge"; provider: string; charge: BillingChargeSnapshot }
-  | { kind: "ignored"; provider: string };
+  { kind: "charge"; provider: string; charge: BillingChargeSnapshot } | { kind: "ignored"; provider: string };
+
+export interface CreatePixAutomaticInput {
+  customerId: string;
+  /** Valor fixo de cada mês (é o que o pagador autoriza). */
+  amountCents: number;
+  /** YYYY-MM-DD: a primeira cobrança, paga junto com a autorização. */
+  startDate: string;
+  description: string;
+  externalReference: string;
+}
+
+export interface CreatedPixAutomatic {
+  authorizationId: string;
+  /** Assinatura que gera as cobranças dos meses seguintes. */
+  subscriptionId: string;
+  /** "Copia e cola" do QR Code: paga a primeira mensalidade e autoriza as próximas. */
+  qrPayload: string;
+  /** Até quando o QR Code vale (ISO), se o provedor informar. */
+  expiresAt: string | null;
+  immediateEvents?: BillingWebhookEvent[];
+}
 
 export interface CreatedRecurringSubscription {
   subscriptionId: string;

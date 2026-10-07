@@ -39,8 +39,8 @@ export default async function MensalidadePage() {
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Mensalidade</h2>
         <p className="text-sm text-muted-foreground">
-          O que a igreja paga por mês para usar o sistema, no cartão de crédito. O cartão é informado na página segura
-          do meio de pagamento.
+          O que a igreja paga por mês para usar o sistema. O pagamento é automático: você configura uma vez e a cobrança
+          é feita todo mês.
         </p>
       </div>
       {mensalidades.length === 0 ? (
