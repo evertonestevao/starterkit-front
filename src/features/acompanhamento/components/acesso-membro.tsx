@@ -2,23 +2,18 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Copy, KeyRound, Mail, MessageCircle, ShieldCheck, UserMinus, X } from "lucide-react";
+import { Copy, Crown, KeyRound, Mail, MessageCircle, ShieldCheck, UserMinus, X } from "lucide-react";
 import { saudar } from "@/lib/saudacao";
 import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useTenant } from "@/providers/tenant-provider";
 import {
   changeMemberRoleAction,
+  definirResponsavelAction,
   inviteMemberAction,
   linkDoConviteAction,
   reenviarConviteAction,
@@ -118,7 +113,8 @@ export function AcessoMembroCard({
           <KeyRound className="size-4 text-primary" /> Acesso ao sistema
         </CardTitle>
         <CardDescription>
-          Quem tem acesso entra no painel com o próprio e-mail. O papel define o que a pessoa pode fazer.
+          Quem tem acesso entra no painel com o próprio e-mail. O papel define o que a pessoa pode fazer. O Responsável
+          é quem responde pela igreja (o pastor): pode haver mais de um, e só um Responsável define outro.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
@@ -130,8 +126,8 @@ export function AcessoMembroCard({
             {acesso.role === "member" ? (
               <p className="text-muted-foreground">
                 O que esta pessoa usa no sistema vem dos <strong>cargos</strong> dela: cada cargo libera os módulos
-                marcados em Configurações → Acessos, e quem tem mais de um cargo soma os de todos. Para mudar, edite
-                os cargos do membro.
+                marcados em Configurações → Acessos, e quem tem mais de um cargo soma os de todos. Para mudar, edite os
+                cargos do membro.
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
@@ -151,6 +147,54 @@ export function AcessoMembroCard({
                 >
                   <ShieldCheck className="size-3.5" />
                   {acesso.role === "admin" ? "Tornar Membro" : "Tornar Administrador"}
+                </Button>
+              ) : null}
+              {/* Só um Responsável dá ou tira este papel; o servidor e o banco conferem de novo. */}
+              {active.role === "owner" && acesso.role !== "owner" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending}
+                  onClick={async () => {
+                    const sim = await confirmar({
+                      titulo: `Tornar ${membro.nome} Responsável pela igreja?`,
+                      descricao:
+                        "Ele passa a administrar tudo, a definir outros Responsáveis e a confirmar a chave PIX (o link do PIX só chega para ele depois de 24 horas). Você continua Responsável também. Todos os Responsáveis são avisados por e-mail.",
+                      botao: "Tornar Responsável",
+                    });
+                    if (!sim) return;
+                    rodar(
+                      () => definirResponsavelAction(active.id, acesso.companyMemberId, true, membro.nome),
+                      `${membro.nome} agora é Responsável.`,
+                    );
+                  }}
+                >
+                  <Crown className="size-3.5" /> Tornar Responsável
+                </Button>
+              ) : null}
+              {active.role === "owner" && acesso.role === "owner" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending}
+                  onClick={async () => {
+                    const sim = await confirmar({
+                      titulo: `Tirar o papel de Responsável de ${membro.nome}?`,
+                      descricao:
+                        "A pessoa continua com acesso, como Administrador, mas deixa de definir Responsáveis e de confirmar a chave PIX. A igreja precisa ficar com pelo menos um Responsável.",
+                      botao: "Tirar o papel",
+                      perigo: true,
+                    });
+                    if (!sim) return;
+                    rodar(
+                      () => definirResponsavelAction(active.id, acesso.companyMemberId, false, membro.nome),
+                      `${membro.nome} agora é Administrador.`,
+                    );
+                  }}
+                >
+                  <Crown className="size-3.5" /> Deixar de ser Responsável
                 </Button>
               ) : null}
               {permissionService.canRemoveMember(active.role, acesso.role) ? (
@@ -204,7 +248,13 @@ export function AcessoMembroCard({
                 <Copy className="size-3.5" /> Copiar link
               </Button>
               {linkWhatsapp(membro.whatsapp, "") ? (
-                <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => comLink("whatsapp")}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => comLink("whatsapp")}
+                >
                   <MessageCircle className="size-3.5" /> Enviar por WhatsApp
                 </Button>
               ) : null}
@@ -254,15 +304,7 @@ export function ConvidarDialog({ membro }: { membro: RolMembro }) {
   );
 }
 
-function ConvidarForm({
-  email,
-  companyId,
-  onEnviado,
-}: {
-  email: string;
-  companyId: string;
-  onEnviado?: () => void;
-}) {
+function ConvidarForm({ email, companyId, onEnviado }: { email: string; companyId: string; onEnviado?: () => void }) {
   const [papel, setPapel] = useState<"member" | "admin">("member");
   const [state, formAction, pending] = useActionState(inviteMemberAction, undefined);
   useActionToast(state);
@@ -276,8 +318,8 @@ function ConvidarForm({
       <input type="hidden" name="companyId" value={companyId} />
       <input type="hidden" name="email" value={email} />
       <p className="text-muted-foreground">
-        Sem acesso. Enviamos um convite para <strong className="text-foreground">{email}</strong>; ao aceitar, a
-        conta fica ligada a este membro.
+        Sem acesso. Enviamos um convite para <strong className="text-foreground">{email}</strong>; ao aceitar, a conta
+        fica ligada a este membro.
       </p>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1.5">

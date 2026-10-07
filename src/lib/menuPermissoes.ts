@@ -44,6 +44,9 @@ export interface MenuDef {
  * /presence) mas estão FORA do menu: as duas ainda são maquete, com números
  * fixos no arquivo. Voltam quando lerem o banco — é só devolver o item aqui.
  */
+/** A conta da própria pessoa: abre pelo menu do perfil, não pela sidebar. */
+export const ROTA_MINHA_CONTA = "/dashboard/conta";
+
 export const MENUS: readonly MenuDef[] = [
   // O painel: liberável por cargo. Cada número dele ainda depende do módulo de onde vem.
   { key: "dashboard", title: "Painel", href: "/dashboard", roles: ["owner", "admin"] },
@@ -69,7 +72,9 @@ export const MENUS: readonly MenuDef[] = [
   { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin"] },
   { key: "billing", title: "Assinatura", href: "/dashboard/billing", roles: ["owner"] },
   { key: "audit", title: "Auditoria", href: "/dashboard/audit", roles: ["owner", "admin"] },
-  { key: "settings", title: "Configurações", href: "/dashboard/settings", roles: ["owner", "admin", "member"] },
+  // Configurações DA IGREJA. O que é da pessoa (foto, nome, sair) fica em
+  // Minha conta, no menu do perfil — fora deste catálogo, porque é de todos.
+  { key: "settings", title: "Configurações", href: "/dashboard/settings", roles: ["owner", "admin"] },
 ];
 
 /** O que cada módulo liberado deixa fazer (texto da tela de Acessos). */
@@ -142,13 +147,13 @@ export function menusVisiveis(pessoa: PessoaAcesso): string[] {
 
 /**
  * Para onde a pessoa vai ao entrar: o painel, se tiver; senão o primeiro
- * menu que ela tem (ex.: o professor cai na EBD). Configurações é de todos,
- * então sempre há para onde ir.
+ * menu que ela tem (ex.: o professor cai na EBD). Quem não tem menu nenhum
+ * cai em Minha conta, que é de todos.
  */
 export function paginaInicial(pessoa: PessoaAcesso): string {
   const menus = menusVisiveis(pessoa);
   if (menus.includes("dashboard")) return "/dashboard";
-  return MENUS.find((m) => menus.includes(m.key))?.href ?? "/dashboard/settings";
+  return MENUS.find((m) => menus.includes(m.key))?.href ?? ROTA_MINHA_CONTA;
 }
 
 /** Linha gravada: da própria igreja (nivel 0) ou de uma acima (1 = mãe...). */

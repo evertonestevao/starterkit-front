@@ -6,6 +6,7 @@ import {
   maskPixKey,
   type ChurchPixRepository,
   type PixActor,
+  type PixNotifier,
 } from "./churchPixService";
 
 const EMPRESA = "11111111-1111-4111-8111-111111111111";
@@ -19,7 +20,9 @@ const ADMIN: PixActor = {
   email: "pastor@igreja.org",
 };
 
-function build() {
+const TOKEN = "t".repeat(43);
+
+function build(status: "aprovado" | "aguardando" = "aprovado") {
   const repo: ChurchPixRepository = {
     listCompanyChurches: vi.fn(async () => [
       {
@@ -27,17 +30,29 @@ function build() {
         name: "Igreja Betel",
         pixChave: "antiga@chave.org",
         pixTitular: "Igreja Betel",
-        pixStatus: "aprovado" as const,
+        pixStatus: status,
         pixMotivoRecusa: null,
       },
     ]),
     updatePix: vi.fn(async () => undefined),
     listCompanyAdminEmails: vi.fn(async () => ["pastor@igreja.org", "tesoureiro@igreja.org"]),
+    criarConfirmacao: vi.fn(async () => ["responsavel@igreja.org"]),
+    confirmacaoPorToken: vi.fn(async () => ({
+      estado: "valido" as const,
+      churchName: "Igreja Betel",
+      chave: "igreja@exemplo.org",
+      titular: "Igreja Betel",
+    })),
+    confirmarPorToken: vi.fn(async () => ({ churchName: "Igreja Betel", publicCode: "betel" })),
   };
-  const notifier = { sendPixChanged: vi.fn(async () => undefined) };
+  const notifier = {
+    sendPixChanged: vi.fn(async () => undefined),
+    sendPixConfirmation: vi.fn<PixNotifier["sendPixConfirmation"]>(async () => undefined),
+  };
+  const tokens = { make: vi.fn(() => TOKEN), hash: vi.fn((t: string) => `hash(${t})`) };
   const audit = { record: vi.fn(async () => undefined) };
   const log = { error: vi.fn() };
-  return { repo, notifier, audit, service: createChurchPixService({ repo, notifier, audit, log }), log };
+  return { repo, notifier, audit, service: createChurchPixService({ repo, notifier, audit, tokens, log }), log };
 }
 
 const base = { churchId: IGREJA, chave: "igreja@exemplo.org", titular: "Igreja Betel", confirmado: true };
@@ -144,5 +159,69 @@ describe("savePix", () => {
 
     expect(repo.updatePix).toHaveBeenCalled();
     expect(log.error).toHaveBeenCalled();
+  });
+});
+
+describe("confirmação por e-mail", () => {
+  it("salvar manda o link ao Responsável, guardando só o hash do token", async () => {
+    const { service, repo, notifier } = build();
+    const r = await service.savePix(ADMIN, base);
+    expect(r.confirmacaoEnviada).toBe(true);
+    expect(repo.criarConfirmacao).toHaveBeenCalledWith({
+      churchId: IGREJA,
+      tokenHash: `hash(${TOKEN})`,
+      solicitadoPor: ADMIN.userId,
+      validadeHoras: 48,
+    });
+    const enviado = notifier.sendPixConfirmation.mock.calls[0]![0];
+    expect(enviado.to).toEqual(["responsavel@igreja.org"]);
+    expect(enviado.token).toBe(TOKEN);
+    // No e-mail a chave vai mascarada.
+    expect(enviado.chaveMascarada).not.toContain("igreja@exemplo.org");
+  });
+
+  it("falha no e-mail não desfaz o salvar: a tela oferece reenviar", async () => {
+    const { service, repo, notifier } = build();
+    notifier.sendPixConfirmation.mockRejectedValueOnce(new Error("smtp fora"));
+    expect((await service.savePix(ADMIN, base)).confirmacaoEnviada).toBe(false);
+    expect(repo.updatePix).toHaveBeenCalled();
+  });
+
+  it("sem Responsável com e-mail, avisa que não enviou", async () => {
+    const { service, repo } = build();
+    vi.mocked(repo.criarConfirmacao).mockResolvedValueOnce([]);
+    expect((await service.savePix(ADMIN, base)).confirmacaoEnviada).toBe(false);
+  });
+
+  it("reenviar só vale para chave aguardando, e só para quem administra", async () => {
+    const aprovada = build("aprovado");
+    expect(isAppError(await erroDe(aprovada.service.reenviarConfirmacao(ADMIN, IGREJA)))).toBe(true);
+    expect(aprovada.repo.criarConfirmacao).not.toHaveBeenCalled();
+
+    const aguardando = build("aguardando");
+    await aguardando.service.reenviarConfirmacao(ADMIN, IGREJA);
+    expect(aguardando.notifier.sendPixConfirmation).toHaveBeenCalledTimes(1);
+
+    const erro = await erroDe(aguardando.service.reenviarConfirmacao({ ...ADMIN, role: "member" }, IGREJA));
+    expect(isAppError(erro) && erro.code).toBe("forbidden");
+    const outra = await erroDe(aguardando.service.reenviarConfirmacao(ADMIN, OUTRA));
+    expect(isAppError(outra) && outra.code).toBe("not_found");
+  });
+
+  it("token malformado nem chega ao banco", async () => {
+    const { service, repo } = build();
+    expect(await service.consultarConfirmacao("curto")).toBeNull();
+    expect(await service.consultarConfirmacao(undefined)).toBeNull();
+    const erro = await erroDe(service.confirmarPorToken("' or 1=1 --"));
+    expect(isAppError(erro) && erro.code).toBe("not_found");
+    expect(repo.confirmacaoPorToken).not.toHaveBeenCalled();
+    expect(repo.confirmarPorToken).not.toHaveBeenCalled();
+  });
+
+  it("token bem formado consulta e confirma", async () => {
+    const { service, repo } = build();
+    expect((await service.consultarConfirmacao(TOKEN))?.estado).toBe("valido");
+    expect(await service.confirmarPorToken(TOKEN)).toEqual({ churchName: "Igreja Betel", publicCode: "betel" });
+    expect(repo.confirmarPorToken).toHaveBeenCalledWith(TOKEN);
   });
 });

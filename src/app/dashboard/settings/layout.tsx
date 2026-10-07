@@ -17,7 +17,8 @@ export default async function SettingsLayout({
 
   const tabs: RouteTab[] = [{ href: "/dashboard/settings", label: "Geral" }];
 
-  // Domínio é configuração de igreja, não de perfil: só quem administra vê.
+  // Tudo aqui é configuração DA IGREJA: só quem administra vê. O que é da
+  // pessoa fica em Minha conta (/dashboard/conta), no menu do perfil.
   // A aba escondida é conveniência de UI — a autorização real está no
   // service e na RLS, que recusam member mesmo com a URL na mão.
   if (active && permissionService.canEditCompany(active.role)) {
@@ -34,9 +35,7 @@ export default async function SettingsLayout({
     <div className="flex max-w-3xl flex-col gap-6">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Configurações</h2>
-        <p className="text-sm text-muted-foreground">
-          Seu perfil, a igreja ativa e o endereço público dela
-        </p>
+        <p className="text-sm text-muted-foreground">A igreja ativa, a página pública dela e quem acessa o quê</p>
       </div>
 
       <RouteTabs tabs={tabs} />

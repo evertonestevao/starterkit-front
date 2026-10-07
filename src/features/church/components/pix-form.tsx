@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
 import { PIX_STATUS_LABEL, explicarPixStatus, type PixStatus } from "@/lib/pixStatus";
-import { saveChurchPixAction } from "@/server/actions/churchPix";
+import { reenviarConfirmacaoPixAction, saveChurchPixAction } from "@/server/actions/churchPix";
 
 const selectClasses =
   "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
@@ -20,6 +20,20 @@ export interface PixChurch {
   pixTitular: string | null;
   pixStatus: PixStatus;
   pixMotivoRecusa: string | null;
+}
+
+/** "Reenviar e-mail": fora do formulário principal, porque é outra ação. */
+function ReenviarConfirmacao({ churchId }: { churchId: string }) {
+  const [state, action, pending] = useActionState(reenviarConfirmacaoPixAction, undefined);
+  useActionToast(state);
+  return (
+    <form action={action}>
+      <input type="hidden" name="churchId" value={churchId} />
+      <Button type="submit" variant="outline" size="sm" disabled={pending}>
+        Reenviar e-mail de confirmação
+      </Button>
+    </form>
+  );
 }
 
 /**
@@ -50,112 +64,118 @@ export function PixForm({ igrejas }: { igrejas: PixChurch[] }) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
-      <input type="hidden" name="churchId" value={churchId} />
-      <input type="hidden" name="confirmado" value={confirmando ? "true" : "false"} />
+    <div className="flex flex-col gap-4">
+      {igreja?.pixStatus === "aguardando" ? <ReenviarConfirmacao churchId={igreja.id} /> : null}
+      <form action={formAction} className="flex flex-col gap-4">
+        <input type="hidden" name="churchId" value={churchId} />
+        <input type="hidden" name="confirmado" value={confirmando ? "true" : "false"} />
 
-      {igreja ? (
-        <div
-          role="status"
-          className={`rounded-lg border p-3 text-sm ${
-            igreja.pixStatus === "recusado"
-              ? "border-destructive/40 bg-destructive/5"
-              : igreja.pixStatus === "aguardando"
-                ? "border-amber-500/40 bg-amber-500/10"
-                : "bg-muted/40"
-          }`}
-        >
-          <p className="font-medium">Situação: {PIX_STATUS_LABEL[igreja.pixStatus]}</p>
-          <p className="mt-0.5 text-muted-foreground">{explicarPixStatus(igreja.pixStatus, igreja.pixMotivoRecusa)}</p>
-        </div>
-      ) : null}
+        {igreja ? (
+          <div
+            role="status"
+            className={`rounded-lg border p-3 text-sm ${
+              igreja.pixStatus === "recusado"
+                ? "border-destructive/40 bg-destructive/5"
+                : igreja.pixStatus === "aguardando"
+                  ? "border-amber-500/40 bg-amber-500/10"
+                  : "bg-muted/40"
+            }`}
+          >
+            <p className="font-medium">Situação: {PIX_STATUS_LABEL[igreja.pixStatus]}</p>
+            <p className="mt-0.5 text-muted-foreground">
+              {explicarPixStatus(igreja.pixStatus, igreja.pixMotivoRecusa)}
+            </p>
+          </div>
+        ) : null}
 
-      {igrejas.length > 1 ? (
+        {igrejas.length > 1 ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="igreja">Igreja</Label>
+            <select
+              id="igreja"
+              className={selectClasses}
+              value={churchId}
+              onChange={(e) => trocarIgreja(e.target.value)}
+            >
+              {igrejas.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="igreja">Igreja</Label>
-          <select
-            id="igreja"
-            className={selectClasses}
-            value={churchId}
-            onChange={(e) => trocarIgreja(e.target.value)}
-          >
-            {igrejas.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name}
-              </option>
-            ))}
-          </select>
+          <Label htmlFor="chave">Chave PIX</Label>
+          <Input
+            id="chave"
+            name="chave"
+            required
+            value={chave}
+            onChange={(e) => {
+              setChave(e.target.value);
+              setConfirmando(false);
+            }}
+            placeholder="CPF, CNPJ, e-mail, telefone (+55...) ou chave aleatória"
+          />
         </div>
-      ) : null}
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="chave">Chave PIX</Label>
-        <Input
-          id="chave"
-          name="chave"
-          required
-          value={chave}
-          onChange={(e) => {
-            setChave(e.target.value);
-            setConfirmando(false);
-          }}
-          placeholder="CPF, CNPJ, e-mail, telefone (+55...) ou chave aleatória"
-        />
-      </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="titular">Nome do titular</Label>
+          <Input
+            id="titular"
+            name="titular"
+            required
+            value={titular}
+            onChange={(e) => {
+              setTitular(e.target.value);
+              setConfirmando(false);
+            }}
+            placeholder="Como aparece na conta da igreja"
+          />
+          <p className="text-xs text-muted-foreground">
+            É este nome que o app do banco mostra para quem vai doar. Se não for o da igreja, quem doa percebe na hora —
+            e é assim que uma chave trocada aparece.
+          </p>
+        </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="titular">Nome do titular</Label>
-        <Input
-          id="titular"
-          name="titular"
-          required
-          value={titular}
-          onChange={(e) => {
-            setTitular(e.target.value);
-            setConfirmando(false);
-          }}
-          placeholder="Como aparece na conta da igreja"
-        />
-        <p className="text-xs text-muted-foreground">
-          É este nome que o app do banco mostra para quem vai doar. Se não for o da igreja, quem doa
-          percebe na hora — e é assim que uma chave trocada aparece.
-        </p>
-      </div>
-
-      {confirmando ? (
-        <Alert>
-          <AlertTriangle className="size-4" />
-          <AlertDescription className="flex flex-col gap-2">
-            <span>Confira antes de salvar. A partir daqui, as doações vão para esta chave:</span>
-            <span className="font-medium break-all text-foreground">{chave.trim()}</span>
-            <span className="text-foreground">Titular: {titular.trim()}</span>
-            <span className="text-xs">
-              Todos os administradores recebem um email avisando da troca.
-            </span>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <div className="flex flex-wrap gap-2">
         {confirmando ? (
-          <>
-            <Button type="submit" disabled={pending}>
-              Confirmar e salvar
+          <Alert>
+            <AlertTriangle className="size-4" />
+            <AlertDescription className="flex flex-col gap-2">
+              <span>Confira antes de salvar. A partir daqui, as doações vão para esta chave:</span>
+              <span className="font-medium break-all text-foreground">{chave.trim()}</span>
+              <span className="text-foreground">Titular: {titular.trim()}</span>
+              <span className="text-xs">
+                A chave só aparece na página depois que o Responsável confirmar pelo link que vamos enviar ao e-mail
+                dele. Todos os administradores recebem um aviso da troca.
+              </span>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          {confirmando ? (
+            <>
+              <Button type="submit" disabled={pending}>
+                Confirmar e salvar
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setConfirmando(false)}>
+                Voltar e revisar
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              disabled={!mudou || !chave.trim() || !titular.trim()}
+              onClick={() => setConfirmando(true)}
+            >
+              Revisar alteração
             </Button>
-            <Button type="button" variant="ghost" onClick={() => setConfirmando(false)}>
-              Voltar e revisar
-            </Button>
-          </>
-        ) : (
-          <Button
-            type="button"
-            disabled={!mudou || !chave.trim() || !titular.trim()}
-            onClick={() => setConfirmando(true)}
-          >
-            Revisar alteração
-          </Button>
-        )}
-      </div>
-    </form>
+          )}
+        </div>
+      </form>
+    </div>
   );
 }

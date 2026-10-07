@@ -21,11 +21,7 @@ interface EmailServiceDeps {
 
 /** Texto vindo do usuário indo para dentro de HTML de email. */
 function escapeHtml(texto: string): string {
-  return texto
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 export function createEmailService({ provider, appUrl }: EmailServiceDeps) {
@@ -124,11 +120,7 @@ O link vale por uma única entrada. Se não foi você, ignore este email.`,
       // O destino aparece por extenso: é onde o dono da conta percebe um
       // link que não pôs.
       if (input.linkChange) {
-        mudancas.push(
-          input.linkChange.href
-            ? `Link da logo: ${input.linkChange.href}`
-            : "Link da logo: removido",
-        );
+        mudancas.push(input.linkChange.href ? `Link da logo: ${input.linkChange.href}` : "Link da logo: removido");
       }
 
       await provider.send({
@@ -160,9 +152,7 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
       displayName: string;
       reason: string | null;
     }): Promise<void> {
-      const subject = input.approved
-        ? "Sua alteração já está no ar"
-        : "Sua alteração não foi aprovada";
+      const subject = input.approved ? "Sua alteração já está no ar" : "Sua alteração não foi aprovada";
       const corpo = input.approved
         ? `A alteração do seu perfil (${input.displayName}) foi conferida e já aparece nas páginas das igrejas que você apoia.`
         : `A alteração do seu perfil não foi aprovada. Motivo: ${input.reason ?? "não informado"}. Seu perfil anterior continua no ar, e você pode enviar outra alteração pelo painel.`;
@@ -221,11 +211,82 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
       );
     },
 
-    async sendPlatformStaffAlert(input: {
+    /**
+     * Mudança de Responsável: vai para todos os Responsáveis e para a pessoa
+     * afetada. É o que faz uma promoção indevida ser percebida no mesmo dia.
+     */
+    async sendResponsavelChanged(input: {
       to: string[];
-      subject: string;
-      lines: string[];
+      churchName: string;
+      pessoa: string;
+      tornou: boolean;
+      alteradoPor: string;
     }): Promise<void> {
+      if (input.to.length === 0) return;
+      const linhas = [
+        input.tornou
+          ? `${input.pessoa} agora é Responsável por ${input.churchName} no sistema (alterado por ${input.alteradoPor}).`
+          : `${input.pessoa} deixou de ser Responsável por ${input.churchName} no sistema e passou a Administrador (alterado por ${input.alteradoPor}).`,
+        input.tornou
+          ? "O Responsável administra a igreja, define outros Responsáveis e confirma a chave PIX. Nas primeiras 24 horas ele ainda não recebe o link de confirmação do PIX."
+          : "Ele continua entrando no sistema, mas não define Responsáveis nem confirma a chave PIX.",
+        "Se você não reconhece esta mudança, entre no sistema, desfaça-a na ficha do membro e troque a sua senha.",
+      ];
+      await Promise.all(
+        input.to.map((to) =>
+          provider.send({
+            to,
+            subject: input.tornou
+              ? `Novo Responsável em ${input.churchName}`
+              : `Mudança de Responsável em ${input.churchName}`,
+            text: linhas.join("\n\n"),
+            html: linhas.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n"),
+          }),
+        ),
+      );
+    },
+
+    /**
+     * Link para o Responsável confirmar a chave PIX. A chave vai mascarada (a
+     * inteira aparece na página do link) e o texto diz o que fazer se o
+     * pedido não partiu da igreja.
+     */
+    async sendPixConfirmation(input: {
+      to: string[];
+      churchName: string;
+      chaveMascarada: string;
+      titular: string;
+      alteradoPor: string;
+      token: string;
+      validadeHoras: number;
+    }): Promise<void> {
+      const link = `${base}/confirmar-pix/${input.token}`;
+      const linhas = [
+        `${input.alteradoPor} cadastrou uma chave PIX para a página de ${input.churchName}.`,
+        `Chave: ${input.chaveMascarada} · Titular: ${input.titular}`,
+        "A chave só aparece na página depois que você confirmar. Abra o link, confira a chave inteira e confirme:",
+      ];
+      const depois = [
+        `O link vale por ${input.validadeHoras} horas.`,
+        "Se você não reconhece este pedido, não confirme: sem a sua confirmação a chave não é publicada. Troque a senha da conta e avise a equipe.",
+      ];
+      await Promise.all(
+        input.to.map((to) =>
+          provider.send({
+            to,
+            subject: `Confirme a chave PIX de ${input.churchName}`,
+            text: [...linhas, link, ...depois].join("\n\n"),
+            html: [
+              ...linhas.map((l) => `<p>${escapeHtml(l)}</p>`),
+              `<p><a href="${link}">Conferir e confirmar a chave PIX</a></p>`,
+              ...depois.map((l) => `<p>${escapeHtml(l)}</p>`),
+            ].join("\n"),
+          }),
+        ),
+      );
+    },
+
+    async sendPlatformStaffAlert(input: { to: string[]; subject: string; lines: string[] }): Promise<void> {
       if (input.to.length === 0) return;
       await Promise.all(
         input.to.map((to) =>
@@ -253,7 +314,8 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
       const painel = `${base}/dashboard/settings/vinculos`;
       const posicao = nomeNivel(NOMES_PADRAO, input.tipo, { minusculo: true });
       const resumo = `${input.childName} pediu para ser ${posicao} de ${input.parentName}.`;
-      const explicacao = "Nada mudou ainda: a igreja só entra na sua rede se você aprovar, e você pode ajustar a função ou recusar.";
+      const explicacao =
+        "Nada mudou ainda: a igreja só entra na sua rede se você aprovar, e você pode ajustar a função ou recusar.";
 
       await Promise.all(
         input.to.map((to) =>
@@ -319,7 +381,8 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
         childName: input.childName,
         tipo: input.tipo,
       })}`;
-      const aviso = "A igreja-mãe dela passa a ver a contagem de pedidos de oração e de visitas. Você pode desfazer o vínculo quando quiser.";
+      const aviso =
+        "A igreja-mãe dela passa a ver a contagem de pedidos de oração e de visitas. Você pode desfazer o vínculo quando quiser.";
 
       await Promise.all(
         input.to.map((to) =>
@@ -338,11 +401,7 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
     },
 
     /** Um dos lados desfez o vínculo: o outro precisa saber. */
-    async sendChurchLinkEnded(input: {
-      to: string[];
-      endedByName: string;
-      otherName: string;
-    }): Promise<void> {
+    async sendChurchLinkEnded(input: { to: string[]; endedByName: string; otherName: string }): Promise<void> {
       if (input.to.length === 0) return;
       const painel = `${base}/dashboard/settings/vinculos`;
       const resumo = `${input.endedByName} desfez o vínculo com ${input.otherName}. A igreja voltou a ser independente.`;

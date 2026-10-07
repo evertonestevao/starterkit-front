@@ -18,6 +18,6 @@ describe("statusDoPix", () => {
 describe("explicarPixStatus", () => {
   it("a recusa mostra o motivo quando há", () => {
     expect(explicarPixStatus("recusado", "Titular não confere")).toContain("Titular não confere");
-    expect(explicarPixStatus("recusado", null)).toContain("não foi aprovada.");
+    expect(explicarPixStatus("recusado", null)).toContain("recusada pela plataforma.");
   });
 });

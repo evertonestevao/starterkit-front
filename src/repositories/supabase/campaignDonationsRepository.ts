@@ -37,7 +37,7 @@ export function createSupabaseCampaignDonationsRepository(
       const igreja = ((igrejas ?? []) as Array<{ id: string; name: string; address: string | null }>)[0];
       if (!igreja) return null;
 
-      // Só a chave aprovada pela moderação, e com a página no ar.
+      // Só a chave confirmada pelo Responsável (ou aprovada pela moderação), e com a página no ar.
       const { data: pix, error: erroPix } = await client.rpc("pix_publico", { p_church_id: igreja.id });
       if (erroPix) throw new AppError("internal_error", "Falha ao carregar a igreja", erroPix);
       const aprovado = ((pix ?? []) as Array<{ chave: string; titular: string | null }>)[0];

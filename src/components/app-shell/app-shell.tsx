@@ -132,7 +132,8 @@ export function AppShell({
           <h1 className="truncate text-sm font-medium lg:hidden">{titleForPath(pathname)}</h1>
           <div className="ml-auto flex items-center gap-2">
             <CompanySwitcher />
-            <UserMenu {...user} />
+            {/* Convites recebidos são da pessoa, não da igreja: o aviso fica no perfil. */}
+            <UserMenu {...user} convitesPendentes={pendingInvitesCount} />
           </div>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 p-4 lg:p-8 print:max-w-none print:p-0">{children}</main>
@@ -145,7 +146,6 @@ export function AppShell({
 /** Badge de atenção por item de menu: href -> quantidade + rótulo do que é. */
 function badgesByHref(pendingInvitesCount: number, unseenPrayerRequestsCount: number, visitasSemContato: number) {
   return {
-    "/dashboard/settings": { count: pendingInvitesCount, label: "convite(s) pendente(s)" },
     "/dashboard/prayers": { count: unseenPrayerRequestsCount, label: "pedido(s) de oração não visto(s)" },
     "/dashboard/relationships": { count: visitasSemContato, label: "pedido(s) de visita aguardando contato" },
   } as const;

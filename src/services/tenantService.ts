@@ -32,8 +32,7 @@ export function normalizePageParams(
   const rawPage = Math.trunc(params?.page ?? 1);
   const rawSize = Math.trunc(params?.pageSize ?? defaultPageSize);
   const page = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
-  const pageSize =
-    Number.isFinite(rawSize) && rawSize >= 1 ? Math.min(rawSize, maxPageSize) : defaultPageSize;
+  const pageSize = Number.isFinite(rawSize) && rawSize >= 1 ? Math.min(rawSize, maxPageSize) : defaultPageSize;
   return { page, pageSize, offset: (page - 1) * pageSize };
 }
 
@@ -55,6 +54,12 @@ export interface TenantRepository {
   removeMember(memberId: string, companyId: string): Promise<void>;
   /** RPC leave_company (sair da empresa sem precisar de UPDATE direto). */
   leaveCompany(companyId: string): Promise<void>;
+  /**
+   * RPC definir_responsavel: dá ou tira o papel de Responsável (owner). O banco
+   * confere que quem pede é Responsável e que sobra pelo menos um. Devolve quem
+   * avisar por e-mail.
+   */
+  definirResponsavel(memberId: string, tornar: boolean): Promise<Array<{ email: string; afetado: boolean }>>;
 }
 
 const companyNameSchema = z.string().trim().min(2, "Nome muito curto").max(80);
@@ -93,13 +98,15 @@ const newChurchDetailsSchema = z
 
 /** Gera slug a partir do nome: minúsculas, sem acentos, hífens. */
 export function slugify(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 50) || "igreja";
+  return (
+    name
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 50) || "igreja"
+  );
 }
 
 export function createTenantService(repo: TenantRepository) {
@@ -115,10 +122,7 @@ export function createTenantService(repo: TenantRepository) {
   }): Promise<CompanyWithRole> {
     const parsed = companyNameSchema.safeParse(input.name);
     if (!parsed.success) {
-      throw new AppError(
-        "validation_error",
-        parsed.error.issues[0]?.message ?? "Nome inválido",
-      );
+      throw new AppError("validation_error", parsed.error.issues[0]?.message ?? "Nome inválido");
     }
     const name = parsed.data;
     const details = newChurchDetailsSchema.safeParse({
@@ -127,10 +131,7 @@ export function createTenantService(repo: TenantRepository) {
       redeNome: input.redeNome,
     });
     if (!details.success) {
-      throw new AppError(
-        "validation_error",
-        details.error.issues[0]?.message ?? "Dados da igreja inválidos",
-      );
+      throw new AppError("validation_error", details.error.issues[0]?.message ?? "Dados da igreja inválidos");
     }
     try {
       return await repo.createCompany(name, slugify(name), details.data);
@@ -147,10 +148,7 @@ export function createTenantService(repo: TenantRepository) {
   async function updateCompany(companyId: string, input: { name: unknown }): Promise<void> {
     const parsed = companyNameSchema.safeParse(input.name);
     if (!parsed.success) {
-      throw new AppError(
-        "validation_error",
-        parsed.error.issues[0]?.message ?? "Nome inválido",
-      );
+      throw new AppError("validation_error", parsed.error.issues[0]?.message ?? "Nome inválido");
     }
     const role = await requireMembership(companyId);
     if (!permissionService.canEditCompany(role)) {
@@ -170,10 +168,7 @@ export function createTenantService(repo: TenantRepository) {
 
   const MEMBERS_PAGE_SIZE = 20;
 
-  async function listMembers(
-    companyId: string,
-    params?: PageParams,
-  ): Promise<Paginated<MemberWithProfile>> {
+  async function listMembers(companyId: string, params?: PageParams): Promise<Paginated<MemberWithProfile>> {
     await requireMembership(companyId);
     const { page, pageSize, offset } = normalizePageParams(params, MEMBERS_PAGE_SIZE);
     const { items, total } = await repo.listMembers(companyId, { limit: pageSize, offset });
@@ -217,6 +212,31 @@ export function createTenantService(repo: TenantRepository) {
     return { removedRole: target.role, targetUserId: target.user_id };
   }
 
+  /**
+   * Dá ou tira o papel de Responsável. Só um Responsável faz isso (um
+   * administrador nunca), a igreja pode ter vários e precisa de pelo menos um.
+   */
+  async function definirResponsavel(
+    companyId: string,
+    memberId: string,
+    tornar: boolean,
+  ): Promise<{ avisar: Array<{ email: string; afetado: boolean }> }> {
+    const actorRole = await requireMembership(companyId);
+    if (actorRole !== "owner") {
+      throw new AppError("forbidden", "Só um Responsável pode definir outro Responsável.");
+    }
+    // getMember filtra por companyId: ID de outro tenant resulta em not_found.
+    const target = await repo.getMember(memberId, companyId);
+    if (!target) throw new AppError("not_found", "Membro não encontrado");
+    if (tornar && target.role === "owner") {
+      throw new AppError("validation_error", "Esta pessoa já é Responsável.");
+    }
+    if (!tornar && target.role !== "owner") {
+      throw new AppError("validation_error", "Esta pessoa não é Responsável.");
+    }
+    return { avisar: await repo.definirResponsavel(memberId, tornar) };
+  }
+
   async function leaveCompany(companyId: string): Promise<void> {
     const role = await requireMembership(companyId);
     if (role === "owner") {
@@ -233,6 +253,7 @@ export function createTenantService(repo: TenantRepository) {
     listMembers,
     changeMemberRole,
     removeMember,
+    definirResponsavel,
     leaveCompany,
   };
 }

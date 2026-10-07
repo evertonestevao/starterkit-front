@@ -128,14 +128,11 @@ begin
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'FALHA companies: UPDATE cross-tenant afetou % linha(s)', n; end if;
 
-  update public.company_members set role = 'owner'
-  where user_id = 'a1a1a1a1-0000-4000-8000-000000000001';
+  -- A policy esconde a linha de outro tenant: o UPDATE não acha nada.
+  update public.company_members set role = 'admin'
+  where company_id = 'c2c2c2c2-0000-4000-8000-000000000002';
   get diagnostics n = row_count;
-  -- update da própria linha exige is_company_admin; alice é owner do c1, então
-  -- pode — mas nunca da linha de outro tenant. Confere que não tocou o c2:
-  perform 1 from public.company_members
-    where company_id = 'c2c2c2c2-0000-4000-8000-000000000002' and role <> 'owner';
-  if found then raise exception 'FALHA company_members: papel de outro tenant alterado'; end if;
+  if n <> 0 then raise exception 'FALHA company_members: papel de outro tenant alterado'; end if;
 end $$;
 
 -- audit_logs é imutável para o client: nem sequer há GRANT de UPDATE/DELETE,
@@ -6824,6 +6821,8 @@ begin
       -- página pública e convite de vínculo
       'chave_publica_por_codigo', 'church_card_donation_link', 'church_pix_donation_link', 'church_primeiro_slots',
       'list_church_sponsors', 'nomes_dos_niveis', 'pix_publico', 'posso_ver_previa_da_pagina',
+      -- link de confirmação da chave Pix, enviado ao e-mail do Responsável
+      'pix_confirmacao_por_token', 'pix_confirmar_por_token',
       'rede_igrejas_publicas', 'resolve_church_by_domain', 'cancel_profile_change_by_token',
       'igreja_publica', 'igrejas_resumo', 'rede_tem_igrejas', 'resolve_church_appearance', 'resolve_template',
       -- auxiliar desta suíte (só existe dentro da transação)
@@ -7082,6 +7081,355 @@ reset role;
 delete from public.cargo_acessos
  where church_id = 'acacacac-0000-4000-8000-0000000000d2'
    and cargo_id = (select id from public.cargos where slug = 'auxiliar_chamada');
+
+-- ---------------------------------------------------------------------------
+-- Chave Pix confirmada por e-mail (migration 20261007100000). AC Outra (d3) é
+-- da conta do usuário 005, que é o Responsável dela.
+-- ---------------------------------------------------------------------------
+update public.churches set pix_chave = 'novo@acoutra.org', pix_titular = 'AC Outra'
+ where id = 'acacacac-0000-4000-8000-0000000000d3';
+
+-- Quem administra a igreja NÃO cria o pedido nem se aprova sozinho: se
+-- pudesse, uma sessão roubada escolheria o token e confirmaria a própria chave.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  begin
+    perform public.pix_criar_confirmacao('acacacac-0000-4000-8000-0000000000d3', repeat('a', 64), null);
+    raise exception 'FALHA pix e-mail: o proprio usuario criou o pedido de confirmacao';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform 1 from public.church_pix_confirmacoes;
+    raise exception 'FALHA pix e-mail: usuario leu a tabela de confirmacoes';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.churches set pix_aprovado_em = now() where id = 'acacacac-0000-4000-8000-0000000000d3';
+    get diagnostics n = row_count;
+    if n > 0 then raise exception 'FALHA pix e-mail: usuario aprovou a propria chave direto na tabela'; end if;
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- O servidor cria o pedido; o e-mail vai para o Responsável da conta.
+do $$
+declare v text;
+begin
+  select string_agg(email, ',') into v from public.pix_criar_confirmacao(
+    'acacacac-0000-4000-8000-0000000000d3', encode(sha256(convert_to('token-um', 'UTF8')), 'hex'),
+    'acacacac-0000-4000-8000-000000000005');
+  if v is distinct from 'rls-ac-outra@test.local' then
+    raise exception 'FALHA pix e-mail: destinatario errado (%)', v;
+  end if;
+  -- Hash malformado nem entra.
+  begin
+    perform public.pix_criar_confirmacao('acacacac-0000-4000-8000-0000000000d3', 'token-puro', null);
+    raise exception 'FALHA pix e-mail: aceitou token sem hash';
+  exception when sqlstate '22023' then null;
+  end;
+end $$;
+
+set local role anon;
+do $$
+declare n int; v text; r record;
+begin
+  begin
+    perform 1 from public.church_pix_confirmacoes;
+    raise exception 'FALHA pix e-mail: anon leu a tabela de confirmacoes';
+  exception when sqlstate '42501' then null;
+  end;
+  -- Token errado: nada. Nem o hash guardado serve de token.
+  select count(*) into n from public.pix_confirmacao_por_token('token-errado');
+  if n <> 0 then raise exception 'FALHA pix e-mail: token errado devolveu dados'; end if;
+  select count(*) into n from public.pix_confirmacao_por_token(encode(sha256(convert_to('token-um', 'UTF8')), 'hex'));
+  if n <> 0 then raise exception 'FALHA pix e-mail: o hash guardado funcionou como token'; end if;
+  begin
+    perform public.pix_confirmar_por_token('token-errado');
+    raise exception 'FALHA pix e-mail: confirmou com token errado';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Abrir o link mostra o que será confirmado, mas não confirma.
+  select * into r from public.pix_confirmacao_por_token('token-um');
+  if r.estado is distinct from 'valido' or r.pix_chave is distinct from 'novo@acoutra.org' then
+    raise exception 'FALHA pix e-mail: link valido nao mostrou a chave (%)', r.estado;
+  end if;
+end $$;
+reset role;
+do $$
+begin
+  if (select pix_aprovado_em from public.churches where id = 'acacacac-0000-4000-8000-0000000000d3') is not null then
+    raise exception 'FALHA pix e-mail: so abrir o link ja aprovou a chave';
+  end if;
+end $$;
+
+set local role anon;
+do $$
+declare r record; v text;
+begin
+  select church_name into v from public.pix_confirmar_por_token('token-um');
+  if v is null then raise exception 'FALHA pix e-mail: confirmacao nao devolveu a igreja'; end if;
+  -- O link vale uma vez, e depois de usado não mostra mais a chave.
+  begin
+    perform public.pix_confirmar_por_token('token-um');
+    raise exception 'FALHA pix e-mail: link usado duas vezes';
+  exception when sqlstate 'P0002' then null;
+  end;
+  select * into r from public.pix_confirmacao_por_token('token-um');
+  if r.estado is distinct from 'usado' or r.pix_chave is not null then
+    raise exception 'FALHA pix e-mail: link usado ainda mostra a chave (%)', r.estado;
+  end if;
+end $$;
+reset role;
+
+do $$
+declare n int;
+begin
+  if (select pix_aprovado_em from public.churches where id = 'acacacac-0000-4000-8000-0000000000d3') is null then
+    raise exception 'FALHA pix e-mail: confirmar nao aprovou a chave';
+  end if;
+  select count(*) into n from public.audit_logs
+  where action = 'church.pix.confirmado_por_email' and entity_id = 'acacacac-0000-4000-8000-0000000000d3'
+    and metadata::text not like '%novo@acoutra.org%';
+  if n <> 1 then raise exception 'FALHA pix e-mail: confirmacao nao foi registrada (ou registrou a chave)'; end if;
+
+  -- Chave já aprovada não gera pedido.
+  begin
+    perform public.pix_criar_confirmacao('acacacac-0000-4000-8000-0000000000d3', repeat('b', 64), null);
+    raise exception 'FALHA pix e-mail: criou pedido para chave ja aprovada';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+
+-- Trocar a chave depois do e-mail mata o link: ele confirmava OUTRA chave.
+update public.churches set pix_chave = 'segunda@acoutra.org' where id = 'acacacac-0000-4000-8000-0000000000d3';
+select public.pix_criar_confirmacao(
+  'acacacac-0000-4000-8000-0000000000d3', encode(sha256(convert_to('token-dois', 'UTF8')), 'hex'), null);
+update public.churches set pix_chave = 'golpista@exemplo.com' where id = 'acacacac-0000-4000-8000-0000000000d3';
+set local role anon;
+do $$
+declare r record;
+begin
+  select * into r from public.pix_confirmacao_por_token('token-dois');
+  if r.estado is distinct from 'substituido' or r.pix_chave is not null then
+    raise exception 'FALHA pix e-mail: link de chave antiga continuou valido (%)', r.estado;
+  end if;
+  begin
+    perform public.pix_confirmar_por_token('token-dois');
+    raise exception 'FALHA pix e-mail: link antigo aprovou a chave nova';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+reset role;
+
+-- Pedir de novo invalida o link anterior; link vencido não confirma.
+select public.pix_criar_confirmacao(
+  'acacacac-0000-4000-8000-0000000000d3', encode(sha256(convert_to('token-tres', 'UTF8')), 'hex'), null);
+select public.pix_criar_confirmacao(
+  'acacacac-0000-4000-8000-0000000000d3', encode(sha256(convert_to('token-quatro', 'UTF8')), 'hex'), null);
+update public.church_pix_confirmacoes set expires_at = now() - interval '1 minute'
+ where token_hash = encode(sha256(convert_to('token-quatro', 'UTF8')), 'hex');
+set local role anon;
+do $$
+declare v text;
+begin
+  select estado into v from public.pix_confirmacao_por_token('token-tres');
+  if v is distinct from 'substituido' then raise exception 'FALHA pix e-mail: link anterior continuou valido (%)', v; end if;
+  select estado into v from public.pix_confirmacao_por_token('token-quatro');
+  if v is distinct from 'expirado' then raise exception 'FALHA pix e-mail: link vencido nao aparece como vencido (%)', v; end if;
+  begin
+    perform public.pix_confirmar_por_token('token-quatro');
+    raise exception 'FALHA pix e-mail: link vencido confirmou';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+reset role;
+
+do $$
+begin
+  if (select pix_aprovado_em from public.churches where id = 'acacacac-0000-4000-8000-0000000000d3') is not null then
+    raise exception 'FALHA pix e-mail: a chave trocada acabou aprovada';
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Responsáveis da igreja (migration 20261007110000). Conta 6c..02: 5e..02 é o
+-- Responsável, 5e..1c é administrador, 5e..06 é membro. 5e..01 é de outra conta.
+-- ---------------------------------------------------------------------------
+update public.company_members set deleted_at = null, role = 'owner'
+ where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-000000000002';
+update public.company_members set deleted_at = null, role = 'admin'
+ where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-00000000001c';
+update public.company_members set deleted_at = null, role = 'member'
+ where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-000000000006';
+
+-- O ADMINISTRADOR não vira Responsável sozinho, nem derruba o Responsável.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-00000000001c","email":"rls-admin@test.local","role":"authenticated"}', true);
+do $$
+declare v_membro uuid;
+begin
+  begin
+    update public.company_members set role = 'owner'
+     where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-00000000001c';
+    raise exception 'FALHA responsavel: administrador se promoveu a Responsavel';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.company_members set role = 'admin'
+     where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-000000000002';
+    raise exception 'FALHA responsavel: administrador rebaixou o Responsavel';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.company_members set deleted_at = now()
+     where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-000000000002';
+    raise exception 'FALHA responsavel: administrador removeu o Responsavel';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    insert into public.company_members (company_id, user_id, role)
+    values ('6c6c6c6c-0000-4000-8000-000000000002', '5e5e5e5e-0000-4000-8000-000000000003', 'owner');
+    raise exception 'FALHA responsavel: administrador inseriu um Responsavel';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    insert into public.company_invites (company_id, email, role, invited_by)
+    values ('6c6c6c6c-0000-4000-8000-000000000002', 'comparsa@test.local', 'owner', '5e5e5e5e-0000-4000-8000-00000000001c');
+    raise exception 'FALHA responsavel: convite nasceu como Responsavel';
+  exception when sqlstate '23514' or sqlstate '42501' then null;
+  end;
+  -- Pela função também não: só Responsável promove.
+  select id into v_membro from public.company_members
+   where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-00000000001c';
+  begin
+    perform public.definir_responsavel(v_membro, true);
+    raise exception 'FALHA responsavel: administrador usou definir_responsavel';
+  exception when sqlstate 'P0002' then null;
+  end;
+  -- O que o administrador sempre pôde continua: trocar o papel de um membro.
+  update public.company_members set role = 'member'
+   where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-000000000006';
+end $$;
+
+-- Responsável de OUTRA conta não mexe aqui.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000001","email":"rls-outro@test.local","role":"authenticated"}', true);
+do $$
+declare v_membro uuid;
+begin
+  -- (lido como dono da função de teste não dá: pega o id por uma consulta que a RLS esconde)
+  select id into v_membro from public.company_members
+   where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-00000000001c';
+  if v_membro is not null then raise exception 'FALHA responsavel: outra conta leu os membros'; end if;
+end $$;
+reset role;
+do $$
+declare v_membro uuid;
+begin
+  select id into v_membro from public.company_members
+   where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-00000000001c';
+  perform set_config('rls.membro_admin', v_membro::text, true);
+  select id into v_membro from public.company_members
+   where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and user_id = '5e5e5e5e-0000-4000-8000-000000000002';
+  perform set_config('rls.membro_dono', v_membro::text, true);
+end $$;
+set local role authenticated;
+do $$
+begin
+  perform public.definir_responsavel(current_setting('rls.membro_admin')::uuid, true);
+  raise exception 'FALHA responsavel: Responsavel de outra conta promoveu alguem';
+exception when sqlstate 'P0002' then null;
+end $$;
+
+-- O Responsável: não sai sem passar o papel, não deixa a igreja sem ninguém,
+-- promove outro e aí pode deixar de ser.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000002","email":"rls-dono@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  begin
+    perform public.leave_company('6c6c6c6c-0000-4000-8000-000000000002');
+    raise exception 'FALHA responsavel: o unico Responsavel saiu da igreja';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.definir_responsavel(current_setting('rls.membro_dono')::uuid, false);
+    raise exception 'FALHA responsavel: a igreja ficou sem Responsavel';
+  exception when sqlstate '23514' then null;
+  end;
+  -- Nem ele escreve o papel direto na tabela.
+  begin
+    update public.company_members set role = 'owner' where id = current_setting('rls.membro_admin')::uuid;
+    raise exception 'FALHA responsavel: Responsavel promoveu direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+
+  select count(*) into n from public.definir_responsavel(current_setting('rls.membro_admin')::uuid, true);
+  if n <> 2 then raise exception 'FALHA responsavel: esperava avisar 2 pessoas, vieram %', n; end if;
+  begin
+    perform public.definir_responsavel(current_setting('rls.membro_admin')::uuid, true);
+    raise exception 'FALHA responsavel: promoveu quem ja era';
+  exception when sqlstate '22023' then null;
+  end;
+  -- Com dois, um pode deixar de ser (aqui, o próprio).
+  perform public.definir_responsavel(current_setting('rls.membro_dono')::uuid, false);
+  if public.is_company_owner('6c6c6c6c-0000-4000-8000-000000000002') then
+    raise exception 'FALHA responsavel: quem deixou o papel continua Responsavel';
+  end if;
+end $$;
+reset role;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.company_members
+   where company_id = '6c6c6c6c-0000-4000-8000-000000000002' and deleted_at is null and role = 'owner'
+     and user_id = '5e5e5e5e-0000-4000-8000-00000000001c' and responsavel_desde is not null;
+  if n <> 1 then raise exception 'FALHA responsavel: o novo Responsavel nao ficou gravado'; end if;
+  select count(*) into n from public.company_members
+   where id = current_setting('rls.membro_dono')::uuid and role = 'admin' and responsavel_desde is null;
+  if n <> 1 then raise exception 'FALHA responsavel: quem saiu nao virou administrador'; end if;
+  select count(*) into n from public.audit_logs
+   where company_id = '6c6c6c6c-0000-4000-8000-000000000002'
+     and action in ('member.responsavel_definido', 'member.responsavel_removido');
+  if n <> 2 then raise exception 'FALHA responsavel: mudancas nao foram registradas (%)', n; end if;
+end $$;
+
+-- Pix: Responsável recém-promovido ainda não recebe o link, se houver um mais
+-- antigo. (AC Outra, d3, está com uma chave aguardando; 005 é o Responsável.)
+do $$
+declare v_conta uuid; v text;
+begin
+  select company_id into v_conta from public.churches where id = 'acacacac-0000-4000-8000-0000000000d3';
+  update public.company_members set responsavel_desde = now() - interval '3 days'
+   where company_id = v_conta and user_id = 'acacacac-0000-4000-8000-000000000005';
+  insert into public.company_members (company_id, user_id, role)
+  values (v_conta, 'a1a1a1a1-0000-4000-8000-000000000001', 'owner');
+
+  select string_agg(email, ',') into v from public.pix_criar_confirmacao(
+    'acacacac-0000-4000-8000-0000000000d3', repeat('c', 64), null);
+  if v is distinct from 'rls-ac-outra@test.local' then
+    raise exception 'FALHA responsavel: link do Pix foi para Responsavel recem-promovido (%)', v;
+  end if;
+
+  -- Passadas as 24h, os dois recebem.
+  update public.company_members set responsavel_desde = now() - interval '25 hours'
+   where company_id = v_conta and user_id = 'a1a1a1a1-0000-4000-8000-000000000001';
+  select count(*) into v from public.pix_criar_confirmacao(
+    'acacacac-0000-4000-8000-0000000000d3', repeat('d', 64), null);
+  if v::int <> 2 then raise exception 'FALHA responsavel: depois de 24h o segundo Responsavel nao recebeu (%)', v; end if;
+
+  update public.company_members set deleted_at = now()
+   where company_id = v_conta and user_id = 'a1a1a1a1-0000-4000-8000-000000000001';
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS

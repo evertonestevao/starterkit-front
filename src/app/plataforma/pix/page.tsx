@@ -34,13 +34,18 @@ export default async function PlatformPixPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Pix das igrejas</h1>
         <p className="text-sm text-muted-foreground">
-          Confira se o titular da chave é a própria igreja (ou alguém que responde por ela) antes de aprovar. Na dúvida,
-          recuse com o motivo: a igreja corrige e envia de novo.
+          Chaves esperando o Responsável da igreja confirmar pelo link enviado ao e-mail dele. Normalmente não é preciso
+          fazer nada aqui: aprove só se o e-mail não chegou e você conhece a igreja; recuse, com o motivo, uma chave
+          suspeita.
         </p>
       </div>
 
       {pendentes.length === 0 ? (
-        <EmptyState icon={Inbox} title="Nenhuma chave aguardando" description="Quando uma igreja cadastrar ou trocar o Pix, ela aparece aqui." />
+        <EmptyState
+          icon={Inbox}
+          title="Nenhuma chave aguardando"
+          description="Quando uma igreja cadastrar ou trocar o Pix, ela aparece aqui."
+        />
       ) : (
         <ul className="flex flex-col gap-3">
           {pendentes.map((p) => (

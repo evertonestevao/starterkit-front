@@ -33,21 +33,22 @@ const linha = (cargo_id: string, modulo: string, permitido: boolean, nivel: numb
 });
 
 describe("menusVisiveis", () => {
-  it("membro sem cargo liberado vê só as próprias configurações e cai nelas", () => {
-    expect(menusVisiveis(pessoa({}))).toEqual(["settings"]);
-    expect(paginaInicial(pessoa({}))).toBe("/dashboard/settings");
+  it("membro sem cargo liberado não vê menu da igreja e cai em Minha conta", () => {
+    expect(menusVisiveis(pessoa({}))).toEqual([]);
+    expect(paginaInicial(pessoa({}))).toBe("/dashboard/conta");
   });
 
   it("o painel é liberado por cargo, como qualquer módulo", () => {
     const comPainel = pessoa({ acessos: ["dashboard", "events"] });
-    expect(menusVisiveis(comPainel)).toEqual(["dashboard", "events", "settings"]);
+    expect(menusVisiveis(comPainel)).toEqual(["dashboard", "events"]);
     expect(paginaInicial(comPainel)).toBe("/dashboard");
     // Sem o painel, entra no primeiro menu que tem.
     expect(paginaInicial(pessoa({ acessos: ["events"] }))).toBe("/dashboard/events");
   });
 
-  it("quem só dá aula vê apenas EBD e Configurações", () => {
-    expect(menusVisiveis(pessoa({ professor_ebd: true }))).toEqual(["ebd", "settings"]);
+  it("quem só dá aula vê apenas a EBD; Configurações é de quem administra", () => {
+    expect(menusVisiveis(pessoa({ professor_ebd: true }))).toEqual(["ebd"]);
+    expect(menusVisiveis(pessoa({ role: "admin" }))).toContain("settings");
   });
 
   it("módulo liberado por cargo abre o menu dele, e só ele", () => {

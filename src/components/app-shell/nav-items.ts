@@ -14,7 +14,7 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
-import { MENUS, type MenuDef } from "@/lib/menuPermissoes";
+import { MENUS, ROTA_MINHA_CONTA, type MenuDef } from "@/lib/menuPermissoes";
 
 /**
  * Navegação da sidebar. O catálogo (título, rota, quem pode abrir) mora em
@@ -54,6 +54,8 @@ export function visibleNavItems(menus: string[]): NavItem[] {
 
 /** Título da página atual a partir do pathname (breadcrumb/header mobile). */
 export function titleForPath(pathname: string): string {
+  // Fora da sidebar: abre pelo menu do perfil.
+  if (pathname === ROTA_MINHA_CONTA || pathname.startsWith(`${ROTA_MINHA_CONTA}/`)) return "Minha conta";
   const match = [...navItems]
     .sort((a, b) => b.href.length - a.href.length)
     .find(

@@ -43,7 +43,7 @@ export function createSupabasePublicChurchRepository(client: SupabaseClient) {
       const { tem_dono: _temDono, ...igreja } = linha;
       void _temDono;
 
-      // A chave Pix só vem aprovada pela moderação, e com a página no ar.
+      // A chave Pix só vem confirmada pelo Responsável (ou aprovada pela moderação), e com a página no ar.
       const { data: pix, error: erroPix } = await client.rpc("pix_publico", { p_church_id: igreja.id });
       if (erroPix) throw new AppError("internal_error", "Falha ao carregar a igreja", erroPix);
       const aprovado = ((pix ?? []) as Array<{ chave: string; titular: string | null }>)[0];

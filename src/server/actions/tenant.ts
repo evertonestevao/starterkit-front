@@ -11,7 +11,9 @@ import { getRequestEvidence, getTermsService } from "@/server/terms";
 import { getInviteService } from "@/server/invites";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { ACTIVE_COMPANY_COOKIE, getTenantService } from "@/server/tenant";
+import { getEmailProvider } from "@/adapters/email";
 import { getServerEnv } from "@/config/env";
+import { createEmailService } from "@/services/emailService";
 import { linkDeAceite } from "@/services/inviteService";
 import { permissionService } from "@/services/permissionService";
 import type { RoleCode } from "@/types/database";
@@ -30,10 +32,7 @@ async function setActiveCompanyCookie(companyId: string) {
   });
 }
 
-export async function createCompanyAction(
-  _prev: ActionState | undefined,
-  formData: FormData,
-): Promise<ActionState> {
+export async function createCompanyAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
   let companyId: string;
   try {
     // Gate de termos no onboarding: sem aceite da versão vigente, a empresa
@@ -41,18 +40,11 @@ export async function createCompanyAction(
     const terms = await getTermsService();
     if (!(await terms.hasAcceptedCurrent("igreja"))) {
       if (formData.get("accept_terms") !== "on") {
-        throw new AppError(
-          "validation_error",
-          "Você precisa aceitar os termos de uso para continuar",
-        );
+        throw new AppError("validation_error", "Você precisa aceitar os termos de uso para continuar");
       }
       const evidence = await getRequestEvidence();
       await terms.acceptCurrentTerms("igreja", evidence);
-      await terms.setConsent(
-        "email_communications",
-        formData.get("email_consent") === "on",
-        evidence,
-      );
+      await terms.setConsent("email_communications", formData.get("email_consent") === "on", evidence);
     }
 
     const tenant = await getTenantService();
@@ -86,10 +78,7 @@ export async function switchCompanyAction(companyId: string): Promise<ActionStat
   }
 }
 
-export async function updateCompanyAction(
-  _prev: ActionState | undefined,
-  formData: FormData,
-): Promise<ActionState> {
+export async function updateCompanyAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
   try {
     const companyId = String(formData.get("companyId") ?? "");
     const tenant = await getTenantService();
@@ -108,10 +97,7 @@ export async function updateCompanyAction(
   }
 }
 
-export async function inviteMemberAction(
-  _prev: ActionState | undefined,
-  formData: FormData,
-): Promise<ActionState> {
+export async function inviteMemberAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
   try {
     const companyId = String(formData.get("companyId") ?? "");
     await convidarParaSistema({
@@ -126,10 +112,7 @@ export async function inviteMemberAction(
   }
 }
 
-export async function revokeInviteAction(
-  inviteId: string,
-  companyId: string,
-): Promise<ActionState | void> {
+export async function revokeInviteAction(inviteId: string, companyId: string): Promise<ActionState | void> {
   try {
     const tenant = await getTenantService();
     const role = await tenant.requireMembership(companyId);
@@ -222,10 +205,45 @@ export async function changeMemberRoleAction(
   }
 }
 
-export async function removeMemberAction(
+/**
+ * Dá ou tira o papel de Responsável. A auditoria é gravada pelo banco, junto
+ * com a mudança; aqui só o aviso por e-mail, que não desfaz nada se falhar.
+ */
+export async function definirResponsavelAction(
   companyId: string,
   memberId: string,
+  tornar: boolean,
+  nomeDaPessoa: string,
 ): Promise<ActionState | void> {
+  try {
+    const supabase = await getSupabaseServerClient();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new AppError("unauthorized", "Faça login para continuar.");
+
+    const tenant = await getTenantService();
+    const { avisar } = await tenant.definirResponsavel(companyId, memberId, tornar);
+
+    const igreja = (await tenant.listMyCompanies()).find((c) => c.id === companyId);
+    await createEmailService({ provider: getEmailProvider(), appUrl: getServerEnv().APP_URL })
+      .sendResponsavelChanged({
+        to: [...new Set(avisar.map((a) => a.email))],
+        churchName: igreja?.name ?? "sua igreja",
+        pessoa:
+          String(nomeDaPessoa ?? "")
+            .trim()
+            .slice(0, 120) || "Uma pessoa",
+        tornou: tornar,
+        alteradoPor: auth.user.email ?? "um Responsável",
+      })
+      .catch((err) => console.error("[responsavel] falha ao avisar por e-mail", err));
+
+    revalidatePath("/dashboard", "layout");
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export async function removeMemberAction(companyId: string, memberId: string): Promise<ActionState | void> {
   try {
     const tenant = await getTenantService();
     const { removedRole } = await tenant.removeMember(companyId, memberId);

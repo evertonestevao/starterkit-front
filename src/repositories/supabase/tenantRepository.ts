@@ -77,7 +77,14 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         }
         throw new AppError("internal_error", "Falha ao criar igreja", error);
       }
-      return { ...data, role: "owner" as const, pode_acompanhar: false, pode_gerir_ebd: false, professor_ebd: false, acessos: [] };
+      return {
+        ...data,
+        role: "owner" as const,
+        pode_acompanhar: false,
+        pode_gerir_ebd: false,
+        professor_ebd: false,
+        acessos: [],
+      };
     },
 
     async updateCompany(companyId, { name }) {
@@ -176,6 +183,24 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       if (!data || data.length === 0) {
         throw new AppError("not_found", "Membro não encontrado");
       }
+    },
+
+    async definirResponsavel(memberId, tornar) {
+      const { data, error } = await client.rpc("definir_responsavel", {
+        p_member_id: memberId,
+        p_responsavel: tornar,
+      });
+      if (error) {
+        if (error.code === "P0002") throw new AppError("not_found", "Membro não encontrado");
+        if (error.code === "23514") {
+          throw new AppError(
+            "validation_error",
+            "A igreja precisa de pelo menos um Responsável. Defina outro antes de tirar este.",
+          );
+        }
+        throw new AppError("internal_error", "Falha ao definir o Responsável", error);
+      }
+      return (data ?? []) as Array<{ email: string; afetado: boolean }>;
     },
 
     async leaveCompany(companyId) {
