@@ -3,7 +3,7 @@ import Link from "next/link";
 import { TermsEditor } from "@/features/platform/components/terms-editor";
 import { cn } from "@/lib/utils";
 import { NOME_DO_PUBLICO, PUBLICOS_DOS_TERMOS, isPublicoDosTermos, type PublicoDosTermos } from "@/lib/termos";
-import { getPlatformTermsService } from "@/server/platform";
+import { exigePlatformStaff, getPlatformTermsService } from "@/server/platform";
 
 export const metadata: Metadata = { title: "Termos de Uso" };
 
@@ -16,6 +16,7 @@ const dataHora = (iso: string) =>
  * registra quem publicou.
  */
 export default async function PlatformTermsPage({ searchParams }: { searchParams: Promise<{ publico?: string }> }) {
+  await exigePlatformStaff();
   const pedido = (await searchParams).publico ?? "";
   const audience: PublicoDosTermos = isPublicoDosTermos(pedido) ? pedido : "igreja";
   const { vigente, historico, proximaVersao } = await (await getPlatformTermsService()).carregar(audience);

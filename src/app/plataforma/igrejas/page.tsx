@@ -12,7 +12,7 @@ import { ChurchHierarchyForm } from "@/features/platform/components/church-hiera
 import { MensalidadeForm } from "@/features/platform/components/mensalidade-form";
 import { churchTagUrl } from "@/lib/churchVisits";
 import { paginaDaUrl, paginar } from "@/lib/paginacao";
-import { getChurchHierarchyService, getMensalidadeService } from "@/server/platform";
+import { exigePlatformStaff, getChurchHierarchyService, getMensalidadeService } from "@/server/platform";
 import { formatCents } from "@/services/sponsorPricing";
 import { CHURCH_TIPO_LABEL } from "@/services/churchHierarchyService";
 
@@ -26,6 +26,7 @@ export default async function PlatformChurchesPage({
 }: {
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
+  await exigePlatformStaff();
   const { q = "", page } = await searchParams;
   const service = await getChurchHierarchyService();
   const todas = await service.listTree();

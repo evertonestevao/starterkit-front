@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { AutopatrocinioForm, PlatformSettingsForm } from "@/features/platform/components/platform-settings-form";
 import { SponsorPricingForm } from "@/features/platform/components/sponsor-pricing-form";
-import { getPlatformPricingService, getPlatformSettingsService } from "@/server/platform";
+import { exigePlatformStaff, getPlatformPricingService, getPlatformSettingsService } from "@/server/platform";
 
 export const metadata: Metadata = { title: "Configurações" };
 
@@ -11,6 +11,7 @@ export const metadata: Metadata = { title: "Configurações" };
  * RPCs exigem `platform_staff`, registrando cada alteração na trilha.
  */
 export default async function PlatformSettingsPage() {
+  await exigePlatformStaff();
   const [settings, tiers] = await Promise.all([
     (await getPlatformSettingsService()).get(),
     (await getPlatformPricingService()).getTiers(),

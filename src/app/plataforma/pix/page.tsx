@@ -1,3 +1,4 @@
+import { exigePlatformStaff } from "@/server/platform";
 import type { Metadata } from "next";
 import { Inbox } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
@@ -27,6 +28,7 @@ function formatDateTime(iso: string | null): string {
  * ler e comparar com o nome da igreja.
  */
 export default async function PlatformPixPage() {
+  await exigePlatformStaff();
   const pendentes = await (await getPixModeracaoService()).listPendentes();
 
   return (

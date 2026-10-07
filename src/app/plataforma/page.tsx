@@ -1,16 +1,10 @@
+import { exigePlatformStaff } from "@/server/platform";
 import type { Metadata } from "next";
 import { AlertTriangle, CircleDollarSign, QrCode, Repeat, Users } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { MetricCard } from "@/components/metric-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getPixCopiesByWeek, getVisitMetricsRepository } from "@/server/churchVisits";
 import { formatCents } from "@/services/sponsorPricing";
 
@@ -39,6 +33,7 @@ function formatSemana(iso: string): string {
  * ("PIX copiado").
  */
 export default async function PlatformOverviewPage() {
+  await exigePlatformStaff();
   const repo = await getVisitMetricsRepository();
   const [resumo, visitas, copiasPix] = await Promise.all([
     repo.getPilotSummary(),
@@ -54,8 +49,7 @@ export default async function PlatformOverviewPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Visão geral</h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Patrocinadores, renovações e quantas vezes a página de cada igreja foi aberta. Números
-          medidos, sem amostra.
+          Patrocinadores, renovações e quantas vezes a página de cada igreja foi aberta. Números medidos, sem amostra.
         </p>
       </div>
 
@@ -90,10 +84,9 @@ export default async function PlatformOverviewPage() {
         <CardHeader>
           <CardTitle>Aberturas da página por igreja e semana</CardTitle>
           <CardDescription>
-            Últimas {SEMANAS} semanas. QR e NFC só aparecem separados quando o material impresso usa
-            o endereço com a origem (?origem=qr ou ?origem=nfc). &quot;PIX copiado&quot; conta quem
-            copiou a chave da igreja — é intenção de doar, não doação: o dinheiro vai direto para a
-            igreja e a plataforma não vê valor nenhum.
+            Últimas {SEMANAS} semanas. QR e NFC só aparecem separados quando o material impresso usa o endereço com a
+            origem (?origem=qr ou ?origem=nfc). &quot;PIX copiado&quot; conta quem copiou a chave da igreja — é intenção
+            de doar, não doação: o dinheiro vai direto para a igreja e a plataforma não vê valor nenhum.
           </CardDescription>
         </CardHeader>
         <CardContent>

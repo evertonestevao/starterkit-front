@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AbuseReportReview } from "@/features/platform/components/abuse-report-review";
-import { getPlatformModerationService } from "@/server/platform";
+import { exigePlatformStaff, getPlatformModerationService } from "@/server/platform";
 
 export const metadata: Metadata = { title: "Denúncias" };
 
@@ -18,19 +18,17 @@ function formatDateTime(iso: string): string {
 }
 
 export default async function PlatformReportsPage() {
+  await exigePlatformStaff();
   const service = await getPlatformModerationService();
-  const [denuncias, sinais] = await Promise.all([
-    service.listAbuseReports(),
-    service.listHiddenSignals(),
-  ]);
+  const [denuncias, sinais] = await Promise.all([service.listAbuseReports(), service.listHiddenSignals()]);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Denúncias</h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Casos que uma igreja pediu para a plataforma olhar. Esconder um patrocinador é decisão de
-          cada igreja e não passa por aqui — decidir uma denúncia também não esconde ninguém.
+          Casos que uma igreja pediu para a plataforma olhar. Esconder um patrocinador é decisão de cada igreja e não
+          passa por aqui — decidir uma denúncia também não esconde ninguém.
         </p>
       </div>
 

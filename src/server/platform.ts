@@ -1,3 +1,5 @@
+import { cache } from "react";
+import { notFound } from "next/navigation";
 import "server-only";
 import { getEmailProvider } from "@/adapters/email";
 import { createSupabaseStorageProvider } from "@/adapters/storage/supabaseStorageProvider";
@@ -29,11 +31,22 @@ import { getSupabaseServerClient } from "./supabase-server";
  * cada RPC — a checagem daqui serve para a UI não oferecer o que não pode, e
  * não como barreira. A barreira está no banco.
  */
-export async function isPlatformStaff(): Promise<boolean> {
+export const isPlatformStaff = cache(async (): Promise<boolean> => {
   const client = await getSupabaseServerClient();
   const { data, error } = await client.rpc("is_platform_staff");
   if (error) return false;
   return Boolean(data);
+});
+
+/**
+ * Guarda das TELAS da moderação: quem não é da moderação recebe "não
+ * encontrado". O layout já faz isso, mas layout e página são renderizados em
+ * paralelo — sem a guarda também na página, ela chega a pedir os dados, o
+ * banco nega e o log registra um erro a cada visita de curioso em /plataforma.
+ * (`isPlatformStaff` é uma consulta só por request, para as duas chamadas.)
+ */
+export async function exigePlatformStaff(): Promise<void> {
+  if (!(await isPlatformStaff())) notFound();
 }
 
 /** Usada nas server actions: falha fechada. */

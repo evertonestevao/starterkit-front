@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfileChangeReview } from "@/features/platform/components/profile-change-review";
 import { SecurityHoldList } from "@/features/platform/components/security-hold-list";
 import { sponsorLinkHref } from "@/lib/sponsorLink";
-import { getPendingLogoUrl, getPlatformModerationService } from "@/server/platform";
+import { exigePlatformStaff, getPendingLogoUrl, getPlatformModerationService } from "@/server/platform";
 import type { PendingProfileChange } from "@/types/sponsorship";
 
 export const metadata: Metadata = { title: "Alterações pendentes" };
@@ -56,19 +56,17 @@ function LinkDiff({ change }: { change: PendingProfileChange }) {
 }
 
 export default async function PlatformChangesPage() {
+  await exigePlatformStaff();
   const service = await getPlatformModerationService();
-  const [pendentes, travadas] = await Promise.all([
-    service.listPendingProfileChanges(),
-    service.listSecurityHolds(),
-  ]);
+  const [pendentes, travadas] = await Promise.all([service.listPendingProfileChanges(), service.listSecurityHolds()]);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Alterações pendentes</h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Nome, logo e link de patrocinadores aparecem nas páginas públicas das igrejas. Nada entra no ar
-          sem passar por aqui — até a decisão, as igrejas seguem exibindo o perfil anterior.
+          Nome, logo e link de patrocinadores aparecem nas páginas públicas das igrejas. Nada entra no ar sem passar por
+          aqui — até a decisão, as igrejas seguem exibindo o perfil anterior.
         </p>
       </div>
 
@@ -106,11 +104,7 @@ export default async function PlatformChangesPage() {
                     {change.atualLogoUrl ? (
                       <figure className="flex flex-col items-center gap-1">
                         {/* eslint-disable-next-line @next/next/no-img-element -- logo em storage externo */}
-                        <img
-                          src={change.atualLogoUrl}
-                          alt=""
-                          className="size-16 rounded-lg border object-contain"
-                        />
+                        <img src={change.atualLogoUrl} alt="" className="size-16 rounded-lg border object-contain" />
                         <figcaption className="text-xs text-muted-foreground">atual</figcaption>
                       </figure>
                     ) : null}
