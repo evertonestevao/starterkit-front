@@ -10,6 +10,7 @@ import {
   saudeDaUnidade,
   serieSemanal,
   tendenciaDaPresenca,
+  VARIACAO_MINIMA,
   type NivelDeSaude,
   type SemanaDaRede,
   type Tendencia,
@@ -102,15 +103,22 @@ function Tracinho({ valores }: { valores: Array<number | null> }) {
 
 function SeloDeTendencia({ tendencia }: { tendencia: Tendencia }) {
   if (tendencia.sentido === "sem_dados" || tendencia.delta === null) return null;
-  const pontos = Math.abs(tendencia.delta).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  const modulo = Math.abs(tendencia.delta);
+  const pontos = modulo.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  const rotulo = modulo === 1 ? "ponto" : "pontos";
+  // Ao passar o mouse (ou para leitor de tela): de quanto para quanto.
+  const deQuantoParaQuanto = `Presença nos cultos: ${formatarPorcento(tendencia.anterior)} nas 4 semanas anteriores, ${formatarPorcento(tendencia.atual)} nas últimas 4.`;
   const { Icone, texto, classe } =
     tendencia.sentido === "subiu"
-      ? { Icone: ArrowUpRight, texto: `subiu ${pontos} pts`, classe: "text-emerald-700 dark:text-emerald-400" }
+      ? { Icone: ArrowUpRight, texto: `subiu ${pontos} ${rotulo}`, classe: "text-emerald-700 dark:text-emerald-400" }
       : tendencia.sentido === "caiu"
-        ? { Icone: ArrowDownRight, texto: `caiu ${pontos} pts`, classe: "text-destructive" }
+        ? { Icone: ArrowDownRight, texto: `caiu ${pontos} ${rotulo}`, classe: "text-destructive" }
         : { Icone: ArrowRight, texto: "estável", classe: "text-muted-foreground" };
   return (
-    <span className={cn("inline-flex items-center gap-0.5 text-xs font-medium whitespace-nowrap", classe)}>
+    <span
+      title={deQuantoParaQuanto}
+      className={cn("inline-flex items-center gap-0.5 text-xs font-medium whitespace-nowrap", classe)}
+    >
       <Icone className="size-3.5" aria-hidden />
       {texto}
     </span>
@@ -259,11 +267,50 @@ export function MapaDaRede({
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">
-          Toque em uma igreja para ver só os números dela. Parada: sem culto nem EBD registrados há mais de 45 dias.
-          Pede atenção: presença baixa, muitas faltas seguidas, pedido de visita sem contato, registro atrasado ou
-          mensalidade pendente. A linha mostra a presença nos cultos nas últimas 12 semanas.
-        </p>
+        {/* Como ler: nada aqui depende de adivinhar o que a cor, a seta ou os "pontos" querem dizer. */}
+        <div className="rounded-lg bg-muted/50 p-3 text-xs leading-5 text-muted-foreground">
+          <p className="font-medium text-foreground">Como ler</p>
+          <dl className="mt-1 grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+            <div>
+              <dt className="inline font-medium text-foreground">Número grande: </dt>
+              <dd className="inline">a presença nos cultos nas últimas 8 semanas.</dd>
+            </div>
+            <div>
+              <dt className="inline font-medium text-foreground">Subiu ou caiu tantos pontos: </dt>
+              <dd className="inline">
+                a diferença entre a presença das últimas 4 semanas e a das 4 semanas anteriores.
+                {geral.delta !== null && geral.sentido !== "estavel"
+                  ? ` Na rede, ela foi de ${formatarPorcento(geral.anterior)} para ${formatarPorcento(geral.atual)}: ${
+                      geral.sentido === "subiu" ? "subiu" : "caiu"
+                    } ${Math.abs(geral.delta).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pontos.`
+                  : " Por exemplo, de 80% para 74% são 6 pontos a menos."}{" "}
+                Menos de {VARIACAO_MINIMA} pontos de diferença aparece como estável.
+              </dd>
+            </div>
+            <div>
+              <dt className="inline font-medium text-foreground">Linha: </dt>
+              <dd className="inline">
+                o desenho da presença nas últimas 12 semanas, na escala da própria igreja. Serve para ver se sobe ou
+                cai, não para comparar uma igreja com outra.
+              </dd>
+            </div>
+            <div>
+              <dt className="inline font-medium text-foreground">Parada: </dt>
+              <dd className="inline">sem culto nem EBD registrados há mais de 45 dias.</dd>
+            </div>
+            <div>
+              <dt className="inline font-medium text-foreground">Pede atenção: </dt>
+              <dd className="inline">
+                presença abaixo de 60%, muitas faltas seguidas, pedido de visita sem contato, registro atrasado ou
+                mensalidade pendente.
+              </dd>
+            </div>
+            <div>
+              <dt className="inline font-medium text-foreground">Para ver uma igreja: </dt>
+              <dd className="inline">toque no bloco dela.</dd>
+            </div>
+          </dl>
+        </div>
       </CardContent>
     </Card>
   );
