@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
+import type { MensalidadePendente, MotivoPendencia } from "@/lib/mensalidadeAviso";
 import type {
   ChurchSelfPaymentRepository,
   ChurchSelfPaymentStatusBase,
@@ -26,6 +27,32 @@ export function createSupabaseChurchSelfPaymentRepository(client: SupabaseClient
   }
 
   return {
+    async pendencias(companyId) {
+      const { data, error } = await client.rpc("mensalidades_pendentes", { p_company_id: companyId });
+      if (error) throw new AppError("internal_error", "Falha ao verificar a mensalidade", error);
+      return (
+        (data ?? []) as Array<{
+          church_id: string;
+          church_name: string;
+          motivo: MotivoPendencia;
+          desde: string;
+          tolerancia_ate: string;
+        }>
+      ).map((r): MensalidadePendente => ({
+        churchId: r.church_id,
+        churchName: r.church_name,
+        motivo: r.motivo,
+        desde: r.desde,
+        toleranciaAte: r.tolerancia_ate,
+      }));
+    },
+
+    async bloqueada(companyId) {
+      const { data, error } = await client.rpc("mensalidade_bloqueada", { p_company_id: companyId });
+      if (error) throw new AppError("internal_error", "Falha ao verificar a mensalidade", error);
+      return data === true;
+    },
+
     async setPaymentMethod(churchId, method) {
       const { data, error } = await client.rpc("definir_forma_mensalidade", { p_church_id: churchId, p_forma: method });
       if (error) {

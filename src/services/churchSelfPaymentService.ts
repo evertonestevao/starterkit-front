@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidDocumentFor, onlyDigits } from "@/lib/brDocument";
 import { AppError, toValidationError } from "@/lib/errors";
+import type { MensalidadePendente } from "@/lib/mensalidadeAviso";
 import { phoneSchema, sponsorKindSchema } from "@/features/sponsor/schemas";
 import type { PaymentMethod, SponsorAccount, SponsorKind } from "@/types/sponsorship";
 
@@ -66,6 +67,14 @@ export type ChurchSelfPaymentStatusBase = Omit<ChurchSelfPaymentStatus, "pixDisp
 
 export interface ChurchSelfPaymentRepository {
   getStatus(churchId: string): Promise<ChurchSelfPaymentStatusBase>;
+  /**
+   * RPC mensalidades_pendentes: igrejas da empresa com a mensalidade pendente
+   * (fatura vencida, ou nunca em dia) e até quando vai a tolerância. Vazio para
+   * quem não administra a empresa.
+   */
+  pendencias(companyId: string): Promise<MensalidadePendente[]>;
+  /** RPC mensalidade_bloqueada: a tolerância acabou e o painel da empresa está suspenso? */
+  bloqueada(companyId: string): Promise<boolean>;
   /** RPC definir_forma_mensalidade: grava a forma escolhida e devolve a conta de cobrança. */
   setPaymentMethod(churchId: string, method: PaymentMethod): Promise<string>;
   /** RPC enable_church_self_payment: cria ou reaproveita a conta+patrocínio. */
@@ -144,6 +153,16 @@ export function createChurchSelfPaymentService(deps: {
   return {
     getStatus(churchId: string): Promise<ChurchSelfPaymentStatus> {
       return status(churchId);
+    },
+
+    /** Mensalidades pendentes da empresa, para o aviso no topo do painel. */
+    pendencias(companyId: string): Promise<MensalidadePendente[]> {
+      return repo.pendencias(companyId);
+    },
+
+    /** O painel da empresa está suspenso por mensalidade pendente além da tolerância? */
+    bloqueada(companyId: string): Promise<boolean> {
+      return repo.bloqueada(companyId);
     },
 
     /**

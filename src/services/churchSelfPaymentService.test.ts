@@ -58,6 +58,8 @@ function build(pixDisponivel = false) {
     getStatus: vi.fn(async () => STATUS_ATIVO),
     enable: vi.fn(async () => ACCOUNT),
     setPaymentMethod: vi.fn(async () => ACCOUNT.id),
+    pendencias: vi.fn(async () => []),
+    bloqueada: vi.fn(async () => false),
     setAceitaPatrocinio: vi.fn(async () => {}),
   };
   const biller: SelfPaymentBiller = {

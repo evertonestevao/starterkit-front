@@ -8471,6 +8471,125 @@ begin
 end $$;
 reset role;
 
+-- Pendência e tolerância (migration 20261008130000). A AC Cong (d2, criada
+-- agora, no teste) tem conta de cobrança e uma fatura que acabou de ser paga
+-- — mas nunca teve a mensalidade ativa.
+do $$
+declare n int;
+begin
+  if (select mensalidade_tolerancia_dias from public.platform_settings where id = 1) <> 14 then
+    raise exception 'FALHA pendencia: a tolerancia padrao nao e de 14 dias';
+  end if;
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare r record;
+begin
+  -- Cadastro iniciado e nunca ativo: pendente desde a criação da igreja, com 14 dias.
+  -- Dentro da tolerância, o painel não está suspenso.
+  if public.mensalidade_bloqueada('acacacac-0000-4000-8000-0000000000c2') then
+    raise exception 'FALHA pendencia: igreja dentro da tolerancia ja esta suspensa';
+  end if;
+  select * into r from public.mensalidades_pendentes('acacacac-0000-4000-8000-0000000000c2')
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if r.motivo is distinct from 'cadastro_incompleto' or r.tolerancia_ate <> r.desde + 14 then
+    raise exception 'FALHA pendencia: cadastro incompleto mal classificado (% / % / %)', r.motivo, r.desde, r.tolerancia_ate;
+  end if;
+end $$;
+reset role;
+
+-- Fatura vencida há 3 dias: pendente desde o vencimento.
+insert into public.sponsor_charges (sponsor_id, gateway, gateway_payment_id, amount_cents, active_count, due_date, status)
+values ('8b8b8b8b-0000-4000-8000-0000000000f1', 'fake', 'pay_rls_vencida', 8990, 1, current_date - 3, 'overdue');
+set local role authenticated;
+do $$
+declare r record; n int;
+begin
+  select * into r from public.mensalidades_pendentes('acacacac-0000-4000-8000-0000000000c2')
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if r.motivo is distinct from 'fatura_vencida' or r.tolerancia_ate <> r.desde + 14 then
+    raise exception 'FALHA pendencia: fatura vencida mal classificada (% / %)', r.motivo, r.desde;
+  end if;
+end $$;
+-- Quem não administra a empresa (a secretaria, a igreja de cima, outra rede) não vê nada.
+do $$
+declare v_quem text; n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.mensalidades_pendentes('acacacac-0000-4000-8000-0000000000c2');
+    if n <> 0 then raise exception 'FALHA pendencia: % viu a pendencia da congregacao', v_quem; end if;
+  end loop;
+end $$;
+reset role;
+
+-- Vencida há 20 dias: a tolerância (14) acabou e o painel fica suspenso. Quem é
+-- da empresa fica sabendo (só sim/não); quem é de fora recebe sempre "não".
+update public.sponsor_charges set due_date = current_date - 20 where gateway_payment_id = 'pay_rls_vencida';
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if not public.mensalidade_bloqueada('acacacac-0000-4000-8000-0000000000c2') then
+    raise exception 'FALHA pendencia: passada a tolerancia, o painel nao foi suspenso';
+  end if;
+  begin
+    perform public.mensalidades_pendentes_base('acacacac-0000-4000-8000-0000000000c2');
+    raise exception 'FALHA pendencia: a consulta sem checagem ficou chamavel';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if public.mensalidade_bloqueada('acacacac-0000-4000-8000-0000000000c2') then
+    raise exception 'FALHA pendencia: outra rede soube que a congregacao esta suspensa';
+  end if;
+end $$;
+reset role;
+
+-- Fatura paga e mensalidade ativa: deixa de estar pendente.
+update public.sponsor_charges set status = 'paid' where gateway_payment_id = 'pay_rls_vencida';
+insert into public.sponsorships (sponsor_id, church_id, company_id, status, activated_at)
+values ('8b8b8b8b-0000-4000-8000-0000000000f1', 'acacacac-0000-4000-8000-0000000000d2',
+        'acacacac-0000-4000-8000-0000000000c2', 'active', now());
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.mensalidades_pendentes('acacacac-0000-4000-8000-0000000000c2')
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if n <> 0 then raise exception 'FALHA pendencia: mensalidade em dia continua pendente'; end if;
+  if public.mensalidade_bloqueada('acacacac-0000-4000-8000-0000000000c2') then
+    raise exception 'FALHA pendencia: pagou e o painel continua suspenso';
+  end if;
+end $$;
+reset role;
+set local role anon;
+do $$
+begin
+  perform public.mensalidades_pendentes('acacacac-0000-4000-8000-0000000000c2');
+  raise exception 'FALHA pendencia: anon consultou as pendencias';
+exception when sqlstate '42501' then null;
+end $$;
+do $$
+begin
+  perform public.mensalidade_bloqueada('acacacac-0000-4000-8000-0000000000c2');
+  raise exception 'FALHA pendencia: anon consultou a suspensao';
+exception when sqlstate '42501' then null;
+end $$;
+reset role;
+
 -- Forma de pagamento (migration 20261008120000): quem administra a igreja
 -- escolhe, e só enquanto não há cobrança recorrente viva.
 set local role authenticated;

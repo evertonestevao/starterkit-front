@@ -1,6 +1,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell/app-shell";
+import { AvisoMensalidade, PainelSuspenso } from "@/features/church/components/aviso-mensalidade";
+import { hojeISO } from "@/lib/acompanhamento";
+import { montarAviso, montarBloqueio, pendenciaPrincipal } from "@/lib/mensalidadeAviso";
+import { getMensalidadeBloqueada } from "@/server/mensalidadeBloqueio";
+import { getChurchSelfPaymentService } from "@/server/churchSelfPayment";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
 import { createSupabaseUserRepository } from "@/repositories/supabase/userRepository";
 import { createMemoryRateLimiter } from "@/server/rateLimit";
@@ -87,6 +92,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
         .catch(() => 0)
     : 0;
 
+  // Mensalidade pendente. Durante a tolerância: aviso no topo, só para quem
+  // administra a igreja (a situação financeira dela não é assunto de quem só
+  // faz a chamada). Passada a tolerância: painel suspenso para todos, com a
+  // explicação no lugar das telas. Se a consulta do detalhe falhar, o painel
+  // segue sem o aviso (e a suspensão, com a mensagem genérica).
+  const administra = active.role === "owner" || active.role === "admin";
+  const suspenso = await getMensalidadeBloqueada();
+  const pendencias = administra
+    ? await (await getChurchSelfPaymentService()).pendencias(active.id).catch((err: unknown) => {
+        console.error("[painel] falha ao verificar a mensalidade", err);
+        return [];
+      })
+    : [];
+  const pendencia = pendenciaPrincipal(pendencias);
+  const variasIgrejas = pendencias.length > 1;
+  const bloqueio = suspenso ? montarBloqueio(pendencia, administra, variasIgrejas) : null;
+  const avisoMensalidade = !suspenso && pendencia ? montarAviso(pendencia, hojeISO(), variasIgrejas) : null;
+
   const cookieStore = await cookies();
   const initialCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "true";
 
@@ -105,7 +128,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           pendingInvitesCount={myInvites.length}
           unseenPrayerRequestsCount={unseenPrayerRequestsCount}
         >
-          {children}
+          {avisoMensalidade ? <AvisoMensalidade aviso={avisoMensalidade} /> : null}
+          {bloqueio ? <PainelSuspenso bloqueio={bloqueio}>{children}</PainelSuspenso> : children}
         </AppShell>
       </NomesNiveisProvider>
     </TenantProvider>
