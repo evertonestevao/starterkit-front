@@ -19,17 +19,24 @@ export function AutopatrocinioForm({ amountCents }: { amountCents: number }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Autopatrocínio</CardTitle>
+        <CardTitle>Mensalidade das igrejas</CardTitle>
         <CardDescription>
-          Quanto a própria igreja paga por mês quando assume a mensalidade dela, por falta de
-          patrocinador. Só é oferecido a igreja sem nenhum patrocinador ativo.
+          Quanto cada igreja paga por mês, por padrão. Valor diferente para uma igreja específica (desconto, igreja de
+          teste) é definido em Igrejas → Mensalidade. Igreja com patrocinador ativo não paga.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="flex flex-wrap items-end gap-3">
           <div className="flex max-w-[12rem] flex-col gap-1.5">
             <Label htmlFor="autopatrocinio-amount">Valor mensal</Label>
-            <Input id="autopatrocinio-amount" name="amount" value={value} onChange={onChange} inputMode="numeric" required />
+            <Input
+              id="autopatrocinio-amount"
+              name="amount"
+              value={value}
+              onChange={onChange}
+              inputMode="numeric"
+              required
+            />
           </div>
           <Button type="submit" disabled={pending}>
             {pending ? "Salvando..." : "Salvar"}
@@ -55,10 +62,9 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
         <CardHeader>
           <CardTitle>Vagas de primeiro patrocínio</CardTitle>
           <CardDescription>
-            Quantos patrocinadores podem ter cada tipo de igreja como a igreja principal deles.
-            Deixe vazio para não limitar. Zero fecha a igreja para novos patrocinadores. A expansão
-            — a segunda, terceira e demais igrejas de quem já patrocina — nunca ocupa vaga nem é
-            limitada.
+            Quantos patrocinadores podem ter cada tipo de igreja como a igreja principal deles. Deixe vazio para não
+            limitar. Zero fecha a igreja para novos patrocinadores. A expansão — a segunda, terceira e demais igrejas de
+            quem já patrocina — nunca ocupa vaga nem é limitada.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
@@ -99,9 +105,9 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
         <CardHeader>
           <CardTitle>Carência da marca</CardTitle>
           <CardDescription>
-            Dias de atraso no pagamento até a marca do patrocinador sair da vitrine da igreja. Ela
-            volta sozinha quando o pagamento entra. A conta é feita na hora em que a página é
-            aberta, então mudar este número vale para todo mundo no acesso seguinte.
+            Dias de atraso no pagamento até a marca do patrocinador sair da vitrine da igreja. Ela volta sozinha quando
+            o pagamento entra. A conta é feita na hora em que a página é aberta, então mudar este número vale para todo
+            mundo no acesso seguinte.
           </CardDescription>
         </CardHeader>
         <CardContent>

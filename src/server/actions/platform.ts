@@ -9,6 +9,7 @@ import {
   requirePlatformStaff,
 } from "@/server/platform";
 import { getPixModeracaoService } from "@/server/pixModeracao";
+import { getMensalidadeService } from "@/server/platform";
 import { getPublicSponsorProfileService } from "@/server/sponsorProfile";
 import { toActionError, type ActionState } from "./action-state";
 
@@ -56,8 +57,7 @@ export async function undoProfileChangeAction(
     const ok = await service.undoByToken(String(formData.get("token") ?? ""));
     return ok
       ? {
-          success:
-            "Alteração desfeita e conta bloqueada para novas alterações. Fale com o suporte para liberar.",
+          success: "Alteração desfeita e conta bloqueada para novas alterações. Fale com o suporte para liberar.",
         }
       : { error: "Este link não vale mais. Se a alteração já foi decidida, fale com o suporte." };
   } catch (err) {
@@ -83,9 +83,7 @@ export async function reviewAbuseReportAction(
 
     revalidatePath("/plataforma", "layout");
     return {
-      success: procedente
-        ? "Denúncia marcada como procedente."
-        : "Denúncia marcada como improcedente.",
+      success: procedente ? "Denúncia marcada como procedente." : "Denúncia marcada como improcedente.",
     };
   } catch (err) {
     return toActionError(err);
@@ -188,7 +186,7 @@ export async function updateAutopatrocinioAmountAction(
     const service = await getPlatformSettingsService();
     await service.updateAutopatrocinioAmount(String(formData.get("amount") ?? ""));
     revalidatePath("/plataforma/configuracoes");
-    return { success: "Valor do autopatrocínio salvo." };
+    return { success: "Mensalidade padrão salva." };
   } catch (err) {
     return toActionError(err);
   }
@@ -198,7 +196,9 @@ export async function updateAutopatrocinioAmountAction(
 export async function decidirPixAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
   try {
     await requirePlatformStaff();
-    const { aprovado } = await (await getPixModeracaoService()).decidir({
+    const { aprovado } = await (
+      await getPixModeracaoService()
+    ).decidir({
       churchId: String(formData.get("churchId") ?? ""),
       aprovar: formData.get("decisao") === "aprovar",
       motivo: String(formData.get("motivo") ?? ""),
@@ -209,6 +209,32 @@ export async function decidirPixAction(_prev: ActionState | undefined, formData:
       success: aprovado
         ? "Chave aprovada. Ela já aparece na página da igreja."
         : "Chave recusada. A igreja vê o motivo na tela do Pix.",
+    };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Define o valor da mensalidade de UMA igreja (vazio = volta ao padrão). Só a moderação. */
+export async function definirMensalidadeAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    await requirePlatformStaff();
+    const valor = String(formData.get("valor") ?? "");
+    const { cobrancaPendente } = await (
+      await getMensalidadeService()
+    ).definir({
+      churchId: String(formData.get("churchId") ?? ""),
+      valor,
+      motivo: String(formData.get("motivo") ?? ""),
+    });
+    revalidatePath("/plataforma/igrejas");
+    const base =
+      valor.trim() === "" ? "A igreja voltou ao valor padrão." : "Valor da mensalidade salvo para esta igreja.";
+    return {
+      success: cobrancaPendente ? `${base} A cobrança que já existe será ajustada na próxima sincronização.` : base,
     };
   } catch (err) {
     return toActionError(err);

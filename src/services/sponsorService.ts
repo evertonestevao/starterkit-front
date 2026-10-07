@@ -24,12 +24,7 @@ import type {
   SponsorshipView,
   SponsorshipWithChurch,
 } from "@/types/sponsorship";
-import {
-  allocatePositions,
-  marginalPriceForNext,
-  totalForCount,
-  type PriceTier,
-} from "./sponsorPricing";
+import { allocatePositions, marginalPriceForNext, totalForCount, type PriceTier } from "./sponsorPricing";
 
 /**
  * Regra de negócio do patrocínio.
@@ -147,7 +142,7 @@ export interface SponsorBillingStore {
 
   // --- usados só pelo fluxo público (sem sessão) ---
   findAccountByEmail(email: string): Promise<SponsorAccount | null>;
-  findChurchByPublicCode(publicCode: string): Promise<SponsorshipInviteChurch & { companyId: string | null } | null>;
+  findChurchByPublicCode(publicCode: string): Promise<(SponsorshipInviteChurch & { companyId: string | null }) | null>;
   createAccountForUser(input: {
     userId: string;
     kind: SponsorAccount["kind"];
@@ -166,11 +161,7 @@ export interface SponsorBillingStore {
     companyId: string,
     primeiro: boolean,
   ): Promise<Sponsorship>;
-  recordTermsAcceptance(
-    userId: string,
-    evidence: RequestEvidence,
-    emailConsent: boolean,
-  ): Promise<void>;
+  recordTermsAcceptance(userId: string, evidence: RequestEvidence, emailConsent: boolean): Promise<void>;
 }
 
 /**
@@ -223,7 +214,8 @@ export interface SponsorServiceDeps {
   /** URL pública da app, usada nos retornos do provedor de pagamento. */
   appUrl: string;
   /** Só necessária se alguma conta puder ser de autopatrocínio (ver resolveTiersFor). */
-  getAutopatrocinioAmountCents?: () => Promise<number>;
+  /** Mensalidade da igreja da conta: o valor combinado com ela, ou o padrão. */
+  getAutopatrocinioAmountCents?: (churchId: string | null) => Promise<number>;
   audit?: (entry: SponsorAuditEntry) => Promise<void>;
   /** Só o fluxo público precisa; ausente = página pública desabilitada. */
   identity?: SponsorIdentityProvider;
@@ -272,7 +264,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
     if (!deps.getAutopatrocinioAmountCents) {
       throw new AppError("internal_error", "Valor do autopatrocínio não configurado.");
     }
-    return [{ position: 1, amountCents: await deps.getAutopatrocinioAmountCents() }];
+    return [{ position: 1, amountCents: await deps.getAutopatrocinioAmountCents(account.church_id) }];
   }
 
   async function recordAudit(entry: SponsorAuditEntry): Promise<void> {
@@ -305,10 +297,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       throw new AppError("not_found", "Conta de patrocinador não encontrada.");
     }
 
-    const [billable, tiers] = await Promise.all([
-      store.listBillableSponsorships(accountId),
-      resolveTiersFor(account),
-    ]);
+    const [billable, tiers] = await Promise.all([store.listBillableSponsorships(accountId), resolveTiersFor(account)]);
     const total = totalForCount(billable.length, tiers);
     const syncedAt = now().toISOString();
 
@@ -341,8 +330,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       // mudou, o cliente antigo fica para trás e um novo é criado.
       const providerName = defaultProviderName();
       const provider = resolveProvider(providerName);
-      let customerId =
-        account.gateway === providerName ? account.gateway_customer_id : null;
+      let customerId = account.gateway === providerName ? account.gateway_customer_id : null;
 
       if (!customerId) {
         ({ customerId } = await provider.createCustomer({
@@ -394,10 +382,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
     }
 
     try {
-      await resolveProvider(account.gateway).updateSubscriptionAmount(
-        account.gateway_subscription_id,
-        total,
-      );
+      await resolveProvider(account.gateway).updateSubscriptionAmount(account.gateway_subscription_id, total);
     } catch (err) {
       log.error("[sponsor] falha ao atualizar valor da assinatura", { accountId, total, err });
       await store.updateAccountBilling(accountId, { billing_sync_status: "pending" });
@@ -437,10 +422,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
     // a marca do patrocinador sumir da vitrine por uma cobrança que já foi
     // quitada. Pagamento só sai de `paid` por estorno ou cancelamento.
     const existente = await store.findCharge(provider, charge.paymentId);
-    if (
-      existente?.status === "paid" &&
-      (charge.status === "pending" || charge.status === "overdue")
-    ) {
+    if (existente?.status === "paid" && (charge.status === "pending" || charge.status === "overdue")) {
       log.warn("[sponsor] evento atrasado ignorado: cobrança já paga", {
         provider,
         paymentId: charge.paymentId,
@@ -457,10 +439,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       await store.activatePendingSponsorships(account.id, charge.paidAt ?? nowIso);
     }
 
-    const [billable, tiers] = await Promise.all([
-      store.listBillableSponsorships(account.id),
-      resolveTiersFor(account),
-    ]);
+    const [billable, tiers] = await Promise.all([store.listBillableSponsorships(account.id), resolveTiersFor(account)]);
 
     const { charge: saved } = await store.upsertCharge({
       sponsorId: account.id,
@@ -580,9 +559,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       ]);
 
       const billableCount = sponsorships.filter((s) => isBillable(s.status)).length;
-      const visibleCount = sponsorships.filter(
-        (s) => s.status === "active" || s.status === "cancel_scheduled",
-      ).length;
+      const visibleCount = sponsorships.filter((s) => s.status === "active" || s.status === "cancel_scheduled").length;
       const openCharge = charges.find((c) => c.status === "pending" || c.status === "overdue");
 
       let paymentState: SponsorOverview["paymentState"];
@@ -610,15 +587,10 @@ export function createSponsorService(deps: SponsorServiceDeps) {
     /** Patrocínios com o valor que cada um representa HOJE. */
     async listSponsorships(): Promise<SponsorshipView[]> {
       await requireAccount();
-      const [sponsorships, tiers] = await Promise.all([
-        repo.listMySponsorships(),
-        repo.listPriceTiers(),
-      ]);
+      const [sponsorships, tiers] = await Promise.all([repo.listMySponsorships(), repo.listPriceTiers()]);
 
       const allocation = allocatePositions(
-        sponsorships
-          .filter((s) => isBillable(s.status))
-          .map((s) => ({ ...s, rankedAt: s.created_at })),
+        sponsorships.filter((s) => isBillable(s.status)).map((s) => ({ ...s, rankedAt: s.created_at })),
         tiers,
       );
       const byId = new Map(allocation.map((item) => [item.sponsorship.id, item]));
@@ -675,10 +647,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       if (!church || !church.companyId) {
         throw new AppError("not_found", "Igreja não encontrada.");
       }
-      const [tiers, slots] = await Promise.all([
-        store.listPriceTiers(),
-        store.getChurchPrimeiroSlots(church.id),
-      ]);
+      const [tiers, slots] = await Promise.all([store.listPriceTiers(), store.getChurchPrimeiroSlots(church.id)]);
       return {
         church: {
           id: church.id,
@@ -751,10 +720,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
      * mandamos um link de acesso, e a pessoa confirma autenticada — onde o
      * valor com desconto aparece.
      */
-    async startPublicSponsorship(
-      input: unknown,
-      evidence: RequestEvidence,
-    ): Promise<PublicSponsorshipResult> {
+    async startPublicSponsorship(input: unknown, evidence: RequestEvidence): Promise<PublicSponsorshipResult> {
       if (!identity || !mailer) {
         throw new AppError("internal_error", "Assinatura pública não configurada");
       }
@@ -816,12 +782,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       // Aceite dos termos: é aqui que a pessoa entra no serviço (LGPD).
       await store.recordTermsAcceptance(created.userId, evidence, data.emailConsent);
 
-      const sponsorship = await store.createSponsorshipForAccount(
-        account.id,
-        church.id,
-        church.companyId,
-        true,
-      );
+      const sponsorship = await store.createSponsorshipForAccount(account.id, church.id, church.companyId, true);
 
       let billing: { invoiceUrl: string | null; syncPending: boolean };
       try {
@@ -847,16 +808,12 @@ export function createSponsorService(deps: SponsorServiceDeps) {
       // O link de acesso vai junto: quem pagou precisa entrar no painel, e
       // não definiu senha nenhuma.
       const url = await identity.createAccessLink(data.email, "/patrocinador");
-      await mailer
-        .sendAccessLink({ to: data.email, url, churchName: church.name, isNewSponsor: true })
-        .catch((err) => {
-          // Email é recuperável (dá para reenviar); pagamento não pode travar.
-          log.error("[sponsor] falha ao enviar link de acesso", { err });
-        });
+      await mailer.sendAccessLink({ to: data.email, url, churchName: church.name, isNewSponsor: true }).catch((err) => {
+        // Email é recuperável (dá para reenviar); pagamento não pode travar.
+        log.error("[sponsor] falha ao enviar link de acesso", { err });
+      });
 
-      return billing.invoiceUrl
-        ? { kind: "checkout", invoiceUrl: billing.invoiceUrl }
-        : { kind: "done" };
+      return billing.invoiceUrl ? { kind: "checkout", invoiceUrl: billing.invoiceUrl } : { kind: "done" };
     },
 
     async listCharges(): Promise<SponsorCharge[]> {
@@ -878,9 +835,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         repo.listMySponsorships(),
         repo.listPriceTiers(),
       ]);
-      const alreadySponsoring = sponsorships.some(
-        (s) => s.church_id === church.id && s.status !== "canceled",
-      );
+      const alreadySponsoring = sponsorships.some((s) => s.church_id === church.id && s.status !== "canceled");
       const currentCount = sponsorships.filter((s) => isBillable(s.status)).length;
 
       return {
@@ -913,9 +868,7 @@ export function createSponsorService(deps: SponsorServiceDeps) {
         if (sponsorship.status === "pending_payment") {
           await store
             .discardPendingSponsorship(sponsorship.id, now().toISOString())
-            .catch((cleanupErr) =>
-              log.error("[sponsor] falha ao desfazer pedido", { cleanupErr }),
-            );
+            .catch((cleanupErr) => log.error("[sponsor] falha ao desfazer pedido", { cleanupErr }));
         }
         throw err;
       }

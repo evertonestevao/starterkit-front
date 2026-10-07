@@ -1,13 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
 import { getChurchSelfPaymentService } from "@/server/churchSelfPayment";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant } from "@/server/tenant";
 import { toActionError, type ActionState } from "./action-state";
 
-const PAGINA = "/dashboard/sponsors";
+const PAGINAS = ["/dashboard/mensalidade", "/dashboard/sponsors"];
+const revalidar = () => PAGINAS.forEach((p) => revalidatePath(p));
 
 function texto(formData: FormData, campo: string): string {
   const valor = formData.get(campo);
@@ -27,21 +30,34 @@ export async function enableChurchSelfPaymentAction(
   _prev: ActionState | undefined,
   formData: FormData,
 ): Promise<ActionState> {
+  let pagamento: string | null;
   try {
     await requireSession();
     const churchId = texto(formData, "churchId");
-    await (await getChurchSelfPaymentService()).enable(churchId, {
-      kind: texto(formData, "kind"),
-      displayName: texto(formData, "displayName"),
-      email: texto(formData, "email"),
-      phone: texto(formData, "phone"),
-      document: texto(formData, "document"),
-    });
-    revalidatePath(PAGINA);
-    return { success: "Mensalidade assumida. A cobrança começa agora." };
+    const { invoiceUrl } = await (
+      await getChurchSelfPaymentService()
+    ).enable(
+      churchId,
+      {
+        kind: texto(formData, "kind"),
+        displayName: texto(formData, "displayName"),
+        email: texto(formData, "email"),
+        phone: texto(formData, "phone"),
+        document: texto(formData, "document"),
+      },
+      // Pago o cartão, o provedor devolve a pessoa para a tela da mensalidade.
+      { successUrl: `${getServerEnv().APP_URL.replace(/\/+$/, "")}/dashboard/mensalidade` },
+    );
+    revalidar();
+    pagamento = invoiceUrl;
   } catch (err) {
     return toActionError(err);
   }
+  // Fora do try: redirect() funciona lançando uma exceção própria. O endereço
+  // é o da página de pagamento do provedor (onde o cartão é digitado), nunca
+  // algo vindo de quem preencheu o formulário.
+  if (pagamento) redirect(pagamento);
+  return { success: "Pagamento cadastrado." };
 }
 
 export async function setChurchAceitaPatrocinioAction(
@@ -53,7 +69,7 @@ export async function setChurchAceitaPatrocinioAction(
     const churchId = texto(formData, "churchId");
     const aceita = texto(formData, "aceita") === "true";
     await (await getChurchSelfPaymentService()).setAceitaPatrocinio(churchId, aceita);
-    revalidatePath(PAGINA);
+    revalidar();
     return {
       success: aceita
         ? "A igreja voltou a aceitar patrocinador."

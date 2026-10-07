@@ -9,9 +9,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getServerEnv } from "@/config/env";
 import { ChurchHierarchyForm } from "@/features/platform/components/church-hierarchy-form";
+import { MensalidadeForm } from "@/features/platform/components/mensalidade-form";
 import { churchTagUrl } from "@/lib/churchVisits";
 import { paginaDaUrl, paginar } from "@/lib/paginacao";
-import { getChurchHierarchyService } from "@/server/platform";
+import { getChurchHierarchyService, getMensalidadeService } from "@/server/platform";
+import { formatCents } from "@/services/sponsorPricing";
 import { CHURCH_TIPO_LABEL } from "@/services/churchHierarchyService";
 
 export const metadata: Metadata = { title: "Igrejas" };
@@ -27,6 +29,15 @@ export default async function PlatformChurchesPage({
   const { q = "", page } = await searchParams;
   const service = await getChurchHierarchyService();
   const todas = await service.listTree();
+  // Mensalidade de cada igreja. É um complemento: se falhar, a lista segue sem ele.
+  const mensalidades = new Map(
+    (
+      await (await getMensalidadeService()).listar().catch((err: unknown) => {
+        console.error("[plataforma] falha ao carregar as mensalidades", err);
+        return [];
+      })
+    ).map((m) => [m.churchId, m]),
+  );
 
   const termo = q.trim().toLowerCase();
   const filtradas = termo
@@ -144,6 +155,28 @@ export default async function PlatformChurchesPage({
                       </p>
                     </div>
                   </details>
+                  {mensalidades.has(church.id) ? (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-xs text-muted-foreground">
+                        Mensalidade:{" "}
+                        {formatCents(
+                          mensalidades.get(church.id)!.valorProprioCents ??
+                            mensalidades.get(church.id)!.valorPadraoCents,
+                        )}
+                        {mensalidades.get(church.id)!.valorProprioCents !== null ? " (valor próprio)" : ""}
+                        {mensalidades.get(church.id)!.pagando ? " · pagando" : ""}
+                      </summary>
+                      <MensalidadeForm
+                        // A chave muda com o valor gravado: o formulário recomeça do que está no banco.
+                        key={String(mensalidades.get(church.id)!.valorProprioCents)}
+                        churchId={church.id}
+                        valorProprioCents={mensalidades.get(church.id)!.valorProprioCents}
+                        motivo={mensalidades.get(church.id)!.motivo}
+                        valorPadraoCents={mensalidades.get(church.id)!.valorPadraoCents}
+                        pagando={mensalidades.get(church.id)!.pagando}
+                      />
+                    </details>
+                  ) : null}
                 </div>
                 <div className="w-full lg:max-w-xl">
                   <ChurchHierarchyForm church={church} all={todas} />

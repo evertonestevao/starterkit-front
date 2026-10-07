@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useState, useTransition, type FormEvent } from "react";
-import { Building2, HandCoins, ShieldCheck, User } from "lucide-react";
+import Link from "next/link";
+import { Building2, CircleCheck, Clock, CreditCard, HeartHandshake, User } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,15 +14,12 @@ import { formatDocumentFor } from "@/lib/brDocument";
 import { cn } from "@/lib/utils";
 import { formatCents } from "@/services/sponsorPricing";
 import type { ChurchSelfPaymentStatus } from "@/services/churchSelfPaymentService";
-import {
-  enableChurchSelfPaymentAction,
-  setChurchAceitaPatrocinioAction,
-} from "@/server/actions/churchSelfPayment";
+import { enableChurchSelfPaymentAction, setChurchAceitaPatrocinioAction } from "@/server/actions/churchSelfPayment";
 import type { SponsorKind } from "@/types/sponsorship";
 
 const KIND_OPTIONS: Array<{ value: SponsorKind; label: string; icon: typeof User }> = [
   { value: "person", label: "Pessoa (CPF)", icon: User },
-  { value: "business", label: "Empresa (CNPJ)", icon: Building2 },
+  { value: "business", label: "Igreja ou empresa (CNPJ)", icon: Building2 },
 ];
 
 /** Botão "abrir/fechar a porta pra patrocinador", com o mesmo padrão de toast dos outros. */
@@ -38,10 +36,10 @@ function AceitaPatrocinioToggle({ churchId, aceita }: { churchId: string; aceita
   );
 }
 
-/** Formulário de dados de cobrança (CPF/CNPJ, email, telefone), reaberto sob demanda. */
+/** Dados de quem paga (CPF/CNPJ, e-mail, telefone), exigidos pelo meio de pagamento. */
 function EnableForm({ churchId, defaultEmail }: { churchId: string; defaultEmail: string }) {
   const [state, formAction, pending] = useActionState(enableChurchSelfPaymentAction, undefined);
-  const [kind, setKind] = useState<SponsorKind>("person");
+  const [kind, setKind] = useState<SponsorKind>("business");
   const [documentValue, setDocumentValue] = useState("");
   const [submitting, startTransition] = useTransition();
   const isBusiness = kind === "business";
@@ -64,7 +62,7 @@ function EnableForm({ churchId, defaultEmail }: { churchId: string; defaultEmail
       <input type="hidden" name="churchId" value={churchId} />
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-sm font-medium">Cadastro para a cobrança</legend>
+        <legend className="mb-1 text-sm font-medium">Quem paga</legend>
         <div className="grid grid-cols-2 gap-2">
           {KIND_OPTIONS.map(({ value, label, icon: Icon }) => (
             <label
@@ -94,7 +92,7 @@ function EnableForm({ churchId, defaultEmail }: { churchId: string; defaultEmail
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="sp-displayName">{isBusiness ? "Nome da igreja/empresa" : "Nome do responsável"}</Label>
+          <Label htmlFor="sp-displayName">{isBusiness ? "Nome da igreja ou empresa" : "Nome do responsável"}</Label>
           <Input id="sp-displayName" name="displayName" minLength={2} maxLength={120} required />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -122,23 +120,27 @@ function EnableForm({ churchId, defaultEmail }: { churchId: string; defaultEmail
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Exigido pelo meio de pagamento para emitir a cobrança. Some da tela depois de salvo.
+        Estes dados são exigidos pelo meio de pagamento para emitir a cobrança. No próximo passo você informa o cartão,
+        na página segura do meio de pagamento — o sistema da igreja não vê nem guarda o número do cartão.
       </p>
 
-      <Button type="submit" disabled={pending || submitting} className="w-fit">
-        {pending || submitting ? "Salvando..." : "Assumir a mensalidade"}
+      <Button type="submit" disabled={pending || submitting} className="w-fit gap-2">
+        <CreditCard className="size-4" aria-hidden />
+        {pending || submitting ? "Abrindo o pagamento..." : "Continuar para o cartão"}
       </Button>
     </form>
   );
 }
 
 /**
- * Autopatrocínio: sem nenhum patrocinador de verdade, a própria igreja pode
- * assumir a mensalidade dela (valor fixo, cobrado como um patrocínio). Some
- * da tela assim que qualquer patrocinador de verdade aparece — o banco
- * cancela sozinho, no fim do ciclo já pago.
+ * Mensalidade da igreja: quanto ela paga por mês para usar a plataforma, e o
+ * cadastro de quem paga. O valor vem da plataforma (o padrão, ou o que foi
+ * combinado com esta igreja) — a igreja não o altera.
+ *
+ * Por baixo é a mesma cobrança recorrente do patrocínio: se um patrocinador
+ * assumir a igreja, a mensalidade para sozinha no fim do ciclo já pago.
  */
-export function SelfPaymentCard({
+export function MensalidadeCard({
   churchId,
   churchName,
   status,
@@ -150,26 +152,64 @@ export function SelfPaymentCard({
   defaultEmail: string;
 }) {
   const [abrirForm, setAbrirForm] = useState(false);
-  const billable = status.sponsorshipStatus === "pending_payment" || status.sponsorshipStatus === "active";
+  const valor = `${formatCents(status.amountCents)} por mês`;
 
-  if (status.realSponsorCount > 0) return null;
-
-  if (billable) {
+  if (status.realSponsorCount > 0) {
     return (
-      <Card className="border-primary/30 bg-primary/5">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="size-4 text-primary" aria-hidden />
-            Você está pagando a mensalidade de {churchName}
+            <HeartHandshake className="size-4 text-primary" aria-hidden />
+            Mensalidade de {churchName}: coberta por patrocinador
           </CardTitle>
           <CardDescription>
-            {formatCents(status.amountCents)}/mês, cobrado no mesmo sistema do patrocínio. Se um
-            patrocinador de verdade entrar, essa cobrança para sozinha, sem cortar no meio do ciclo.
+            Enquanto houver patrocinador ativo, a igreja não paga nada. Veja quem apoia em{" "}
+            <Link href="/dashboard/sponsors" className="font-medium text-primary underline underline-offset-4">
+              Patrocinadores
+            </Link>
+            .
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <AceitaPatrocinioToggle churchId={churchId} aceita={status.aceitaPatrocinio} />
-        </CardContent>
+      </Card>
+    );
+  }
+
+  if (status.sponsorshipStatus === "active" || status.sponsorshipStatus === "pending_payment") {
+    const emDia = status.sponsorshipStatus === "active";
+    const Icone = emDia ? CircleCheck : Clock;
+    return (
+      <Card className={emDia ? "border-primary/30 bg-primary/5" : "border-amber-500/40 bg-amber-500/10"}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Icone className={cn("size-4", emDia ? "text-primary" : "text-amber-600")} aria-hidden />
+            Mensalidade de {churchName}: {emDia ? "em dia" : "aguardando o pagamento"}
+          </CardTitle>
+          <CardDescription>
+            {valor}, no cartão de crédito.{" "}
+            {emDia
+              ? "A cobrança é feita todo mês no cartão cadastrado, e o recibo chega no e-mail de cobrança."
+              : "Falta informar o cartão. Assim que o pagamento for aprovado, isto muda para “em dia”."}
+            {status.account?.email ? ` E-mail de cobrança: ${status.account.email}.` : ""}
+          </CardDescription>
+        </CardHeader>
+        {!emDia ? (
+          <CardContent>
+            {status.openInvoiceUrl ? (
+              <a
+                href={status.openInvoiceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(buttonVariants(), "gap-2")}
+              >
+                <CreditCard className="size-4" aria-hidden /> Pagar com cartão
+              </a>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                O link para pagar com cartão foi enviado ao e-mail de cobrança.
+              </p>
+            )}
+          </CardContent>
+        ) : null}
       </Card>
     );
   }
@@ -178,26 +218,58 @@ export function SelfPaymentCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <HandCoins className="size-4 text-primary" aria-hidden />
-          {churchName} está sem patrocinador
+          <CreditCard className="size-4 text-primary" aria-hidden />
+          Mensalidade de {churchName}
         </CardTitle>
         <CardDescription>
-          Enquanto isso, você pode assumir a mensalidade — {formatCents(status.amountCents)}/mês — para a
-          página continuar no ar. Assim que aparecer um patrocinador de verdade, essa cobrança para
-          sozinha.
+          <span className="text-lg font-semibold text-foreground">{valor}</span>
+          <span className="block">
+            É o que mantém o sistema e a página da igreja no ar. O pagamento é no cartão de crédito, cobrado todo mês.
+          </span>
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent>
         {abrirForm ? (
           <EnableForm churchId={churchId} defaultEmail={defaultEmail} />
         ) : (
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => setAbrirForm(true)}>
-              Assumir a mensalidade
-            </Button>
-            <AceitaPatrocinioToggle churchId={churchId} aceita={status.aceitaPatrocinio} />
-          </div>
+          <Button type="button" className="gap-2" onClick={() => setAbrirForm(true)}>
+            <CreditCard className="size-4" aria-hidden /> Pagar com cartão
+          </Button>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Em Patrocinadores, para a igreja sem patrocinador: decidir se ela aparece
+ * para quem quer patrocinar. A mensalidade em si fica na tela própria.
+ */
+export function PortaPatrocinadorCard({
+  churchId,
+  churchName,
+  status,
+}: {
+  churchId: string;
+  churchName: string;
+  status: ChurchSelfPaymentStatus;
+}) {
+  if (status.realSponsorCount > 0) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{churchName} está sem patrocinador</CardTitle>
+        <CardDescription>
+          Sem patrocinador, quem paga a mensalidade é a própria igreja — veja em{" "}
+          <Link href="/dashboard/mensalidade" className="font-medium text-primary underline underline-offset-4">
+            Mensalidade
+          </Link>
+          . Se um patrocinador entrar, essa cobrança para sozinha. Se a igreja não quer patrocinador, feche a porta: o
+          espaço deles some da página.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <AceitaPatrocinioToggle churchId={churchId} aceita={status.aceitaPatrocinio} />
       </CardContent>
     </Card>
   );

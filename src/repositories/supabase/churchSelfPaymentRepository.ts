@@ -12,9 +12,7 @@ interface SponsorshipRow {
   ends_at: string | null;
 }
 
-export function createSupabaseChurchSelfPaymentRepository(
-  client: SupabaseClient,
-): ChurchSelfPaymentRepository {
+export function createSupabaseChurchSelfPaymentRepository(client: SupabaseClient): ChurchSelfPaymentRepository {
   async function getAccount(churchId: string): Promise<SponsorAccount | null> {
     const { data, error } = await client
       .from("sponsor_accounts")
@@ -29,15 +27,14 @@ export function createSupabaseChurchSelfPaymentRepository(
 
   return {
     async getStatus(churchId): Promise<ChurchSelfPaymentStatus> {
-      const [countResult, churchResult, account, amountResult] = await Promise.all([
+      const [countResult, churchResult, account, amountResult, faturaResult] = await Promise.all([
         client.rpc("church_real_billable_sponsorships", { p_church_id: churchId }),
-        client
-          .from("churches")
-          .select("aceita_patrocinio")
-          .eq("id", churchId)
-          .single<{ aceita_patrocinio: boolean }>(),
+        client.from("churches").select("aceita_patrocinio").eq("id", churchId).single<{ aceita_patrocinio: boolean }>(),
         getAccount(churchId),
-        client.rpc("get_autopatrocinio_amount_cents"),
+        // O valor DESTA igreja: o combinado com a plataforma, ou o padrão.
+        client.rpc("mensalidade_da_igreja", { p_church_id: churchId }),
+        // Complemento: sem a fatura, a tela só deixa de oferecer o botão de pagar.
+        client.rpc("mensalidade_fatura_aberta", { p_church_id: churchId }),
       ]);
       if (countResult.error || churchResult.error || amountResult.error) {
         throw new AppError(
@@ -72,6 +69,7 @@ export function createSupabaseChurchSelfPaymentRepository(
         endsAt,
         aceitaPatrocinio: churchResult.data?.aceita_patrocinio ?? true,
         amountCents: (amountResult.data as number) ?? 0,
+        openInvoiceUrl: faturaResult.error ? null : ((faturaResult.data as string | null) ?? null),
       };
     },
 

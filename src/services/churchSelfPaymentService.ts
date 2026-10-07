@@ -28,6 +28,8 @@ export interface ChurchSelfPaymentStatus {
   endsAt: string | null;
   aceitaPatrocinio: boolean;
   amountCents: number;
+  /** Página de pagamento (cartão) da fatura em aberto, no provedor; null se não há. */
+  openInvoiceUrl: string | null;
 }
 
 /** cobrável = a mensalidade da igreja está de fato correndo (ou prestes a). */
@@ -54,7 +56,7 @@ export interface ChurchSelfPaymentRepository {
 export interface SelfPaymentBiller {
   syncBilling(
     accountId: string,
-    options: { createIfMissing: boolean },
+    options: { createIfMissing: boolean; successUrl?: string },
   ): Promise<{ invoiceUrl: string | null; syncPending: boolean }>;
 }
 
@@ -80,10 +82,7 @@ const enableSchema = z
     }
   });
 
-export function createChurchSelfPaymentService(deps: {
-  repo: ChurchSelfPaymentRepository;
-  biller: SelfPaymentBiller;
-}) {
+export function createChurchSelfPaymentService(deps: { repo: ChurchSelfPaymentRepository; biller: SelfPaymentBiller }) {
   const { repo, biller } = deps;
 
   return {
@@ -92,19 +91,28 @@ export function createChurchSelfPaymentService(deps: {
     },
 
     /**
-     * Liga o autopatrocínio: grava a conta (o banco recusa se já tem
-     * patrocinador) e sincroniza a cobrança de verdade no valor fixo. Se a
+     * Liga a mensalidade: grava a conta (o banco recusa se já tem
+     * patrocinador) e cria a cobrança recorrente no cartão, no valor da igreja. Se a
      * cobrança falhar, a conta fica criada com sync pendente — igual ao
      * patrocínio normal, o job reenvia depois; não desfaz o que já foi
      * gravado, porque a igreja já está sem patrocinador de qualquer jeito.
      */
-    async enable(churchId: string, input: unknown): Promise<ChurchSelfPaymentStatus> {
+    async enable(
+      churchId: string,
+      input: unknown,
+      options: { successUrl?: string } = {},
+    ): Promise<{ status: ChurchSelfPaymentStatus; invoiceUrl: string | null }> {
       const parsed = enableSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
 
       const account = await repo.enable({ churchId, ...parsed.data });
-      await biller.syncBilling(account.id, { createIfMissing: true });
-      return repo.getStatus(churchId);
+      // A assinatura é no cartão: o provedor devolve a página onde o cartão é
+      // digitado, e é para lá que a pessoa vai em seguida.
+      const { invoiceUrl } = await biller.syncBilling(account.id, {
+        createIfMissing: true,
+        ...(options.successUrl ? { successUrl: options.successUrl } : {}),
+      });
+      return { status: await repo.getStatus(churchId), invoiceUrl };
     },
 
     async setAceitaPatrocinio(churchId: string, aceita: unknown): Promise<void> {

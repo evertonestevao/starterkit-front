@@ -47,6 +47,7 @@ const STATUS_ATIVO: ChurchSelfPaymentStatus = {
   endsAt: null,
   aceitaPatrocinio: true,
   amountCents: 3990,
+  openInvoiceUrl: null,
 };
 
 function build() {
@@ -92,13 +93,28 @@ describe("enable", () => {
   it("grava a conta, sincroniza a cobrança e devolve o status atualizado", async () => {
     const { repo, biller, service } = build();
 
-    const status = await service.enable(CHURCH, INPUT_VALIDO);
+    const { status, invoiceUrl } = await service.enable(CHURCH, INPUT_VALIDO);
 
     expect(repo.enable).toHaveBeenCalledWith(
       expect.objectContaining({ churchId: CHURCH, kind: "person", document: "11144477735" }),
     );
     expect(biller.syncBilling).toHaveBeenCalledWith("acc-1", { createIfMissing: true });
     expect(status).toEqual(STATUS_ATIVO);
+    expect(invoiceUrl).toBeNull();
+  });
+
+  it("devolve a página do cartão e manda o endereço de volta ao provedor", async () => {
+    const { biller, service } = build();
+    vi.mocked(biller.syncBilling).mockResolvedValueOnce({
+      invoiceUrl: "https://pagamento.test/i/123",
+      syncPending: false,
+    });
+    const r = await service.enable(CHURCH, INPUT_VALIDO, { successUrl: "https://app.test/dashboard/mensalidade" });
+    expect(r.invoiceUrl).toBe("https://pagamento.test/i/123");
+    expect(biller.syncBilling).toHaveBeenCalledWith("acc-1", {
+      createIfMissing: true,
+      successUrl: "https://app.test/dashboard/mensalidade",
+    });
   });
 
   it("recusa CPF/CNPJ inválido antes de tocar o banco", async () => {

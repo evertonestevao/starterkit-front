@@ -1,8 +1,5 @@
 import "server-only";
-import {
-  getDefaultRecurringBillingProviderName,
-  getRecurringBillingProvider,
-} from "@/adapters/payment";
+import { getDefaultRecurringBillingProviderName, getRecurringBillingProvider } from "@/adapters/payment";
 import { getEmailProvider } from "@/adapters/email";
 import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
@@ -50,11 +47,17 @@ async function auditToChurch(entry: SponsorAuditEntry): Promise<void> {
  */
 const publicSponsorshipLimiter = createRateLimiter({ limit: 5, windowMs: 60 * 60_000 });
 
-/** Único ponto de leitura do valor do autopatrocínio, para não repetir a RPC. */
+/**
+ * Único ponto de leitura da mensalidade de uma igreja: o valor que a
+ * plataforma combinou com ela, ou o padrão (quem resolve é o banco).
+ */
 async function getAutopatrocinioAmountCents(
   client: Parameters<typeof createSupabaseSponsorRepository>[0],
+  churchId: string | null,
 ): Promise<number> {
-  const { data, error } = await client.rpc("get_autopatrocinio_amount_cents");
+  const { data, error } = churchId
+    ? await client.rpc("mensalidade_da_igreja", { p_church_id: churchId })
+    : await client.rpc("get_autopatrocinio_amount_cents");
   if (error || data === null) {
     throw new AppError("internal_error", "Falha ao carregar o valor do autopatrocínio", error);
   }
@@ -77,7 +80,7 @@ function build(repoClient: Parameters<typeof createSupabaseSponsorRepository>[0]
       sendAccessLink: (input) => email.sendSponsorAccessLink(input),
     },
     publicRateLimiter: publicSponsorshipLimiter,
-    getAutopatrocinioAmountCents: () => getAutopatrocinioAmountCents(repoClient),
+    getAutopatrocinioAmountCents: (churchId) => getAutopatrocinioAmountCents(repoClient, churchId),
   });
 }
 

@@ -18,17 +18,30 @@ test("igreja sem patrocinador assume a mensalidade, some da lista de patrocinado
     company: `Igreja Autopatrocínio E2E ${sufixo}`,
   });
 
-  await page.goto("/dashboard/sponsors");
-  await expect(page.getByText("está sem patrocinador")).toBeVisible();
+  // A mensalidade tem tela própria, com o valor padrão da plataforma.
+  await page.goto("/dashboard/mensalidade");
+  await expect(page.getByText("R$ 89,90 por mês")).toBeVisible();
 
-  await page.getByRole("button", { name: "Assumir a mensalidade" }).click();
+  await page.getByRole("button", { name: "Pagar com cartão" }).click();
+  await page.getByText("Pessoa (CPF)").click();
   await page.getByLabel("Nome do responsável").fill("Pastor E2E");
   await page.getByRole("textbox", { name: "CPF" }).fill("111.444.777-35");
   await page.getByLabel("Email de cobrança").fill(`cobranca-${sufixo}@e2e.local`);
-  await page.getByRole("button", { name: "Assumir a mensalidade" }).click();
+  // Com o provedor de verdade, daqui a pessoa vai para a página do cartão; o de
+  // teste não tem essa página e aprova na hora.
+  await page.getByRole("button", { name: "Continuar para o cartão" }).click();
 
-  // O toast some sozinho rápido; o que importa é o estado persistido.
-  await expect(page.getByText("Você está pagando a mensalidade")).toBeVisible();
+  // O toast some sozinho rápido; o que importa é o estado persistido. (O
+  // provedor de teste cobra na hora: sai de "aguardando" direto para "em dia".)
+  await expect(page.getByText(/Mensalidade de .+: (em dia|aguardando o pagamento)/)).toBeVisible();
+
+  // A antiga tela de assinatura leva à mensalidade.
+  await page.goto("/dashboard/billing");
+  await expect(page).toHaveURL(/\/dashboard\/mensalidade$/);
+
+  // A porta do patrocinador continua em Patrocinadores.
+  await page.goto("/dashboard/sponsors");
+  await expect(page.getByText("está sem patrocinador")).toBeVisible();
 
   // O autopatrocínio nunca aparece como um patrocinador de verdade.
   const link = page.getByText(/\/patrocinador\/patrocinar\//);

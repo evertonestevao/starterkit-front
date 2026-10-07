@@ -7,23 +7,14 @@ import { createSupabaseChurchHierarchyRepository } from "@/repositories/supabase
 import { createSupabasePlatformModerationRepository } from "@/repositories/supabase/platformModerationRepository";
 import { createSupabasePlatformPricingRepository } from "@/repositories/supabase/platformPricingRepository";
 import { createSupabasePlatformSettingsRepository } from "@/repositories/supabase/platformSettingsRepository";
-import {
-  createChurchHierarchyService,
-  type ChurchHierarchyService,
-} from "@/services/churchHierarchyService";
+import { createChurchHierarchyService, type ChurchHierarchyService } from "@/services/churchHierarchyService";
 import { createEmailService } from "@/services/emailService";
-import {
-  createPlatformPricingService,
-  type PlatformPricingService,
-} from "@/services/platformPricingService";
-import {
-  createPlatformSettingsService,
-  type PlatformSettingsService,
-} from "@/services/platformSettingsService";
-import {
-  createPlatformModerationService,
-  type PlatformModerationService,
-} from "@/services/platformModerationService";
+import { createPlatformPricingService, type PlatformPricingService } from "@/services/platformPricingService";
+import { createPlatformSettingsService, type PlatformSettingsService } from "@/services/platformSettingsService";
+import { createPlatformModerationService, type PlatformModerationService } from "@/services/platformModerationService";
+import { createSupabaseMensalidadeRepository } from "@/repositories/supabase/mensalidadeRepository";
+import { createMensalidadeService, type MensalidadeService } from "@/services/mensalidadeService";
+import { getSponsorSystemService } from "./sponsor";
 import { getSupabaseAdminClient } from "./supabase-admin";
 import { SPONSOR_LOGOS_BUCKET } from "./sponsorProfile";
 import { getSupabaseServerClient } from "./supabase-server";
@@ -80,10 +71,7 @@ export async function getPlatformModerationService(): Promise<PlatformModeration
  * própria pessoa enviou.
  */
 export function getPendingLogoUrl(pendingPath: string): string {
-  return createSupabaseStorageProvider(
-    getSupabaseAdminClient(),
-    SPONSOR_LOGOS_BUCKET,
-  ).getPublicUrl(pendingPath);
+  return createSupabaseStorageProvider(getSupabaseAdminClient(), SPONSOR_LOGOS_BUCKET).getPublicUrl(pendingPath);
 }
 
 /** Árvore Sede > Subsede > Congregação (só a plataforma liga uma igreja a outra). */
@@ -96,6 +84,19 @@ export async function getChurchHierarchyService(): Promise<ChurchHierarchyServic
 export async function getPlatformSettingsService(): Promise<PlatformSettingsService> {
   const client = await getSupabaseServerClient();
   return createPlatformSettingsService(createSupabasePlatformSettingsRepository(client));
+}
+
+/**
+ * Mensalidade por igreja (valor próprio definido pela moderação). Mudou o
+ * valor de uma igreja que já paga: o `SponsorService` de sistema atualiza a
+ * cobrança no provedor.
+ */
+export async function getMensalidadeService(): Promise<MensalidadeService> {
+  const client = await getSupabaseServerClient();
+  return createMensalidadeService({
+    repo: createSupabaseMensalidadeRepository(client),
+    biller: getSponsorSystemService(),
+  });
 }
 
 /** Tabela de preço do patrocínio, por posição. */

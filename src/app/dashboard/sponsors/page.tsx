@@ -8,12 +8,11 @@ import { MetricCard } from "@/components/metric-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SelfPaymentCard } from "@/features/church/components/self-payment-card";
+import { PortaPatrocinadorCard } from "@/features/church/components/self-payment-card";
 import { SponsorCardActions } from "@/features/church/components/sponsor-card-actions";
 import { getChurchDomainService } from "@/server/churchDomain";
 import { getChurchSelfPaymentService } from "@/server/churchSelfPayment";
 import { getChurchSponsorsService } from "@/server/churchSponsors";
-import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant } from "@/server/tenant";
 import type { CompanySponsor } from "@/services/churchSponsorsService";
 
@@ -88,11 +87,9 @@ export default async function SponsorsPage({ searchParams }: { searchParams: Pro
   const { active } = await getActiveTenant();
   if (!active) return null; // layout já redirecionou
 
-  const client = await getSupabaseServerClient();
-  const [summary, domains, { data: userData }] = await Promise.all([
+  const [summary, domains] = await Promise.all([
     (await getChurchSponsorsService()).getSummary(active.id),
     (await getChurchDomainService()).listForCompany({ companyId: active.id, role: active.role }),
-    client.auth.getUser(),
   ]);
   const inviteUrl = domains[0]?.sponsorInviteUrl ?? null;
   const showChurch = domains.length > 1;
@@ -119,8 +116,8 @@ export default async function SponsorsPage({ searchParams }: { searchParams: Pro
         <h2 className="mt-2 text-2xl font-semibold tracking-tight">Patrocinadores</h2>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
           Negócios e pessoas que sustentam a presença digital da sua igreja. O nome deles aparece na página pública, e o
-          apoio é pago diretamente à plataforma — a igreja não paga nada. Se não quiser alguém na sua página, esconda: o
-          apoio continua, a marca sai.
+          apoio é pago diretamente à plataforma e cobre a mensalidade da igreja. Se não quiser alguém na sua página,
+          esconda: o apoio continua, a marca sai.
         </p>
       </div>
 
@@ -154,12 +151,11 @@ export default async function SponsorsPage({ searchParams }: { searchParams: Pro
       </div>
 
       {selfPaymentByChurch.map(({ churchId, churchName, status }) => (
-        <SelfPaymentCard
+        <PortaPatrocinadorCard
           key={churchId}
           churchId={churchId}
-          churchName={showChurch ? churchName : "sua igreja"}
+          churchName={showChurch ? churchName : "Sua igreja"}
           status={status}
-          defaultEmail={userData.user?.email ?? ""}
         />
       ))}
 

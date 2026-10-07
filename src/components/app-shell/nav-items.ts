@@ -39,7 +39,7 @@ const ICONES: Record<string, LucideIcon> = {
   tesouraria: Wallet,
   sponsors: Landmark,
   relationships: HeartHandshake,
-  billing: CreditCard,
+  mensalidade: CreditCard,
   audit: ScrollText,
   settings: Settings,
 };
@@ -60,8 +60,6 @@ export function titleForPath(pathname: string): string {
   if (pathname === ROTA_MINHA_CONTA || pathname.startsWith(`${ROTA_MINHA_CONTA}/`)) return "Minha conta";
   const match = [...navItems]
     .sort((a, b) => b.href.length - a.href.length)
-    .find(
-      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-    );
+    .find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
   return match?.title ?? "Painel";
 }

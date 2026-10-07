@@ -8348,6 +8348,146 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Mensalidade por igreja (migration 20261008110000). AC Cong (d2) é de 002;
+-- 5e..07 é da moderação da plataforma.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  if public.mensalidade_da_igreja('acacacac-0000-4000-8000-0000000000d2') <> 8990 then
+    raise exception 'FALHA mensalidade: o padrao nao e R$ 89,90';
+  end if;
+  -- Quem administra a igreja NÃO escreve o próprio preço, nem direto nem pela função.
+  begin
+    update public.churches set mensalidade_centavos = 500 where id = 'acacacac-0000-4000-8000-0000000000d2';
+    raise exception 'FALHA mensalidade: a igreja mudou o proprio preco direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.platform_definir_mensalidade('acacacac-0000-4000-8000-0000000000d2', 500, 'Eu mesmo');
+    raise exception 'FALHA mensalidade: a igreja mudou o proprio preco pela funcao';
+  exception when sqlstate '42501' then null;
+  end;
+  select count(*) into n from public.platform_mensalidades();
+  if n <> 0 then raise exception 'FALHA mensalidade: a igreja leu a lista de mensalidades da plataforma'; end if;
+end $$;
+
+-- A moderação combina um valor com UMA igreja.
+select set_config('request.jwt.claims',
+  '{"sub":"5e5e5e5e-0000-4000-8000-000000000007","email":"rls-staff2@test.local","role":"authenticated"}', true);
+do $$
+declare r record; n int;
+begin
+  begin
+    perform public.platform_definir_mensalidade('acacacac-0000-4000-8000-0000000000d2', 500, '  ');
+    raise exception 'FALHA mensalidade: aceitou valor proprio sem motivo';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform public.platform_definir_mensalidade('acacacac-0000-4000-8000-0000000000d2', 499, 'Barato demais');
+    raise exception 'FALHA mensalidade: aceitou valor abaixo do minimo';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.platform_definir_mensalidade('00000000-0000-4000-8000-000000000000', 500, 'Nao existe');
+    raise exception 'FALHA mensalidade: aceitou igreja que nao existe';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  perform public.platform_definir_mensalidade('acacacac-0000-4000-8000-0000000000d2', 500, 'Igreja de teste');
+  if public.mensalidade_da_igreja('acacacac-0000-4000-8000-0000000000d2') <> 500 then
+    raise exception 'FALHA mensalidade: o valor proprio nao passou a valer';
+  end if;
+  -- Só aquela igreja: as outras seguem no padrão.
+  if public.mensalidade_da_igreja('acacacac-0000-4000-8000-0000000000d3') <> 8990 then
+    raise exception 'FALHA mensalidade: o valor de uma igreja vazou para outra';
+  end if;
+  select * into r from public.platform_mensalidades() where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if r.valor_proprio <> 500 or r.valor_padrao <> 8990 or r.motivo <> 'Igreja de teste' then
+    raise exception 'FALHA mensalidade: a lista da plataforma veio errada';
+  end if;
+  -- Tirar o valor próprio volta ao padrão.
+  perform public.platform_definir_mensalidade('acacacac-0000-4000-8000-0000000000d2', null, null);
+  if public.mensalidade_da_igreja('acacacac-0000-4000-8000-0000000000d2') <> 8990 then
+    raise exception 'FALHA mensalidade: tirar o valor proprio nao voltou ao padrao';
+  end if;
+end $$;
+reset role;
+
+-- As duas mudanças ficaram registradas (a moderação não lê a própria trilha pela API).
+do $$
+declare n int;
+begin
+  select count(*) into n from public.platform_staff_actions
+  where action = 'church.mensalidade.definida' and entity_id = 'acacacac-0000-4000-8000-0000000000d2'
+    and staff_user_id = '5e5e5e5e-0000-4000-8000-000000000007';
+  if n <> 2 then raise exception 'FALHA mensalidade: mudancas de preco nao foram registradas (%)', n; end if;
+end $$;
+
+-- Fatura em aberto: a igreja lê a PRÓPRIA; outra rede e a igreja de cima, não.
+insert into public.sponsor_accounts (id, kind, display_name, email, document, is_self_payment, church_id, company_id)
+values ('8b8b8b8b-0000-4000-8000-0000000000f1', 'business', 'AC Cong', 'cobranca@accong.test', '11222333000181', true,
+        'acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2');
+insert into public.sponsor_charges (sponsor_id, gateway, gateway_payment_id, amount_cents, active_count, due_date, status, invoice_url)
+values ('8b8b8b8b-0000-4000-8000-0000000000f1', 'fake', 'pay_rls_mensalidade', 8990, 1, current_date, 'pending',
+        'https://pagamento.test/i/rls');
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if public.mensalidade_fatura_aberta('acacacac-0000-4000-8000-0000000000d2') is distinct from 'https://pagamento.test/i/rls' then
+    raise exception 'FALHA mensalidade: a igreja nao leu a propria fatura em aberto';
+  end if;
+end $$;
+do $$
+declare v_quem text;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    if public.mensalidade_fatura_aberta('acacacac-0000-4000-8000-0000000000d2') is not null then
+      raise exception 'FALHA mensalidade: % leu a fatura da congregacao', v_quem;
+    end if;
+  end loop;
+end $$;
+reset role;
+-- Paga, deixa de ser "em aberto".
+update public.sponsor_charges set status = 'paid' where gateway_payment_id = 'pay_rls_mensalidade';
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if public.mensalidade_fatura_aberta('acacacac-0000-4000-8000-0000000000d2') is not null then
+    raise exception 'FALHA mensalidade: fatura paga continua aparecendo como aberta';
+  end if;
+end $$;
+reset role;
+
+set local role anon;
+do $$
+begin
+  begin
+    perform public.mensalidade_da_igreja('acacacac-0000-4000-8000-0000000000d2');
+    raise exception 'FALHA mensalidade: anon leu o preco';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.mensalidade_fatura_aberta('acacacac-0000-4000-8000-0000000000d2');
+    raise exception 'FALHA mensalidade: anon leu a fatura';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

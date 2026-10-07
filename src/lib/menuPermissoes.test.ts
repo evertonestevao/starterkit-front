@@ -67,10 +67,12 @@ describe("menusVisiveis", () => {
     expect(menusVisiveis(pessoa({ professor_ebd: true, role: "admin" }))).toContain("dashboard");
   });
 
-  it("professor abre a EBD; administrador não vê Billing; responsável vê tudo", () => {
+  it("professor abre a EBD; a Mensalidade é de quem administra; a antiga Assinatura saiu do menu", () => {
     expect(menusVisiveis(pessoa({ professor_ebd: true }))).toContain("ebd");
-    expect(menusVisiveis(pessoa({ role: "admin" }))).not.toContain("billing");
-    expect(menusVisiveis(pessoa({ role: "owner" }))).toContain("billing");
+    expect(menusVisiveis(pessoa({ professor_ebd: true }))).not.toContain("mensalidade");
+    expect(menusVisiveis(pessoa({ role: "admin" }))).toContain("mensalidade");
+    expect(menusVisiveis(pessoa({ role: "owner" }))).toContain("mensalidade");
+    expect(menusVisiveis(pessoa({ role: "owner" }))).not.toContain("billing");
   });
 });
 

@@ -74,7 +74,9 @@ export const MENUS: readonly MenuDef[] = [
   { key: "sponsors", title: "Patrocinadores", href: "/dashboard/sponsors", roles: ["owner", "admin"] },
   // Pedidos de visita (nome e telefone de quem pediu).
   { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin"] },
-  { key: "billing", title: "Assinatura", href: "/dashboard/billing", roles: ["owner"] },
+  // Quanto a igreja paga por mês e o cadastro de quem paga. O valor é da
+  // plataforma; aqui a igreja só cadastra o pagamento.
+  { key: "mensalidade", title: "Mensalidade", href: "/dashboard/mensalidade", roles: ["owner", "admin"] },
   { key: "audit", title: "Auditoria", href: "/dashboard/audit", roles: ["owner", "admin"] },
   // Configurações DA IGREJA. O que é da pessoa (foto, nome, sair) fica em
   // Minha conta, no menu do perfil — fora deste catálogo, porque é de todos.
@@ -149,8 +151,7 @@ export function podeNoModulo(pessoa: Pick<PessoaAcesso, "role" | "acessos">, mod
 /** Chaves dos menus que a pessoa vê. */
 export function menusVisiveis(pessoa: PessoaAcesso): string[] {
   return MENUS.filter(
-    (m) =>
-      m.roles.includes(pessoa.role) || pessoa.acessos.includes(m.key) || (m.key === "ebd" && pessoa.professor_ebd),
+    (m) => m.roles.includes(pessoa.role) || pessoa.acessos.includes(m.key) || (m.key === "ebd" && pessoa.professor_ebd),
   ).map((m) => m.key);
 }
 
