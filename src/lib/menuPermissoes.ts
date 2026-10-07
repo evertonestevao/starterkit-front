@@ -52,6 +52,10 @@ export const ROTA_MINHA_CONTA = "/dashboard/conta";
 export const MENUS: readonly MenuDef[] = [
   // O painel: liberável por cargo. Cada número dele ainda depende do módulo de onde vem.
   { key: "dashboard", title: "Painel", href: "/dashboard", roles: ["owner", "admin"] },
+  // Os números das igrejas de baixo. Só existe para a igreja que TEM unidades
+  // ligadas a ela (o servidor tira o item das demais) e não é liberável por
+  // cargo: inclui tesouraria e mensalidade de outras igrejas.
+  { key: "rede", title: "Rede", href: "/dashboard/rede", roles: ["owner", "admin"] },
   // Chamada nos cultos, justificativas e quem está faltando. Dado pessoal:
   // só a própria igreja; a RLS repete a regra (can_acompanhar).
   { key: "acompanhamento", title: "Presença nos cultos", href: "/dashboard/acompanhamento", roles: ["owner", "admin"] },

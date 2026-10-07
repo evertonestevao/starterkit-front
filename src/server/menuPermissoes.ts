@@ -2,10 +2,12 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { menusVisiveis } from "@/lib/menuPermissoes";
 import { menusComBloqueio } from "@/lib/mensalidadeAviso";
+import { MENU_REDE, menusComRede } from "@/lib/painelRede";
 import { createSupabaseMenuPermissoesRepository } from "@/repositories/supabase/menuPermissoesRepository";
 import { createMenuPermissoesService, type MenuPermissoesService } from "@/services/menuPermissoesService";
 import { getSupabaseServerClient } from "./supabase-server";
 import { getMensalidadeBloqueada } from "./mensalidadeBloqueio";
+import { getTemUnidadesAbaixo } from "./redePainel";
 import { getActiveTenant } from "./tenant";
 
 export async function getMenuPermissoesService(): Promise<MenuPermissoesService> {
@@ -20,7 +22,10 @@ export async function getMenuPermissoesService(): Promise<MenuPermissoesService>
 export async function getMenusVisiveis(): Promise<string[]> {
   const { active } = await getActiveTenant();
   if (!active) return [];
-  return menusComBloqueio(menusVisiveis(active), await getMensalidadeBloqueada());
+  const menus = menusVisiveis(active);
+  // "Rede" só para a igreja que tem unidades abaixo (e só consulta se o papel já dá o item).
+  const comRede = menus.includes(MENU_REDE) ? menusComRede(menus, await getTemUnidadesAbaixo()) : menus;
+  return menusComBloqueio(comRede, await getMensalidadeBloqueada());
 }
 
 /**

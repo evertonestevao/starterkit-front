@@ -8761,6 +8761,119 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Painel da rede (migration 20261009100000). AC Sede (c1/d1, de 001) está
+-- acima da AC Cong (c2/d2, de 002); AC Outra (c3/d3, de 005) é outra rede.
+-- A de cima recebe números das de baixo — nunca o contrário, nunca de outra
+-- rede, e da tesouraria só o total.
+-- ---------------------------------------------------------------------------
+insert into public.tesouraria_lancamentos (church_id, company_id, data, tipo, valor_centavos, nome, culto_titulo)
+values ('acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2',
+        public.hoje_local(), 'dizimo', 12345, 'Dizimista Sigiloso', 'Culto de Domingo');
+-- Um administrador (não Responsável) da sede.
+insert into public.company_members (company_id, user_id, role)
+values ('acacacac-0000-4000-8000-0000000000c1', 'acacacac-0000-4000-8000-000000000003', 'admin');
+
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare r record; n int;
+begin
+  if not public.rede_tem_unidades('acacacac-0000-4000-8000-0000000000c1') then
+    raise exception 'FALHA rede: a sede nao reconheceu que tem igrejas abaixo';
+  end if;
+  -- Nem ela mesma, nem a igreja de outra rede entram na lista.
+  select count(*) into n from public.rede_painel_unidades('acacacac-0000-4000-8000-0000000000c1')
+  where church_id in ('acacacac-0000-4000-8000-0000000000d1', 'acacacac-0000-4000-8000-0000000000d3');
+  if n <> 0 then raise exception 'FALHA rede: a lista trouxe a propria sede ou igreja de outra rede'; end if;
+
+  select * into r from public.rede_painel_unidades('acacacac-0000-4000-8000-0000000000c1')
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if r.church_id is null or r.nivel <> 1 then
+    raise exception 'FALHA rede: a congregacao nao veio como unidade de nivel 1 (% nivel %)', r.church_name, r.nivel;
+  end if;
+  if r.dizimos_mes_centavos < 12345 then
+    raise exception 'FALHA rede: o total de dizimos do mes nao subiu (%)', r.dizimos_mes_centavos;
+  end if;
+  -- O Responsável da igreja de cima vê a situação da mensalidade da unidade.
+  if r.mensalidade is null then raise exception 'FALHA rede: o Responsavel nao recebeu a mensalidade da unidade'; end if;
+
+  -- O total sobe; o lançamento (com o nome de quem entregou) continua fechado.
+  select count(*) into n from public.tesouraria_lancamentos
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if n <> 0 then raise exception 'FALHA rede: a sede leu % lancamentos da tesouraria da congregacao', n; end if;
+
+  select count(*) into n from public.rede_painel_meses('acacacac-0000-4000-8000-0000000000c1')
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2'
+    and mes = date_trunc('month', public.hoje_local())::date and dizimos_centavos >= 12345;
+  if n <> 1 then raise exception 'FALHA rede: a serie mensal nao trouxe o total do mes'; end if;
+
+  -- A série semanal responde e só fala da unidade de baixo.
+  select count(*) into n from public.rede_painel_semanas('acacacac-0000-4000-8000-0000000000c1')
+  where church_id in ('acacacac-0000-4000-8000-0000000000d1', 'acacacac-0000-4000-8000-0000000000d3');
+  if n <> 0 then raise exception 'FALHA rede: a serie semanal trouxe igreja que nao esta abaixo'; end if;
+
+  -- A função sem checagem não é chamável.
+  begin
+    perform public.rede_unidades_abaixo('acacacac-0000-4000-8000-0000000000c1');
+    raise exception 'FALHA rede: a consulta sem checagem ficou chamavel';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+
+-- Administrador que não é o Responsável: vê o painel, mas não a mensalidade.
+select set_config('request.jwt.claims', '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
+do $$
+declare r record;
+begin
+  select * into r from public.rede_painel_unidades('acacacac-0000-4000-8000-0000000000c1')
+  where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if r.church_id is null then raise exception 'FALHA rede: o administrador da sede nao viu a unidade'; end if;
+  if r.mensalidade is not null then
+    raise exception 'FALHA rede: administrador que nao e o Responsavel viu a mensalidade da unidade (%)', r.mensalidade;
+  end if;
+end $$;
+
+-- A de baixo não vê a de cima; outra rede e quem não administra não veem nada.
+do $$
+declare v_quem text; v_empresa uuid; n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    foreach v_empresa in array array[
+      'acacacac-0000-4000-8000-0000000000c1'::uuid,
+      'acacacac-0000-4000-8000-0000000000c2'::uuid,
+      'acacacac-0000-4000-8000-0000000000c3'::uuid
+    ] loop
+      if public.rede_tem_unidades(v_empresa) then
+        raise exception 'FALHA rede: % achou unidades abaixo de %', v_quem, v_empresa;
+      end if;
+      select (select count(*) from public.rede_painel_unidades(v_empresa))
+           + (select count(*) from public.rede_painel_semanas(v_empresa))
+           + (select count(*) from public.rede_painel_meses(v_empresa)) into n;
+      if n <> 0 then raise exception 'FALHA rede: % recebeu % linhas do painel de %', v_quem, n, v_empresa; end if;
+    end loop;
+  end loop;
+end $$;
+reset role;
+set local role anon;
+do $$
+declare f text;
+begin
+  foreach f in array array['rede_tem_unidades', 'rede_painel_unidades', 'rede_painel_semanas', 'rede_painel_meses'] loop
+    begin
+      execute format('select * from public.%I(%L)', f, 'acacacac-0000-4000-8000-0000000000c1');
+      raise exception 'FALHA rede: anon chamou %', f;
+    exception when sqlstate '42501' then null;
+    end;
+  end loop;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------
