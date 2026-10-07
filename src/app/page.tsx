@@ -6,8 +6,11 @@ import {
   ChartNoAxesCombined,
   ClipboardCheck,
   Contact,
+  FileText,
+  HandCoins,
   HandHeart,
   HeartHandshake,
+  IdCard,
   KeyRound,
   LayoutDashboard,
   MapPin,
@@ -15,12 +18,12 @@ import {
   MessageCircleHeart,
   Network,
   QrCode,
+  ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { brand } from "@/config/brand";
-import { ChurchFinderPreview } from "@/features/landing/components/church-finder-preview";
 import { cn } from "@/lib/utils";
 
 const benefits = [
@@ -34,7 +37,7 @@ const benefits = [
     icon: Users,
     title: "Para quem cuida",
     description:
-      "Membros, presença nos cultos, Escola Dominical e visitas em um só lugar, com aviso de quem está faltando.",
+      "Membros, presença nos cultos, Escola Dominical, tesouraria e visitas em um só lugar, com aviso de quem está faltando.",
   },
   {
     icon: LayoutDashboard,
@@ -56,7 +59,19 @@ const modules = [
     icon: Contact,
     title: "Membros e cargos",
     description:
-      "Cadastro com busca, aniversariantes do mês e os cargos de cada um: pastor, diácono, secretário, professor e os que a igreja criar.",
+      "Ficha completa de cada membro, busca, aniversariantes do mês e os cargos de cada um: pastor, diácono, secretário, professor e os que a igreja criar.",
+  },
+  {
+    icon: FileText,
+    title: "Cartas e declarações",
+    description:
+      "Carta de recomendação, carta de transferência e declaração de membro em PDF, com a assinatura do pastor e o texto que a igreja ajustar. O histórico de cada membro fica registrado.",
+  },
+  {
+    icon: IdCard,
+    title: "Carteirinha de membro",
+    description:
+      "Carteirinha com foto e QR Code, enviada por link ou impressa em PDF. Quem lê o código confere na hora se ela vale. A sede escolhe o modelo, as cores e a logo.",
   },
   {
     icon: ClipboardCheck,
@@ -69,6 +84,12 @@ const modules = [
     title: "Escola Dominical",
     description:
       "Classes, matrículas, chamada de cada professor, visitantes, lições do trimestre, relatório do domingo em PDF e os alunos mais assíduos.",
+  },
+  {
+    icon: HandCoins,
+    title: "Dízimos e ofertas",
+    description:
+      "Os dízimos com o nome de quem entregou e as ofertas de cada culto, com filtros e relatório do mês. A oferta da Escola Dominical fica em um caixa separado.",
   },
   {
     icon: HeartHandshake,
@@ -112,6 +133,12 @@ const modules = [
     description:
       "Presença por culto e por domingo em gráficos, frequência de cada pessoa e os destaques do trimestre.",
   },
+  {
+    icon: ShieldCheck,
+    title: "Cuidado com os dados",
+    description:
+      "Termo de consentimento impresso para o membro assinar, de acordo com a LGPD. As fotos ficam em área reservada e cada igreja só enxerga os próprios dados.",
+  },
 ];
 
 const steps = [
@@ -128,7 +155,7 @@ const steps = [
   [
     "03",
     "A equipe acompanha de perto",
-    "Chamada nos cultos e na Escola Dominical, visitas registradas e um painel que mostra quem precisa de atenção.",
+    "Chamada nos cultos e na Escola Dominical, visitas registradas, a tesouraria em dia e um painel que mostra quem precisa de atenção.",
   ],
 ];
 
@@ -191,8 +218,9 @@ export default function LandingPage() {
                 {brand.name}
               </strong>{" "}
               dá a qualquer igreja uma página pronta para a comunidade e as
-              ferramentas do dia a dia da liderança: membros, presença nos
-              cultos, Escola Dominical, visitas e eventos.
+              ferramentas do dia a dia da liderança e da secretaria: membros,
+              presença nos cultos, Escola Dominical, dízimos e ofertas,
+              carteirinha, visitas e eventos.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link
@@ -363,8 +391,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <ChurchFinderPreview />
-
         <section className="bg-[#f0f3eb]">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-24 lg:py-24">
             <div>
@@ -499,7 +525,10 @@ export default function LandingPage() {
       <footer className="border-t border-[#dfe5d8] px-5 py-8 sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 text-sm text-[#718075] sm:flex-row sm:items-center sm:justify-between">
           <span className="font-semibold text-[#41694b]">{brand.name}</span>
-          <span>Página, membros e acompanhamento para igrejas.</span>
+          <span>Página, secretaria e acompanhamento para igrejas.</span>
+          <Link href="/terms/igreja" className="hover:text-[#243128]">
+            Termos de Uso
+          </Link>
           <span>© 2026</span>
         </div>
       </footer>
