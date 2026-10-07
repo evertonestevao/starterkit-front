@@ -205,10 +205,6 @@ export default function LandingPage() {
       <main>
         <section className="relative mx-auto grid max-w-7xl items-center gap-14 px-5 pb-20 pt-16 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:gap-8 lg:pb-28 lg:pt-24">
           <div className="relative z-10 max-w-2xl">
-            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#d9dfd2] bg-[#eef2e8] px-3 py-1.5 text-xs font-medium tracking-[0.08em] text-[#54705a] uppercase">
-              <span className="size-1.5 rounded-full bg-[#c39a3a]" />A
-              plataforma para acolher e acompanhar a comunidade
-            </div>
             <h1 className="max-w-[680px] text-[clamp(2.8rem,6vw,5.6rem)] font-semibold leading-[0.98] tracking-[-0.065em] text-[#243128]">
               A página da sua igreja e o cuidado com as pessoas, em um só lugar.
             </h1>
@@ -329,10 +325,7 @@ export default function LandingPage() {
           <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-24">
             <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-24">
               <div>
-                <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
-                  Mais que uma página
-                </p>
-                <h2 className="mt-4 max-w-md text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
+                <h2 className="max-w-md text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
                   Do primeiro contato ao cuidado de cada semana.
                 </h2>
                 <p className="mt-5 max-w-sm leading-7 text-[#718075]">
@@ -360,10 +353,7 @@ export default function LandingPage() {
 
         <section id="modulos" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-24">
           <div className="max-w-2xl">
-            <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
-              O que a igreja encontra
-            </p>
-            <h2 className="mt-4 text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
+            <h2 className="text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
               Tudo o que a secretaria e a liderança usam, no mesmo sistema.
             </h2>
             <p className="mt-5 leading-7 text-[#718075]">
@@ -394,10 +384,7 @@ export default function LandingPage() {
         <section className="bg-[#f0f3eb]">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-24 lg:py-24">
             <div>
-              <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
-                Mobilize o que importa
-              </p>
-              <h2 className="mt-4 max-w-lg text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
+              <h2 className="max-w-lg text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
                 Toda grande obra começa com uma comunidade que acredita junto.
               </h2>
               <p className="mt-5 max-w-lg leading-7 text-[#718075]">
@@ -460,10 +447,7 @@ export default function LandingPage() {
         >
           <div className="flex flex-col justify-between gap-8 border-b border-[#dfe5d8] pb-12 md:flex-row md:items-end">
             <div>
-              <p className="text-xs font-semibold tracking-[0.18em] text-[#a48432] uppercase">
-                Simples desde o primeiro dia
-              </p>
-              <h2 className="mt-4 max-w-xl text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
+              <h2 className="max-w-xl text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
                 Comece pequeno. Acolha de verdade.
               </h2>
             </div>
@@ -496,10 +480,7 @@ export default function LandingPage() {
           <div className="relative px-7 py-14 sm:px-14 sm:py-16 lg:px-20">
             <div className="absolute -right-16 -top-32 size-80 rounded-full border-[40px] border-[#719371]/25" />
             <div className="relative max-w-2xl">
-              <p className="text-xs font-semibold tracking-[0.18em] text-[#d9c17b] uppercase dark:text-primary-foreground/70">
-                Comece pelo essencial
-              </p>
-              <h2 className="mt-5 text-3xl font-semibold leading-tight tracking-[-0.04em] text-white sm:text-5xl">
+              <h2 className="text-3xl font-semibold leading-tight tracking-[-0.04em] text-white sm:text-5xl">
                 Tecnologia a serviço do cuidado, do jeito que a sua igreja já
                 trabalha.
               </h2>
