@@ -38,6 +38,8 @@ async function novoAluno(page: Page, nome: string) {
 }
 
 test("classe com dois professores, chamada salva e relatório do domingo", async ({ page }) => {
+  // Fluxo longo (cadastro, dois membros, classe, professores, alunos, chamada e relatório): não cabe nos 30s padrão.
+  test.setTimeout(120_000);
   await signupAndOnboard(page, {
     email: uniqueEmail("pastor-ebd"),
     password: PASSWORD,
