@@ -2,7 +2,7 @@
 
 export type TipoDocumento = "declaracao" | "recomendacao" | "transferencia";
 
-export type TipoHistorico = "cadastro" | "situacao" | "documento" | "anotacao";
+export type TipoHistorico = "cadastro" | "situacao" | "documento" | "anotacao" | "consentimento" | "carteirinha";
 
 export interface HistoricoItem {
   id: string;

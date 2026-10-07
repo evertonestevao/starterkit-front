@@ -4,6 +4,8 @@ import { BotaoVoltar } from "@/components/botao-voltar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AcessoBadge, AcessoMembroCard } from "@/features/acompanhamento/components/acesso-membro";
+import { CarteirinhaCard } from "@/features/acompanhamento/components/carteirinha-card";
+import { ConsentimentoCard } from "@/features/acompanhamento/components/consentimento-card";
 import { DocumentosCard } from "@/features/acompanhamento/components/documentos-card";
 import { ExcluirMembro } from "@/features/acompanhamento/components/excluir-membro";
 import { FichaCard } from "@/features/acompanhamento/components/ficha-card";
@@ -17,15 +19,18 @@ import {
   formatarPercentual,
   hojeISO,
   percentualPresenca,
+  somarDias,
   ESTADO_LABEL,
   MOTIVO_LABEL,
   RESULTADO_LABEL,
 } from "@/lib/acompanhamento";
+import { ehMenor, validadePadrao } from "@/lib/carteirinha";
 import { camposFaltando } from "@/lib/documentosMembro";
 import { idadeEm } from "@/lib/ebd";
 import { SITUACAO_LABEL } from "@/lib/fichaMembro";
 import { mascaraTelefone } from "@/lib/telefone";
 import { getAcompanhamentoActorAutorizado, getAcompanhamentoService } from "@/server/acompanhamento";
+import { getCarteirinhaActorAutorizado, getCarteirinhaService } from "@/server/carteirinha";
 import { getEbdService } from "@/server/ebd";
 import { getSecretariaActorAutorizado, getSecretariaService } from "@/server/secretaria";
 import { canEditarModelos } from "@/services/secretariaService";
@@ -94,6 +99,22 @@ export default async function MembroPage({
         return null;
       })
     : null;
+  // Consentimento, foto e carteirinha: também do módulo Membros.
+  const credenciador = await getCarteirinhaActorAutorizado();
+  const credencial = credenciador
+    ? await (async () => {
+        const svc = await getCarteirinhaService();
+        const [consentimento, carteirinha] = await Promise.all([
+          svc.consentimento(credenciador, id),
+          svc.carteirinha(credenciador, id),
+        ]);
+        return { consentimento, carteirinha };
+      })().catch((err: unknown) => {
+        console.error("[membro] falha ao carregar consentimento e carteirinha", err);
+        return null;
+      })
+    : null;
+
   const gerenciaAcesso = actor.role === "owner" || actor.role === "admin";
   const { membro, historico, justificativas, contatos } = dados;
   const acesso = membro.userId ? acessos.porUsuario[membro.userId] : undefined;
@@ -175,6 +196,30 @@ export default async function MembroPage({
                 hoje: hojeISO(),
               }),
             }))}
+          />
+        </div>
+      ) : null}
+
+      {credencial ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ConsentimentoCard
+            membroId={membro.id}
+            nome={membro.nome}
+            consentimento={credencial.consentimento}
+            menor={ehMenor(membro.nascimento, hojeISO())}
+            hoje={hojeISO()}
+          />
+          <CarteirinhaCard
+            // Emitir, renovar ou cancelar muda a carteirinha: o cartão recomeça do que está no banco.
+            key={`${credencial.carteirinha?.estado ?? "sem"}|${credencial.carteirinha?.validade ?? ""}`}
+            membroId={membro.id}
+            nome={membro.nome}
+            whatsapp={membro.whatsapp}
+            carteirinha={credencial.carteirinha}
+            autorizada={Boolean(credencial.consentimento?.carteirinha)}
+            ativo={membro.ativo}
+            validadePadrao={validadePadrao(hojeISO())}
+            amanha={somarDias(hojeISO(), 1)}
           />
         </div>
       ) : null}

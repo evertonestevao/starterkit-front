@@ -6823,6 +6823,8 @@ begin
       'list_church_sponsors', 'nomes_dos_niveis', 'pix_publico', 'posso_ver_previa_da_pagina',
       -- link de confirmação da chave Pix, enviado ao e-mail do Responsável
       'pix_confirmacao_por_token', 'pix_confirmar_por_token',
+      -- carteirinha de membro: link pessoal e verificação pelo QR Code
+      'carteirinha_por_token', 'verificar_carteirinha',
       'rede_igrejas_publicas', 'resolve_church_by_domain', 'cancel_profile_change_by_token',
       'igreja_publica', 'igrejas_resumo', 'rede_tem_igrejas', 'resolve_church_appearance', 'resolve_template',
       -- auxiliar desta suíte (só existe dentro da transação)
@@ -7832,6 +7834,314 @@ begin
   end;
 end $$;
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- Consentimento, foto e carteirinha (migration 20261007140000). Membro a1, da
+-- AC Cong (d2, conta c2, de 002). 004 é a secretaria (Membros pelo cargo).
+-- 001 é da igreja de cima; 005, de outra rede.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare v text; n int;
+  c_membro constant uuid := 'cacacaca-0000-4000-8000-0000000000a1';
+  c_base constant text := 'acacacac-0000-4000-8000-0000000000c2/cacacaca-0000-4000-8000-0000000000a1/';
+begin
+  perform public.salvar_ficha_membro(c_membro, '{"situacao":"ativo"}'::jsonb);
+
+  -- Sem termo: nem foto, nem carteirinha.
+  begin
+    perform public.emitir_carteirinha(c_membro, repeat('a', 64), current_date + 365);
+    raise exception 'FALHA carteirinha: emitiu sem consentimento';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.definir_foto_membro(c_membro, c_base || gen_random_uuid()::text || '.jpg');
+    raise exception 'FALHA foto: aceitou foto sem termo registrado';
+  exception when sqlstate 'P0002' then null;
+  end;
+  select count(*) into n from public.membros_sem_consentimento('acacacac-0000-4000-8000-0000000000d2') where id = c_membro;
+  if n <> 1 then raise exception 'FALHA consentimento: membro sem termo nao apareceu na lista'; end if;
+
+  -- Termo sem data, ou com data no futuro, não entra.
+  begin
+    perform public.salvar_consentimento_membro(c_membro, '{"cadastro":true}'::jsonb);
+    raise exception 'FALHA consentimento: aceitou termo sem data';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform public.salvar_consentimento_membro(c_membro,
+      jsonb_build_object('cadastro', true, 'assinado_em', (current_date + 2)::text));
+    raise exception 'FALHA consentimento: aceitou termo assinado no futuro';
+  exception when sqlstate '22023' then null;
+  end;
+
+  -- Só o cadastro: foto e carteirinha continuam fechadas.
+  perform public.salvar_consentimento_membro(c_membro,
+    jsonb_build_object('cadastro', true, 'assinado_em', (current_date - 1)::text));
+  begin
+    perform public.definir_foto_membro(c_membro, c_base || gen_random_uuid()::text || '.jpg');
+    raise exception 'FALHA foto: aceitou foto sem o consentimento da foto';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.emitir_carteirinha(c_membro, repeat('a', 64), current_date + 365);
+    raise exception 'FALHA carteirinha: emitiu sem o consentimento da carteirinha';
+  exception when sqlstate '42501' then null;
+  end;
+  select count(*) into n from public.membros_sem_consentimento('acacacac-0000-4000-8000-0000000000d2') where id = c_membro;
+  if n <> 0 then raise exception 'FALHA consentimento: membro com termo continua na lista dos sem termo'; end if;
+
+  -- Sem "cadastro", foto e carteirinha marcadas não valem.
+  perform public.salvar_consentimento_membro(c_membro, '{"cadastro":false,"foto":true,"carteirinha":true}'::jsonb);
+  if exists (select 1 from public.rol_membro_consentimentos where membro_id = c_membro and (foto or carteirinha)) then
+    raise exception 'FALHA consentimento: foto/carteirinha ficaram valendo sem o cadastro';
+  end if;
+
+  -- Tudo consentido.
+  perform public.salvar_consentimento_membro(c_membro,
+    jsonb_build_object('cadastro', true, 'foto', true, 'carteirinha', true, 'assinado_em', (current_date - 1)::text));
+
+  -- A foto tem de estar na pasta DESTE membro.
+  begin
+    perform public.definir_foto_membro(c_membro,
+      'acacacac-0000-4000-8000-0000000000c2/' || gen_random_uuid()::text || '/' || gen_random_uuid()::text || '.jpg');
+    raise exception 'FALHA foto: apontou para a pasta de outro membro';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform public.definir_foto_membro(c_membro, c_base || '../../x.jpg');
+    raise exception 'FALHA foto: aceitou caminho com ..';
+  exception when sqlstate '22023' then null;
+  end;
+  v := c_base || gen_random_uuid()::text || '.jpg';
+  perform set_config('rls.foto', v, true);
+  if public.definir_foto_membro(c_membro, v) is not null then
+    raise exception 'FALHA foto: primeira foto devolveu caminho antigo';
+  end if;
+  if public.definir_foto_membro(c_membro, v) is distinct from v then
+    raise exception 'FALHA foto: trocar a foto nao devolveu a antiga para apagar';
+  end if;
+
+  -- Emitir: validade no passado não; a de um ano, sim.
+  begin
+    perform public.emitir_carteirinha(c_membro, repeat('a', 64), current_date - 1);
+    raise exception 'FALHA carteirinha: aceitou validade vencida';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    perform public.emitir_carteirinha(c_membro, 'token-puro', current_date + 365);
+    raise exception 'FALHA carteirinha: aceitou token sem hash';
+  exception when sqlstate '22023' then null;
+  end;
+  v := public.emitir_carteirinha(c_membro, encode(sha256(convert_to('link-um', 'UTF8')), 'hex'), current_date + 365);
+  if v !~ '^[0-9A-F]{16}$' then raise exception 'FALHA carteirinha: codigo fora do formato (%)', v; end if;
+  perform set_config('rls.codigo', v, true);
+
+  -- O hash do link não é legível, e a tabela não é gravável.
+  begin
+    perform token_hash from public.rol_membro_carteirinhas;
+    raise exception 'FALHA carteirinha: leu o hash do link';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.rol_membro_carteirinhas set validade = current_date + 3000 where membro_id = c_membro;
+    raise exception 'FALHA carteirinha: update direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.rol_membro_consentimentos set carteirinha = true where membro_id = c_membro;
+    raise exception 'FALHA consentimento: update direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  select count(*) into n from public.carteirinha_do_membro(c_membro) where estado = 'valida' and tem_foto and tem_link;
+  if n <> 1 then raise exception 'FALHA carteirinha: a secretaria nao leu a carteirinha emitida'; end if;
+end $$;
+
+-- A igreja de CIMA e a de outra rede: nada.
+do $$
+declare v_quem text; n int;
+  c_membro constant uuid := 'cacacaca-0000-4000-8000-0000000000a1';
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.rol_membro_consentimentos;
+    if n <> 0 then raise exception 'FALHA consentimento: % leu consentimentos da congregacao', v_quem; end if;
+    select count(*) into n from public.rol_membro_carteirinhas where membro_id = c_membro;
+    if n <> 0 then raise exception 'FALHA carteirinha: % leu a carteirinha da congregacao', v_quem; end if;
+    select count(*) into n from public.carteirinha_do_membro(c_membro);
+    if n <> 0 then raise exception 'FALHA carteirinha: % leu a carteirinha pela funcao', v_quem; end if;
+    select count(*) into n from public.membros_sem_consentimento('acacacac-0000-4000-8000-0000000000d2');
+    if n <> 0 then raise exception 'FALHA consentimento: % listou os sem termo da congregacao', v_quem; end if;
+    begin
+      perform public.salvar_consentimento_membro(c_membro, '{"cadastro":false}'::jsonb);
+      raise exception 'FALHA consentimento: % alterou o consentimento', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.definir_foto_membro(c_membro, null);
+      raise exception 'FALHA foto: % tirou a foto', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.emitir_carteirinha(c_membro, repeat('b', 64), current_date + 365);
+      raise exception 'FALHA carteirinha: % reemitiu a carteirinha', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.revogar_carteirinha(c_membro);
+      raise exception 'FALHA carteirinha: % cancelou a carteirinha', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    -- O caminho da foto pelo link é só do servidor.
+    begin
+      perform public.carteirinha_foto_por_token('link-um');
+      raise exception 'FALHA foto: % leu o caminho da foto pelo link', v_quem;
+    exception when sqlstate '42501' then null;
+    end;
+  end loop;
+end $$;
+reset role;
+
+-- Quem abre o link e quem lê o QR Code (sem login).
+set local role anon;
+do $$
+declare r record; n int;
+begin
+  begin
+    perform 1 from public.rol_membro_carteirinhas;
+    raise exception 'FALHA carteirinha: anon leu a tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform 1 from public.rol_membro_consentimentos;
+    raise exception 'FALHA consentimento: anon leu a tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.carteirinha_foto_por_token('link-um');
+    raise exception 'FALHA foto: anon leu o caminho da foto';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.carteirinha_dados('cacacaca-0000-4000-8000-0000000000a1');
+    raise exception 'FALHA carteirinha: anon chamou a funcao interna';
+  exception when sqlstate '42501' then null;
+  end;
+
+  select * into r from public.carteirinha_por_token('link-um');
+  if r.estado is distinct from 'valida' or r.nome is null or not r.tem_foto then
+    raise exception 'FALHA carteirinha: link valido nao abriu a carteirinha (%)', r.estado;
+  end if;
+  select count(*) into n from public.carteirinha_por_token('link-errado');
+  if n <> 0 then raise exception 'FALHA carteirinha: link errado abriu carteirinha'; end if;
+  select count(*) into n from public.carteirinha_por_token(encode(sha256(convert_to('link-um', 'UTF8')), 'hex'));
+  if n <> 0 then raise exception 'FALHA carteirinha: o hash guardado funcionou como link'; end if;
+
+  select * into r from public.verificar_carteirinha(lower(current_setting('rls.codigo')));
+  if r.estado is distinct from 'valida' or r.nome is null or r.validade is null then
+    raise exception 'FALHA carteirinha: QR de carteirinha valida nao verificou (%)', r.estado;
+  end if;
+  select count(*) into n from public.verificar_carteirinha('0000000000000000');
+  if n <> 0 then raise exception 'FALHA carteirinha: codigo inventado verificou'; end if;
+end $$;
+reset role;
+
+do $$
+begin
+  if public.carteirinha_foto_por_token('link-um') is distinct from current_setting('rls.foto') then
+    raise exception 'FALHA foto: o servidor nao achou a foto pelo link';
+  end if;
+end $$;
+
+-- Link novo: o antigo morre, o código do QR continua o mesmo.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare v text;
+begin
+  v := public.emitir_carteirinha('cacacaca-0000-4000-8000-0000000000a1',
+    encode(sha256(convert_to('link-dois', 'UTF8')), 'hex'), current_date + 365);
+  if v <> current_setting('rls.codigo') then raise exception 'FALHA carteirinha: o codigo do QR mudou ao trocar o link'; end if;
+  -- Membro que deixa de estar ativo: a carteirinha deixa de valer sozinha.
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a1', '{"situacao":"afastado"}'::jsonb);
+end $$;
+reset role;
+
+set local role anon;
+do $$
+declare r record; n int;
+begin
+  select count(*) into n from public.carteirinha_por_token('link-um');
+  if n <> 0 then raise exception 'FALHA carteirinha: o link antigo continuou abrindo'; end if;
+  select * into r from public.verificar_carteirinha(current_setting('rls.codigo'));
+  if r.estado is distinct from 'inativa' or r.nome is not null then
+    raise exception 'FALHA carteirinha: membro inativo ainda verifica (% / %)', r.estado, r.nome;
+  end if;
+  select estado into r from public.carteirinha_por_token('link-dois');
+  if r.estado is distinct from 'inativa' then raise exception 'FALHA carteirinha: link de inativo aparece como %', r.estado; end if;
+end $$;
+reset role;
+
+-- Volta a ativo, mas a validade passou.
+update public.rol_membros set ativo = true where id = 'cacacaca-0000-4000-8000-0000000000a1';
+update public.rol_membro_carteirinhas set validade = current_date - 10 where membro_id = 'cacacaca-0000-4000-8000-0000000000a1';
+set local role anon;
+do $$
+declare r record;
+begin
+  select * into r from public.verificar_carteirinha(current_setting('rls.codigo'));
+  if r.estado is distinct from 'vencida' then raise exception 'FALHA carteirinha: vencida aparece como %', r.estado; end if;
+end $$;
+reset role;
+
+-- O membro retira o consentimento da foto e da carteirinha: a foto vai para a
+-- fila de apagar, o link morre e o QR não mostra mais o nome.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}', true);
+do $$
+declare v text; n int;
+begin
+  v := public.salvar_consentimento_membro('cacacaca-0000-4000-8000-0000000000a1',
+    jsonb_build_object('cadastro', true, 'assinado_em', (current_date - 1)::text));
+  if v is distinct from current_setting('rls.foto') then
+    raise exception 'FALHA consentimento: retirar a foto nao devolveu o arquivo a apagar (%)', v;
+  end if;
+  if exists (select 1 from public.rol_membro_consentimentos
+              where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and foto_path is not null) then
+    raise exception 'FALHA consentimento: a foto continuou ligada ao membro';
+  end if;
+  select count(*) into n from public.rol_membro_historico
+  where membro_id = 'cacacaca-0000-4000-8000-0000000000a1' and tipo in ('consentimento', 'carteirinha');
+  if n < 5 then raise exception 'FALHA consentimento: historico incompleto (%)', n; end if;
+end $$;
+reset role;
+
+set local role anon;
+do $$
+declare r record; n int;
+begin
+  select count(*) into n from public.carteirinha_por_token('link-dois');
+  if n <> 0 then raise exception 'FALHA carteirinha: link abriu depois de retirado o consentimento'; end if;
+  select * into r from public.verificar_carteirinha(current_setting('rls.codigo'));
+  if r.estado is distinct from 'cancelada' or r.nome is not null or r.validade is not null then
+    raise exception 'FALHA carteirinha: QR de carteirinha cancelada ainda mostra dados (% / %)', r.estado, r.nome;
+  end if;
+end $$;
+reset role;
+
+do $$
+begin
+  if public.carteirinha_foto_por_token('link-dois') is not null then
+    raise exception 'FALHA foto: o servidor ainda acha a foto depois de retirado o consentimento';
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Cake, FileUp } from "lucide-react";
+import { Cake, FileSignature, FileUp } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -49,7 +49,11 @@ export default async function RolMembrosPage({
   ]);
   const { items, total, page, pageSize } = resultado;
   // O antigo ?inativos=1 continua valendo como "todas as situações".
-  const situacao: FiltroSituacao = sp.situacao ? lerFiltroSituacao(sp.situacao) : sp.inativos === "1" ? "todas" : "ativo";
+  const situacao: FiltroSituacao = sp.situacao
+    ? lerFiltroSituacao(sp.situacao)
+    : sp.inativos === "1"
+      ? "todas"
+      : "ativo";
 
   const inicio = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const fim = Math.min(page * pageSize, total);
@@ -59,10 +63,13 @@ export default async function RolMembrosPage({
       <MembrosKpisFaixa kpis={kpis} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Para tirar alguém da chamada sem perder o histórico, edite e desmarque &ldquo;Ativo&rdquo;. Cadastro feito
-          por engano pode ser excluído na ficha do membro.
+          Para tirar alguém da chamada sem perder o histórico, edite e desmarque &ldquo;Ativo&rdquo;. Cadastro feito por
+          engano pode ser excluído na ficha do membro.
         </p>
         <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/membros/sem-termo" className={buttonVariants({ variant: "outline" })}>
+            <FileSignature className="size-4" /> Sem termo
+          </Link>
           <Link href="/dashboard/membros/aniversariantes" className={buttonVariants({ variant: "outline" })}>
             <Cake className="size-4" /> Aniversariantes
           </Link>
@@ -87,7 +94,11 @@ export default async function RolMembrosPage({
         {total > 0 && total <= pageSize ? (
           <p className="text-xs text-muted-foreground">
             Mostrando {inicio}–{fim} de {total} {total === 1 ? "membro" : "membros"}
-            {situacao === "ativo" ? (total === 1 ? " ativo" : " ativos") : ` · ${FILTRO_SITUACAO_LABEL[situacao].toLowerCase()}`}
+            {situacao === "ativo"
+              ? total === 1
+                ? " ativo"
+                : " ativos"
+              : ` · ${FILTRO_SITUACAO_LABEL[situacao].toLowerCase()}`}
           </p>
         ) : null}
         <PaginationControls
@@ -95,12 +106,19 @@ export default async function RolMembrosPage({
           pageSize={pageSize}
           total={total}
           basePath="/dashboard/membros"
-          params={{ q: sp.q, situacao: situacao === "ativo" ? undefined : situacao, porPagina: sp.porPagina, cargo: sp.cargo }}
+          params={{
+            q: sp.q,
+            situacao: situacao === "ativo" ? undefined : situacao,
+            porPagina: sp.porPagina,
+            cargo: sp.cargo,
+          }}
         />
       </div>
       {gerenciaAcesso && acessos.convitesSemMembro.length > 0 && !sp.q && !sp.cargo ? (
         <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium text-muted-foreground">Convites enviados para quem ainda não está no rol</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">
+            Convites enviados para quem ainda não está no rol
+          </h3>
           <ConvitesSemMembro convites={acessos.convitesSemMembro} />
         </section>
       ) : null}

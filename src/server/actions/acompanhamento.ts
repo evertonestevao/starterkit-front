@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AppError } from "@/lib/errors";
 import { getAcompanhamentoActor, getAcompanhamentoService } from "@/server/acompanhamento";
+import { getCarteirinhaActorAutorizado, getCarteirinhaService } from "@/server/carteirinha";
 import { recordAudit } from "@/server/audit";
 import type { AcompanhamentoActor } from "@/services/acompanhamentoService";
 import type { ConfigAcompanhamento, Visitante } from "@/types/acompanhamento";
@@ -36,7 +37,9 @@ export async function salvarMembroAction(
   try {
     const id = texto(formData, "id") || null;
     const actor = await ator();
-    const membroId = await (await getAcompanhamentoService()).salvarMembro(
+    const membroId = await (
+      await getAcompanhamentoService()
+    ).salvarMembro(
       actor,
       id,
       {
@@ -81,21 +84,54 @@ export async function salvarMembroAction(
 }
 
 const CAMPOS_FICHA = [
-  "sexo", "estadoCivil", "naturalidade", "profissao", "conjugeNome", "dataCasamento", "paiNome", "maeNome", "filhos",
-  "cep", "logradouro", "numero", "complemento", "bairro", "cidade", "uf", "dataConversao", "entradaForma",
-  "membroDesde", "igrejaOrigem", "situacao", "situacaoEm", "situacaoMotivo",
+  "sexo",
+  "estadoCivil",
+  "naturalidade",
+  "profissao",
+  "conjugeNome",
+  "dataCasamento",
+  "paiNome",
+  "maeNome",
+  "filhos",
+  "cep",
+  "logradouro",
+  "numero",
+  "complemento",
+  "bairro",
+  "cidade",
+  "uf",
+  "dataConversao",
+  "entradaForma",
+  "membroDesde",
+  "igrejaOrigem",
+  "situacao",
+  "situacaoEm",
+  "situacaoMotivo",
 ] as const;
 
 /** Grava a ficha completa do membro (dados pessoais, família, endereço, vida na igreja e situação). */
-export async function salvarFichaMembroAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+export async function salvarFichaMembroAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
   try {
     const actor = await ator();
     const membroId = texto(formData, "membroId");
-    const { nome, situacao } = await (await getAcompanhamentoService()).salvarFicha(
-      actor,
-      membroId,
-      Object.fromEntries(CAMPOS_FICHA.map((campo) => [campo, texto(formData, campo)])),
-    );
+    const { nome, situacao } = await (
+      await getAcompanhamentoService()
+    ).salvarFicha(actor, membroId, Object.fromEntries(CAMPOS_FICHA.map((campo) => [campo, texto(formData, campo)])));
+    // Saiu da igreja: a foto não tem mais por que ficar guardada (a carteirinha
+    // já deixa de valer sozinha, pela situação). Falhar aqui não desfaz a ficha.
+    if (situacao === "transferido" || situacao === "desligado" || situacao === "falecido") {
+      const credenciador = await getCarteirinhaActorAutorizado();
+      if (credenciador) {
+        await (
+          await getCarteirinhaService()
+        )
+          .removerFoto(credenciador, membroId)
+          .catch((err: unknown) => console.error("[membro] falha ao apagar a foto de quem saiu", err));
+      }
+    }
     // Dado pessoal não vai para a auditoria: só o fato e a situação.
     await recordAudit({
       companyId: actor.companyId,
@@ -190,7 +226,9 @@ export async function salvarJustificativaAction(
   try {
     const id = texto(formData, "id") || null;
     const inicio = texto(formData, "dataInicio");
-    await (await getAcompanhamentoService()).salvarJustificativa(await ator(), id, {
+    await (
+      await getAcompanhamentoService()
+    ).salvarJustificativa(await ator(), id, {
       membroId: texto(formData, "membroId"),
       motivo: texto(formData, "motivo"),
       motivoTexto: texto(formData, "motivoTexto"),
@@ -215,12 +253,11 @@ export async function encerrarJustificativaAction(id: string): Promise<ActionSta
   }
 }
 
-export async function registrarContatoAction(
-  _prev: ActionState | undefined,
-  formData: FormData,
-): Promise<ActionState> {
+export async function registrarContatoAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
   try {
-    await (await getAcompanhamentoService()).registrarContato(await ator(), {
+    await (
+      await getAcompanhamentoService()
+    ).registrarContato(await ator(), {
       membroId: texto(formData, "membroId"),
       motivo: texto(formData, "motivo"),
       data: texto(formData, "data"),

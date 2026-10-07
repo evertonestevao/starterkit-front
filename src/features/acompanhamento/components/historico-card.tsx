@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { FileText, History, PencilLine, Plus, Trash2, UserCheck, UserPlus } from "lucide-react";
+import { FileSignature, FileText, History, IdCard, PencilLine, Plus, Trash2, UserCheck, UserPlus } from "lucide-react";
 import { confirmar } from "@/components/confirmar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,8 @@ const ICONE: Record<TipoHistorico, typeof History> = {
   situacao: UserCheck,
   documento: FileText,
   anotacao: PencilLine,
+  consentimento: FileSignature,
+  carteirinha: IdCard,
 };
 
 /** Quantos aparecem antes do "ver tudo". */
