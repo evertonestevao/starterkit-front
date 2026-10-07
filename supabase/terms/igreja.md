@@ -1,14 +1,10 @@
 # Termos de Uso — Igrejas
 
-**Versão 2 — vigente desde 18 de setembro de 2026**
+**Versão 3 — vigente desde 7 de outubro de 2026**
 
 Estes Termos regulam o uso da plataforma Conecta Igreja pelas igrejas e por
 quem as administra. Ao criar uma conta e marcar o aceite, a Igreja concorda
 com tudo o que está escrito aqui.
-
-Se você é patrocinador — pessoa ou empresa que apoia financeiramente a
-plataforma — os termos que valem para você são outros, os
-[Termos de Uso para Patrocinadores](/terms/patrocinador).
 
 ---
 
@@ -29,7 +25,10 @@ administração, com recursos para:
 - receber pedidos de oração enviados por quem visita a página;
 - divulgar eventos e receber inscrições;
 - registrar visitantes;
-- exibir os patrocinadores que sustentam a Plataforma;
+- manter o cadastro de membros, emitir cartas, declarações e a carteirinha de
+  membro;
+- organizar a Escola Bíblica Dominical (classes, chamada e relatórios);
+- registrar a presença nos cultos, os dízimos e as ofertas;
 - opcionalmente, usar um domínio próprio no lugar do endereço padrão.
 
 A Plataforma é uma ferramenta. Ela não participa da vida religiosa, da
@@ -49,22 +48,62 @@ cada pessoa faz com o acesso que recebeu.
 3.4. As credenciais são pessoais e intransferíveis. A Igreja deve avisar a
 Plataforma imediatamente se suspeitar de acesso indevido.
 
-## 4. Preço
+## 4. Mensalidade
 
-4.1. **O uso da Plataforma pela Igreja é gratuito.** A Igreja não paga
-mensalidade, taxa de adesão nem comissão sobre o que quer que seja.
+4.1. **O uso da Plataforma é pago por mensalidade, no valor de R$ 89,90
+(oitenta e nove reais e noventa centavos) por igreja, por mês.** Não há taxa
+de adesão nem comissão sobre dízimos, ofertas, campanhas ou qualquer outro
+valor que a Igreja receba.
 
-4.2. A Plataforma se sustenta com o patrocínio de pessoas e empresas, que
-pagam diretamente a ela. **Esse dinheiro não é repassado à Igreja**, não é
-doação à Igreja e não gera qualquer crédito ou direito da Igreja sobre ele.
+4.2. A mensalidade é **por igreja cadastrada**. Numa rede, cada unidade —
+sede, subsede ou congregação — tem a sua própria mensalidade e o seu próprio
+cadastro de pagamento.
 
-4.3. Se no futuro passarem a existir planos pagos com recursos adicionais, a
-contratação será opcional e comunicada com antecedência mínima de 30 dias. O
-conjunto de recursos descrito na cláusula 2 permanece gratuito para quem já
-usava a Plataforma quando estes Termos entraram em vigor.
+4.3. A Plataforma pode combinar com uma igreja um valor diferente do indicado
+na cláusula 4.1. Nesse caso, vale o valor informado na tela "Mensalidade" do
+painel daquela igreja.
 
-4.4. O serviço de **configuração assistida de domínio próprio** é a única
-exceção: é opcional, cobrado uma única vez, e só existe se a Igreja pedir.
+4.4. **O pagamento é automático e recorrente.** A Igreja cadastra uma vez a
+forma de pagamento — cartão de crédito ou, quando estiver disponível, Pix
+Automático — e a cobrança passa a ser feita todo mês, sem nova autorização. A
+primeira mensalidade vence no dia do cadastro; as seguintes, no mesmo dia dos
+meses seguintes. **Pagar com atraso não muda o dia de vencimento.**
+
+4.5. A cobrança é processada por uma instituição de pagamento parceira. A
+Plataforma não armazena o número do cartão nem os dados bancários da Igreja.
+
+4.6. **Tolerância.** Vencida a mensalidade sem pagamento, a Igreja continua
+usando a Plataforma normalmente por **14 (catorze) dias corridos**, período em
+que um aviso é exibido no painel a quem administra a Igreja. A igreja recém-
+cadastrada tem o mesmo prazo, contado da criação, para cadastrar a forma de
+pagamento.
+
+4.7. **Suspensão por falta de pagamento.** Passada a tolerância sem que o
+pagamento seja confirmado, o acesso ao painel fica suspenso para todos os
+usuários daquela igreja, restando apenas a tela de pagamento. A suspensão:
+
+- **não apaga nenhum dado** da Igreja nem da sua comunidade;
+- termina sozinha, sem necessidade de contato, assim que o pagamento é
+  confirmado;
+- não dispensa a mensalidade em aberto.
+
+4.8. **Reajuste.** O valor da mensalidade pode ser reajustado, com aviso à
+Igreja com antecedência mínima de 30 dias. Se não concordar, a Igreja pode
+encerrar a conta sem ônus antes de o novo valor valer.
+
+4.9. **Cancelamento e devolução.** A Igreja pode cancelar a qualquer momento,
+e nenhuma nova mensalidade é cobrada depois disso. A mensalidade do mês em
+curso não é devolvida proporcionalmente, salvo quando a lei determinar.
+
+4.10. **Pagamento por outra pessoa.** A mensalidade pode ser paga por outra
+pessoa ou empresa, em nome da Igreja, se ela assim quiser. Isso não muda nada
+neste contrato: a responsável pela mensalidade continua sendo a Igreja, e quem
+paga não adquire nenhum direito sobre a conta, os dados ou o conteúdo da
+Igreja. Se esse pagamento deixar de ser feito, valem os prazos das cláusulas
+4.6 e 4.7.
+
+4.11. O serviço de **configuração assistida de domínio próprio** é opcional,
+cobrado à parte, uma única vez, e só existe se a Igreja pedir.
 
 ## 5. Conteúdo publicado pela Igreja
 
@@ -92,10 +131,11 @@ com a justificativa.
 Esta é a cláusula mais importante deste documento, e vale a pena lê-la com
 calma.
 
-6.1. Quando alguém envia um pedido de oração, se inscreve num evento ou se
-registra como visitante, essa pessoa está entregando **dados pessoais**, e às
-vezes dados sensíveis — um pedido de oração pode falar de saúde, de família,
-de sofrimento.
+6.1. Quando alguém envia um pedido de oração, se inscreve num evento, se
+registra como visitante ou é cadastrado como membro, há **dados pessoais**
+envolvidos, e muitas vezes dados sensíveis — um pedido de oração pode falar de
+saúde, de família, de sofrimento; o cadastro de membro, a foto da carteirinha
+e o registro de dízimos revelam a convicção religiosa da pessoa.
 
 6.2. Para a Lei Geral de Proteção de Dados (Lei 13.709/2018), nessa relação:
 
@@ -122,106 +162,93 @@ de sofrimento.
   afetar esses dados;
 - não usar os dados da comunidade da Igreja para finalidade própria.
 
-6.5. A Plataforma não repassa aos patrocinadores nenhum dado da comunidade.
-Patrocinador não recebe lista, contato, nome nem estatística individual de
-quem interage com a página da Igreja.
+6.5. A Plataforma não repassa a terceiros nenhum dado da comunidade — nem a
+quem eventualmente pague a mensalidade em nome da Igreja. Ninguém de fora
+recebe lista, contato, nome nem estatística individual de quem interage com a
+Igreja.
 
-## 7. Patrocinadores na página da Igreja
+## 7. Domínio próprio
 
-7.1. A página pública da Igreja exibe os patrocinadores ativos — nome e, se
-houver, logo.
+7.1. A Igreja pode apontar um domínio próprio para a sua página.
 
-7.2. **A Igreja pode ocultar qualquer patrocinador da sua página, a qualquer
-momento e sem precisar justificar.** A decisão é só dela, tem efeito imediato
-e não passa por aprovação da Plataforma.
-
-7.3. Ocultar não cancela o patrocínio nem interrompe a cobrança do
-patrocinador: ele continua apoiando a Plataforma, apenas deixa de aparecer na
-página daquela Igreja.
-
-7.4. Se o problema for mais grave que preferência — conteúdo impróprio,
-identidade falsa, uso indevido da marca —, a Igreja pode **denunciar** o
-patrocinador, e a Plataforma analisará o caso.
-
-7.5. Nome e logo de patrocinador passam por conferência da Plataforma antes de
-entrar no ar. Isso reduz, mas não elimina, o risco de conteúdo inadequado. A
-Igreja tem sempre o recurso da cláusula 7.2.
-
-## 8. Domínio próprio
-
-8.1. A Igreja pode apontar um domínio próprio para a sua página.
-
-8.2. O registro do domínio, a renovação e o pagamento das taxas do registrador
+7.2. O registro do domínio, a renovação e o pagamento das taxas do registrador
 são responsabilidade da Igreja. A Plataforma não registra domínio em nome da
 Igreja.
 
-8.3. O endereço padrão fornecido pela Plataforma continua funcionando mesmo
+7.3. O endereço padrão fornecido pela Plataforma continua funcionando mesmo
 com domínio próprio configurado. Se o domínio da Igreja expirar, for
 transferido ou tiver o DNS alterado, a página continua acessível pelo endereço
 padrão.
 
-## 9. Disponibilidade
+## 8. Disponibilidade
 
-9.1. A Plataforma trabalha para manter o serviço no ar, mas não garante
+8.1. A Plataforma trabalha para manter o serviço no ar, mas não garante
 funcionamento ininterrupto. Falhas de internet, de provedores de
 infraestrutura e manutenções acontecem.
 
-9.2. Manutenções programadas serão comunicadas com antecedência sempre que
+8.2. Manutenções programadas serão comunicadas com antecedência sempre que
 possível.
 
-9.3. Como o serviço é gratuito para a Igreja (cláusula 4.1), não há
+8.3. Em caso de indisponibilidade causada pela Plataforma que impeça o uso do
+painel por mais de 72 horas seguidas, a Igreja pode pedir, pelo contato da
+cláusula 1, o desconto proporcional na mensalidade seguinte. Não há outra
 compensação financeira por indisponibilidade.
 
-## 10. Encerramento
+## 9. Encerramento
 
-10.1. A Igreja pode encerrar a conta quando quiser, pelo painel ou pelo
-contato indicado na cláusula 1.
+9.1. A Igreja pode encerrar a conta quando quiser, pelo painel ou pelo
+contato indicado na cláusula 1. O encerramento interrompe as cobranças
+futuras, nos termos da cláusula 4.9.
 
-10.2. A Plataforma pode suspender ou encerrar a conta em caso de violação
+9.2. A Plataforma pode suspender ou encerrar a conta em caso de violação
 destes Termos, com aviso prévio e prazo para correção — salvo em casos graves,
-como conteúdo ilícito, em que a suspensão pode ser imediata.
+como conteúdo ilícito, em que a suspensão pode ser imediata. A suspensão por
+falta de pagamento segue a cláusula 4.7. Se a mensalidade ficar em aberto por
+mais de 90 dias, a Plataforma pode encerrar a conta, avisando a Igreja com
+pelo menos 15 dias de antecedência.
 
-10.3. Encerrada a conta, a página pública sai do ar. Durante 30 dias, a
+9.3. Encerrada a conta, a página pública sai do ar. Durante 30 dias, a
 Igreja pode pedir, pelo contato da cláusula 1, uma cópia dos dados da
 comunidade; depois desse prazo eles são eliminados, exceto o que a lei obrigar
 a guardar.
 
-10.4. O encerramento da conta da Igreja não gera direito a qualquer valor pago
-por patrocinadores.
+9.4. O encerramento da conta não gera direito à devolução de mensalidades já
+pagas, pela Igreja ou por outra pessoa em nome dela, salvo quando a lei
+determinar.
 
-## 11. Propriedade intelectual
+## 10. Propriedade intelectual
 
-11.1. A Plataforma, seu código, sua marca e seu design pertencem à empresa
+10.1. A Plataforma, seu código, sua marca e seu design pertencem à empresa
 indicada na cláusula 1.
 
-11.2. O conteúdo publicado pela Igreja continua sendo dela. A Igreja autoriza
+10.2. O conteúdo publicado pela Igreja continua sendo dela. A Igreja autoriza
 a Plataforma a exibir esse conteúdo na página pública e em materiais de
 divulgação do próprio serviço, podendo revogar essa segunda autorização a
 qualquer tempo por escrito.
 
-## 12. Limitação de responsabilidade
+## 11. Limitação de responsabilidade
 
-12.1. A Plataforma não responde por decisões da Igreja, pelo conteúdo que ela
+11.1. A Plataforma não responde por decisões da Igreja, pelo conteúdo que ela
 publica, nem pela relação da Igreja com sua comunidade.
 
-12.2. A Plataforma não responde por danos indiretos, lucros cessantes ou
+11.2. A Plataforma não responde por danos indiretos, lucros cessantes ou
 perda de oportunidade.
 
-12.3. Nada nesta cláusula afasta responsabilidades que a lei não permite
+11.3. Nada nesta cláusula afasta responsabilidades que a lei não permite
 afastar, inclusive em matéria de proteção de dados.
 
-## 13. Mudanças nestes Termos
+## 12. Mudanças nestes Termos
 
-13.1. Estes Termos podem ser alterados. A versão vigente fica sempre publicada
+12.1. Estes Termos podem ser alterados. A versão vigente fica sempre publicada
 em [/terms/igreja](/terms/igreja), com número de versão e data.
 
-13.2. Mudanças relevantes serão comunicadas com antecedência mínima de 30 dias
+12.2. Mudanças relevantes serão comunicadas com antecedência mínima de 30 dias
 e exigirão novo aceite no próximo acesso ao painel.
 
-13.3. Se a Igreja não concordar com a nova versão, pode encerrar a conta sem
+12.3. Se a Igreja não concordar com a nova versão, pode encerrar a conta sem
 ônus.
 
-## 14. Lei aplicável e foro
+## 13. Lei aplicável e foro
 
 Estes Termos são regidos pelas leis brasileiras. Fica eleito o foro da comarca
 de [COMARCA], salvo quando a lei determinar foro diverso.

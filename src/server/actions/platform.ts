@@ -6,6 +6,7 @@ import {
   getPlatformModerationService,
   getPlatformPricingService,
   getPlatformSettingsService,
+  getPlatformTermsService,
   requirePlatformStaff,
 } from "@/server/platform";
 import { getPixModeracaoService } from "@/server/pixModeracao";
@@ -187,6 +188,28 @@ export async function updateAutopatrocinioAmountAction(
     await service.updateAutopatrocinioAmount(String(formData.get("amount") ?? ""));
     revalidatePath("/plataforma/configuracoes");
     return { success: "Mensalidade padrão salva." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/**
+ * Publica uma versão nova dos Termos de um público. Exige a confirmação
+ * explícita: publicar obriga todo mundo daquele público a aceitar de novo.
+ */
+export async function publicarTermosAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+  try {
+    await requirePlatformStaff();
+    if (formData.get("ciente") !== "on") {
+      return { error: "Confirme que as pessoas terão de aceitar os termos de novo." };
+    }
+    const audience = String(formData.get("audience") ?? "");
+    const versao = await (
+      await getPlatformTermsService()
+    ).publicar({ audience, content: String(formData.get("content") ?? "") });
+    revalidatePath("/plataforma/termos");
+    revalidatePath("/terms", "layout");
+    return { success: `Versão ${versao} publicada. Ela já vale para os próximos acessos.` };
   } catch (err) {
     return toActionError(err);
   }

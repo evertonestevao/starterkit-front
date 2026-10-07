@@ -8677,6 +8677,90 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Termos pelo painel (migration 20261008140000). a1..01 é da moderação;
+-- acac..02 administra uma igreja, e isso não basta para publicar.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+begin
+  perform public.platform_publicar_termos('igreja', repeat('Texto dos termos. ', 30), 1);
+  raise exception 'FALHA termos: quem nao e da moderacao publicou os termos';
+exception when sqlstate '42501' then null;
+end $$;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+do $$
+declare v_proxima int; v_publicada int; v_patrocinador uuid; n int;
+begin
+  select coalesce(max(version), 0) + 1 into v_proxima from public.terms_versions where audience = 'igreja';
+  select id into v_patrocinador from public.terms_versions where audience = 'patrocinador' and is_current;
+
+  -- Número de versão que não bate (alguém publicou antes): nada é gravado.
+  begin
+    perform public.platform_publicar_termos('igreja', repeat('Texto dos termos. ', 30), v_proxima - 1);
+    raise exception 'FALHA termos: publicou por cima de uma versao que nao tinha visto';
+  exception when sqlstate '40001' then null;
+  end;
+  begin
+    perform public.platform_publicar_termos('igreja', 'curto', v_proxima);
+    raise exception 'FALHA termos: aceitou um texto de uma linha';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.platform_publicar_termos('todos', repeat('Texto dos termos. ', 30), 1);
+    raise exception 'FALHA termos: aceitou um publico que nao existe';
+  exception when sqlstate '22023' then null;
+  end;
+
+  v_publicada := public.platform_publicar_termos('igreja', repeat('Texto novo dos termos. ', 30), v_proxima);
+  if v_publicada <> v_proxima then raise exception 'FALHA termos: numero da versao errado (%)', v_publicada; end if;
+
+  -- Uma vigente só para as igrejas, e é a nova; a anterior continua no histórico.
+  select count(*) into n from public.terms_versions where audience = 'igreja' and is_current;
+  if n <> 1 then raise exception 'FALHA termos: % versoes vigentes para as igrejas', n; end if;
+  if not exists (select 1 from public.terms_versions
+                  where audience = 'igreja' and is_current and version = v_proxima
+                    and content like 'Texto novo dos termos.%') then
+    raise exception 'FALHA termos: a versao nova nao ficou vigente';
+  end if;
+  if not exists (select 1 from public.terms_versions where audience = 'igreja' and version = v_proxima - 1 and not is_current) then
+    raise exception 'FALHA termos: a versao anterior sumiu do historico';
+  end if;
+  -- O documento do outro público não é tocado.
+  if (select id from public.terms_versions where audience = 'patrocinador' and is_current) is distinct from v_patrocinador then
+    raise exception 'FALHA termos: publicar para as igrejas mexeu nos termos do patrocinador';
+  end if;
+
+  -- Versão publicada não se altera, nem pela moderação (sem privilégio de
+  -- escrita na tabela: ou o update é recusado, ou não atinge linha nenhuma).
+  begin
+    update public.terms_versions set content = 'adulterado' where audience = 'igreja';
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'FALHA termos: a moderacao alterou uma versao ja publicada'; end if;
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+do $$
+declare n int;
+begin
+  select count(*) into n from public.platform_staff_actions
+  where action = 'terms.publicados' and staff_user_id = 'a1a1a1a1-0000-4000-8000-000000000001'
+    and metadata->>'audience' = 'igreja';
+  if n <> 1 then raise exception 'FALHA termos: publicacao sem registro na trilha (%)', n; end if;
+end $$;
+set local role anon;
+do $$
+begin
+  perform public.platform_publicar_termos('igreja', repeat('Texto dos termos. ', 30), 1);
+  raise exception 'FALHA termos: anon publicou os termos';
+exception when sqlstate '42501' then null;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

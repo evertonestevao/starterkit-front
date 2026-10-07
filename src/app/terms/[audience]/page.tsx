@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { brand } from "@/config/brand";
+import { features } from "@/config/features";
 import { TermsDocument } from "@/features/terms/components/terms-document";
 import { createSupabaseTermsRepository } from "@/repositories/supabase/termsRepository";
 import { getSupabaseServerClient } from "@/server/supabase-server";
@@ -76,14 +77,17 @@ export default async function TermsByAudiencePage({
         </p>
       )}
 
-      <p className="mt-10 border-t pt-6 text-sm">
-        <Link
-          href={`/terms/${info.outro}`}
-          className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
-        >
-          {info.chamada}
-        </Link>
-      </p>
+      {/* Patrocínio fora das telas: a igreja não é levada aos termos do patrocinador. */}
+      {audience === "patrocinador" || features.patrocinioVisivel ? (
+        <p className="mt-10 border-t pt-6 text-sm">
+          <Link
+            href={`/terms/${info.outro}`}
+            className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            {info.chamada}
+          </Link>
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -32,6 +32,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
     { href: "/plataforma/denuncias", label: "Denúncias", count: pendencias.denuncias },
     { href: "/plataforma/pix", label: "Pix", count: pendencias.pix },
     { href: "/plataforma/igrejas", label: "Igrejas" },
+    { href: "/plataforma/termos", label: "Termos" },
     { href: "/plataforma/configuracoes", label: "Configurações" },
   ];
 

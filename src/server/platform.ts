@@ -14,6 +14,9 @@ import { createPlatformSettingsService, type PlatformSettingsService } from "@/s
 import { createPlatformModerationService, type PlatformModerationService } from "@/services/platformModerationService";
 import { createSupabaseMensalidadeRepository } from "@/repositories/supabase/mensalidadeRepository";
 import { createMensalidadeService, type MensalidadeService } from "@/services/mensalidadeService";
+import { hojeISO } from "@/lib/acompanhamento";
+import { createSupabasePlatformTermsRepository } from "@/repositories/supabase/platformTermsRepository";
+import { createPlatformTermsService, type PlatformTermsService } from "@/services/platformTermsService";
 import { getSponsorSystemService } from "./sponsor";
 import { getSupabaseAdminClient } from "./supabase-admin";
 import { SPONSOR_LOGOS_BUCKET } from "./sponsorProfile";
@@ -97,6 +100,12 @@ export async function getMensalidadeService(): Promise<MensalidadeService> {
     repo: createSupabaseMensalidadeRepository(client),
     biller: getSponsorSystemService(),
   });
+}
+
+/** Termos de Uso: a moderação publica versões novas. */
+export async function getPlatformTermsService(): Promise<PlatformTermsService> {
+  const client = await getSupabaseServerClient();
+  return createPlatformTermsService({ repo: createSupabasePlatformTermsRepository(client), hoje: hojeISO });
 }
 
 /** Tabela de preço do patrocínio, por posição. */

@@ -1,3 +1,4 @@
+import { features } from "@/config/features";
 import type { RoleCode } from "@/types/database";
 
 /**
@@ -150,9 +151,15 @@ export function podeNoModulo(pessoa: Pick<PessoaAcesso, "role" | "acessos">, mod
 
 /** Chaves dos menus que a pessoa vê. */
 export function menusVisiveis(pessoa: PessoaAcesso): string[] {
-  return MENUS.filter(
-    (m) => m.roles.includes(pessoa.role) || pessoa.acessos.includes(m.key) || (m.key === "ebd" && pessoa.professor_ebd),
-  ).map((m) => m.key);
+  return (
+    MENUS.filter(
+      (m) =>
+        m.roles.includes(pessoa.role) || pessoa.acessos.includes(m.key) || (m.key === "ebd" && pessoa.professor_ebd),
+    )
+      // Patrocínio fora das telas por enquanto (src/config/features.ts).
+      .filter((m) => m.key !== "sponsors" || features.patrocinioVisivel)
+      .map((m) => m.key)
+  );
 }
 
 /**

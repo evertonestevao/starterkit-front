@@ -31,8 +31,8 @@ test("cada público abre o seu contrato, e um leva ao outro", async ({ page }) =
   await expect(page).toHaveURL(/\/terms\/igreja/);
   await expect(page.getByRole("heading", { name: "Termos de Uso — Igrejas" })).toBeVisible();
 
-  // A igreja não paga: se esta frase sumir, o contrato mudou de sentido.
-  await expect(page.getByText(/uso da Plataforma pela Igreja é gratuito/i)).toBeVisible();
+  // A igreja paga mensalidade: se esta frase sumir, o contrato mudou de sentido.
+  await expect(page.getByText(/O uso da Plataforma é pago por mensalidade/i)).toBeVisible();
 
   await page.getByRole("link", { name: /Veja os termos do patrocínio/i }).click();
   await expect(page).toHaveURL(/\/terms\/patrocinador/);

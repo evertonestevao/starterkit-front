@@ -1,3 +1,4 @@
+import { features } from "@/config/features";
 import { notFound, permanentRedirect } from "next/navigation";
 import { ChurchPageRenderer } from "@/features/church/church-page-templates";
 import { VISIT_ORIGIN_PARAM } from "@/lib/churchVisits";
@@ -39,8 +40,9 @@ export default async function PublicChurchPage({
   // Nenhuma das duas listas pode derrubar a página da igreja: vazia é melhor
   // do que tela de erro para quem veio pelo QR Code.
   const [sponsors, eventos, campanhas, programacao, linkCartao, linkPix, temRede] = await Promise.all([
-    // Porta fechada pra patrocinador: nem consulta — a seção nem aparece.
-    !church.aceita_patrocinio
+    // Porta fechada pra patrocinador (ou patrocínio fora das telas): nem
+    // consulta — a seção nem aparece.
+    !church.aceita_patrocinio || !features.patrocinioVisivel
       ? Promise.resolve([])
       : repo.listPublicSponsors(church.id).catch((err: unknown) => {
           console.error("[church-page] falha ao carregar patrocinadores", err);

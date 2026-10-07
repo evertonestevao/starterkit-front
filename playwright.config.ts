@@ -52,6 +52,9 @@ export default defineConfig({
       // mesmo endereço: sem isto a barreira contra robôs barraria o próprio teste.
       PUBLIC_FORMS_RELAXED: "true",
       APP_URL: BASE_URL,
+      // O patrocínio está fora das telas por padrão (src/config/features.ts),
+      // mas a função segue ligada: os testes dela precisam das telas.
+      NEXT_PUBLIC_PATROCINIO_VISIVEL: "true",
     },
   },
 });

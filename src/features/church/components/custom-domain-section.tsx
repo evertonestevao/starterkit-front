@@ -33,6 +33,7 @@ import {
   removeCustomDomainAction,
   verifyCustomDomainAction,
 } from "@/server/actions/churchDomain";
+import { features } from "@/config/features";
 import type { ChurchDomainStatus } from "@/types/database";
 import type { ChurchDomainView, DnsRecordInstruction } from "@/types/domain";
 
@@ -227,6 +228,7 @@ export function CustomDomainSection({
 
       {/* O link que transforma visitante em patrocinador. Sem ele exposto
           aqui, o pastor não tinha como divulgar o convite. */}
+      {features.patrocinioVisivel ? (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -254,6 +256,7 @@ export function CustomDomainSection({
           </a>
         </CardContent>
       </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

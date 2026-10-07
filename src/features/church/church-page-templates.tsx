@@ -38,6 +38,7 @@ import { sponsorshipPath } from "@/lib/sponsorPaths";
 // PublicChurch, e não Church: esta página renderiza só o que o `anon` pode
 // ler (as colunas de domínio próprio ficam de fora).
 import type { Campaign, ChurchEvent, ChurchScheduleItem, PublicChurch as ChurchRecord } from "@/types/database";
+import { features } from "@/config/features";
 import type { ChurchTheme } from "@/lib/pageAppearance";
 import type { PublicSponsor as Sponsor } from "@/types/sponsorship";
 
@@ -627,7 +628,7 @@ export function ChurchPageRenderer({
           A igreja pode fechar a porta pra patrocinador (Configurações):
           sem `aceita_patrocinio`, o espaço nem existe aqui — não é uma
           lista vazia, a seção some por inteiro. */}
-      {church.aceita_patrocinio ? (
+      {church.aceita_patrocinio && features.patrocinioVisivel ? (
         <section id="apoio" className="border-t border-[var(--pg-border)] bg-[var(--pg-bg)]">
           <div className="mx-auto w-full max-w-xl px-5 py-10 text-center">
             <h2 className="text-xs font-semibold tracking-[0.14em] text-[var(--pg-muted)] uppercase">
