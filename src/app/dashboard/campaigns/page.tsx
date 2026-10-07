@@ -1,3 +1,5 @@
+import { PaginationControls } from "@/components/pagination-controls";
+import { paginaDaUrl, paginar } from "@/lib/paginacao";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HandCoins, Plus } from "lucide-react";
@@ -13,11 +15,12 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Campanhas" };
 
-const STATUS_LABEL: Record<CompanyCampaign["status"], { texto: string; variant: "outline" | "default" | "secondary" }> = {
-  rascunho: { texto: "Rascunho", variant: "outline" },
-  ativa: { texto: "Ativa", variant: "default" },
-  encerrada: { texto: "Encerrada", variant: "secondary" },
-};
+const STATUS_LABEL: Record<CompanyCampaign["status"], { texto: string; variant: "outline" | "default" | "secondary" }> =
+  {
+    rascunho: { texto: "Rascunho", variant: "outline" },
+    ativa: { texto: "Ativa", variant: "default" },
+    encerrada: { texto: "Encerrada", variant: "secondary" },
+  };
 
 function CampaignCard({ campanha, mostrarIgreja }: { campanha: CompanyCampaign; mostrarIgreja: boolean }) {
   const percentual = Math.min(100, Math.round((campanha.totalArrecadadoLiquidoCents / campanha.metaCents) * 100));
@@ -29,11 +32,7 @@ function CampaignCard({ campanha, mostrarIgreja }: { campanha: CompanyCampaign; 
         <div className="aspect-[2/1] w-full bg-muted">
           {campanha.fotoCapaUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- capa em storage externo
-            <img
-              src={campanha.fotoCapaUrl}
-              alt={`Capa de ${campanha.titulo}`}
-              className="size-full object-cover"
-            />
+            <img src={campanha.fotoCapaUrl} alt={`Capa de ${campanha.titulo}`} className="size-full object-cover" />
           ) : (
             <div className="flex size-full items-center justify-center text-muted-foreground">
               <HandCoins className="size-8" aria-hidden />
@@ -58,8 +57,7 @@ function CampaignCard({ campanha, mostrarIgreja }: { campanha: CompanyCampaign; 
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                {formatCents(campanha.totalArrecadadoLiquidoCents)} de {formatCents(campanha.metaCents)} ·{" "}
-                {percentual}%
+                {formatCents(campanha.totalArrecadadoLiquidoCents)} de {formatCents(campanha.metaCents)} · {percentual}%
               </p>
             </div>
           ) : (
@@ -71,13 +69,17 @@ function CampaignCard({ campanha, mostrarIgreja }: { campanha: CompanyCampaign; 
   );
 }
 
-export default async function CampaignsPage() {
+/** Campanhas por página (grade de 3 colunas). */
+const POR_PAGINA = 12;
+
+export default async function CampaignsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const { active } = await getActiveTenant();
   if (!active) return null; // layout já redirecionou
 
   const podeGerenciar = canManageCampaigns(active.role, active.acessos.includes("campaigns"));
   const campanhas = await (await getCampaignsService()).list(active.id);
   const igrejas = new Set(campanhas.map((c) => c.churchId));
+  const pag = paginar(campanhas, paginaDaUrl((await searchParams).page), POR_PAGINA);
 
   return (
     <div className="flex flex-col gap-6">
@@ -88,15 +90,11 @@ export default async function CampaignsPage() {
           </div>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight">Campanhas</h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Reforma, ação social, evento — cada campanha tem meta, história e progresso próprios na
-            página da igreja.
+            Reforma, ação social, evento — cada campanha tem meta, história e progresso próprios na página da igreja.
           </p>
         </div>
         {podeGerenciar ? (
-          <Link
-            href="/dashboard/campaigns/nova"
-            className={cn(buttonVariants(), "gap-2 self-start sm:self-auto")}
-          >
+          <Link href="/dashboard/campaigns/nova" className={cn(buttonVariants(), "gap-2 self-start sm:self-auto")}>
             <Plus className="size-4" />
             Nova campanha
           </Link>
@@ -118,11 +116,12 @@ export default async function CampaignsPage() {
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {campanhas.map((campanha) => (
+          {pag.itens.map((campanha) => (
             <CampaignCard key={campanha.id} campanha={campanha} mostrarIgreja={igrejas.size > 1} />
           ))}
         </div>
       )}
+      <PaginationControls page={pag.pagina} pageSize={POR_PAGINA} total={pag.total} basePath="/dashboard/campaigns" />
     </div>
   );
 }

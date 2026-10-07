@@ -1,33 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, MapPin, Search } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, MapPin, Search } from "lucide-react";
 import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { formatChurchName } from "@/lib/churchName";
 import { nomeNivel, type NomesNiveis } from "@/lib/niveisRede";
+import { paginar } from "@/lib/paginacao";
 import { normalizeSearch } from "@/lib/search";
 import type { IgrejaDaRedePublica } from "@/types/redePublica";
 
-/** Quantas aparecem antes do "Mostrar mais". */
-const PASSO = 8;
+/** Igrejas por página. */
+const POR_PAGINA = 10;
 
 /**
  * "Nossas igrejas" na página da sede: as igrejas da rede, com busca por nome,
- * bairro ou cidade. Cada uma leva à própria página.
+ * bairro ou cidade, em páginas. Cada uma leva à própria página.
  */
+const BOTAO_PAGINA =
+  "inline-flex h-11 items-center gap-1 rounded-xl border border-[var(--pg-border)] px-3 text-sm font-semibold text-[var(--pg-text)] disabled:opacity-40";
+
 export function RedeIgrejas({ igrejas, nomes }: { igrejas: IgrejaDaRedePublica[]; nomes: NomesNiveis }) {
   const [busca, setBusca] = useState("");
-  const [limite, setLimite] = useState(PASSO);
+  const [pagina, setPagina] = useState(1);
   const termo = normalizeSearch(busca);
   const achadas = termo
     ? igrejas.filter((i) => normalizeSearch(`${i.name} ${i.sobrenome ?? ""} ${i.address ?? ""}`).includes(termo))
     : igrejas;
-  const mostradas = achadas.slice(0, limite);
+  const pag = paginar(achadas, pagina, POR_PAGINA);
+  const mostradas = pag.itens;
 
   return (
     <div className="flex flex-col gap-3">
       {/* Com poucas igrejas a busca só atrapalha. */}
-      {igrejas.length > PASSO ? (
+      {igrejas.length > POR_PAGINA ? (
         <div className="relative">
           <Search
             className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-[var(--pg-muted)]"
@@ -38,7 +43,7 @@ export function RedeIgrejas({ igrejas, nomes }: { igrejas: IgrejaDaRedePublica[]
             value={busca}
             onChange={(e) => {
               setBusca(e.target.value);
-              setLimite(PASSO);
+              setPagina(1);
             }}
             placeholder="Buscar por nome, bairro ou cidade"
             aria-label="Buscar igreja"
@@ -80,14 +85,33 @@ export function RedeIgrejas({ igrejas, nomes }: { igrejas: IgrejaDaRedePublica[]
         </ul>
       )}
 
-      {achadas.length > mostradas.length ? (
-        <button
-          type="button"
-          onClick={() => setLimite((l) => l + PASSO * 2)}
-          className="inline-flex h-12 items-center justify-center rounded-xl border border-[var(--pg-border)] text-sm font-semibold text-[var(--pg-text)]"
-        >
-          Mostrar mais ({achadas.length - mostradas.length})
-        </button>
+      {/* Cores da própria página da igreja (--pg-*), por isso não usa o PaginacaoLocal do painel. */}
+      {pag.totalPaginas > 1 ? (
+        <nav className="flex flex-wrap items-center justify-between gap-2" aria-label="Paginação das igrejas">
+          <span className="text-sm text-[var(--pg-muted)]">
+            Página {pag.pagina} de {pag.totalPaginas} · {pag.total} igrejas
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={BOTAO_PAGINA}
+              disabled={pag.pagina <= 1}
+              onClick={() => setPagina(pag.pagina - 1)}
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+              Anterior
+            </button>
+            <button
+              type="button"
+              className={BOTAO_PAGINA}
+              disabled={pag.pagina >= pag.totalPaginas}
+              onClick={() => setPagina(pag.pagina + 1)}
+            >
+              Próxima
+              <ChevronRight className="size-4" aria-hidden />
+            </button>
+          </div>
+        </nav>
       ) : null}
     </div>
   );

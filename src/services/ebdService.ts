@@ -7,18 +7,19 @@ import type { RoleCode } from "@/types/database";
 import type {
   EbdAlerta,
   EbdAluno,
+  EbdAlunoDaIgreja,
   EbdAulaParaPreencher,
   EbdAulaResumo,
   EbdClasse,
   EbdFrequenciaAluno,
   EbdLicao,
   EbdPessoaBusca,
+  EbdPresencaDomingo,
   EbdPromocaoLinha,
   EbdRedeIgreja,
-  EbdPresencaDomingo,
   EbdRelatorioClasse,
-  EbdResumoClasse,
   EbdResponsavel,
+  EbdResumoClasse,
   EbdResumoMembro,
   EbdTrimestre,
   EbdVisitante,
@@ -93,7 +94,9 @@ export interface EbdRepository {
     visitantes: Array<{ nome: string; telefone: string | null; membroId: string | null }>;
   }): Promise<string>;
   aulasDaClasse(classeId: string): Promise<EbdAulaResumo[]>;
-  visitantesSemMatricula(classeId: string): Promise<Array<{ id: string; nome: string; telefone: string | null; data: string }>>;
+  visitantesSemMatricula(
+    classeId: string,
+  ): Promise<Array<{ id: string; nome: string; telefone: string | null; data: string }>>;
   resumoDoDia(churchId: string, data: string): Promise<EbdResumoClasse[]>;
   resumoDoMembro(membroId: string): Promise<EbdResumoMembro | null>;
 
@@ -129,7 +132,12 @@ export interface EbdRepository {
   licoes(churchId: string, trimestreId: string, classeId?: string | null): Promise<EbdLicao[]>;
   criarLicoes(churchId: string, trimestreId: string, licoes: Array<{ numero: number; data: string }>): Promise<void>;
   /** Com `classeId`, grava (ou apaga, se vazio) o título só daquela classe. */
-  salvarTituloLicao(churchId: string, licaoId: string, titulo: string | null, classeId?: string | null): Promise<boolean>;
+  salvarTituloLicao(
+    churchId: string,
+    licaoId: string,
+    titulo: string | null,
+    classeId?: string | null,
+  ): Promise<boolean>;
   licaoDoDia(churchId: string, data: string, classeId?: string | null): Promise<EbdLicao | null>;
   resumoRede(churchId: string): Promise<EbdRedeIgreja[]>;
 }
@@ -178,7 +186,10 @@ const responsavelSchema = z
 
 const promocaoSchema = z.object({
   data: dataISO,
-  itens: z.array(z.object({ membroId: z.uuid(), classeId: z.uuid() })).min(1, "Escolha ao menos um aluno").max(500),
+  itens: z
+    .array(z.object({ membroId: z.uuid(), classeId: z.uuid() }))
+    .min(1, "Escolha ao menos um aluno")
+    .max(500),
 });
 
 const novoAlunoSchema = z.object({
@@ -196,9 +207,7 @@ const aulaSchema = z.object({
   biblias: z.number().int().min(0, "Não pode ser negativo").max(999),
   revistas: z.number().int().min(0, "Não pode ser negativo").max(999),
   ofertaCentavos: z.number().int().min(0, "Oferta inválida").max(100_000_000, "Oferta alta demais"),
-  presencas: z
-    .array(z.object({ membroId: z.uuid(), estado: z.enum(["presente", "ausente", "justificado"]) }))
-    .max(500),
+  presencas: z.array(z.object({ membroId: z.uuid(), estado: z.enum(["presente", "ausente", "justificado"]) })).max(500),
   visitantes: z
     .array(
       z.object({
@@ -274,7 +283,35 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
   return {
     async classes(actor: EbdActor) {
       const church = await igreja(actor);
-      return { igreja: church, classes: await repo.listClasses(church.id), gestao: canGerirEbd(actor.role, actor.podeGerirEbd) };
+      return {
+        igreja: church,
+        classes: await repo.listClasses(church.id),
+        gestao: canGerirEbd(actor.role, actor.podeGerirEbd),
+      };
+    },
+
+    /**
+     * Todos os alunos matriculados hoje, com a classe de cada um, por nome.
+     * `listClasses` já devolve só as classes que a pessoa pode ver (o
+     * professor recebe as dele), então a lista segue o mesmo recorte.
+     */
+    async alunosDaIgreja(
+      actor: EbdActor,
+    ): Promise<{ alunos: EbdAlunoDaIgreja[]; classes: EbdClasse[]; gestao: boolean }> {
+      const church = await igreja(actor);
+      const classes = (await repo.listClasses(church.id)).filter((c) => c.ativa);
+      const hojeData = hoje();
+      const porClasse = await Promise.all(
+        classes.map(async (c) =>
+          (await repo.alunos(c.id, hojeData)).map((a): EbdAlunoDaIgreja => ({
+            ...a,
+            classeId: c.id,
+            classeNome: c.nome,
+          })),
+        ),
+      );
+      const alunos = porClasse.flat().sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+      return { alunos, classes, gestao: canGerirEbd(actor.role, actor.podeGerirEbd) };
     },
 
     async classe(actor: EbdActor, classeId: string) {
@@ -298,14 +335,16 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
       const church = await gestao(actor);
       await exigeClasse(church.id, classeId);
       const dados = validar(classeSchema, input);
-      if (!(await repo.editarClasse(church.id, classeId, dados))) throw new AppError("not_found", "Classe não encontrada.");
+      if (!(await repo.editarClasse(church.id, classeId, dados)))
+        throw new AppError("not_found", "Classe não encontrada.");
     },
 
     /** Encerrar a classe tira do resumo e da chamada; matrículas e aulas ficam no histórico. */
     async definirClasseAtiva(actor: EbdActor, classeId: string, ativa: boolean): Promise<void> {
       const church = await gestao(actor);
       await exigeClasse(church.id, classeId);
-      if (!(await repo.editarClasse(church.id, classeId, { ativa }))) throw new AppError("not_found", "Classe não encontrada.");
+      if (!(await repo.editarClasse(church.id, classeId, { ativa })))
+        throw new AppError("not_found", "Classe não encontrada.");
     },
 
     async adicionarProfessor(actor: EbdActor, classeId: string, membroId: string): Promise<void> {
@@ -355,7 +394,8 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
     async abrirAula(actor: EbdActor, classeId: string, data: string): Promise<EbdAulaParaPreencher> {
       const church = await igreja(actor);
       validar(dataISO, data);
-      if (data > somarDias(hoje(), 1)) throw new AppError("validation_error", "Não dá para fazer chamada de data futura.");
+      if (data > somarDias(hoje(), 1))
+        throw new AppError("validation_error", "Não dá para fazer chamada de data futura.");
       const classe = await exigeClasse(church.id, classeId);
       const [alunos, aula, licao] = await Promise.all([
         repo.alunos(classeId, data),
@@ -370,7 +410,11 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
         presencas: aula?.presencas ?? {},
         visitantes: aula?.visitantes ?? [],
         // Chamada nova já vem com a lição do domingo (do trimestre).
-        licao: aula ? aula.licao : licao ? textoDaLicao({ numero: licao.numero, titulo: licao.titulo ?? licao.tituloGeral }) : null,
+        licao: aula
+          ? aula.licao
+          : licao
+            ? textoDaLicao({ numero: licao.numero, titulo: licao.titulo ?? licao.tituloGeral })
+            : null,
         biblias: aula?.biblias ?? 0,
         revistas: aula?.revistas ?? 0,
         ofertaCentavos: aula?.ofertaCentavos ?? 0,
@@ -390,7 +434,10 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
         if (vistos.has(p.membroId)) throw new AppError("validation_error", "Aluno repetido na chamada.");
         vistos.add(p.membroId);
         if (!matriculados.has(p.membroId)) {
-          throw new AppError("validation_error", "A lista tem alguém que não está matriculado nesta classe. Atualize a página.");
+          throw new AppError(
+            "validation_error",
+            "A lista tem alguém que não está matriculado nesta classe. Atualize a página.",
+          );
         }
       }
       return repo.salvarAula(dados);
@@ -549,7 +596,12 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
     },
 
     /** Título geral ou, com `classeId`, só o da classe (vazio volta a usar o geral). */
-    async salvarTituloLicao(actor: EbdActor, licaoId: string, titulo: unknown, classeId?: string | null): Promise<void> {
+    async salvarTituloLicao(
+      actor: EbdActor,
+      licaoId: string,
+      titulo: unknown,
+      classeId?: string | null,
+    ): Promise<void> {
       const church = await gestao(actor);
       if (!z.uuid().safeParse(licaoId).success) throw new AppError("validation_error", "Lição inválida.");
       const t = validar(vazioVira(z.string().trim().max(160, "Título longo demais")), titulo);

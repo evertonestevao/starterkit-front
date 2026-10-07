@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Network } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { PaginationControls } from "@/components/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,20 +10,21 @@ import { Input } from "@/components/ui/input";
 import { getServerEnv } from "@/config/env";
 import { ChurchHierarchyForm } from "@/features/platform/components/church-hierarchy-form";
 import { churchTagUrl } from "@/lib/churchVisits";
+import { paginaDaUrl, paginar } from "@/lib/paginacao";
 import { getChurchHierarchyService } from "@/server/platform";
 import { CHURCH_TIPO_LABEL } from "@/services/churchHierarchyService";
 
 export const metadata: Metadata = { title: "Igrejas" };
 
-/** Acima disso a tela pede um filtro em vez de desenhar centenas de formulários. */
-const LIMITE = 60;
+/** Igrejas por página: cada linha carrega um formulário, então a página é curta. */
+const POR_PAGINA = 30;
 
 export default async function PlatformChurchesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  const { q = "" } = await searchParams;
+  const { q = "", page } = await searchParams;
   const service = await getChurchHierarchyService();
   const todas = await service.listTree();
 
@@ -35,7 +37,8 @@ export default async function PlatformChurchesPage({
           (c.redeNome?.toLowerCase().includes(termo) ?? false),
       )
     : todas;
-  const visiveis = filtradas.slice(0, LIMITE);
+  const pag = paginar(filtradas, paginaDaUrl(page), POR_PAGINA);
+  const visiveis = pag.itens;
   const appUrl = getServerEnv().APP_URL;
 
   return (
@@ -43,9 +46,9 @@ export default async function PlatformChurchesPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Igrejas</h1>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Sede, subsedes e congregações. Quem está acima enxerga os dados de quem está abaixo, por
-          isso só a plataforma liga uma igreja a outra. Ligar uma subsede à sede depois é só escolher
-          a sede aqui — nenhum dado precisa ser migrado.
+          Sede, subsedes e congregações. Quem está acima enxerga os dados de quem está abaixo, por isso só a plataforma
+          liga uma igreja a outra. Ligar uma subsede à sede depois é só escolher a sede aqui — nenhum dado precisa ser
+          migrado.
         </p>
       </div>
 
@@ -94,9 +97,7 @@ export default async function PlatformChurchesPage({
                   </div>
                   {/* Endereços que vão impressos: o ?origem= separa QR de NFC nas métricas. */}
                   <details className="mt-1">
-                    <summary className="cursor-pointer text-xs text-muted-foreground">
-                      QR Code e tag NFC
-                    </summary>
+                    <summary className="cursor-pointer text-xs text-muted-foreground">QR Code e tag NFC</summary>
                     <div className="mt-2 flex flex-col gap-2 rounded-lg border p-3">
                       <div>
                         <p className="text-xs font-medium">Endereço do QR impresso</p>
@@ -104,10 +105,16 @@ export default async function PlatformChurchesPage({
                           {churchTagUrl(appUrl, church.publicCode, "qr")}
                         </p>
                         <p className="mt-1 flex gap-3 text-xs">
-                          <a className="text-primary hover:underline" href={`/plataforma/igrejas/${church.id}/qr?formato=png&origem=qr`}>
+                          <a
+                            className="text-primary hover:underline"
+                            href={`/plataforma/igrejas/${church.id}/qr?formato=png&origem=qr`}
+                          >
                             Baixar PNG
                           </a>
-                          <a className="text-primary hover:underline" href={`/plataforma/igrejas/${church.id}/qr?formato=svg&origem=qr`}>
+                          <a
+                            className="text-primary hover:underline"
+                            href={`/plataforma/igrejas/${church.id}/qr?formato=svg&origem=qr`}
+                          >
                             Baixar SVG
                           </a>
                         </p>
@@ -118,10 +125,16 @@ export default async function PlatformChurchesPage({
                           {churchTagUrl(appUrl, church.publicCode, "nfc")}
                         </p>
                         <p className="mt-1 flex gap-3 text-xs">
-                          <a className="text-primary hover:underline" href={`/plataforma/igrejas/${church.id}/qr?formato=png&origem=nfc`}>
+                          <a
+                            className="text-primary hover:underline"
+                            href={`/plataforma/igrejas/${church.id}/qr?formato=png&origem=nfc`}
+                          >
                             Baixar PNG
                           </a>
-                          <a className="text-primary hover:underline" href={`/plataforma/igrejas/${church.id}/qr?formato=svg&origem=nfc`}>
+                          <a
+                            className="text-primary hover:underline"
+                            href={`/plataforma/igrejas/${church.id}/qr?formato=svg&origem=nfc`}
+                          >
                             Baixar SVG
                           </a>
                         </p>
@@ -141,11 +154,13 @@ export default async function PlatformChurchesPage({
         </Card>
       )}
 
-      {filtradas.length > LIMITE ? (
-        <p className="text-sm text-muted-foreground">
-          Mostrando {LIMITE} de {filtradas.length}. Use a busca para achar uma igreja específica.
-        </p>
-      ) : null}
+      <PaginationControls
+        page={pag.pagina}
+        pageSize={POR_PAGINA}
+        total={pag.total}
+        basePath="/plataforma/igrejas"
+        params={{ q: q || undefined }}
+      />
     </div>
   );
 }

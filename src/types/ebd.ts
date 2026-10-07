@@ -39,6 +39,12 @@ export interface EbdAluno {
   cuidados: string | null;
 }
 
+/** Um aluno na lista geral da EBD: a matrícula atual, com a classe. */
+export interface EbdAlunoDaIgreja extends EbdAluno {
+  classeId: string;
+  classeNome: string;
+}
+
 export interface EbdVisitante {
   id?: string;
   nome: string;

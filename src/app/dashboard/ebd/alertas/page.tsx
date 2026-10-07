@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSaudacaoAtiva } from "@/server/saudacao";
+import { PaginationControls } from "@/components/pagination-controls";
 import { Badge } from "@/components/ui/badge";
 import { ContatoAcoes } from "@/features/acompanhamento/components/contato-acoes";
 import { RESULTADO_LABEL, formatarData, hojeISO } from "@/lib/acompanhamento";
 import { idadeEm, mensagemSaudadeEbd } from "@/lib/ebd";
+import { paginaDaUrl, paginar } from "@/lib/paginacao";
 import { registrarContatoEbdAction } from "@/server/actions/ebd";
 import { getEbdActorAutorizado, getEbdService } from "@/server/ebd";
 
@@ -13,10 +15,15 @@ export const metadata: Metadata = { title: "Alertas da EBD" };
 /** Até esta idade a mensagem de WhatsApp fala com a família. */
 const IDADE_CRIANCA = 14;
 
-export default async function EbdAlertasPage() {
+/** Alunos em alerta por página. */
+const POR_PAGINA = 20;
+
+export default async function EbdAlertasPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const actor = await getEbdActorAutorizado();
   if (!actor) notFound();
-  const { igreja, alertas } = await (await getEbdService()).alertas(actor);
+  const { igreja, alertas: todos } = await (await getEbdService()).alertas(actor);
+  const pag = paginar(todos, paginaDaUrl((await searchParams).page), POR_PAGINA);
+  const alertas = pag.itens;
   const saudacao = await getSaudacaoAtiva();
   const hoje = hojeISO();
 
@@ -41,11 +48,13 @@ export default async function EbdAlertasPage() {
                   <div>
                     <p className="text-base font-semibold">
                       {a.nome}
-                      {idade !== null ? <span className="font-normal text-muted-foreground"> · {idade} anos</span> : null}
+                      {idade !== null ? (
+                        <span className="font-normal text-muted-foreground"> · {idade} anos</span>
+                      ) : null}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      <strong className="text-foreground">{a.faltasSeguidas} faltas seguidas</strong> em {a.classeNome} ·
-                      última presença: {a.ultimaPresenca ? formatarData(a.ultimaPresenca) : "nenhuma registrada"}
+                      <strong className="text-foreground">{a.faltasSeguidas} faltas seguidas</strong> em {a.classeNome}{" "}
+                      · última presença: {a.ultimaPresenca ? formatarData(a.ultimaPresenca) : "nenhuma registrada"}
                     </p>
                     {a.responsavelNome && (crianca || !a.whatsapp) ? (
                       <p className="text-sm text-muted-foreground">
@@ -80,6 +89,7 @@ export default async function EbdAlertasPage() {
           })}
         </ul>
       )}
+      <PaginationControls page={pag.pagina} pageSize={POR_PAGINA} total={pag.total} basePath="/dashboard/ebd/alertas" />
     </div>
   );
 }

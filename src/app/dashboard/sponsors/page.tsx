@@ -1,3 +1,5 @@
+import { PaginationControls } from "@/components/pagination-controls";
+import { paginaDaUrl, paginar } from "@/lib/paginacao";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Building2, Church, EyeOff, Landmark, Share2, TimerReset } from "lucide-react";
@@ -41,11 +43,7 @@ function SponsorCard({ sponsor, showChurch }: { sponsor: CompanySponsor; showChu
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-sm font-semibold text-primary">
           {sponsor.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- logo externo do patrocinador
-            <img
-              src={sponsor.logoUrl}
-              alt=""
-              className="size-full rounded-lg object-cover"
-            />
+            <img src={sponsor.logoUrl} alt="" className="size-full rounded-lg object-cover" />
           ) : (
             initials(sponsor.sponsorName)
           )}
@@ -83,7 +81,10 @@ function SponsorCard({ sponsor, showChurch }: { sponsor: CompanySponsor; showChu
   );
 }
 
-export default async function SponsorsPage() {
+/** Patrocinadores por página (grade de 2 colunas). */
+const POR_PAGINA = 20;
+
+export default async function SponsorsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const { active } = await getActiveTenant();
   if (!active) return null; // layout já redirecionou
 
@@ -107,6 +108,8 @@ export default async function SponsorsPage() {
     })),
   );
 
+  const pag = paginar(summary.sponsors, paginaDaUrl((await searchParams).page), POR_PAGINA);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -115,9 +118,9 @@ export default async function SponsorsPage() {
         </div>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight">Patrocinadores</h2>
         <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Negócios e pessoas que sustentam a presença digital da sua igreja. O nome deles aparece
-          na página pública, e o apoio é pago diretamente à plataforma — a igreja não paga nada.
-          Se não quiser alguém na sua página, esconda: o apoio continua, a marca sai.
+          Negócios e pessoas que sustentam a presença digital da sua igreja. O nome deles aparece na página pública, e o
+          apoio é pago diretamente à plataforma — a igreja não paga nada. Se não quiser alguém na sua página, esconda: o
+          apoio continua, a marca sai.
         </p>
       </div>
 
@@ -168,16 +171,12 @@ export default async function SponsorsPage() {
               Convide um patrocinador
             </CardTitle>
             <CardDescription>
-              Envie este link para negócios da comunidade. Quem abrir vê o convite e assina sem
-              precisar de conta antes.
+              Envie este link para negócios da comunidade. Quem abrir vê o convite e assina sem precisar de conta antes.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
             <span className="min-w-0 flex-1 font-mono text-sm break-all">{inviteUrl}</span>
-            <Link
-              href="/dashboard/settings/domain"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
+            <Link href="/dashboard/settings/domain" className={buttonVariants({ variant: "outline", size: "sm" })}>
               Copiar em Configurações
             </Link>
           </CardContent>
@@ -192,15 +191,12 @@ export default async function SponsorsPage() {
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {summary.sponsors.map((sponsor) => (
-            <SponsorCard
-              key={sponsor.sponsorshipId}
-              sponsor={sponsor}
-              showChurch={showChurch}
-            />
+          {pag.itens.map((sponsor) => (
+            <SponsorCard key={sponsor.sponsorshipId} sponsor={sponsor} showChurch={showChurch} />
           ))}
         </div>
       )}
+      <PaginationControls page={pag.pagina} pageSize={POR_PAGINA} total={pag.total} basePath="/dashboard/sponsors" />
     </div>
   );
 }

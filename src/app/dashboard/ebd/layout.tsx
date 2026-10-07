@@ -16,7 +16,9 @@ export default async function EbdLayout({ children }: { children: React.ReactNod
   if (!actor) notFound();
 
   // Quantos em alerta, para o número na aba. Falhar aqui não derruba a página.
-  const emAlerta = await (await getEbdService())
+  const emAlerta = await (
+    await getEbdService()
+  )
     .alertas(actor)
     .then((r) => r.alertas.filter((a) => a.situacao === "pendente").length)
     .catch((err: unknown) => {
@@ -26,6 +28,7 @@ export default async function EbdLayout({ children }: { children: React.ReactNod
 
   const tabs: RouteTab[] = [
     { href: BASE, label: "Resumo" },
+    { href: `${BASE}/alunos`, label: "Alunos" },
     { href: `${BASE}/alertas`, label: "Em alerta", count: emAlerta },
     { href: `${BASE}/relatorios`, label: "Relatórios" },
   ];

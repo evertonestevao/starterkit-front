@@ -160,16 +160,22 @@ describe("ficha do membro", () => {
 });
 
 describe("etapa 2", () => {
-  const t4 = { id: "66666666-6666-4666-8666-666666666666", nome: "4º", inicio: "2026-10-01", fim: "2026-12-31", revista: null };
+  const t4 = {
+    id: "66666666-6666-4666-8666-666666666666",
+    nome: "4º",
+    inicio: "2026-10-01",
+    fim: "2026-12-31",
+    revista: null,
+  };
 
   it("trimestre: só a gestão cria, e não pode sobrepor outro", async () => {
     const salvar = vi.fn(async () => undefined);
     const { svc } = build({ listTrimestres: async () => [t4], salvarTrimestre: salvar });
     const novo = { nome: "1º de 2027", inicio: "2027-01-01", fim: "2027-03-31" };
     await expect(svc.salvarTrimestre(professor, null, novo)).rejects.toMatchObject({ code: "forbidden" });
-    await expect(
-      svc.salvarTrimestre(secretaria, null, { ...novo, inicio: "2026-12-15" }),
-    ).rejects.toMatchObject({ code: "conflict" });
+    await expect(svc.salvarTrimestre(secretaria, null, { ...novo, inicio: "2026-12-15" })).rejects.toMatchObject({
+      code: "conflict",
+    });
     await svc.salvarTrimestre(secretaria, null, novo);
     expect(salvar).toHaveBeenCalledWith(IGREJA, null, { ...novo, revista: null });
     // Editar o próprio trimestre não conta como sobreposição consigo mesmo.
@@ -182,7 +188,9 @@ describe("etapa 2", () => {
     const base = { membroId: ALUNO, classeId: CLASSE, data: "2026-09-30", resultado: "retornou" };
     await svc.registrarContato(professor, base);
     expect(registrar).toHaveBeenCalledWith(IGREJA, { ...base, observacao: null });
-    await expect(svc.registrarContato(professor, { ...base, classeId: OUTRA })).rejects.toMatchObject({ code: "not_found" });
+    await expect(svc.registrarContato(professor, { ...base, classeId: OUTRA })).rejects.toMatchObject({
+      code: "not_found",
+    });
     await expect(svc.registrarContato(professor, { ...base, data: "2026-10-02" })).rejects.toMatchObject({
       code: "validation_error",
     });
@@ -199,7 +207,11 @@ describe("etapa 2", () => {
 
   it("relatório: período válido e classe opcional", async () => {
     const freq = vi.fn(async () => []);
-    const { svc } = build({ relatorioClasses: async () => [], frequenciaAlunos: freq, presencaPorDomingo: async () => [] });
+    const { svc } = build({
+      relatorioClasses: async () => [],
+      frequenciaAlunos: freq,
+      presencaPorDomingo: async () => [],
+    });
     await expect(svc.relatorio(owner, { de: "2026-10-10", ate: "2026-10-01" })).rejects.toMatchObject({
       code: "validation_error",
     });
@@ -241,10 +253,18 @@ describe("etapa 3", () => {
 
   it("lições: uma por domingo, sem repetir as que já existem", async () => {
     const criar = vi.fn(async () => undefined);
-    const trimestre = { id: "77777777-7777-4777-8777-777777777777", nome: "4º", inicio: "2026-10-01", fim: "2026-12-31", revista: null };
+    const trimestre = {
+      id: "77777777-7777-4777-8777-777777777777",
+      nome: "4º",
+      inicio: "2026-10-01",
+      fim: "2026-12-31",
+      revista: null,
+    };
     const { svc } = build({
       listTrimestres: async () => [trimestre],
-      licoes: async () => [{ id: "l1", trimestreId: trimestre.id, numero: 1, data: "2026-10-04", titulo: null, tituloGeral: null }],
+      licoes: async () => [
+        { id: "l1", trimestreId: trimestre.id, numero: 1, data: "2026-10-04", titulo: null, tituloGeral: null },
+      ],
       criarLicoes: criar,
     });
     expect(await svc.gerarLicoes(owner, trimestre.id)).toBe(12);
@@ -253,12 +273,27 @@ describe("etapa 3", () => {
   });
 
   it("chamada nova já vem com a lição do domingo; reaberta mantém a salva", async () => {
-    const licao = { id: "l3", trimestreId: "t", numero: 3, data: "2026-09-27", titulo: "A fé de Abraão", tituloGeral: "A fé de Abraão" };
+    const licao = {
+      id: "l3",
+      trimestreId: "t",
+      numero: 3,
+      data: "2026-09-27",
+      titulo: "A fé de Abraão",
+      tituloGeral: "A fé de Abraão",
+    };
     const { svc } = build({ licaoDoDia: async () => licao });
     expect((await svc.abrirAula(owner, CLASSE, "2026-09-27")).licao).toBe("Lição 3 — A fé de Abraão");
     const { svc: reaberta } = build({
       licaoDoDia: async () => licao,
-      getAula: async () => ({ aulaId: "a", licao: null, biblias: 0, revistas: 0, ofertaCentavos: 0, presencas: {}, visitantes: [] }),
+      getAula: async () => ({
+        aulaId: "a",
+        licao: null,
+        biblias: 0,
+        revistas: 0,
+        ofertaCentavos: 0,
+        presencas: {},
+        visitantes: [],
+      }),
     });
     expect((await reaberta.abrirAula(owner, CLASSE, "2026-09-27")).licao).toBeNull();
   });
@@ -298,3 +333,31 @@ describe("rede e títulos por classe", () => {
   });
 });
 
+describe("alunosDaIgreja", () => {
+  it("junta os alunos das classes ativas, com a classe de cada um, por nome", async () => {
+    const outra: EbdClasse = { ...classe, id: OUTRA, nome: "Jovens" };
+    const encerrada: EbdClasse = { ...classe, id: ESTRANHO, nome: "Encerrada", ativa: false };
+    const { svc, repo } = build({
+      listClasses: vi.fn(async () => [classe, outra, encerrada]),
+      alunos: vi.fn(async (classeId: string) =>
+        classeId === OUTRA
+          ? [{ ...aluno, membroId: "m2", matriculaId: "mt2", nome: "Ana" }]
+          : [{ ...aluno, nome: "Zeca" }],
+      ),
+    });
+    const r = await svc.alunosDaIgreja(secretaria);
+    expect(r.alunos.map((a) => [a.nome, a.classeNome])).toEqual([
+      ["Ana", "Jovens"],
+      ["Zeca", classe.nome],
+    ]);
+    expect(r.classes.map((c) => c.id)).toEqual([CLASSE, OUTRA]);
+    expect(r.gestao).toBe(true);
+    // Classe encerrada nem é consultada.
+    expect(repo.alunos).toHaveBeenCalledTimes(2);
+  });
+
+  it("quem não é da EBD não recebe a lista", async () => {
+    const { svc } = build();
+    await expect(svc.alunosDaIgreja(member)).rejects.toMatchObject({ code: "forbidden" });
+  });
+});

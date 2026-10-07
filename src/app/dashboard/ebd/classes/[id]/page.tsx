@@ -54,11 +54,16 @@ export default async function ClasseEbdPage({ params }: { params: Promise<{ id: 
             {classe.nome}
             {!classe.ativa ? <Badge variant="outline">Encerrada</Badge> : null}
           </h3>
-          <p className="text-sm text-muted-foreground">{[classe.faixaEtaria, classe.sala].filter(Boolean).join(" · ") || "—"}</p>
+          <p className="text-sm text-muted-foreground">
+            {[classe.faixaEtaria, classe.sala].filter(Boolean).join(" · ") || "—"}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {classe.ativa ? (
-            <Link href={`/dashboard/ebd/classes/${classe.id}/chamada?data=${domingoSugerido(hoje)}`} className={buttonVariants()}>
+            <Link
+              href={`/dashboard/ebd/classes/${classe.id}/chamada?data=${domingoSugerido(hoje)}`}
+              className={buttonVariants()}
+            >
               <ClipboardCheck className="size-4" /> Fazer chamada
             </Link>
           ) : null}
@@ -81,7 +86,7 @@ export default async function ClasseEbdPage({ params }: { params: Promise<{ id: 
             {classe.ativa ? (
               <div className="flex flex-wrap gap-2">
                 {gestao ? <MatricularMembro classe={classe} /> : null}
-                <NovoAluno classeId={classe.id} />
+                <NovoAluno classeId={classe.id} destaque={!gestao} />
               </div>
             ) : null}
           </div>
@@ -202,7 +207,8 @@ export default async function ClasseEbdPage({ params }: { params: Promise<{ id: 
                       {a.licao ? <span className="text-muted-foreground"> · {a.licao}</span> : null}
                     </span>
                     <span className="text-xs tabular-nums text-muted-foreground">
-                      {a.presentes} P · {a.ausentes} A · {a.justificados} J · {a.visitantes} visit. · {formatarReais(a.ofertaCentavos)}
+                      {a.presentes} P · {a.ausentes} A · {a.justificados} J · {a.visitantes} visit. ·{" "}
+                      {formatarReais(a.ofertaCentavos)}
                     </span>
                   </Link>
                 </li>

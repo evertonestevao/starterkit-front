@@ -1,11 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Trash2 } from "lucide-react";
+import { PaginacaoLocal } from "@/components/paginacao-local";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useActionToast } from "@/hooks/useActionToast";
+import { paginar } from "@/lib/paginacao";
 import { useMoneyInput } from "@/hooks/useMoneyInput";
 import { GATEWAY_FEE_HINT, PIX_HINT } from "@/features/campaigns/paymentMethodCopy";
 import {
@@ -113,9 +115,7 @@ export function EditCampaignForm({ campanha }: { campanha: CompanyCampaign }) {
         />
         <span>
           Mostrar barra de progresso na página
-          <span className="block text-xs text-muted-foreground">
-            Some com o total já arrecadado.
-          </span>
+          <span className="block text-xs text-muted-foreground">Some com o total já arrecadado.</span>
         </span>
       </label>
 
@@ -124,8 +124,8 @@ export function EditCampaignForm({ campanha }: { campanha: CompanyCampaign }) {
           Valores sugeridos <span className="font-normal text-muted-foreground">(opcional, até 3)</span>
         </legend>
         <p className="text-xs text-muted-foreground">
-          Preencha os que quiser — cada um vira um botão de valor na página. Nenhum precisa vir marcado
-          como &ldquo;vem selecionado&rdquo;; é só um atalho opcional para quem doa não precisar escolher.
+          Preencha os que quiser — cada um vira um botão de valor na página. Nenhum precisa vir marcado como &ldquo;vem
+          selecionado&rdquo;; é só um atalho opcional para quem doa não precisar escolher.
         </p>
         <div className="grid gap-3 sm:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -262,11 +262,7 @@ export function CampaignFeedbackForm({ campanha }: { campanha: CompanyCampaign }
   useActionToast(fotoState);
 
   if (campanha.status !== "encerrada") {
-    return (
-      <p className="text-sm text-muted-foreground">
-        A devolutiva fica disponível depois de encerrar a campanha.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">A devolutiva fica disponível depois de encerrar a campanha.</p>;
   }
 
   return (
@@ -335,7 +331,15 @@ function formatDateTime(iso: string): string {
   });
 }
 
-function ConfirmPixDonationButton({ campaignId, donationId, nome }: { campaignId: string; donationId: string; nome: string }) {
+function ConfirmPixDonationButton({
+  campaignId,
+  donationId,
+  nome,
+}: {
+  campaignId: string;
+  donationId: string;
+  nome: string;
+}) {
   const [state, formAction, pending] = useActionState(confirmPixDonationAction, undefined);
   useActionToast(state);
 
@@ -355,19 +359,19 @@ function ConfirmPixDonationButton({ campaignId, donationId, nome }: { campaignId
  * financeira conferiu o extrato ou o comprovante); cartão nunca aparece
  * pendente por muito tempo — confirma sozinho, no webhook.
  */
-export function CampaignDonationsList({
-  campaignId,
-  doacoes,
-}: {
-  campaignId: string;
-  doacoes: CampaignDonationRow[];
-}) {
+/** Doações do histórico por página. */
+const DOACOES_POR_PAGINA = 20;
+
+export function CampaignDonationsList({ campaignId, doacoes }: { campaignId: string; doacoes: CampaignDonationRow[] }) {
+  const [pagina, setPagina] = useState(1);
   if (doacoes.length === 0) {
     return <p className="text-sm text-muted-foreground">Nenhuma doação ainda.</p>;
   }
 
   const pendentes = doacoes.filter((d) => d.status === "pendente");
   const resto = doacoes.filter((d) => d.status !== "pendente");
+  // As pendentes ficam todas à vista (pedem ação); o histórico é que cresce.
+  const historico = paginar(resto, pagina, DOACOES_POR_PAGINA);
 
   return (
     <div className="flex flex-col gap-4">
@@ -395,7 +399,7 @@ export function CampaignDonationsList({
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">Histórico</p>
           <ul className="flex flex-col divide-y rounded-lg border">
-            {resto.map((d) => (
+            {historico.itens.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
                 <div className="min-w-0">
                   <p className="truncate font-medium">{d.doadorNome}</p>
@@ -408,6 +412,14 @@ export function CampaignDonationsList({
               </li>
             ))}
           </ul>
+          <PaginacaoLocal
+            pagina={historico.pagina}
+            totalPaginas={historico.totalPaginas}
+            total={historico.total}
+            onMudar={setPagina}
+            rotulo="doação"
+            rotuloPlural="doações"
+          />
         </div>
       ) : null}
     </div>

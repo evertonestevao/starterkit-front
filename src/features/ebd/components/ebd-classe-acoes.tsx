@@ -84,26 +84,59 @@ export function ClasseForm({ classe }: { classe?: EbdClasse }) {
             {classe ? <input type="hidden" name="id" value={classe.id} /> : null}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`cl-nome-${id}`}>Nome</Label>
-              <Input id={`cl-nome-${id}`} name="nome" required minLength={2} maxLength={60} defaultValue={classe?.nome} />
+              <Input
+                id={`cl-nome-${id}`}
+                name="nome"
+                required
+                minLength={2}
+                maxLength={60}
+                defaultValue={classe?.nome}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`cl-faixa-${id}`}>Faixa etária</Label>
-                <Input id={`cl-faixa-${id}`} name="faixaEtaria" maxLength={40} placeholder="9 a 11 anos" defaultValue={classe?.faixaEtaria ?? ""} />
+                <Input
+                  id={`cl-faixa-${id}`}
+                  name="faixaEtaria"
+                  maxLength={40}
+                  placeholder="9 a 11 anos"
+                  defaultValue={classe?.faixaEtaria ?? ""}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`cl-sala-${id}`}>Sala</Label>
-                <Input id={`cl-sala-${id}`} name="sala" maxLength={40} placeholder="Sala 2" defaultValue={classe?.sala ?? ""} />
+                <Input
+                  id={`cl-sala-${id}`}
+                  name="sala"
+                  maxLength={40}
+                  placeholder="Sala 2"
+                  defaultValue={classe?.sala ?? ""}
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`cl-imin-${id}`}>Idade mínima</Label>
-                <Input id={`cl-imin-${id}`} name="idadeMinima" type="number" min={0} max={120} defaultValue={classe?.idadeMinima ?? ""} />
+                <Input
+                  id={`cl-imin-${id}`}
+                  name="idadeMinima"
+                  type="number"
+                  min={0}
+                  max={120}
+                  defaultValue={classe?.idadeMinima ?? ""}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`cl-imax-${id}`}>Idade máxima</Label>
-                <Input id={`cl-imax-${id}`} name="idadeMaxima" type="number" min={0} max={120} defaultValue={classe?.idadeMaxima ?? ""} />
+                <Input
+                  id={`cl-imax-${id}`}
+                  name="idadeMaxima"
+                  type="number"
+                  min={0}
+                  max={120}
+                  defaultValue={classe?.idadeMaxima ?? ""}
+                />
               </div>
               <p className="col-span-2 text-xs text-muted-foreground">
                 Usadas para sugerir a classe de cada aluno na promoção. Deixe em branco se não tiver limite.
@@ -111,7 +144,15 @@ export function ClasseForm({ classe }: { classe?: EbdClasse }) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`cl-ordem-${id}`}>Ordem no resumo</Label>
-              <Input id={`cl-ordem-${id}`} name="ordem" type="number" min={0} max={999} defaultValue={classe?.ordem ?? 100} className="w-28" />
+              <Input
+                id={`cl-ordem-${id}`}
+                name="ordem"
+                type="number"
+                min={0}
+                max={999}
+                defaultValue={classe?.ordem ?? 100}
+                className="w-28"
+              />
             </div>
             <DialogFooter>
               <DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Cancelar</DialogClose>
@@ -164,12 +205,15 @@ function BuscaPessoa({
   rotuloBotao,
   onEscolher,
   icone,
+  destaque = false,
 }: {
   titulo: string;
   descricao: string;
   rotuloBotao: string;
   onEscolher: (p: EbdPessoaBusca) => Promise<ActionState>;
   icone: React.ReactNode;
+  /** Botão principal da tela (cor cheia). */
+  destaque?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   const [termo, setTermo] = useState("");
@@ -197,7 +241,7 @@ function BuscaPessoa({
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={() => setAberto(true)}>
+      <Button type="button" variant={destaque ? "default" : "outline"} size="sm" onClick={() => setAberto(true)}>
         {icone} {rotuloBotao}
       </Button>
       <Dialog open={aberto} onOpenChange={setAberto}>
@@ -208,7 +252,14 @@ function BuscaPessoa({
           </DialogHeader>
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input autoFocus placeholder="Nome da pessoa" value={termo} onChange={(e) => setTermo(e.target.value)} className="pl-8" aria-label="Buscar pessoa" />
+            <Input
+              autoFocus
+              placeholder="Nome da pessoa"
+              value={termo}
+              onChange={(e) => setTermo(e.target.value)}
+              className="pl-8"
+              aria-label="Buscar pessoa"
+            />
           </div>
           <ul className="flex max-h-72 flex-col divide-y overflow-y-auto rounded-md border">
             {pessoas.map((p) => (
@@ -224,11 +275,13 @@ function BuscaPessoa({
                   type="button"
                   size="sm"
                   disabled={pending}
-                  onClick={() => rodar(async () => {
-                    const r = await onEscolher(p);
-                    if (r.success) setAberto(false);
-                    return r;
-                  })}
+                  onClick={() =>
+                    rodar(async () => {
+                      const r = await onEscolher(p);
+                      if (r.success) setAberto(false);
+                      return r;
+                    })
+                  }
                 >
                   Escolher
                 </Button>
@@ -250,6 +303,8 @@ export function MatricularMembro({ classe }: { classe: Pick<EbdClasse, "id" | "n
       titulo={`Matricular em ${classe.nome}`}
       descricao="Quem já está em Membros. Se a pessoa estiver em outra classe, ela muda para esta."
       rotuloBotao="Matricular membro"
+      // O caminho mais comum de quem cuida da EBD: a pessoa já está em Membros.
+      destaque
       icone={<UserPlus className="size-3.5" />}
       onEscolher={(p) => matricularAction(classe.id, p.membroId)}
     />
@@ -289,9 +344,12 @@ export function RemoverProfessor({ classeId, membroId, nome }: { classeId: strin
 export function NovoAluno({
   classeId,
   visitante,
+  destaque = false,
 }: {
   classeId: string;
   visitante?: { id: string; nome: string; telefone: string | null };
+  /** Botão principal: só quando é o único jeito de matricular (o professor não busca em Membros). */
+  destaque?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   // O aviso sai aqui mesmo, e não por efeito: matriculado, o visitante some da
@@ -312,7 +370,7 @@ export function NovoAluno({
 
   return (
     <>
-      <Button type="button" variant={visitante ? "outline" : "default"} size="sm" onClick={() => setAberto(true)}>
+      <Button type="button" variant={destaque ? "default" : "outline"} size="sm" onClick={() => setAberto(true)}>
         <UserPlus className="size-3.5" /> {visitante ? "Matricular" : "Novo aluno"}
       </Button>
       <Dialog open={aberto} onOpenChange={setAberto}>
@@ -320,8 +378,8 @@ export function NovoAluno({
           <DialogHeader>
             <DialogTitle>{visitante ? `Matricular ${visitante.nome}` : "Novo aluno"}</DialogTitle>
             <DialogDescription>
-              Para quem ainda não está em Membros (ex.: filho de um membro). Entra como &ldquo;não membro&rdquo; e não aparece
-              na chamada dos cultos.
+              Para quem ainda não está em Membros (ex.: filho de um membro). Entra como &ldquo;não membro&rdquo; e não
+              aparece na chamada dos cultos.
             </DialogDescription>
           </DialogHeader>
           <form action={formAction} className="flex flex-col gap-3">
@@ -329,12 +387,24 @@ export function NovoAluno({
             {visitante ? <input type="hidden" name="visitanteId" value={visitante.id} /> : null}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`al-nome-${id}`}>Nome</Label>
-              <Input id={`al-nome-${id}`} name="nome" required minLength={2} maxLength={120} defaultValue={visitante?.nome} />
+              <Input
+                id={`al-nome-${id}`}
+                name="nome"
+                required
+                minLength={2}
+                maxLength={120}
+                defaultValue={visitante?.nome}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`al-tel-${id}`}>Telefone</Label>
-                <TelefoneInput id={`al-tel-${id}`} name="telefone" autoComplete="off" defaultValue={visitante?.telefone} />
+                <TelefoneInput
+                  id={`al-tel-${id}`}
+                  name="telefone"
+                  autoComplete="off"
+                  defaultValue={visitante?.telefone}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`al-nasc-${id}`}>Nascimento</Label>
