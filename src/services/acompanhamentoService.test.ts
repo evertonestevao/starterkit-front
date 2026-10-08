@@ -503,6 +503,46 @@ describe("ficha do membro", () => {
     expect(fichas).toEqual([]);
   });
 
+  it("campos do rol: o CPF vai só com os dígitos e o resto como foi digitado", async () => {
+    const { svc, fichas } = gravadas();
+    await svc.salvarFicha(owner, MEMBRO, {
+      ...base,
+      numeroFicha: " A-123 ",
+      cpf: "529.982.247-25",
+      rg: "12.345.678-9",
+      telefone2: "(14) 3522-0000",
+      batismoAguasLocal: "Rio Dourado",
+      batismoEspiritoData: "2020-05-17",
+      consagracaoMinisterio: "Diaconato",
+      consagracaoOndePorQuem: "",
+    });
+    expect(fichas[0]).toMatchObject({
+      numeroFicha: "A-123",
+      cpf: "52998224725",
+      rg: "12.345.678-9",
+      telefone2: "(14) 3522-0000",
+      batismoAguasLocal: "Rio Dourado",
+      batismoEspiritoData: "2020-05-17",
+      batismoEspiritoLocal: null,
+      consagracaoMinisterio: "Diaconato",
+      consagracaoOndePorQuem: null,
+    });
+  });
+
+  it("recusa CPF com dígito errado, telefone curto demais e batismo no futuro", async () => {
+    const { svc, fichas } = gravadas();
+    for (const ruim of [
+      { ...base, cpf: "529.982.247-24" },
+      { ...base, cpf: "111.111.111-11" },
+      { ...base, telefone2: "123" },
+      { ...base, batismoEspiritoData: "2999-01-01" },
+    ]) {
+      const err = await svc.salvarFicha(owner, MEMBRO, ruim).catch((e) => e);
+      expect(isAppError(err) && err.code).toBe("validation_error");
+    }
+    expect(fichas).toEqual([]);
+  });
+
   it("membro de outra igreja (ou inexistente) é não encontrado", async () => {
     const { svc } = service({ getMembro: async () => null });
     const err = await svc.salvarFicha(owner, MEMBRO, base).catch((e) => e);

@@ -47,6 +47,31 @@ export function mascaraCep(valor: string | null | undefined): string {
   return digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
 }
 
+/** "529.982.247-25" enquanto digita; o banco guarda só os 11 dígitos. */
+export function mascaraCpf(valor: string | null | undefined): string {
+  const d = (valor ?? "").replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+/**
+ * CPF válido: 11 dígitos, não todos iguais, e os dois dígitos verificadores
+ * conferem. Pega erro de digitação antes de gravar; não diz se o CPF existe.
+ */
+export function cpfValido(valor: string): boolean {
+  const d = valor.replace(/\D/g, "");
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const verificador = (ate: number) => {
+    let soma = 0;
+    for (let i = 0; i < ate; i++) soma += Number(d[i]) * (ate + 1 - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+  return verificador(9) === Number(d[9]) && verificador(10) === Number(d[10]);
+}
+
 /** Endereço numa linha só, pulando o que não foi preenchido; null se não há nada. */
 export function enderecoEmLinha(
   f: Pick<FichaMembro, "logradouro" | "numero" | "complemento" | "bairro" | "cidade" | "uf" | "cep">,
@@ -63,6 +88,10 @@ export function enderecoEmLinha(
  */
 export function fichaVazia(ativo: boolean): FichaMembro {
   return {
+    numeroFicha: null,
+    cpf: null,
+    rg: null,
+    telefone2: null,
     sexo: null,
     estadoCivil: null,
     naturalidade: null,
@@ -83,6 +112,11 @@ export function fichaVazia(ativo: boolean): FichaMembro {
     entradaForma: null,
     membroDesde: null,
     igrejaOrigem: null,
+    batismoAguasLocal: null,
+    batismoEspiritoData: null,
+    batismoEspiritoLocal: null,
+    consagracaoMinisterio: null,
+    consagracaoOndePorQuem: null,
     situacao: ativo ? "ativo" : "afastado",
     situacaoEm: null,
     situacaoMotivo: null,

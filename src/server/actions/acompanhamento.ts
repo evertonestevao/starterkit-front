@@ -84,6 +84,10 @@ export async function salvarMembroAction(
 }
 
 const CAMPOS_FICHA = [
+  "numeroFicha",
+  "cpf",
+  "rg",
+  "telefone2",
   "sexo",
   "estadoCivil",
   "naturalidade",
@@ -104,6 +108,11 @@ const CAMPOS_FICHA = [
   "entradaForma",
   "membroDesde",
   "igrejaOrigem",
+  "batismoAguasLocal",
+  "batismoEspiritoData",
+  "batismoEspiritoLocal",
+  "consagracaoMinisterio",
+  "consagracaoOndePorQuem",
   "situacao",
   "situacaoEm",
   "situacaoMotivo",

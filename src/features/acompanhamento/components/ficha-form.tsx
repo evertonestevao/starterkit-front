@@ -28,6 +28,7 @@ import {
   SITUACAO_LABEL,
   UFS,
   mascaraCep,
+  mascaraCpf,
   temConjuge,
 } from "@/lib/fichaMembro";
 import { salvarFichaMembroAction } from "@/server/actions/acompanhamento";
@@ -64,6 +65,7 @@ export function FichaForm({
   }
   const [estadoCivil, setEstadoCivil] = useState<EstadoCivil | "">(ficha.estadoCivil ?? "");
   const [situacao, setSituacao] = useState<SituacaoMembro>(ficha.situacao);
+  const [cpf, setCpf] = useState(mascaraCpf(ficha.cpf));
   // O que o CEP preenche fica em estado; número e complemento são sempre à mão.
   const [endereco, setEndereco] = useState({
     logradouro: ficha.logradouro ?? "",
@@ -107,6 +109,39 @@ export function FichaForm({
           </DialogHeader>
           <form action={formAction} className="flex flex-col gap-5">
             <input type="hidden" name="membroId" value={membroId} />
+
+            <Bloco titulo="Identificação">
+              <Campo rotulo="Número da ficha (rol)" htmlFor={id("numeroFicha")}>
+                <Input id={id("numeroFicha")} name="numeroFicha" maxLength={20} defaultValue={ficha.numeroFicha ?? ""} />
+              </Campo>
+              <Campo rotulo="Segundo telefone (fixo ou recado)" htmlFor={id("telefone2")}>
+                <Input
+                  id={id("telefone2")}
+                  name="telefone2"
+                  inputMode="tel"
+                  maxLength={20}
+                  defaultValue={ficha.telefone2 ?? ""}
+                />
+              </Campo>
+              <Campo rotulo="CPF" htmlFor={id("cpf")}>
+                <Input
+                  id={id("cpf")}
+                  name="cpf"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="000.000.000-00"
+                  value={cpf}
+                  onChange={(e) => setCpf(mascaraCpf(e.target.value))}
+                />
+              </Campo>
+              <Campo rotulo="RG" htmlFor={id("rg")}>
+                <Input id={id("rg")} name="rg" autoComplete="off" maxLength={20} defaultValue={ficha.rg ?? ""} />
+              </Campo>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                CPF e RG são opcionais e só aparecem para quem cuida do cadastro de membros. Servem para a carta de
+                transferência e para a pessoa não ser cadastrada duas vezes; ninguém entra no sistema com CPF.
+              </p>
+            </Bloco>
 
             <Bloco titulo="Dados pessoais">
               <Campo rotulo="Sexo" htmlFor={id("sexo")}>
@@ -268,6 +303,51 @@ export function FichaForm({
               </Campo>
               <Campo rotulo="Igreja de origem" htmlFor={id("igrejaOrigem")}>
                 <Input id={id("igrejaOrigem")} name="igrejaOrigem" maxLength={160} defaultValue={ficha.igrejaOrigem ?? ""} />
+              </Campo>
+            </Bloco>
+
+            <Bloco titulo="Batismos e consagração">
+              <Campo rotulo="Local do batismo nas águas" htmlFor={id("batismoAguasLocal")} largo>
+                <Input
+                  id={id("batismoAguasLocal")}
+                  name="batismoAguasLocal"
+                  maxLength={120}
+                  defaultValue={ficha.batismoAguasLocal ?? ""}
+                />
+                <p className="text-xs text-muted-foreground">A data do batismo nas águas fica no cadastro do membro.</p>
+              </Campo>
+              <Campo rotulo="Batismo no Espírito Santo (data)" htmlFor={id("batismoEspiritoData")}>
+                <Input
+                  id={id("batismoEspiritoData")}
+                  name="batismoEspiritoData"
+                  type="date"
+                  defaultValue={ficha.batismoEspiritoData ?? ""}
+                />
+              </Campo>
+              <Campo rotulo="Batismo no Espírito Santo (local)" htmlFor={id("batismoEspiritoLocal")}>
+                <Input
+                  id={id("batismoEspiritoLocal")}
+                  name="batismoEspiritoLocal"
+                  maxLength={120}
+                  defaultValue={ficha.batismoEspiritoLocal ?? ""}
+                />
+              </Campo>
+              <Campo rotulo="Consagrado(a) a qual ministério" htmlFor={id("consagracaoMinisterio")}>
+                <Input
+                  id={id("consagracaoMinisterio")}
+                  name="consagracaoMinisterio"
+                  maxLength={120}
+                  placeholder="Ex.: diaconato, presbitério"
+                  defaultValue={ficha.consagracaoMinisterio ?? ""}
+                />
+              </Campo>
+              <Campo rotulo="Onde foi consagrado(a) e por quem" htmlFor={id("consagracaoOndePorQuem")}>
+                <Input
+                  id={id("consagracaoOndePorQuem")}
+                  name="consagracaoOndePorQuem"
+                  maxLength={200}
+                  defaultValue={ficha.consagracaoOndePorQuem ?? ""}
+                />
               </Campo>
             </Bloco>
 

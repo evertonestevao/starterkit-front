@@ -49,7 +49,8 @@ interface Reservado {
 const FICHA_COLS =
   "sexo, estado_civil, naturalidade, profissao, conjuge_nome, data_casamento, pai_nome, mae_nome, filhos, " +
   "cep, logradouro, numero, complemento, bairro, cidade, uf, data_conversao, entrada_forma, membro_desde, " +
-  "igreja_origem, situacao, situacao_em, situacao_motivo";
+  "igreja_origem, situacao, situacao_em, situacao_motivo, numero_ficha, cpf, rg, telefone2, " +
+  "batismo_aguas_local, batismo_espirito_data, batismo_espirito_local, consagracao_ministerio, consagracao_onde_por_quem";
 // Cultos = itens da Programação.
 const CULTO_COLS = "id, church_id, titulo, tipo, dia_semana, data, hora, registra_chamada, deleted_at";
 const JUST_COLS = "id, membro_id, motivo, motivo_texto, data_inicio, data_fim, encerrada_em, membro:rol_membros(nome)";
@@ -89,6 +90,10 @@ const toMembro = (r: any): RolMembro => ({
 });
 
 const toFicha = (r: any): FichaMembro => ({
+  numeroFicha: r.numero_ficha,
+  cpf: r.cpf,
+  rg: r.rg,
+  telefone2: r.telefone2,
   sexo: r.sexo,
   estadoCivil: r.estado_civil,
   naturalidade: r.naturalidade,
@@ -109,6 +114,11 @@ const toFicha = (r: any): FichaMembro => ({
   entradaForma: r.entrada_forma,
   membroDesde: r.membro_desde,
   igrejaOrigem: r.igreja_origem,
+  batismoAguasLocal: r.batismo_aguas_local,
+  batismoEspiritoData: r.batismo_espirito_data,
+  batismoEspiritoLocal: r.batismo_espirito_local,
+  consagracaoMinisterio: r.consagracao_ministerio,
+  consagracaoOndePorQuem: r.consagracao_onde_por_quem,
   situacao: r.situacao,
   situacaoEm: r.situacao_em,
   situacaoMotivo: r.situacao_motivo,
@@ -474,6 +484,10 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       const { error } = await client.rpc("salvar_ficha_membro", {
         p_membro_id: membroId,
         p_ficha: {
+          numero_ficha: f.numeroFicha,
+          cpf: f.cpf,
+          rg: f.rg,
+          telefone2: f.telefone2,
           sexo: f.sexo,
           estado_civil: f.estadoCivil,
           naturalidade: f.naturalidade,
@@ -494,6 +508,11 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
           entrada_forma: f.entradaForma,
           membro_desde: f.membroDesde,
           igreja_origem: f.igrejaOrigem,
+          batismo_aguas_local: f.batismoAguasLocal,
+          batismo_espirito_data: f.batismoEspiritoData,
+          batismo_espirito_local: f.batismoEspiritoLocal,
+          consagracao_ministerio: f.consagracaoMinisterio,
+          consagracao_onde_por_quem: f.consagracaoOndePorQuem,
           situacao: f.situacao,
           situacao_em: f.situacaoEm,
           situacao_motivo: f.situacaoMotivo,
@@ -502,6 +521,16 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       if (error) {
         if (error.code === "P0002") {
           throw new AppError("not_found", "Membro não encontrado, ou você não tem acesso à ficha dele.", error);
+        }
+        // Número da ficha e CPF são únicos na igreja: o índice diz qual dos dois repetiu.
+        if (error.code === "23505") {
+          throw new AppError(
+            "validation_error",
+            /cpf/i.test(error.message ?? "")
+              ? "Já existe um membro com este CPF nesta igreja. Confira se a pessoa não está cadastrada duas vezes."
+              : "Já existe um membro com este número de ficha nesta igreja.",
+            error,
+          );
         }
         // CHECK da tabela ou data impossível: o service já validou, então é dado adulterado.
         if (error.code === "23514" || error.code?.startsWith("22")) {
