@@ -227,6 +227,6 @@ export const config = {
   // Tudo, exceto estáticos, o webhook de pagamento (autenticado por assinatura)
   // e o cron de domínios (autenticado por CRON_SECRET).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|offline.html|api/webhooks|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

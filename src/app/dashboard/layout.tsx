@@ -1,6 +1,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import type { Metadata, Viewport } from "next";
 import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell/app-shell";
+import { AvisoInstalarApp, RegistraServiceWorker } from "@/components/pwa/instalar-app";
+import { brand } from "@/config/brand";
 import { AvisoMensalidade, PainelSuspenso } from "@/features/church/components/aviso-mensalidade";
 import { hojeISO } from "@/lib/acompanhamento";
 import { montarAviso, montarBloqueio, pendenciaPrincipal } from "@/lib/mensalidadeAviso";
@@ -23,6 +26,21 @@ import { NomesNiveisProvider } from "@/providers/niveis-provider";
 import { TenantProvider } from "@/providers/tenant-provider";
 import { getNomesNiveisDaEmpresa } from "@/server/niveisRede";
 import { getSaudacaoDaEmpresa } from "@/server/saudacao";
+
+/**
+ * O painel é o que se instala como aplicativo (PWA): o manifesto e os ícones
+ * ficam só aqui, e não na página pública das igrejas — quem visita a página
+ * de uma igreja não deve ver "instalar AssembleiaApp".
+ */
+export const metadata: Metadata = {
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: brand.name, statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#41694b",
+};
 
 /**
  * Layout autenticado: gate de termos vigentes (LGPD) + empresa ativa,
@@ -128,6 +146,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           pendingInvitesCount={myInvites.length}
           unseenPrayerRequestsCount={unseenPrayerRequestsCount}
         >
+          <RegistraServiceWorker />
+          <AvisoInstalarApp />
           {avisoMensalidade ? <AvisoMensalidade aviso={avisoMensalidade} /> : null}
           {bloqueio ? <PainelSuspenso bloqueio={bloqueio}>{children}</PainelSuspenso> : children}
         </AppShell>
