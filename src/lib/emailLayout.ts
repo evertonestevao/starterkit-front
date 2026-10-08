@@ -69,6 +69,11 @@ export function estilizarConteudo(html: string): string {
 /** Texto curto e sem tags, para a prévia que o cliente de e-mail mostra ao lado do assunto. */
 export function previaDoConteudo(html: string, limite = 140): string {
   const texto = html
+    // Variáveis de modelo ({{ .Email }}, {{ .ConfirmationURL }} do Supabase)
+    // não entram na prévia: cortada no meio, uma delas vira "{{…" e o modelo
+    // inteiro fica inválido — o Supabase então descarta o nosso e manda o
+    // padrão em inglês.
+    .replace(/\{\{[^}]*\}\}/g, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
@@ -76,7 +81,9 @@ export function previaDoConteudo(html: string, limite = 140): string {
     .replace(/&quot;/g, '"')
     .replace(/\s+/g, " ")
     .trim();
-  return texto.length > limite ? `${texto.slice(0, limite - 1).trimEnd()}…` : texto;
+  const curto = texto.length > limite ? `${texto.slice(0, limite - 1).trimEnd()}…` : texto;
+  // Garantia extra: nenhuma chave de modelo solta sobra na prévia.
+  return curto.replace(/[{}]/g, "");
 }
 
 export interface MolduraDeEmail {

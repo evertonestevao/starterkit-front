@@ -40,6 +40,18 @@ describe("previaDoConteudo", () => {
   });
 });
 
+describe("previaDoConteudo com variáveis de modelo", () => {
+  it("tira as variáveis do Supabase e nunca deixa chave solta, mesmo cortando no limite", () => {
+    const html =
+      "<p>Pedido para a conta <strong>{{ .Email }}</strong>.</p><p>Copie no navegador: {{ .ConfirmationURL }}</p>";
+    const previa = previaDoConteudo(html);
+    expect(previa).not.toMatch(/[{}]/);
+    expect(previa).toContain("Pedido para a conta");
+    // Cortado bem no meio de onde estaria uma variável.
+    expect(previaDoConteudo("<p>Abra: {{ .ConfirmationURL }} agora</p>", 10)).not.toMatch(/[{}]/);
+  });
+});
+
 describe("molduraDeEmail", () => {
   const html = molduraDeEmail({
     marca: "AssembleiaApp",
