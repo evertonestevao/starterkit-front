@@ -6,7 +6,7 @@ export const brand = {
   /** Nome exibido na LP, título das páginas e sidebar. */
   name: "Conecta Igreja",
   /** Descrição curta usada em metadata e na LP. */
-  tagline: "Página da igreja, membros, presença nos cultos, Escola Dominical e visitas em um só lugar",
+  tagline: "Página da igreja, membros, presença nos cultos, Escola Dominical, tesouraria e visitas em um só lugar",
   /** Domínio público (links de email usam APP_URL do servidor). */
   url: "https://tagigreja.com",
 } as const;
