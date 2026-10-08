@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Confirme seu e-mail</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4ef">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">Que bom ter você por aqui! Para terminar o cadastro, confirme que este e-mail ( {{ .Email }} ) é seu: Confirmar meu e-mail Se o botão não a…</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f4ef">
+<tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px">
+<tr><td style="padding:0 4px 20px">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+<td style="width:36px;height:36px;border-radius:9px;background:#41694b;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:17px;font-weight:700;text-align:center;vertical-align:middle">A</td>
+<td style="padding-left:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:17px;font-weight:700;color:#26332a">AssembleiaApp</td>
+</tr></table>
+</td></tr>
+<tr><td style="background:#ffffff;border:1px solid #e3e6dd;border-radius:14px;padding:32px 32px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+<h1 style="margin:0 0 20px;font-size:21px;line-height:1.35;font-weight:700;color:#26332a">Confirme seu e-mail</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#26332a">Que bom ter você por aqui! Para terminar o cadastro, confirme que este e-mail (<strong style="color:#26332a">{{ .Email }}</strong>) é seu:</p>
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0"><tr><td style="border-radius:8px;background:#41694b"><a style="display:inline-block;padding:13px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;border-radius:8px" href="{{ .ConfirmationURL }}">Confirmar meu e-mail</a></td></tr></table>
+<p style="margin:0 0 12px;font-size:13px;line-height:1.5;color:#6b746d">Se o botão não abrir, copie e cole no navegador:<br>{{ .ConfirmationURL }}</p>
+<p style="margin:0 0 12px;font-size:13px;line-height:1.5;color:#6b746d">Se você não se cadastrou, pode ignorar este e-mail: nenhuma conta será criada sem a confirmação.</p>
+</td></tr>
+<tr><td style="padding:20px 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b746d;text-align:center">
+Mensagem automática do AssembleiaApp. Este endereço não recebe respostas.<br>
+<a href="{{ .SiteURL }}" style="color:#6b746d;text-decoration:underline">{{ .SiteURL }}</a>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

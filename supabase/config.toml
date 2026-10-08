@@ -243,10 +243,33 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# Modelos dos e-mails do Auth, em português, com a mesma moldura dos e-mails
+# do sistema. Em produção, o mesmo texto é colado no painel do Supabase
+# (Authentication → Emails → Templates); passo a passo em docs/emails-supabase.md.
+[auth.email.template.confirmation]
+subject = "Confirme seu cadastro no AssembleiaApp"
+content_path = "./supabase/templates/confirmacao.html"
+
+[auth.email.template.recovery]
+subject = "Redefinir sua senha do AssembleiaApp"
+content_path = "./supabase/templates/recuperacao.html"
+
+[auth.email.template.email_change]
+subject = "Confirme a troca de e-mail no AssembleiaApp"
+content_path = "./supabase/templates/troca-de-email.html"
+
+[auth.email.template.magic_link]
+subject = "Seu link de acesso ao AssembleiaApp"
+content_path = "./supabase/templates/link-de-acesso.html"
+
+[auth.email.template.invite]
+subject = "Você foi convidado para o AssembleiaApp"
+content_path = "./supabase/templates/convite.html"
+
+[auth.email.template.reauthentication]
+subject = "Código de confirmação do AssembleiaApp"
+content_path = "./supabase/templates/reautenticacao.html"
+
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

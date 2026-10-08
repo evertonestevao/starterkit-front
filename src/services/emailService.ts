@@ -1,4 +1,6 @@
-import type { EmailProvider } from "@/adapters/email/EmailProvider";
+import type { EmailMessage, EmailProvider } from "@/adapters/email/EmailProvider";
+import { brand } from "@/config/brand";
+import { molduraDeEmail } from "@/lib/emailLayout";
 import { describeApproved } from "@/lib/churchLinks";
 import { NOMES_PADRAO, nomeNivel } from "@/lib/niveisRede";
 import { saudar } from "@/lib/saudacao";
@@ -24,8 +26,18 @@ function escapeHtml(texto: string): string {
   return texto.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export function createEmailService({ provider, appUrl }: EmailServiceDeps) {
+export function createEmailService({ provider: envio, appUrl }: EmailServiceDeps) {
   const base = appUrl.replace(/\/+$/, "");
+
+  // Todo e-mail sai na mesma moldura (cabeçalho, cartão e rodapé); cada
+  // método só escreve o conteúdo. O texto puro vai como está.
+  const provider: Pick<EmailProvider, "send"> = {
+    send: (m: EmailMessage) =>
+      envio.send({
+        ...m,
+        html: molduraDeEmail({ marca: brand.name, site: base, titulo: m.subject, conteudo: m.html }),
+      }),
+  };
 
   const service = {
     /**
@@ -57,7 +69,7 @@ O convite vale por 7 dias. Se você não esperava este e-mail, pode ignorá-lo.`
         html: [
           `<p>${escapeHtml(abertura)}</p>`,
           `<p><strong>${escapeHtml(quem)}</strong> convidou você para acessar o sistema da igreja (acesso: ${escapeHtml(papel)}).</p>`,
-          `<p><a href="${acceptUrl}" style="display:inline-block;padding:10px 18px;background:#41694b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:600">Aceitar o convite</a></p>`,
+          `<p><a href="${acceptUrl}">Aceitar o convite</a></p>`,
           `<p>Entre com este mesmo e-mail (<strong>${escapeHtml(invite.email)}</strong>). Se você ainda não tem conta, é só criar uma com ele e voltar a este link.</p>`,
           `<p style="color:#666;font-size:13px">Se o botão não abrir, copie e cole no navegador:<br>${acceptUrl}</p>`,
           '<p style="color:#666;font-size:13px">O convite vale por 7 dias. Se você não esperava este e-mail, pode ignorá-lo.</p>',

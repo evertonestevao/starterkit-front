@@ -77,3 +77,18 @@ describe("emailService.sendInviteEmail", () => {
     });
   });
 });
+
+describe("emailService: moldura", () => {
+  it("todo e-mail sai com a moldura do produto; o texto puro continua sem HTML", async () => {
+    const sent: EmailMessage[] = [];
+    const service = createEmailService({ provider: makeProvider(sent), appUrl: "https://app.example.com/" });
+    await service.sendInviteEmail(invite, { churchName: "Igreja Esperança" });
+    const [m] = sent;
+    expect(m.html.startsWith("<!doctype html>")).toBe(true);
+    expect(m.html).toContain("Mensagem automática do");
+    // O link de aceite virou o botão principal.
+    expect(m.html).toContain('role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0"');
+    expect(m.html).toContain(`/invites/accept?token=${TOKEN}`);
+    expect(m.text).not.toContain("<");
+  });
+});
