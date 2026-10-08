@@ -231,3 +231,39 @@ select:not([multiple]):not([size]) {
 .dark select:not([multiple]):not([size]) {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b3a894' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
+/*
+ * Aviso (toast) com barra de tempo: uma faixa clara embaixo vai enchendo nos
+ * 5 segundos em que o aviso fica na tela (DURACAO_DO_AVISO_MS, em
+ * src/components/ui/sonner.tsx). Feita com o fundo do próprio aviso, e não
+ * com ::before/::after, que a biblioteca já usa.
+ *
+ * Com o mouse sobre os avisos a biblioteca pausa o tempo, e aqui a barra
+ * pausa junto. Quem prefere menos movimento não vê a animação.
+ */
+@keyframes aviso-barra-enchendo {
+  from {
+    background-size: 0% 4px;
+  }
+  to {
+    background-size: 100% 4px;
+  }
+}
+
+[data-sonner-toast].aviso-com-barra {
+  background-image: linear-gradient(rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.55));
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 0% 4px;
+  animation: aviso-barra-enchendo 5s linear forwards;
+}
+
+[data-sonner-toaster]:hover [data-sonner-toast].aviso-com-barra {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast].aviso-com-barra {
+    animation: none;
+    background-image: none;
+  }
+}
