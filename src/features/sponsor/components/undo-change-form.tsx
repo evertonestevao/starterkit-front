@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -14,6 +15,7 @@ import { undoProfileChangeAction } from "@/server/actions/platform";
  */
 export function UndoChangeForm({ token }: { token: string }) {
   const [state, formAction, pending] = useActionState(undoProfileChangeAction, undefined);
+  useActionToast(state);
 
   if (state?.success) {
     return (
@@ -26,11 +28,6 @@ export function UndoChangeForm({ token }: { token: string }) {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
       <input type="hidden" name="token" value={token} />
       <Button type="submit" variant="destructive" disabled={pending} className="w-full">
         {pending ? "Desfazendo..." : "Desfazer e bloquear minha conta"}

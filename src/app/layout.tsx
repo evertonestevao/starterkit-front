@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { AvisoDaUrl } from "@/components/aviso-da-url";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
@@ -38,7 +40,11 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           {children}
-          <Toaster richColors position="top-right" />
+          <Toaster richColors closeButton position="top-right" />
+          {/* useSearchParams pede Suspense; o aviso não atrasa o resto da página. */}
+          <Suspense fallback={null}>
+            <AvisoDaUrl />
+          </Suspense>
           <ConfirmarHost />
         </ThemeProvider>
       </body>

@@ -1,7 +1,7 @@
 "use client";
 
+import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState, useState, useTransition, type FormEvent } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,7 @@ export function SponsorAccountForm({
   needsTerms: boolean;
 }) {
   const [state, formAction, pending] = useActionState(createSponsorAccountAction, undefined);
+  useActionToast(state);
   const [kind, setKind] = useState<SponsorKind>(DEFAULT_SPONSOR_KIND);
   const [documentValue, setDocumentValue] = useState("");
   const [submitting, startTransition] = useTransition();
@@ -41,11 +42,6 @@ export function SponsorAccountForm({
 
   return (
     <form action={formAction} onSubmit={handleSubmit} className="flex flex-col gap-5">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
       <input type="hidden" name="next" value={next} />
 
       <fieldset className="flex flex-col gap-2">

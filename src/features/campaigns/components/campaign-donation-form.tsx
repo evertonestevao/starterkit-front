@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState, useState, type ReactNode } from "react";
+import { useActionToast } from "@/hooks/useActionToast";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { Check } from "lucide-react";
 import { CopyPix } from "@/features/church/components/copy-pix";
 import { CamposAntiRobo } from "@/components/campos-anti-robo";
@@ -130,6 +132,10 @@ function PixDonationForm({
   whatsappHref,
 }: CampaignDonationFormProps) {
   const [state, formAction, pending] = useActionState(submitPixCampaignDonationAction, undefined);
+  // Aqui o "sucesso" traz os dados do Pix (não é uma mensagem): só o erro vira toast.
+  useEffect(() => {
+    if (state?.error) toast.error(state.error);
+  }, [state]);
   const [valor, setValor] = useState(valorPadraoCents ? formatCents(valorPadraoCents) : "");
 
   if (state?.success) {
@@ -172,11 +178,6 @@ function PixDonationForm({
         valor={valor}
         onChange={setValor}
       />
-      {state?.error ? (
-        <p role="alert" className="text-sm text-[var(--pg-danger)]">
-          {state.error}
-        </p>
-      ) : null}
       <Enviar pending={pending}>Gerar PIX</Enviar>
     </form>
   );
@@ -189,6 +190,7 @@ function GatewayDonationForm({
   permitirValorLivre,
 }: CampaignDonationFormProps) {
   const [state, formAction, pending] = useActionState(submitGatewayCampaignDonationAction, undefined);
+  useActionToast(state);
   const [valor, setValor] = useState(valorPadraoCents ? formatCents(valorPadraoCents) : "");
 
   return (
@@ -203,11 +205,6 @@ function GatewayDonationForm({
         valor={valor}
         onChange={setValor}
       />
-      {state?.error ? (
-        <p role="alert" className="text-sm text-[var(--pg-danger)]">
-          {state.error}
-        </p>
-      ) : null}
       <p className="text-xs leading-5 text-[var(--pg-muted)]">
         Você será levado à página segura do Asaas para pagar com cartão ou Pix. O provedor cobra
         uma tarifa sobre o valor (não é taxa da igreja nem da plataforma), descontada antes do

@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,6 +13,7 @@ import { confirmarPixPorEmailAction } from "@/server/actions/churchPix";
  */
 export function ConfirmarPixForm({ token, chave, titular }: { token: string; chave: string; titular: string | null }) {
   const [state, action, pending] = useActionState(confirmarPixPorEmailAction, undefined);
+  useActionToast(state);
 
   if (state?.success) {
     return (
@@ -39,11 +41,6 @@ export function ConfirmarPixForm({ token, chave, titular }: { token: string; cha
         Confira com a conta da igreja. Se a chave ou o titular não forem os que você espera, não confirme: feche esta
         página, troque a senha da sua conta e corrija a chave no painel.
       </p>
-      {state?.error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {state.error}
-        </p>
-      ) : null}
       <Button type="submit" disabled={pending} className="self-start">
         Confirmar esta chave
       </Button>

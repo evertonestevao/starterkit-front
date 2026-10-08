@@ -6,6 +6,7 @@ import { createSupabaseAuthRepository } from "@/repositories/supabase/authReposi
 import { createRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { createAuthService } from "@/services/authService";
+import { comAviso } from "@/lib/avisos";
 import { toActionError, type ActionState } from "./action-state";
 
 /**
@@ -99,5 +100,6 @@ export async function resetPasswordAction(_prev: ActionState | undefined, formDa
   } catch (err) {
     return toActionError(err);
   }
-  redirect("/dashboard");
+  // O painel mostra o aviso "senha trocada" (o redirect não deixa a tela daqui mostrar).
+  redirect(comAviso("/dashboard", "senha-trocada"));
 }
