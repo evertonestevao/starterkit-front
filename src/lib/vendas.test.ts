@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maximoParaPedir, resumirPedidos, situacaoDaVenda, unidadesReservadas } from "./vendas";
+import { maximoParaPedir, mensagemDoComprovante, resumirPedidos, situacaoDaVenda, unidadesReservadas } from "./vendas";
 
 const base = { status: "ativa" as const, pixConfirmadoEm: "2026-10-01T10:00:00Z", encerraEm: null, estoque: null };
 
@@ -40,5 +40,27 @@ describe("pedidos", () => {
     expect(maximoParaPedir(10, null)).toBe(10);
     expect(maximoParaPedir(10, 3)).toBe(3);
     expect(maximoParaPedir(null, 0)).toBe(0);
+  });
+});
+
+describe("mensagemDoComprovante", () => {
+  it("leva nome, quantidade, total e observação", () => {
+    const msg = mensagemDoComprovante({
+      titulo: "Camiseta do congresso",
+      nome: "Ana Paula",
+      quantidade: 3,
+      totalFormatado: "R$ 165,00",
+      observacao: "2 G e 1 M",
+    });
+    expect(msg).toContain("pedido de Camiseta do congresso");
+    expect(msg).toContain("Nome: Ana Paula");
+    expect(msg).toContain("Quantidade: 3");
+    expect(msg).toContain("Total: R$ 165,00");
+    expect(msg).toContain("Observação: 2 G e 1 M");
+  });
+
+  it("sem observação, não deixa a linha vazia", () => {
+    const msg = mensagemDoComprovante({ titulo: "Pastel", nome: "Bia", quantidade: 1, totalFormatado: "R$ 8,00", observacao: null });
+    expect(msg).not.toContain("Observação");
   });
 });

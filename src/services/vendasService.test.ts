@@ -28,6 +28,7 @@ const venda: Venda = {
   precoCents: 5500,
   pixChave: "tesouraria@igreja.org",
   pixTitular: "Maria Souza",
+  whatsappComprovante: null,
   pixConfirmadoEm: null,
   encerraEm: null,
   estoque: null,
@@ -42,6 +43,7 @@ const entrada = {
   precoCents: 5500,
   pixChave: "tesouraria@igreja.org",
   pixTitular: "Maria Souza",
+  whatsappComprovante: "(14) 99999-8888",
   encerraEm: "2026-10-20",
   estoque: 80,
   maxPorPedido: 10,
@@ -96,13 +98,29 @@ describe("salvar", () => {
 
     const r = await service.salvar(ADMIN, null, entrada);
 
-    expect(repo.salvar).toHaveBeenCalledWith(IGREJA.id, null, expect.objectContaining({ precoCents: 5500, estoque: 80 }));
+    // O WhatsApp é gravado só com dígitos e vai junto no e-mail de confirmação.
+    expect(repo.salvar).toHaveBeenCalledWith(
+      IGREJA.id,
+      null,
+      expect.objectContaining({ precoCents: 5500, estoque: 80, whatsappComprovante: "14999998888" }),
+    );
     expect(r).toEqual({ id: VENDA_ID, precisaConfirmar: true, confirmacaoEnviada: true });
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "venda.criada" }));
     // O e-mail leva a chave mascarada, nunca inteira.
     expect(notifier.sendVendaPixConfirmation).toHaveBeenCalledWith(
-      expect.objectContaining({ to: ["responsavel@igreja.org"], chaveMascarada: "tes***org", titulo: entrada.titulo }),
+      expect.objectContaining({
+        to: ["responsavel@igreja.org"],
+        chaveMascarada: "tes***org",
+        titulo: entrada.titulo,
+        whatsapp: "14999998888",
+      }),
     );
+  });
+
+  it("sem WhatsApp do comprovante, grava nulo", async () => {
+    const { repo, service } = build();
+    await service.salvar(ADMIN, null, { ...entrada, whatsappComprovante: null });
+    expect(repo.salvar).toHaveBeenCalledWith(IGREJA.id, null, expect.objectContaining({ whatsappComprovante: null }));
   });
 
   it("edição sem trocar a chave: não pede confirmação de novo", async () => {
@@ -119,6 +137,7 @@ describe("salvar", () => {
       { ...entrada, estoque: 5, maxPorPedido: 10 },
       { ...entrada, encerraEm: "2026-10-07" },
       { ...entrada, precoCents: 0 },
+      { ...entrada, whatsappComprovante: "9999-8888" },
     ]) {
       const err = await erroDe(service.salvar(ADMIN, null, errado));
       expect(isAppError(err) && err.code).toBe("validation_error");
@@ -166,6 +185,7 @@ describe("página pública", () => {
       pixTitular: "Maria Souza",
       churchName: "Igreja Betel",
       churchAddress: "Rua A, 10 - Centro, Lins/SP",
+      whatsappComprovante: "14999998888",
     }));
     const service = createVendasPublicasService({ repo: { listar: vi.fn(), criarPedido }, qr: async () => "data:qr" });
 
@@ -179,6 +199,7 @@ describe("página pública", () => {
 
     expect(criarPedido).toHaveBeenCalledWith(expect.objectContaining({ nome: "Ana", quantidade: 3, observacao: "2 G e 1 M" }));
     expect(r.totalCents).toBe(15000);
+    expect(r.whatsappComprovante).toBe("14999998888");
     // O valor vai dentro do "copia e cola" (campo 54 do padrão Pix).
     expect(r.pixCopiaECola).toContain("5406150.00");
   });

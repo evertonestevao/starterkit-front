@@ -44,6 +44,8 @@ export async function salvarVendaAction(_prev: ActionState | undefined, fd: Form
       precoCents: preco,
       pixChave: texto(fd, "pixChave"),
       pixTitular: texto(fd, "pixTitular"),
+      // Sem o campo (caixa desmarcada), a venda não pede comprovante.
+      whatsappComprovante: texto(fd, "whatsappComprovante") || null,
       encerraEm: texto(fd, "encerraEm") || null,
       estoque: inteiroOuNulo(texto(fd, "estoque"), "Estoque inválido."),
       maxPorPedido: inteiroOuNulo(texto(fd, "maxPorPedido"), "Máximo por pedido inválido."),
@@ -56,8 +58,8 @@ export async function salvarVendaAction(_prev: ActionState | undefined, fd: Form
       return {
         success: salvo.precisaConfirmar
           ? salvo.confirmacaoEnviada
-            ? "Venda salva. A chave Pix mudou: enviamos o link de confirmação ao Responsável."
-            : "Venda salva. A chave Pix mudou e precisa ser confirmada pelo Responsável."
+            ? "Venda salva. Ela aguarda a confirmação do Responsável: enviamos o link para o e-mail dele."
+            : "Venda salva. Ela aguarda a confirmação do Responsável, que ainda não recebeu o e-mail."
           : "Venda salva.",
       };
     }

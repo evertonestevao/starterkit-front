@@ -10,7 +10,7 @@ import type {
 import type { PedidoVenda, StatusPedido, StatusVenda, Venda, VendaPublica } from "@/types/vendas";
 
 const COLS =
-  "id, titulo, descricao, preco_cents, pix_chave, pix_titular, pix_confirmado_em, encerra_em, estoque, max_por_pedido, status, created_at";
+  "id, titulo, descricao, preco_cents, pix_chave, pix_titular, whatsapp_comprovante, pix_confirmado_em, encerra_em, estoque, max_por_pedido, status, created_at";
 
 interface VendaRow {
   id: string;
@@ -19,6 +19,7 @@ interface VendaRow {
   preco_cents: number;
   pix_chave: string;
   pix_titular: string;
+  whatsapp_comprovante: string | null;
   pix_confirmado_em: string | null;
   encerra_em: string | null;
   estoque: number | null;
@@ -34,6 +35,7 @@ const toVenda = (r: VendaRow): Venda => ({
   precoCents: r.preco_cents,
   pixChave: r.pix_chave,
   pixTitular: r.pix_titular,
+  whatsappComprovante: r.whatsapp_comprovante,
   pixConfirmadoEm: r.pix_confirmado_em,
   encerraEm: r.encerra_em,
   estoque: r.estoque,
@@ -125,6 +127,7 @@ export function createSupabaseVendasRepository(client: SupabaseClient, admin?: S
           preco_cents: v.precoCents,
           pix_chave: v.pixChave,
           pix_titular: v.pixTitular,
+          whatsapp_comprovante: v.whatsappComprovante ?? "",
           encerra_em: v.encerraEm ?? "",
           estoque: v.estoque === null ? "" : String(v.estoque),
           max_por_pedido: v.maxPorPedido === null ? "" : String(v.maxPorPedido),
@@ -247,6 +250,7 @@ export function createSupabaseVendasPublicasRepository(
           pix_titular: string;
           church_name: string;
           church_address: string | null;
+          whatsapp_comprovante: string | null;
         }>
       )[0];
       if (!row) throw new AppError("internal_error", "Não foi possível registrar o pedido.");
@@ -257,6 +261,7 @@ export function createSupabaseVendasPublicasRepository(
         pixTitular: row.pix_titular,
         churchName: row.church_name,
         churchAddress: row.church_address,
+        whatsappComprovante: row.whatsapp_comprovante,
       };
     },
   };
@@ -275,6 +280,7 @@ export function createSupabaseConfirmacaoVendaRepository(client: SupabaseClient)
           preco_cents: number;
           pix_chave: string | null;
           pix_titular: string | null;
+          whatsapp_comprovante: string | null;
         }>
       )[0];
       if (!row) return null;
@@ -285,6 +291,7 @@ export function createSupabaseConfirmacaoVendaRepository(client: SupabaseClient)
         precoCents: row.preco_cents,
         chave: row.pix_chave,
         titular: row.pix_titular,
+        whatsapp: row.whatsapp_comprovante,
       };
       return r;
     },

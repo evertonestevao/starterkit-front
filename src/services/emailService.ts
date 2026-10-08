@@ -305,6 +305,7 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
       titulo: string;
       chaveMascarada: string;
       titular: string;
+      whatsapp: string | null;
       alteradoPor: string;
       token: string;
       validadeHoras: number;
@@ -313,6 +314,7 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
       const linhas = [
         `${input.alteradoPor} cadastrou a venda "${input.titulo}" na página de ${input.churchName}.`,
         `O pagamento vai para a chave Pix ${input.chaveMascarada}, de ${input.titular}.`,
+        ...(input.whatsapp ? [`Quem compra manda o comprovante para o WhatsApp ${input.whatsapp}.`] : []),
         "A venda só aparece na página depois que você confirmar. Abra o link, confira a chave inteira e confirme:",
       ];
       const depois = [

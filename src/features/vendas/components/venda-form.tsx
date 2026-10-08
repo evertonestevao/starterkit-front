@@ -5,6 +5,7 @@ import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TelefoneInput } from "@/components/telefone-input";
 import { useActionToast } from "@/hooks/useActionToast";
 import { salvarVendaAction } from "@/server/actions/vendas";
 import { formatCents } from "@/services/sponsorPricing";
@@ -21,6 +22,7 @@ export function VendaForm({ venda, hoje }: { venda?: Venda; hoje: string }) {
   const [state, action, pending] = useActionState(salvarVendaAction, undefined);
   useActionToast(state);
   const [preco, setPreco] = useState(venda ? formatCents(venda.precoCents) : "");
+  const [pedeComprovante, setPedeComprovante] = useState(Boolean(venda?.whatsappComprovante));
 
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -76,8 +78,8 @@ export function VendaForm({ venda, hoje }: { venda?: Venda; hoje: string }) {
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
           O dinheiro vai direto para esta chave, não para o caixa da igreja. Por segurança, a venda só aparece na
-          página depois que o Responsável da igreja confirmar a chave pelo link que vai para o e-mail dele. Trocar a
-          chave depois pede uma nova confirmação.
+          página depois que o Responsável da igreja confirmar a chave (e o WhatsApp do comprovante, se houver) pelo
+          link que vai para o e-mail dele. Trocar qualquer um dos dois depois pede uma nova confirmação.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
@@ -104,6 +106,33 @@ export function VendaForm({ venda, hoje }: { venda?: Venda; hoje: string }) {
             />
           </div>
         </div>
+
+        <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={pedeComprovante}
+            onChange={(e) => setPedeComprovante(e.target.checked)}
+            className="mt-0.5 size-4 accent-primary"
+          />
+          <span>
+            Quem compra deve enviar o comprovante pelo WhatsApp
+            <span className="block text-xs text-muted-foreground">
+              Depois do Pix aparece um botão que abre o WhatsApp deste número com uma mensagem pronta: nome,
+              quantidade, total e a observação do pedido.
+            </span>
+          </span>
+        </label>
+        {pedeComprovante ? (
+          <div className="flex flex-col gap-1.5 sm:max-w-64">
+            <Label htmlFor="whatsappComprovante">WhatsApp para o comprovante</Label>
+            <TelefoneInput
+              id="whatsappComprovante"
+              name="whatsappComprovante"
+              required
+              defaultValue={venda?.whatsappComprovante ?? ""}
+            />
+          </div>
+        ) : null}
       </fieldset>
 
       <fieldset className="flex flex-col gap-3">

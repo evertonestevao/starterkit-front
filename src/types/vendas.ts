@@ -11,6 +11,8 @@ export interface Venda {
   precoCents: number;
   pixChave: string;
   pixTitular: string;
+  /** WhatsApp (só dígitos) para onde quem compra manda o comprovante; null = a venda não pede. */
+  whatsappComprovante: string | null;
   /** Null = a chave ainda espera a confirmação do Responsável (a venda não aparece na página). */
   pixConfirmadoEm: string | null;
   /** AAAA-MM-DD: aceita pedidos até o fim desse dia. */
@@ -41,6 +43,7 @@ export interface VendaInput {
   precoCents: number;
   pixChave: string;
   pixTitular: string;
+  whatsappComprovante: string | null;
   encerraEm: string | null;
   estoque: number | null;
   maxPorPedido: number | null;

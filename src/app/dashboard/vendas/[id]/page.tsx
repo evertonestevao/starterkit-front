@@ -12,6 +12,7 @@ import { VendaForm } from "@/features/vendas/components/venda-form";
 import { hojeISO } from "@/lib/acompanhamento";
 import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { isAppError } from "@/lib/errors";
+import { mascaraTelefone } from "@/lib/telefone";
 import { SITUACAO_VENDA, resumirPedidos, situacaoDaVenda, unidadesReservadas } from "@/lib/vendas";
 import { getChurchProfileService } from "@/server/churchProfile";
 import { getVendasActorAutorizado, getVendasService } from "@/server/vendas";
@@ -59,7 +60,14 @@ export default async function VendaPage({ params }: { params: Promise<{ id: stri
           <Clock className="size-4" />
           <AlertDescription>
             A venda ainda não aparece na página. Enviamos ao Responsável da igreja um e-mail para confirmar a chave Pix{" "}
-            <strong>{venda.pixChave}</strong> ({venda.pixTitular}). Assim que ele confirmar, ela entra no ar.
+            <strong>{venda.pixChave}</strong> ({venda.pixTitular})
+            {venda.whatsappComprovante ? (
+              <>
+                {" "}
+                e o WhatsApp do comprovante <strong>{mascaraTelefone(venda.whatsappComprovante)}</strong>
+              </>
+            ) : null}
+            . Assim que ele confirmar, ela entra no ar.
           </AlertDescription>
         </Alert>
       ) : situacao === "aberta" && linkPublico ? (
@@ -101,7 +109,11 @@ export default async function VendaPage({ params }: { params: Promise<{ id: stri
           <CardTitle>Editar venda</CardTitle>
         </CardHeader>
         <CardContent>
-          <VendaForm key={`${venda.id}:${venda.precoCents}:${venda.pixChave}`} venda={venda} hoje={hoje} />
+          <VendaForm
+            key={`${venda.id}:${venda.precoCents}:${venda.pixChave}:${venda.whatsappComprovante ?? ""}`}
+            venda={venda}
+            hoje={hoje}
+          />
         </CardContent>
       </Card>
     </>

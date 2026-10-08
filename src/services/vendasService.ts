@@ -58,6 +58,8 @@ export interface VendasNotifier {
     titulo: string;
     chaveMascarada: string;
     titular: string;
+    /** WhatsApp do comprovante, quando a venda pede. */
+    whatsapp: string | null;
     alteradoPor: string;
     token: string;
     validadeHoras: number;
@@ -102,6 +104,13 @@ function vendaSchema(hoje: string) {
       .max(PRECO_MAXIMO, "Valor alto demais. Confira os centavos."),
     pixChave: z.string().trim().min(5, "Informe a chave Pix de quem recebe").max(140, "Chave Pix longa demais"),
     pixTitular: z.string().trim().min(3, "Informe o nome de quem recebe").max(140, "Nome longo demais"),
+    // Só dígitos: DDD + número (com ou sem o 55).
+    whatsappComprovante: z
+      .string()
+      .transform((v) => v.replace(/\D/g, ""))
+      .refine((v) => v === "" || (v.length >= 10 && v.length <= 13), "Informe o WhatsApp com DDD")
+      .nullable()
+      .transform((v) => v || null),
     encerraEm: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida")
@@ -158,7 +167,11 @@ export function createVendasService(deps: {
   }
 
   /** Manda o link ao Responsável. Devolve se o e-mail saiu (a venda já está salva de qualquer jeito). */
-  async function pedirConfirmacao(actor: VendasActor, churchName: string, venda: Pick<Venda, "id" | "titulo" | "pixChave" | "pixTitular">) {
+  async function pedirConfirmacao(
+    actor: VendasActor,
+    churchName: string,
+    venda: Pick<Venda, "id" | "titulo" | "pixChave" | "pixTitular" | "whatsappComprovante">,
+  ) {
     if (!deps.tokens || !deps.notifier) return false;
     try {
       const token = deps.tokens.make();
@@ -175,6 +188,7 @@ export function createVendasService(deps: {
         titulo: venda.titulo,
         chaveMascarada: maskPixKey(venda.pixChave),
         titular: venda.pixTitular,
+        whatsapp: venda.whatsappComprovante,
         alteradoPor: actor.email,
         token,
         validadeHoras: VALIDADE_CONFIRMACAO_HORAS,
@@ -294,6 +308,7 @@ export interface VendasPublicasRepository {
     pixTitular: string;
     churchName: string;
     churchAddress: string | null;
+    whatsappComprovante: string | null;
   }>;
 }
 
@@ -314,6 +329,7 @@ export function createVendasPublicasService(deps: {
       pixTitular: string;
       pixCopiaECola: string;
       pixQrDataUrl: string;
+      whatsappComprovante: string | null;
     }> {
       const parsed = pedidoPublicoSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
@@ -332,6 +348,7 @@ export function createVendasPublicasService(deps: {
         pixTitular: pedido.pixTitular,
         pixCopiaECola,
         pixQrDataUrl: await deps.qr(pixCopiaECola),
+        whatsappComprovante: pedido.whatsappComprovante,
       };
     },
   };
@@ -356,6 +373,7 @@ export interface ConfirmacaoVenda {
   /** Só vêm enquanto o link vale. */
   chave: string | null;
   titular: string | null;
+  whatsapp: string | null;
 }
 
 export interface ConfirmacaoVendaRepository {

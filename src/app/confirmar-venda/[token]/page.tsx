@@ -51,7 +51,7 @@ export default async function ConfirmarVendaPage({ params }: { params: Promise<{
       </CardHeader>
       <CardContent>
         {pedido.estado === "valido" && pedido.chave ? (
-          <ConfirmarChaveVendaForm token={token} chave={pedido.chave} titular={pedido.titular} />
+          <ConfirmarChaveVendaForm token={token} chave={pedido.chave} titular={pedido.titular} whatsapp={pedido.whatsapp} />
         ) : (
           <Alert>
             <Info className="size-4" />

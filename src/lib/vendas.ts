@@ -61,3 +61,23 @@ export function resumirPedidos(pedidos: Pick<PedidoVenda, "quantidade" | "totalC
     pendenteCents: validos.filter((p) => p.status === "pendente").reduce((s, p) => s + p.totalCents, 0),
   };
 }
+
+/**
+ * Mensagem pronta do comprovante, para o WhatsApp de quem organiza. Leva o
+ * que a pessoa precisa conferir: quem pediu, o quê, quanto e a observação.
+ */
+export function mensagemDoComprovante(pedido: {
+  titulo: string;
+  nome: string;
+  quantidade: number;
+  totalFormatado: string;
+  observacao: string | null;
+}): string {
+  return [
+    `Olá! Segue o comprovante do Pix do meu pedido de ${pedido.titulo}.`,
+    `Nome: ${pedido.nome}`,
+    `Quantidade: ${pedido.quantidade}`,
+    `Total: ${pedido.totalFormatado}`,
+    ...(pedido.observacao ? [`Observação: ${pedido.observacao}`] : []),
+  ].join("\n");
+}

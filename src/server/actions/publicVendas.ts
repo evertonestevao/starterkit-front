@@ -27,7 +27,10 @@ export interface PedidoVendaState {
     pixTitular: string;
     pixCopiaECola: string;
     pixQrDataUrl: string;
+    whatsappComprovante: string | null;
   };
+  /** O que foi pedido, para a mensagem pronta do comprovante. */
+  pedido?: { nome: string; quantidade: number; observacao: string | null };
 }
 
 export async function fazerPedidoVendaAction(
@@ -38,14 +41,17 @@ export async function fazerPedidoVendaAction(
     const vendaId = texto(fd, "vendaId");
     if ((await protegerEnvioPublico("venda", vendaId, fd)).robo) return { error: RECUSA };
     const quantidade = Number(texto(fd, "quantidade"));
+    const pedido = {
+      nome: texto(fd, "nome").trim(),
+      quantidade: Number.isInteger(quantidade) ? quantidade : 0,
+      observacao: texto(fd, "observacao").trim() || null,
+    };
     const resultado = await (await getVendasPublicasService()).pedir({
       vendaId,
-      nome: texto(fd, "nome"),
       telefone: texto(fd, "telefone"),
-      quantidade: Number.isInteger(quantidade) ? quantidade : 0,
-      observacao: texto(fd, "observacao") || null,
+      ...pedido,
     });
-    return { success: resultado };
+    return { success: resultado, pedido };
   } catch (err) {
     return toActionError(err) as PedidoVendaState;
   }
