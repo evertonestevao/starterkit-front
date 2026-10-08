@@ -167,7 +167,7 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
 
         <ChurchNameFields igreja={igreja} />
 
-        <CampoEnderecoDaIgreja inicial={igreja.address ?? ""} />
+        <CampoEnderecoDaIgreja endereco={igreja.endereco} enderecoAntigo={igreja.address} />
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="sobre">Sobre a igreja (opcional)</Label>

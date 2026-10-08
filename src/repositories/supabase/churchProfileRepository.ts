@@ -48,7 +48,7 @@ export function createSupabaseChurchProfileRepository(
       const { data, error } = await client
         .from("churches")
         .select(
-          "id, name, nome_proprio, sobrenome, herdar_nome, codigo, public_code, tipo, address, sobre, pagina_ativa, logo_url, social_links, parent_id, template_mode, template_id, accent_color",
+          "id, name, nome_proprio, sobrenome, herdar_nome, codigo, public_code, tipo, address, cep, logradouro, numero, complemento, bairro, cidade, uf, sobre, pagina_ativa, logo_url, social_links, parent_id, template_mode, template_id, accent_color",
         )
         .eq("company_id", companyId)
         .is("deleted_at", null)
@@ -66,6 +66,13 @@ export function createSupabaseChurchProfileRepository(
         public_code: string;
         tipo: string;
         address: string | null;
+        cep: string | null;
+        logradouro: string | null;
+        numero: string | null;
+        complemento: string | null;
+        bairro: string | null;
+        cidade: string | null;
+        uf: string | null;
         sobre: string | null;
         pagina_ativa: boolean;
         logo_url: string | null;
@@ -100,6 +107,15 @@ export function createSupabaseChurchProfileRepository(
           chavePublica: row.public_code,
           ehSedeDeRede: row.tipo === "sede" && row.parent_id === null,
           address: row.address,
+          endereco: {
+            cep: row.cep,
+            logradouro: row.logradouro,
+            numero: row.numero,
+            complemento: row.complemento,
+            bairro: row.bairro,
+            cidade: row.cidade,
+            uf: row.uf,
+          },
           sobre: row.sobre,
           paginaAtiva: row.pagina_ativa,
           logoUrl: row.logo_url,
@@ -122,6 +138,7 @@ export function createSupabaseChurchProfileRepository(
       sobrenome,
       herdarNome,
       address,
+      endereco,
       sobre,
       publicCode,
       socialLinks,
@@ -134,6 +151,7 @@ export function createSupabaseChurchProfileRepository(
           sobrenome,
           herdar_nome: herdarNome,
           address,
+          ...endereco,
           sobre,
           // Gravado em `public_code`: o gatilho entende como troca de código e
           // refaz a chave (migration 20261006150000).
