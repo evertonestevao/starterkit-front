@@ -1,4 +1,9 @@
+import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { features } from "@/config/features";
+import { RegistraServiceWorker } from "@/components/pwa/instalar-app";
+import { CABECALHO_DOMINIO_DA_IGREJA } from "@/lib/churchPaths";
+import { COR_PADRAO_DO_APP, inicioDoAppDaIgreja, nomeCurtoDoApp } from "@/lib/appDaIgreja";
 import { notFound, permanentRedirect } from "next/navigation";
 import { ChurchPageRenderer } from "@/features/church/church-page-templates";
 import { VISIT_ORIGIN_PARAM } from "@/lib/churchVisits";
@@ -9,6 +14,43 @@ import { enderecoAtualDoCodigoAntigo, getPublicChurchRepository, loadPublicChurc
 
 /** Quantos eventos a página inicial mostra antes do "ver todos os eventos". */
 const EVENTOS_NA_PREVIA = 3;
+
+type ParamsDaIgreja = { params: Promise<{ public_code: string }> };
+
+/** O pedido chegou pelo domínio próprio da igreja? (o proxy marca quando reescreve o endereço dela) */
+async function noDominioProprio(): Promise<boolean> {
+  return (await headers()).get(CABECALHO_DOMINIO_DA_IGREJA) === "1";
+}
+
+/**
+ * Além do título, a página da igreja vira um app instalável PRÓPRIO (nome,
+ * logo e cor dela), separado do painel. O manifesto diz onde o app abre no
+ * endereço que a pessoa está usando.
+ */
+export async function generateMetadata({ params }: ParamsDaIgreja): Promise<Metadata> {
+  const { public_code } = await params;
+  const carregado = await loadPublicChurch(public_code).catch(() => null);
+  if (!carregado) return {};
+  const { church, previa } = carregado;
+  const titulo = church.sobrenome ? `${church.name} - ${church.sobrenome}` : church.name;
+  if (previa) return { title: titulo };
+
+  const codigo = encodeURIComponent(church.public_code);
+  const inicio = inicioDoAppDaIgreja(church.public_code, await noDominioProprio());
+  return {
+    title: titulo,
+    manifest: `/api/igreja-app/manifest?c=${codigo}&inicio=${encodeURIComponent(inicio)}`,
+    appleWebApp: { capable: true, title: nomeCurtoDoApp(church.name), statusBarStyle: "default" },
+    icons: { apple: `/api/igreja-app/icone?c=${codigo}&t=180` },
+  };
+}
+
+export async function generateViewport({ params }: ParamsDaIgreja): Promise<Viewport> {
+  const { public_code } = await params;
+  const carregado = await loadPublicChurch(public_code).catch(() => null);
+  const cor = carregado?.accent;
+  return { themeColor: cor && /^#[0-9a-f]{6}$/i.test(cor) ? cor : COR_PADRAO_DO_APP };
+}
 
 export default async function PublicChurchPage({
   params,
@@ -104,20 +146,23 @@ export default async function PublicChurchPage({
   }
 
   return (
-    <ChurchPageRenderer
-      church={church}
-      sponsors={sponsors}
-      eventos={eventos}
-      campanhas={campanhas}
-      programacao={programacao}
-      pixCopiaECola={pixCopiaECola}
-      pixQrDataUrl={pixQrDataUrl}
-      linkCartao={linkCartao}
-      linkPix={linkPix}
-      temRede={temRede}
-      previa={previa}
-      templateSlug={theme}
-      accent={accent}
-    />
+    <>
+      {previa ? null : <RegistraServiceWorker />}
+      <ChurchPageRenderer
+        church={church}
+        sponsors={sponsors}
+        eventos={eventos}
+        campanhas={campanhas}
+        programacao={programacao}
+        pixCopiaECola={pixCopiaECola}
+        pixQrDataUrl={pixQrDataUrl}
+        linkCartao={linkCartao}
+        linkPix={linkPix}
+        temRede={temRede}
+        previa={previa}
+        templateSlug={theme}
+        accent={accent}
+      />
+    </>
   );
 }

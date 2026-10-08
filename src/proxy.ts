@@ -1,4 +1,5 @@
 import {
+  CABECALHO_DOMINIO_DA_IGREJA,
   SEPARADOR_REDE,
   enderecoPublicoDaRotaInterna,
   resolverNoDominioDaRede,
@@ -8,10 +9,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientEnv } from "@/config/env";
 import { createRestChurchDomainLookup } from "@/repositories/rest/churchDomainLookupRepository";
-import {
-  createHostTenantService,
-  type HostTenantService,
-} from "@/services/hostTenantService";
+import { createHostTenantService, type HostTenantService } from "@/services/hostTenantService";
 
 /**
  * Proxy (o "middleware" do Next 16). Duas responsabilidades, nesta ordem:
@@ -27,14 +25,7 @@ import {
  */
 
 /** Rotas que exigem usuário logado. */
-const PROTECTED_PREFIXES = [
-  "/dashboard",
-  "/vinculo",
-  "/onboarding",
-  "/invites",
-  "/reset-password",
-  "/accept-terms",
-];
+const PROTECTED_PREFIXES = ["/dashboard", "/vinculo", "/onboarding", "/invites", "/reset-password", "/accept-terms"];
 /** Rotas de auth que usuário logado não deve rever. */
 const AUTH_ONLY_ANONYMOUS = ["/login", "/signup", "/forgot-password"];
 
@@ -118,13 +109,13 @@ export async function proxy(request: NextRequest) {
         if (destino) {
           const url = request.nextUrl.clone();
           url.pathname = destino.caminho;
-          return NextResponse.rewrite(url);
+          return NextResponse.rewrite(url, { request: { headers: marcaDominioDaIgreja(request) } });
         }
       } else if (pathname === "/") {
         // Domínio de uma igreja que está abaixo de outra: só a página dela.
         const url = request.nextUrl.clone();
         url.pathname = `/igreja/${match.publicCode}`;
-        return NextResponse.rewrite(url);
+        return NextResponse.rewrite(url, { request: { headers: marcaDominioDaIgreja(request) } });
       }
     }
 
@@ -151,26 +142,22 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const env = getClientEnv();
-  const supabase = createServerClient(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          for (const { name, value } of cookiesToSet) {
-            request.cookies.set(name, value);
-          }
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
-          }
-        },
+  const supabase = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        for (const { name, value } of cookiesToSet) {
+          request.cookies.set(name, value);
+        }
+        response = NextResponse.next({ request });
+        for (const { name, value, options } of cookiesToSet) {
+          response.cookies.set(name, value, options);
+        }
       },
     },
-  );
+  });
 
   // getClaims valida o JWT localmente (rápido) e renova a sessão se preciso.
   const { data } = await supabase.auth.getClaims();
@@ -217,6 +204,18 @@ export async function proxy(request: NextRequest) {
 }
 
 /** Rotas de aplicação (autenticadas ou de auth), que só existem no host padrão. */
+/**
+ * Avisa a página que ela está sendo servida no domínio PRÓPRIO de uma igreja
+ * (o endereço que a pessoa vê não é a rota interna). A página usa isso só para
+ * saber onde o app instalado da igreja deve abrir. Quem forjar o cabeçalho no
+ * endereço da plataforma só muda o próprio app — não há o que explorar.
+ */
+function marcaDominioDaIgreja(request: NextRequest): Headers {
+  const h = new Headers(request.headers);
+  h.set(CABECALHO_DOMINIO_DA_IGREJA, "1");
+  return h;
+}
+
 function isAppPath(pathname: string): boolean {
   return [...PROTECTED_PREFIXES, ...AUTH_ONLY_ANONYMOUS, "/auth", "/admin", SPONSOR_PREFIX].some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -227,6 +226,6 @@ export const config = {
   // Tudo, exceto estáticos, o webhook de pagamento (autenticado por assinatura)
   // e o cron de domínios (autenticado por CRON_SECRET).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|offline.html|api/igreja-app|api/webhooks|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

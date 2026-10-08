@@ -17,6 +17,9 @@
 
 export const SEPARADOR_REDE = "~";
 
+/** Cabeçalho que o proxy põe quando a página é servida no domínio próprio da igreja. */
+export const CABECALHO_DOMINIO_DA_IGREJA = "x-dominio-da-igreja";
+
 /** Subpáginas de /igreja/{codigo}/... — por isso não podem ser código de igreja. */
 export const SUBPAGINAS_DA_IGREJA = ["eventos", "campanhas", "igrejas"];
 
