@@ -146,7 +146,7 @@ export default async function TesourariaRelatorioPage({ searchParams }: { search
                   </thead>
                   <tbody className="divide-y">
                     {dizimistas.map((d) => (
-                      <tr key={d.nome}>
+                      <tr key={d.chave}>
                         <td className={celula}>{d.nome}</td>
                         <td className={numero}>{d.quantidade}</td>
                         <td className={cn(numero, "font-medium")}>{formatarValor(d.total)}</td>

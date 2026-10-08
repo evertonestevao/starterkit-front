@@ -150,6 +150,8 @@ export function agruparPorCulto(lista: Lancamento[]): LinhaPorCulto[] {
 }
 
 export interface LinhaDizimista {
+  /** Identifica a linha (o vínculo do membro, ou o nome): dois nomes iguais podem ser pessoas diferentes. */
+  chave: string;
   nome: string;
   quantidade: number;
   total: number;
@@ -166,8 +168,8 @@ export function agruparPorDizimista(lista: Lancamento[]): LinhaDizimista[] {
   for (const l of lista) {
     if (l.tipo !== "dizimo") continue;
     const chave = l.membroId ?? (l.nome ? `nome:${normalizeSearch(l.nome)}` : SEM_NOME);
-    const atual = grupos.get(chave) ?? { nome: l.nome ?? "Sem nome", quantidade: 0, total: 0 };
-    grupos.set(chave, { nome: atual.nome, quantidade: atual.quantidade + 1, total: atual.total + l.valorCentavos });
+    const atual = grupos.get(chave) ?? { chave, nome: l.nome ?? "Sem nome", quantidade: 0, total: 0 };
+    grupos.set(chave, { ...atual, quantidade: atual.quantidade + 1, total: atual.total + l.valorCentavos });
   }
   return [...grupos.entries()]
     .sort(([ca, a], [cb, b]) => (ca === SEM_NOME ? 1 : cb === SEM_NOME ? -1 : a.nome.localeCompare(b.nome, "pt-BR")))
