@@ -5,16 +5,16 @@
 -- Rodar com:  node scripts/seed-acompanhamento.mjs
 --
 -- Monta uma rede separada, com slugs demo-*:
---   Demo Sede (40 membros)                       pastor.demo.sede@dev.local
---   ├── Demo Subsede Norte (6)                   pastor.demo.norte@dev.local
---   │   ├── Demo Congregação Vila Nova (6)       pastor.demo.vilanova@dev.local
---   │   └── Demo Congregação Aurora (6)          pastor.demo.aurora@dev.local
---   └── Demo Subsede Sul (6)                     pastor.demo.sul@dev.local
---       └── Demo Congregação Centro (6)          pastor.demo.centro@dev.local
+--   Demonstração Sede (40 membros)                       pastor.demo.sede@dev.local
+--   ├── Demonstração Subsede Norte (6)                   pastor.demo.norte@dev.local
+--   │   ├── Demonstração Congregação Vila Nova (6)       pastor.demo.vilanova@dev.local
+--   │   └── Demonstração Congregação Aurora (6)          pastor.demo.aurora@dev.local
+--   └── Demonstração Subsede Sul (6)                     pastor.demo.sul@dev.local
+--       └── Demonstração Congregação Centro (6)          pastor.demo.centro@dev.local
 -- + secretario.demo@dev.local: member da sede com o cargo Secretário(a).
 --
 -- 8 semanas de cultos (domingo + quarta de oração) com os casos que o módulo
--- precisa mostrar, todos na Demo Sede:
+-- precisa mostrar, todos na Demonstração Sede:
 --   Antônio, Bruna, Carlos      faltas seguidas            -> Em alerta
 --   Daniela                     falta, falta, justif., falta -> alerta com 3
 --   Eduardo                     viagem nas 3 últimas semanas -> justificado, sem alerta
@@ -26,12 +26,12 @@
 --
 -- Cargos (catálogo com herança):
 --   padrão da plataforma: Pastor, Diácono, Presbítero, Tesoureiro(a)...
---   Demo Sede cria "Coordenador de células"   -> todas as igrejas abaixo usam
---   Demo Subsede Norte cria "Líder de casais" -> Vila Nova e Aurora usam
---   Demo Congregação Vila Nova cria "Zelador(a)" -> só ela
+--   Demonstração Sede cria "Coordenador de células"   -> todas as igrejas abaixo usam
+--   Demonstração Subsede Norte cria "Líder de casais" -> Vila Nova e Aurora usam
+--   Demonstração Congregação Vila Nova cria "Zelador(a)" -> só ela
 --   Vários membros da sede com cargos (alguns com dois).
 --
--- EBD (Demo Sede): 4 classes, 6 domingos de aula, crianças "não membro" e
+-- EBD (Demonstração Sede): 4 classes, 6 domingos de aula, crianças "não membro" e
 -- uma professora com login: professora.demo@dev.local (só vê os Juniores).
 -- secretaria.ebd.demo@dev.local: member da sede com o cargo Secretário(a) da EBD.
 
@@ -252,9 +252,9 @@ declare
   v_estado_dom text;
   v_estado_qua text;
 begin
-  v_sede := public.__demo_church('demo-sede', 'Demo Sede', 'sede', null, 'pastor.demo.sede@dev.local', 'Pr. Demo Sede');
-  v_norte := public.__demo_church('demo-norte', 'Demo Subsede Norte', 'subsede', v_sede, 'pastor.demo.norte@dev.local', 'Pr. Demo Norte');
-  v_sul := public.__demo_church('demo-sul', 'Demo Subsede Sul', 'subsede', v_sede, 'pastor.demo.sul@dev.local', 'Pr. Demo Sul');
+  v_sede := public.__demo_church('demo-sede', 'Demonstração Sede', 'sede', null, 'pastor.demo.sede@dev.local', 'Pr. Demonstração Sede');
+  v_norte := public.__demo_church('demo-norte', 'Demonstração Subsede Norte', 'subsede', v_sede, 'pastor.demo.norte@dev.local', 'Pr. Demonstração Norte');
+  v_sul := public.__demo_church('demo-sul', 'Demonstração Subsede Sul', 'subsede', v_sede, 'pastor.demo.sul@dev.local', 'Pr. Demonstração Sul');
 
   -- Cargos criados pelas igrejas (os padrões vêm da plataforma).
   insert into public.cargos (church_id, nome, descricao, ordem) values
@@ -262,14 +262,14 @@ begin
     (v_norte, 'Líder de casais', 'Ministério de casais da Subsede Norte.', 21);
 
   -- Secretário: member da sede; o acesso vem do cargo Secretário(a).
-  v_secretario := public.__demo_user('secretario.demo@dev.local', 'Secretário Demo');
+  v_secretario := public.__demo_user('secretario.demo@dev.local', 'Secretário Demonstração');
   insert into public.company_members (company_id, user_id, role)
   select company_id, v_secretario, 'member' from public.churches where id = v_sede;
   insert into public.rol_membro_cargos (membro_id, cargo_id, church_id)
   select m.id, (select id from public.cargos where slug = 'secretario'), v_sede
   from public.rol_membros m where m.church_id = v_sede and m.user_id = v_secretario;
 
-  -- ---------------------------- Demo Sede ----------------------------------
+  -- ---------------------------- Demonstração Sede ----------------------------------
   select * into v_cultos from public.__demo_cultos(v_sede);
 
   for i in 1 .. 40 loop
@@ -369,8 +369,8 @@ begin
   perform public.__demo_rol_pequeno(v_norte, 'Norte', 6, v_dom);
   perform public.__demo_rol_pequeno(v_sul, 'Sul', 6, v_dom);
 
-  v_church := public.__demo_church('demo-norte-vilanova', 'Demo Congregação Vila Nova', 'congregacao', v_norte,
-    'pastor.demo.vilanova@dev.local', 'Pr. Demo Vila Nova');
+  v_church := public.__demo_church('demo-norte-vilanova', 'Demonstração Congregação Vila Nova', 'congregacao', v_norte,
+    'pastor.demo.vilanova@dev.local', 'Pr. Demonstração Vila Nova');
   insert into public.cargos (church_id, nome, ordem) values (v_church, 'Zelador(a)', 30);
   perform public.__demo_rol_pequeno(v_church, 'Vila Nova', 6, v_dom);
   perform public.__demo_cargo(
@@ -378,21 +378,21 @@ begin
   perform public.__demo_cargo(
     (select id from public.rol_membros where church_id = v_church and nome like 'Diego%'), 'Líder de casais');
 
-  v_church := public.__demo_church('demo-norte-aurora', 'Demo Congregação Aurora', 'congregacao', v_norte,
-    'pastor.demo.aurora@dev.local', 'Pr. Demo Aurora');
+  v_church := public.__demo_church('demo-norte-aurora', 'Demonstração Congregação Aurora', 'congregacao', v_norte,
+    'pastor.demo.aurora@dev.local', 'Pr. Demonstração Aurora');
   perform public.__demo_rol_pequeno(v_church, 'Aurora', 6, v_dom);
 
-  v_church := public.__demo_church('demo-sul-centro', 'Demo Congregação Centro', 'congregacao', v_sul,
-    'pastor.demo.centro@dev.local', 'Pr. Demo Centro');
+  v_church := public.__demo_church('demo-sul-centro', 'Demonstração Congregação Centro', 'congregacao', v_sul,
+    'pastor.demo.centro@dev.local', 'Pr. Demonstração Centro');
   perform public.__demo_rol_pequeno(v_church, 'Centro', 6, v_dom);
 end $$;
 
 -- ---------------------------------------------------------------------------
--- EBD da Demo Sede
+-- EBD da Demonstração Sede
 -- ---------------------------------------------------------------------------
 --   Adultos (prof. Nelson Prado, sem login)     10 membros
 --   Jovens (prof. Tiago Azevedo, sem login)      5 membros
---   Juniores 9-11 (prof. Professora Demo, COM login: professora.demo@dev.local)
+--   Juniores 9-11 (prof. Professora Demonstração, COM login: professora.demo@dev.local)
 --                                                6 crianças "não membro" + 1 membro
 --   Primários 6-8 (prof. Clara Vieira)           5 crianças "não membro"
 -- 6 domingos de aula; os Primários ficam sem chamada no último (aparece
@@ -414,7 +414,7 @@ begin
 
   -- Secretaria da EBD com login (member): o acesso vem do cargo.
   insert into public.company_members (company_id, user_id, role)
-  select company_id, public.__demo_user('secretaria.ebd.demo@dev.local', 'Secretária EBD Demo'), 'member'
+  select company_id, public.__demo_user('secretaria.ebd.demo@dev.local', 'Secretária EBD Demonstração'), 'member'
   from public.churches where id = v_sede;
   perform public.__demo_cargo(
     (select m.id from public.rol_membros m join auth.users u on u.id = m.user_id
@@ -422,7 +422,7 @@ begin
     'secretario_ebd');
 
   -- Professora com login (member): o trigger já cria o membro dela.
-  v_prof := public.__demo_user('professora.demo@dev.local', 'Professora Demo');
+  v_prof := public.__demo_user('professora.demo@dev.local', 'Professora Demonstração');
   insert into public.company_members (company_id, user_id, role)
   select company_id, v_prof, 'member' from public.churches where id = v_sede;
   perform public.__demo_cargo((select id from public.rol_membros where user_id = v_prof and church_id = v_sede), 'professor_ebd');
@@ -575,7 +575,7 @@ begin
   from public.ebd_aulas a where a.classe_id = k_juniores and a.data = v_dom;
 end $$;
 
--- EBD da Demo Subsede Norte (para a sede ver números da rede) e títulos da
+-- EBD da Demonstração Subsede Norte (para a sede ver números da rede) e títulos da
 -- revista dos Juniores em algumas lições.
 do $$
 declare
@@ -617,7 +617,7 @@ begin
   where l.numero in (12, 13);
 end $$;
 
--- Pedidos de visita da Demo Sede: pendentes e já visitados, em datas variadas.
+-- Pedidos de visita da Demonstração Sede: pendentes e já visitados, em datas variadas.
 do $$
 declare v_sede uuid;
 begin
@@ -629,14 +629,14 @@ begin
     (v_sede, 'Família Albuquerque', '(11) 99876-1203', 'Av. Brasil, 845, ap. 32', null, now() - interval '6 days', null, null, null),
     (v_sede, 'Sr. Antônio Pires', '(11) 96543-2104', 'Rua São Bento, 77', 'Tenho 82 anos e não consigo mais ir aos cultos.', now() - interval '12 days', null, null, null),
     (v_sede, 'Juliana Costa', '(11) 95432-1005', 'Centro', 'Quero conhecer a fé, mas tenho vergonha de ir sozinha.', now() - interval '20 days', null, null, null),
-    (v_sede, 'Rogério e Paula Menezes', '(11) 98765-0906', 'Vila Esperança', 'Passamos por uma fase difícil no casamento.', now() - interval '9 days', current_date - 5, 'Pr. Demo Sede e irmã Marta', 'Oramos juntos; voltaram ao culto de domingo.'),
+    (v_sede, 'Rogério e Paula Menezes', '(11) 98765-0906', 'Vila Esperança', 'Passamos por uma fase difícil no casamento.', now() - interval '9 days', current_date - 5, 'Pr. Demonstração Sede e irmã Marta', 'Oramos juntos; voltaram ao culto de domingo.'),
     (v_sede, 'Helena Duarte', '(11) 97777-2107', 'Rua do Comércio, 400', 'Minha mãe está internada.', now() - interval '18 days', current_date - 15, 'Pb. Carlos', 'Visita no hospital, família muito grata.'),
-    (v_sede, 'Seu Joaquim Lima', '(11) 96666-3308', 'Sítio Boa Vista', null, now() - interval '35 days', current_date - 30, 'Pr. Demo Sede', null),
+    (v_sede, 'Seu Joaquim Lima', '(11) 96666-3308', 'Sítio Boa Vista', null, now() - interval '35 days', current_date - 30, 'Pr. Demonstração Sede', null),
     (v_sede, 'Bianca Freitas', '(11) 95555-4409', 'Parque das Flores', 'Gostaria de batizar meus filhos.', now() - interval '50 days', current_date - 44, 'Diác. Roberto', 'Encaminhada para a classe de novos convertidos.'),
     (v_sede, 'Tereza Nogueira', '(11) 94444-5510', 'Vila Nova', 'Meu marido está desempregado e desanimado.', now() - interval '75 days', null, null, null);
 end $$;
 
--- Etapas dos pedidos de visita da Demo Sede: contato feito e quem visitou.
+-- Etapas dos pedidos de visita da Demonstração Sede: contato feito e quem visitou.
 do $$
 declare v_sede uuid; v_pastor uuid; v_outro uuid;
 begin
@@ -671,7 +671,7 @@ begin
   where church_id = v_sede and name = 'Juliana Costa' and visitado_em is null;
 end $$;
 
--- Pedidos de oração da Demo Sede: alguns aguardando, outros já orados.
+-- Pedidos de oração da Demonstração Sede: alguns aguardando, outros já orados.
 do $$
 declare v_sede uuid;
 begin
@@ -687,7 +687,7 @@ begin
     (v_sede, 'Jovem da igreja', 'Pelas provas do vestibular.', now() - interval '30 days', now() - interval '28 days', null);
 end $$;
 
--- Datas comemorativas da Demo Sede, relativas ao dia em que o seed roda: um
+-- Datas comemorativas da Demonstração Sede, relativas ao dia em que o seed roda: um
 -- aniversário, um batismo e um casamento HOJE, e outros nos próximos dias —
 -- para o cartão "Próximos aniversariantes" do Painel e a tela do mês terem os
 -- três tipos. Pode rodar de novo: só regrava as mesmas datas.
@@ -726,7 +726,7 @@ end $$;
 
 -- Página da sede na demo: um texto de apresentação ("Sobre a igreja").
 update public.churches
-   set sobre = E'Somos uma igreja de portas abertas há mais de 40 anos, com cultos, Escola Bíblica e trabalho social na cidade.\n\nA Demo Sede coordena as igrejas da nossa rede na região. Venha nos visitar!'
+   set sobre = E'Somos uma igreja de portas abertas há mais de 40 anos, com cultos, Escola Bíblica e trabalho social na cidade.\n\nA Demonstração Sede coordena as igrejas da nossa rede na região. Venha nos visitar!'
  where slug = 'demo-sede' and sobre is null;
 
 -- A demo já nasce publicada: igreja nova fica com a página fora do ar e o Pix

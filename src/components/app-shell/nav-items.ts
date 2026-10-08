@@ -10,10 +10,11 @@ import {
   HeartHandshake,
   Landmark,
   LayoutDashboard,
+  type LucideIcon,
+  Network,
   ScrollText,
   Settings,
   Wallet,
-  type LucideIcon,
 } from "lucide-react";
 import { MENUS, ROTA_MINHA_CONTA, type MenuDef } from "@/lib/menuPermissoes";
 
@@ -29,6 +30,7 @@ export interface NavItem extends MenuDef {
 
 const ICONES: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
+  rede: Network,
   acompanhamento: ClipboardCheck,
   membros: Contact,
   ebd: BookOpen,
