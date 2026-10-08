@@ -21,16 +21,16 @@ test("editar o nome da igreja atualiza o valor e mantém o campo editável", asy
     company: "Igreja Perfil E2E",
   });
 
-  await page.goto("/dashboard/settings/igreja");
+  await page.goto("/dashboard/settings");
   const novoNome = `Igreja Perfil Renomeada ${Date.now()}`;
   await page.locator("#name").fill(novoNome);
-  await page.getByRole("button", { name: "Salvar página" }).click();
+  await page.getByRole("button", { name: "Salvar dados" }).click();
 
-  await expect(page.getByText("Página da igreja atualizada.")).toBeVisible();
+  await expect(page.getByText("Dados da igreja atualizados.")).toBeVisible();
   await expect(page.locator("#name")).toHaveValue(novoNome);
 
   // Digitar de novo funciona normalmente — prova que o campo continua sendo
   // o mesmo input usável, não travado por causa do remonte.
-  await page.locator("#address").fill("Rua Nova, 100");
-  await expect(page.locator("#address")).toHaveValue("Rua Nova, 100");
+  await page.locator("#logradouro").fill("Rua Nova");
+  await expect(page.locator("#logradouro")).toHaveValue("Rua Nova");
 });

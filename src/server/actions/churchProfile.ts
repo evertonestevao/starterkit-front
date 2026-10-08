@@ -9,9 +9,10 @@ import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant } from "@/server/tenant";
 import { toActionError, type ActionState } from "./action-state";
 
-/** Server actions da página da igreja (nome, endereço, redes, logo, endereço público). */
+/** Server actions dos dados da igreja e da página pública (texto, redes, logo, endereço da página). */
 
 const PAGINA = "/dashboard/settings/igreja";
+const GERAL = "/dashboard/settings";
 
 function texto(formData: FormData, campo: string): string {
   const valor = formData.get(campo);
@@ -28,14 +29,15 @@ async function ator() {
   return { companyId: active.id, role: active.role, userId: data.user.id };
 }
 
-export async function saveChurchProfileAction(
+/** Nome, sobrenome e endereço (Configurações → Geral). */
+export async function saveChurchDadosAction(
   _prev: ActionState | undefined,
   formData: FormData,
 ): Promise<ActionState> {
   try {
     const actor = await ator();
     const service = await getChurchProfileService();
-    await service.save(actor, {
+    await service.saveDados(actor, {
       churchId: texto(formData, "churchId"),
       name: texto(formData, "name"),
       sobrenome: texto(formData, "sobrenome"),
@@ -48,6 +50,28 @@ export async function saveChurchProfileAction(
       bairro: texto(formData, "bairro"),
       cidade: texto(formData, "cidade"),
       uf: texto(formData, "uf"),
+    });
+
+    revalidatePath(GERAL);
+    revalidatePath(PAGINA);
+    // Nome e endereço aparecem na página pública e no menu do painel.
+    revalidatePath("/igreja/[public_code]", "layout");
+    revalidatePath("/dashboard", "layout");
+    return { success: "Dados da igreja atualizados." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export async function saveChurchProfileAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const actor = await ator();
+    const service = await getChurchProfileService();
+    await service.savePagina(actor, {
+      churchId: texto(formData, "churchId"),
       sobre: texto(formData, "sobre"),
       publicCode: texto(formData, "publicCode"),
       instagram: texto(formData, "instagram"),

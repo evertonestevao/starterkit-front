@@ -23,7 +23,7 @@ export function CompanyNameForm() {
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="companyId" value={active.id} />
       <div className="flex flex-col gap-2">
-        <Label htmlFor="company-name">Nome da igreja</Label>
+        <Label htmlFor="company-name">Nome no menu</Label>
         <Input id="company-name" name="name" defaultValue={active.name} minLength={2} required />
       </div>
       <Button type="submit" disabled={pending} className="w-fit">
