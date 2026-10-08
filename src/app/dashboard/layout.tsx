@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import type { Metadata, Viewport } from "next";
 import { AppShell, SIDEBAR_COOKIE } from "@/components/app-shell/app-shell";
 import { AvisoInstalarApp, RegistraServiceWorker } from "@/components/pwa/instalar-app";
-import { brand } from "@/config/brand";
+import { METADADOS_DO_APP, VIEWPORT_DO_APP } from "@/config/appDoPainel";
 import { AvisoMensalidade, PainelSuspenso } from "@/features/church/components/aviso-mensalidade";
 import { hojeISO } from "@/lib/acompanhamento";
 import { montarAviso, montarBloqueio, pendenciaPrincipal } from "@/lib/mensalidadeAviso";
@@ -32,15 +32,8 @@ import { getSaudacaoDaEmpresa } from "@/server/saudacao";
  * ficam só aqui, e não na página pública das igrejas — quem visita a página
  * de uma igreja não deve ver "instalar AssembleiaApp".
  */
-export const metadata: Metadata = {
-  manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: brand.name, statusBarStyle: "default" },
-  icons: { apple: "/icons/apple-touch-icon.png" },
-};
-
-export const viewport: Viewport = {
-  themeColor: "#41694b",
-};
+export const metadata: Metadata = METADADOS_DO_APP;
+export const viewport: Viewport = VIEWPORT_DO_APP;
 
 /**
  * Layout autenticado: gate de termos vigentes (LGPD) + empresa ativa,

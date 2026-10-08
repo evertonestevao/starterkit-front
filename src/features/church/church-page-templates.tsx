@@ -1,3 +1,4 @@
+import { BotaoAppDaIgreja } from "@/components/pwa/botao-app-da-igreja";
 import type { ReactNode } from "react";
 import {
   ArrowRight,
@@ -20,19 +21,8 @@ import { PrayerForm, VisitorForm } from "@/features/church/components/public-act
 import { CopyPix } from "@/features/church/components/copy-pix";
 import { fonteTitulos as titulos, PublicShell } from "@/features/church/components/public-shell";
 import { SocialIcon } from "@/features/church/components/social-icon";
-import {
-  formatHora,
-  groupWeekly,
-  specialBadge,
-  specialWhen,
-  upcomingSpecials,
-} from "@/lib/churchSchedule";
-import {
-  churchInitials,
-  directionsUrl,
-  normalizeSocialLinks,
-  orderServiceTimes,
-} from "@/lib/churchPublicPage";
+import { formatHora, groupWeekly, specialBadge, specialWhen, upcomingSpecials } from "@/lib/churchSchedule";
+import { churchInitials, directionsUrl, normalizeSocialLinks, orderServiceTimes } from "@/lib/churchPublicPage";
 import { sponsorLinkHref } from "@/lib/sponsorLink";
 import { sponsorshipPath } from "@/lib/sponsorPaths";
 // PublicChurch, e não Church: esta página renderiza só o que o `anon` pode
@@ -55,7 +45,6 @@ import type { PublicSponsor as Sponsor } from "@/types/sponsorship";
  * links sociais para "#" e botões de "Dízimos" e "Quero ser membro" que não
  * levavam a lugar nenhum — o visitante não tem como saber que é enfeite.
  */
-
 
 export type ChurchPageTemplateProps = {
   church: ChurchRecord;
@@ -120,9 +109,7 @@ function TituloSecao({
           {antes} <span className="text-[var(--pg-accent)]">{destaque}</span>
         </span>
       </h2>
-      {subtitulo ? (
-        <p className="mt-2 text-base leading-7 text-[var(--pg-muted)]">{subtitulo}</p>
-      ) : null}
+      {subtitulo ? <p className="mt-2 text-base leading-7 text-[var(--pg-muted)]">{subtitulo}</p> : null}
     </div>
   );
 }
@@ -130,10 +117,7 @@ function TituloSecao({
 /** Faixa de seção de ponta a ponta, conteúdo na coluna estreita. */
 function Faixa({ id, alternada, children }: { id: string; alternada: boolean; children: ReactNode }) {
   return (
-    <section
-      id={id}
-      className={`scroll-mt-4 ${alternada ? "bg-[var(--pg-band)]" : "bg-[var(--pg-bg)]"}`}
-    >
+    <section id={id} className={`scroll-mt-4 ${alternada ? "bg-[var(--pg-band)]" : "bg-[var(--pg-bg)]"}`}>
       <div className="mx-auto w-full max-w-xl px-5 py-12">{children}</div>
     </section>
   );
@@ -214,8 +198,7 @@ export function ChurchPageRenderer({
   const especiais = upcomingSpecials(programacao).slice(0, 4);
   // Igreja que ainda não usa a Programação cai no campo antigo (texto livre).
   const usaLegado = semana.length === 0 && especiais.length === 0;
-  const temCultos =
-    semana.length > 0 || especiais.length > 0 || horarios.length > 0 || Boolean(church.address);
+  const temCultos = semana.length > 0 || especiais.length > 0 || horarios.length > 0 || Boolean(church.address);
 
   // Só um Pix por vez: chave própria OU o da subconta Asaas, nunca os dois —
   // duas opções de Pix juntas confundiriam quem doa.
@@ -246,9 +229,7 @@ export function ChurchPageRenderer({
     ...(temRede
       ? [{ rotulo: "Nossas igrejas", icone: Church, href: `${caminhoDaIgreja(church.public_code)}/igrejas` }]
       : []),
-    ...(whatsapp
-      ? [{ rotulo: "WhatsApp", icone: "whatsapp" as const, href: whatsapp.href, externo: true }]
-      : []),
+    ...(whatsapp ? [{ rotulo: "WhatsApp", icone: "whatsapp" as const, href: whatsapp.href, externo: true }] : []),
     ...(redes.length > 0 ? [{ rotulo: "Redes sociais", icone: Share2, href: "#redes" }] : []),
   ];
   const atalhos: Atalho[] = destaque ? [destaque, ...pares] : pares;
@@ -284,8 +265,8 @@ export function ChurchPageRenderer({
             {temPixPropria && church.pix_titular ? (
               <p className="mt-4 text-sm leading-6 text-[var(--pg-muted)]">
                 Antes de confirmar, veja se o app do seu banco mostra{" "}
-                <strong className="font-semibold text-[var(--pg-text)]">{church.pix_titular}</strong>{" "}
-                como quem vai receber.
+                <strong className="font-semibold text-[var(--pg-text)]">{church.pix_titular}</strong> como quem vai
+                receber.
               </p>
             ) : null}
             {/* Pix pela Asaas: link próprio, nunca junto com o de cartão. */}
@@ -301,8 +282,8 @@ export function ChurchPageRenderer({
                   Doar com Pix
                 </a>
                 <p className="mt-2 text-xs leading-5 text-[var(--pg-muted)]">
-                  Abre a página segura do Asaas. O provedor cobra uma tarifa sobre o valor (não é
-                  taxa da igreja), descontada antes de cair na conta dela.
+                  Abre a página segura do Asaas. O provedor cobra uma tarifa sobre o valor (não é taxa da igreja),
+                  descontada antes de cair na conta dela.
                 </p>
               </div>
             ) : null}
@@ -320,8 +301,8 @@ export function ChurchPageRenderer({
                   Doar com cartão
                 </a>
                 <p className="mt-2 text-xs leading-5 text-[var(--pg-muted)]">
-                  Abre a página segura do Asaas. O provedor cobra uma tarifa sobre o valor (não é
-                  taxa da igreja), descontada antes de cair na conta dela.
+                  Abre a página segura do Asaas. O provedor cobra uma tarifa sobre o valor (não é taxa da igreja),
+                  descontada antes de cair na conta dela.
                 </p>
               </div>
             ) : null}
@@ -463,9 +444,7 @@ export function ChurchPageRenderer({
 
             {especiais.length > 0 ? (
               <div className={semana.length > 0 ? "mt-5 border-t border-[var(--pg-border)] pt-5" : ""}>
-                <p className="text-xs font-semibold tracking-[0.12em] text-[var(--pg-muted)] uppercase">
-                  Especiais
-                </p>
+                <p className="text-xs font-semibold tracking-[0.12em] text-[var(--pg-muted)] uppercase">Especiais</p>
                 <ul className="mt-2 flex flex-col gap-3">
                   {especiais.map((item) => {
                     const selo = specialBadge(item.data!);
@@ -587,9 +566,7 @@ export function ChurchPageRenderer({
               {church.sobrenome}
             </p>
           ) : null}
-          {church.address ? (
-            <p className="mt-2 text-base text-[var(--pg-hero-muted)]">{church.address}</p>
-          ) : null}
+          {church.address ? <p className="mt-2 text-base text-[var(--pg-hero-muted)]">{church.address}</p> : null}
         </div>
       </header>
 
@@ -664,6 +641,8 @@ export function ChurchPageRenderer({
       ))}
 
       <footer className="bg-[var(--pg-bg)] px-4 pt-2 pb-10 text-center">
+        {previa ? null : <BotaoAppDaIgreja nomeDaIgreja={church.name} />}
+        <br />
         <a href={brand.url} className="text-xs text-[var(--pg-muted)] underline-offset-4 hover:underline">
           Página criada com {brand.name}
         </a>

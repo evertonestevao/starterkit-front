@@ -38,16 +38,19 @@ export function InstrucoesIos({
   aberto,
   aoFechar,
   foraDoSafari,
+  titulo = `Instalar o ${brand.name} no iPhone`,
 }: {
   aberto: boolean;
   aoFechar: () => void;
   foraDoSafari: boolean;
+  /** O da página da igreja diz o nome dela. */
+  titulo?: string;
 }) {
   return (
     <Dialog open={aberto} onOpenChange={(v) => !v && aoFechar()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Instalar o {brand.name} no iPhone</DialogTitle>
+          <DialogTitle>{titulo}</DialogTitle>
           <DialogDescription>
             Fica com um ícone na tela inicial e abre em tela cheia, como um aplicativo.
           </DialogDescription>
@@ -77,7 +80,7 @@ export function InstrucoesIos({
             <li className="flex items-start gap-2">
               <span className="font-semibold">3.</span>
               <span>
-                Toque em <strong>Adicionar</strong>. O ícone do {brand.name} aparece junto dos outros aplicativos.
+                Toque em <strong>Adicionar</strong>. O ícone aparece junto dos outros aplicativos.
               </span>
             </li>
           </ol>
