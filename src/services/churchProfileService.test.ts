@@ -7,6 +7,7 @@ import {
   type ChurchProfileRepository,
   type ProfileActor,
 } from "./churchProfileService";
+import { ENDERECO_VAZIO } from "@/lib/enderecoDaIgreja";
 
 const EMPRESA = "11111111-1111-4111-8111-111111111111";
 const IGREJA = "33333333-3333-4333-8333-333333333333";
@@ -34,6 +35,7 @@ function build(sobrescrever: Partial<ChurchProfile> = {}) {
         sobre: null,
         paginaAtiva: true,
         address: "Rua A, 10",
+        endereco: ENDERECO_VAZIO,
         logoUrl: null,
         socialLinks: {},
         hasParent: false,
@@ -57,7 +59,13 @@ const base = {
   name: "Igreja Betel",
   sobrenome: "",
   herdarNome: false,
-  address: "Rua das Flores, 540 - Centro",
+  cep: "16400-010",
+  logradouro: "Rua das Flores",
+  numero: "540",
+  complemento: "",
+  bairro: "Centro",
+  cidade: "Lins",
+  uf: "sp",
   publicCode: "betel-lins",
   instagram: "",
   whatsapp: "",
@@ -74,6 +82,46 @@ async function erroDe(promise: Promise<unknown>) {
   }
   throw new Error("esperava erro");
 }
+
+describe("endereço", () => {
+  it("grava as partes e monta a linha da página", async () => {
+    const { repo, service } = build();
+    await service.save(ADMIN, base);
+    expect(repo.updateProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: "Rua das Flores, 540 - Centro, Lins/SP, 16400-010",
+        endereco: {
+          cep: "16400010",
+          logradouro: "Rua das Flores",
+          numero: "540",
+          complemento: null,
+          bairro: "Centro",
+          cidade: "Lins",
+          uf: "SP",
+        },
+      }),
+    );
+  });
+
+  it("igreja antiga só com a linha: salvar sem preencher as partes mantém a linha", async () => {
+    const { repo, service } = build();
+    const semEndereco = { cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "" };
+    await service.save(ADMIN, { ...base, ...semEndereco });
+    expect(repo.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ address: "Rua A, 10" }));
+
+    // Quem já tinha partes e apagou tudo fica sem endereço.
+    const comPartes = build({ endereco: { ...ENDERECO_VAZIO, cidade: "Lins" } });
+    await comPartes.service.save(ADMIN, { ...base, ...semEndereco });
+    expect(comPartes.repo.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ address: null }));
+  });
+
+  it("recusa CEP incompleto e UF que não existe", async () => {
+    const { repo, service } = build();
+    expect(isAppError(await erroDe(service.save(ADMIN, { ...base, cep: "1640" })))).toBe(true);
+    expect(isAppError(await erroDe(service.save(ADMIN, { ...base, uf: "São Paulo" })))).toBe(true);
+    expect(repo.updateProfile).not.toHaveBeenCalled();
+  });
+});
 
 describe("publicCodeSchema", () => {
   it("aceita o formato que vira URL", () => {

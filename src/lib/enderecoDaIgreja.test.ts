@@ -1,17 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { enderecoPeloCep } from "./enderecoDaIgreja";
+import { ENDERECO_VAZIO, linhaDoEndereco } from "./enderecoDaIgreja";
 
-describe("enderecoPeloCep", () => {
-  it("monta rua, bairro e cidade e deixa o cursor no lugar do número", () => {
-    const r = enderecoPeloCep({ logradouro: "Rua das Flores", bairro: "Centro", cidade: "Lins", uf: "SP" });
-    expect(r.texto).toBe("Rua das Flores,  - Centro, Lins/SP");
-    expect(r.texto.slice(0, r.posicaoDoNumero)).toBe("Rua das Flores, ");
+describe("linhaDoEndereco", () => {
+  it("monta o endereço completo numa linha", () => {
+    expect(
+      linhaDoEndereco({
+        cep: "16400010",
+        logradouro: "Rua das Flores",
+        numero: "540",
+        complemento: "sala 2",
+        bairro: "Centro",
+        cidade: "Lins",
+        uf: "SP",
+      }),
+    ).toBe("Rua das Flores, 540, sala 2 - Centro, Lins/SP, 16400-010");
   });
 
-  it("CEP geral de cidade pequena: só cidade e UF", () => {
-    expect(enderecoPeloCep({ logradouro: "", bairro: "", cidade: "Guaiçara", uf: "SP" })).toEqual({
-      texto: "Guaiçara/SP",
-      posicaoDoNumero: 0,
-    });
+  it("pula o que não foi preenchido", () => {
+    expect(linhaDoEndereco({ ...ENDERECO_VAZIO, cidade: "Guaiçara", uf: "SP" })).toBe("Guaiçara/SP");
+    expect(linhaDoEndereco({ ...ENDERECO_VAZIO, logradouro: "Rua A", numero: "10", cidade: "Lins" })).toBe(
+      "Rua A, 10 - Lins",
+    );
+  });
+
+  it("nada preenchido vira null", () => {
+    expect(linhaDoEndereco(ENDERECO_VAZIO)).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SUBPAGINAS_DA_IGREJA } from "@/lib/churchPaths";
 import { CHURCH_SURNAME_MAX_LENGTH, normalizeSurname } from "@/lib/churchName";
 import { normalizeSocialLinks, type SocialKind } from "@/lib/churchPublicPage";
+import { linhaDoEndereco, type PartesDoEndereco } from "@/lib/enderecoDaIgreja";
 import { AppError, toValidationError } from "@/lib/errors";
 import { isChurchTheme, parseAccentColor, type ChurchTheme } from "@/lib/pageAppearance";
 import type { RoleCode } from "@/types/database";
@@ -45,7 +46,10 @@ export interface ChurchProfile {
   chavePublica: string;
   /** Sede: o código dela é o endereço da rede e entra no endereço das igrejas ligadas. */
   ehSedeDeRede: boolean;
+  /** A linha que a página pública mostra, montada a partir de `endereco`. */
   address: string | null;
+  /** O endereço em partes (igreja antiga pode ter só `address`). */
+  endereco: PartesDoEndereco;
   /** Texto de apresentação, mostrado na página ("Sobre a igreja"). */
   sobre: string | null;
   /** A página pública está no ar? Igreja nova nasce com ela fora do ar. */
@@ -71,6 +75,7 @@ export interface ChurchProfileRepository {
     sobrenome: string | null;
     herdarNome: boolean;
     address: string | null;
+    endereco: PartesDoEndereco;
     sobre: string | null;
     publicCode: string;
     socialLinks: Record<string, string>;
@@ -107,6 +112,10 @@ export interface ProfileActor {
 
 const QUEM_EDITA: RoleCode[] = ["owner", "admin"];
 
+function temPartes(p: PartesDoEndereco): boolean {
+  return Object.values(p).some((v) => v !== null);
+}
+
 export function canEditChurchProfile(role: RoleCode): boolean {
   return QUEM_EDITA.includes(role);
 }
@@ -130,6 +139,14 @@ export const publicCodeSchema = z
   )
   .refine((v) => !SUBPAGINAS_DA_IGREJA.includes(v), "Este endereço é reservado. Escolha outro.");
 
+function vazioViraNull(v: string): string | null {
+  return v === "" ? null : v;
+}
+
+function textoOpcional(max: number, mensagem: string) {
+  return z.string().trim().max(max, mensagem).transform(vazioViraNull);
+}
+
 const profileSchema = z.object({
   churchId: z.uuid("Igreja inválida"),
   name: z.string().trim().min(2, "Informe o nome da igreja").max(120, "Nome muito longo"),
@@ -138,11 +155,22 @@ const profileSchema = z.object({
     .max(CHURCH_SURNAME_MAX_LENGTH, "Sobrenome muito longo")
     .transform((v) => normalizeSurname(v)),
   herdarNome: z.boolean(),
-  address: z
+  cep: z
+    .string()
+    .transform((v) => v.replace(/\D/g, ""))
+    .refine((v) => v === "" || v.length === 8, "O CEP tem 8 números")
+    .transform(vazioViraNull),
+  logradouro: textoOpcional(150, "Rua muito longa"),
+  numero: textoOpcional(20, "Número muito longo"),
+  complemento: textoOpcional(80, "Complemento muito longo"),
+  bairro: textoOpcional(80, "Bairro muito longo"),
+  cidade: textoOpcional(80, "Cidade muito longa"),
+  uf: z
     .string()
     .trim()
-    .max(200, "Endereço muito longo")
-    .transform((v) => (v === "" ? null : v)),
+    .toUpperCase()
+    .refine((v) => v === "" || /^[A-Z]{2}$/.test(v), "Escolha a UF")
+    .transform(vazioViraNull),
   publicCode: publicCodeSchema,
   // Texto simples (a página mostra sem interpretar HTML). Ausente = sem texto.
   sobre: z
@@ -259,6 +287,16 @@ export function createChurchProfileService(deps: {
         throw new AppError("validation_error", "Esta igreja não tem uma igreja-mãe cujo nome herdar.");
       }
 
+      const endereco: PartesDoEndereco = {
+        cep: dados.cep,
+        logradouro: dados.logradouro,
+        numero: dados.numero,
+        complemento: dados.complemento,
+        bairro: dados.bairro,
+        cidade: dados.cidade,
+        uf: dados.uf,
+      };
+
       const socialLinks = validarRedes({
         instagram: dados.instagram,
         whatsapp: dados.whatsapp,
@@ -273,7 +311,10 @@ export function createChurchProfileService(deps: {
         nomeProprio: dados.name,
         sobrenome: dados.sobrenome,
         herdarNome: dados.herdarNome,
-        address: dados.address,
+        // Igreja antiga com só a linha e nenhuma parte: salvar sem mexer no
+        // endereço não pode apagar a linha que já estava na página.
+        address: linhaDoEndereco(endereco) ?? (temPartes(igreja.endereco) ? null : igreja.address),
+        endereco,
         sobre: dados.sobre,
         publicCode: dados.publicCode,
         socialLinks,
