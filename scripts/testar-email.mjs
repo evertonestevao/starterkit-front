@@ -48,7 +48,7 @@ if (problemas.length > 0) {
 }
 
 const dominio = env.EMAIL_FROM.split("@")[1];
-const nome = (env.EMAIL_FROM_NAME ?? "Conecta Igreja").replace(/["<>\r\n]/g, "").trim();
+const nome = (env.EMAIL_FROM_NAME ?? "AssembleiaApp").replace(/["<>\r\n]/g, "").trim();
 const link = `${(env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "")}/login`;
 
 console.log(`Enviando teste para ${destino} como "${nome} <${env.EMAIL_FROM}>"...`);

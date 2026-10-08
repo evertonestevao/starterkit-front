@@ -11,6 +11,8 @@ export interface CompanyWithRole extends Company {
   acessos: string[];
   /** É professor(a) de alguma classe da EBD desta empresa. */
   professor_ebd: boolean;
+  /** Módulos desligáveis que a igreja mantém ativos (RPC modulos_ativos()). */
+  modulosAtivos: string[];
 }
 
 /** Convite pendente endereçado ao usuário logado (RPC my_pending_invites). */

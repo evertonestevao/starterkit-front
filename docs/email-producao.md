@@ -30,7 +30,7 @@ poucos e-mails por hora.
    EMAIL_PROVIDER=resend
    RESEND_API_KEY=re_...
    EMAIL_FROM=no-reply@seudominio.com.br
-   EMAIL_FROM_NAME=Conecta Igreja
+   EMAIL_FROM_NAME=AssembleiaApp
    EMAIL_REPLY_TO=suporte@seudominio.com.br
    APP_URL=https://seudominio.com.br
    ```

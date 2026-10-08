@@ -8949,6 +8949,89 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Módulos ativos (migration 20261010100000). Desligar um módulo tira o acesso
+-- de TODO MUNDO naquela igreja — inclusive de quem administra —, vale para as
+-- igrejas abaixo (herança), e só quem administra liga e desliga.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}', true);
+do $$
+begin
+  -- 003 é membro comum da AC Cong: não desliga nada lá.
+  perform public.salvar_modulos_ativos('acacacac-0000-4000-8000-0000000000c2', '[{"modulo":"tesouraria","ativo":false}]'::jsonb);
+  raise exception 'FALHA modulos: membro comum desligou modulo';
+exception when sqlstate '42501' then null;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if not public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'tesouraria') then
+    raise exception 'FALHA modulos: modulo deveria comecar ligado';
+  end if;
+  perform public.salvar_modulos_ativos('acacacac-0000-4000-8000-0000000000c2', '[{"modulo":"tesouraria","ativo":false}]'::jsonb);
+  if public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'tesouraria') then
+    raise exception 'FALHA modulos: Responsavel continuou com acesso ao modulo desligado';
+  end if;
+  if exists (select 1 from public.modulos_ativos()
+             where company_id = 'acacacac-0000-4000-8000-0000000000c2' and modulo = 'tesouraria') then
+    raise exception 'FALHA modulos: modulos_ativos ainda lista o modulo desligado';
+  end if;
+  -- Módulo fora da lista não entra.
+  begin
+    perform public.salvar_modulos_ativos('acacacac-0000-4000-8000-0000000000c2', '[{"modulo":"membros","ativo":false}]'::jsonb);
+    raise exception 'FALHA modulos: desligou um modulo que nao e desligavel';
+  exception when sqlstate '22023' then null;
+  end;
+end $$;
+
+-- A sede desliga a EBD: a congregação abaixo herda; outra rede não é afetada.
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+begin
+  perform public.salvar_modulos_ativos('acacacac-0000-4000-8000-0000000000c1', '[{"modulo":"ebd","ativo":false}]'::jsonb);
+end $$;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if public.tem_acesso('acacacac-0000-4000-8000-0000000000c2', 'ebd') then
+    raise exception 'FALHA modulos: a congregacao nao herdou o modulo desligado pela sede';
+  end if;
+end $$;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+begin
+  if not public.tem_acesso('acacacac-0000-4000-8000-0000000000c3', 'ebd') then
+    raise exception 'FALHA modulos: desligar na sede afetou outra rede';
+  end if;
+  -- E a outra rede não lê a configuração de módulos desta (a tabela nem é
+  -- legível direto: a leitura passa pela função, que exige administrar).
+  begin
+    if exists (select 1 from public.church_modulos) then
+      raise exception 'FALHA modulos: outra rede leu a configuracao de modulos';
+    end if;
+  exception when sqlstate '42501' then null;
+  end;
+  if exists (select 1 from public.modulos_ativos_da_rede('acacacac-0000-4000-8000-0000000000c1')) then
+    raise exception 'FALHA modulos: outra rede leu os modulos da sede pela funcao';
+  end if;
+end $$;
+reset role;
+set local role anon;
+do $$
+begin
+  perform public.modulos_ativos();
+  raise exception 'FALHA modulos: anon consultou os modulos';
+exception when sqlstate '42501' then null;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

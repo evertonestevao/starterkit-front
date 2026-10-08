@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CHURCH_NETWORK_NAME_MAX_LENGTH, CHURCH_SURNAME_MAX_LENGTH } from "@/lib/churchName";
 import { AppError } from "@/lib/errors";
+import { MODULOS_DESLIGAVEIS, type ModuloDesligavel } from "@/lib/menuPermissoes";
 import type { RoleCode } from "@/types/database";
 import type { CompanyWithRole, MemberWithProfile } from "@/types/tenant";
 import { permissionService } from "./permissionService";
@@ -72,6 +73,8 @@ export interface NewChurchDetails {
   fazParteDeRede: boolean;
   /** Só existe quando `fazParteDeRede`. */
   redeNome: string | null;
+  /** Módulos desligáveis que a igreja já desmarcou no cadastro. */
+  modulosInativos: ModuloDesligavel[];
 }
 
 /** Texto opcional: aparado, espaços colapsados, vazio vira null. */
@@ -84,11 +87,18 @@ function optionalText(max: number, tooLongMessage: string) {
     .transform((value) => (value === "" ? null : value));
 }
 
+/** Lista crua (ex.: formData.getAll) vira só os módulos desligáveis conhecidos. */
+const modulosInativosSchema = z
+  .array(z.string())
+  .default([])
+  .transform((valores) => valores.filter((v): v is ModuloDesligavel => (MODULOS_DESLIGAVEIS as readonly string[]).includes(v)));
+
 const newChurchDetailsSchema = z
   .object({
     sobrenome: optionalText(CHURCH_SURNAME_MAX_LENGTH, "Complemento do nome muito longo"),
     fazParteDeRede: z.boolean().default(false),
     redeNome: optionalText(CHURCH_NETWORK_NAME_MAX_LENGTH, "Nome da rede muito longo"),
+    modulosInativos: modulosInativosSchema,
   })
   // Nome de rede sem marcar que faz parte de uma não é gravado.
   .transform((details): NewChurchDetails => ({
@@ -119,6 +129,7 @@ export function createTenantService(repo: TenantRepository) {
     sobrenome?: unknown;
     fazParteDeRede?: unknown;
     redeNome?: unknown;
+    modulosInativos?: unknown;
   }): Promise<CompanyWithRole> {
     const parsed = companyNameSchema.safeParse(input.name);
     if (!parsed.success) {
@@ -129,6 +140,7 @@ export function createTenantService(repo: TenantRepository) {
       sobrenome: input.sobrenome,
       fazParteDeRede: input.fazParteDeRede === true,
       redeNome: input.redeNome,
+      modulosInativos: input.modulosInativos,
     });
     if (!details.success) {
       throw new AppError("validation_error", details.error.issues[0]?.message ?? "Dados da igreja inválidos");

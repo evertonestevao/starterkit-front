@@ -101,7 +101,17 @@ describe("tenantService.createCompany", () => {
   it("sem os campos novos, a igreja nasce sem complemento e fora de rede", async () => {
     const received: unknown[] = [];
     await createTenantService(repoQueGuarda(received)).createCompany({ name: "Igreja Esperança" });
-    expect(received[0]).toEqual({ sobrenome: null, fazParteDeRede: false, redeNome: null });
+    expect(received[0]).toEqual({ sobrenome: null, fazParteDeRede: false, redeNome: null, modulosInativos: [] });
+  });
+
+  it("guarda só os módulos desligáveis conhecidos que vieram desmarcados", async () => {
+    const received: unknown[] = [];
+    await createTenantService(repoQueGuarda(received)).createCompany({
+      name: "Igreja Esperança",
+      modulosInativos: ["ebd", "acompanhamento", "membros", "billing", "dashboard"],
+    });
+    // "membros", "billing" e "dashboard" não são desligáveis: descartados.
+    expect(received[0]).toMatchObject({ modulosInativos: ["ebd", "acompanhamento"] });
   });
 
   it("limpa o complemento (espaços) e trata vazio como ausente", async () => {

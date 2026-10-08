@@ -1222,7 +1222,7 @@ describe("autopatrocínio: conta com is_self_payment usa valor fixo, não a tabe
     await service.syncBilling("self-1", { createIfMissing: true });
 
     expect(provider.createSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 1990, description: "Mensalidade Conecta Igreja" }),
+      expect.objectContaining({ amountCents: 1990, description: "Mensalidade AssembleiaApp" }),
     );
   });
 
@@ -1251,7 +1251,7 @@ describe("autopatrocínio: conta com is_self_payment usa valor fixo, não a tabe
       const r = await service.syncBilling("self-1", { createIfMissing: true });
 
       expect(provider.createPixAutomatic).toHaveBeenCalledWith(
-        expect.objectContaining({ customerId: "cus-1", amountCents: 8990, description: "Mensalidade Conecta Igreja" }),
+        expect.objectContaining({ customerId: "cus-1", amountCents: 8990, description: "Mensalidade AssembleiaApp" }),
       );
       expect(provider.createSubscription).not.toHaveBeenCalled();
       expect(store.updateAccountBilling).toHaveBeenCalledWith(
