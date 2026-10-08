@@ -40,7 +40,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           {children}
-          <Toaster richColors closeButton position="top-right" />
+          <Toaster position="top-right" />
           {/* useSearchParams pede Suspense; o aviso não atrasa o resto da página. */}
           <Suspense fallback={null}>
             <AvisoDaUrl />
