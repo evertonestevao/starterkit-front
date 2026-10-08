@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { safeChurchLinkPath } from "@/lib/churchLinks";
 import { AppError } from "@/lib/errors";
+import { MODULOS_DESLIGAVEIS } from "@/lib/menuPermissoes";
 import { recordAudit } from "@/server/audit";
 import { syncCompanySeats } from "@/server/billing";
 import { getRequestEvidence, getTermsService } from "@/server/terms";
@@ -48,11 +49,15 @@ export async function createCompanyAction(_prev: ActionState | undefined, formDa
     }
 
     const tenant = await getTenantService();
+    // Checkbox marcado = módulo continua ativo; o que NÃO veio marcado é o
+    // que entra como desligado (o form já manda todos marcados por padrão).
+    const modulosInativos = MODULOS_DESLIGAVEIS.filter((m) => formData.get(`modulo_${m}`) !== "on");
     const company = await tenant.createCompany({
       name: formData.get("name"),
       sobrenome: formData.get("sobrenome"),
       fazParteDeRede: formData.get("faz_parte_de_rede") === "on",
       redeNome: formData.get("rede_nome"),
+      modulosInativos,
     });
     companyId = company.id;
     await setActiveCompanyCookie(companyId);

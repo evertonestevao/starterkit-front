@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
-import { acessosDaPessoa } from "@/lib/menuPermissoes";
+import { MODULOS_DESLIGAVEIS, acessosDaPessoa } from "@/lib/menuPermissoes";
 import type { TenantRepository } from "@/services/tenantService";
 import type { Company, CompanyMember, RoleCode } from "@/types/database";
 import type { MemberWithProfile } from "@/types/tenant";
@@ -37,6 +37,13 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       for (const l of (liberados ?? []) as Array<{ company_id: string; modulo: string }>) {
         porCargo.set(l.company_id, [...(porCargo.get(l.company_id) ?? []), l.modulo]);
       }
+      // Módulos que a igreja mantém ligados (liga/desliga acima do cargo).
+      // Falhar aqui esconde o menu em vez de liberar a mais.
+      const { data: ativos } = await client.rpc("modulos_ativos");
+      const modulosAtivosPorEmpresa = new Map<string, string[]>();
+      for (const l of (ativos ?? []) as Array<{ company_id: string; modulo: string }>) {
+        modulosAtivosPorEmpresa.set(l.company_id, [...(modulosAtivosPorEmpresa.get(l.company_id) ?? []), l.modulo]);
+      }
       const companies = (data ?? [])
         .filter((row) => row.company && !(row.company as unknown as Company).deleted_at)
         .map((row) => {
@@ -49,6 +56,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
             pode_gerir_ebd: acessos.includes("ebd"),
             professor_ebd: ensinaEm.has(company.id),
             acessos,
+            modulosAtivos: modulosAtivosPorEmpresa.get(company.id) ?? [],
           };
         });
       // Dedup defensivo por id: o índice único parcial de company_members já
@@ -69,6 +77,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
           p_sobrenome: church.sobrenome,
           p_faz_parte_de_rede: church.fazParteDeRede,
           p_rede_nome: church.redeNome,
+          p_modulos_inativos: church.modulosInativos,
         })
         .single<Company>();
       if (error || !data) {
@@ -84,6 +93,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         pode_gerir_ebd: false,
         professor_ebd: false,
         acessos: [],
+        modulosAtivos: MODULOS_DESLIGAVEIS.filter((m) => !church.modulosInativos.includes(m)),
       };
     },
 

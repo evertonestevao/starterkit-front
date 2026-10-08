@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  MODULOS_DESLIGAVEIS,
   acessosDaPessoa,
   celula,
+  escolhasModulosParaGravar,
   escolhasParaGravar,
   menusVisiveis,
   paginaInicial,
   podeNoModulo,
   resolverAcessos,
+  resolverModulos,
   type LinhaAcesso,
+  type LinhaModulo,
   type PessoaAcesso,
 } from "./menuPermissoes";
 
@@ -21,6 +25,9 @@ const pessoa = (over: Partial<PessoaAcesso>): PessoaAcesso => ({
   role: "member",
   acessos: [],
   professor_ebd: false,
+  // Todos os módulos desligáveis ligados por padrão: só os testes do gate
+  // abaixo pedem um conjunto menor explicitamente.
+  modulosAtivos: [...MODULOS_DESLIGAVEIS],
   ...over,
 });
 
@@ -88,9 +95,31 @@ describe("acessosDaPessoa e podeNoModulo", () => {
   });
 
   it("quem administra pode em qualquer módulo; membro só no liberado", () => {
-    expect(podeNoModulo({ role: "admin", acessos: [] }, "campaigns")).toBe(true);
-    expect(podeNoModulo({ role: "member", acessos: ["events"] }, "events")).toBe(true);
-    expect(podeNoModulo({ role: "member", acessos: ["events"] }, "campaigns")).toBe(false);
+    const ativos = [...MODULOS_DESLIGAVEIS];
+    expect(podeNoModulo({ role: "admin", acessos: [], modulosAtivos: ativos }, "campaigns")).toBe(true);
+    expect(podeNoModulo({ role: "member", acessos: ["events"], modulosAtivos: ativos }, "events")).toBe(true);
+    expect(podeNoModulo({ role: "member", acessos: ["events"], modulosAtivos: ativos }, "campaigns")).toBe(false);
+  });
+
+  it("módulo não liberável (ex.: membros) não depende de modulosAtivos", () => {
+    expect(podeNoModulo({ role: "member", acessos: ["membros"], modulosAtivos: [] }, "membros")).toBe(true);
+  });
+});
+
+describe("módulo desligado pela igreja bloqueia até quem administra", () => {
+  it("desligado, some do menu de owner/admin, não só de quem usa por cargo", () => {
+    expect(menusVisiveis(pessoa({ role: "owner", modulosAtivos: [] }))).not.toContain("ebd");
+    expect(menusVisiveis(pessoa({ role: "admin", modulosAtivos: [] }))).not.toContain("acompanhamento");
+    // Módulo não desligável (membros, dashboard) continua valendo mesmo com modulosAtivos vazio.
+    expect(menusVisiveis(pessoa({ role: "admin", modulosAtivos: [] }))).toContain("dashboard");
+  });
+
+  it("professor da EBD também fica sem o módulo se a igreja desligou", () => {
+    expect(menusVisiveis(pessoa({ professor_ebd: true, modulosAtivos: [] }))).not.toContain("ebd");
+  });
+
+  it("podeNoModulo nega mesmo para quem administra", () => {
+    expect(podeNoModulo({ role: "owner", acessos: [], modulosAtivos: [] }, "ebd")).toBe(false);
   });
 });
 
@@ -194,6 +223,57 @@ describe("escolhasParaGravar", () => {
     const linhas = [...deCima, linha(SECRETARIO, "ebd", false, 0, "Cong")];
     expect(escolhasParaGravar([{ cargoId: SECRETARIO, modulo: "ebd", permitido: true }], CARGOS, linhas)).toEqual([
       { cargoId: SECRETARIO, modulo: "ebd", permitido: true },
+    ]);
+  });
+});
+
+const linhaModulo = (modulo: string, ativo: boolean, nivel: number, igreja = "Sede"): LinhaModulo => ({
+  modulo,
+  ativo,
+  nivel,
+  igreja,
+});
+
+describe("resolverModulos: herança igual à de cargo, mas sem a dimensão de cargo", () => {
+  it("sem nenhuma definição, o módulo está ativo (oposto do padrão de cargo)", () => {
+    expect(resolverModulos([]).get("ebd")).toEqual({ ativo: true, herdado: true, herdadoDe: null, propria: false });
+  });
+
+  it("a igreja acima mais próxima vence; a própria vence todas", () => {
+    const linhas = [linhaModulo("ebd", false, 2, "Sede"), linhaModulo("ebd", true, 1, "Subsede")];
+    expect(resolverModulos(linhas).get("ebd")).toMatchObject({ ativo: true, herdadoDe: "Subsede", propria: false });
+
+    const comPropria = [...linhas, linhaModulo("ebd", false, 0, "Cong")];
+    expect(resolverModulos(comPropria).get("ebd")).toMatchObject({ ativo: false, herdado: true, propria: true });
+  });
+});
+
+describe("escolhasModulosParaGravar", () => {
+  const deCimaModulos = [linhaModulo("ebd", true, 1)];
+
+  it("quem mexe grava a configuração inteira", () => {
+    const gravar = escolhasModulosParaGravar(
+      [
+        { modulo: "ebd", ativo: false }, // a mudança
+        { modulo: "programacao", ativo: true },
+        { modulo: "membros", ativo: false }, // não é desligável: descartado
+      ],
+      deCimaModulos,
+    );
+    expect(gravar).toEqual([
+      { modulo: "ebd", ativo: false },
+      { modulo: "programacao", ativo: true },
+    ]);
+  });
+
+  it("salvar sem mudar nada, ainda seguindo a de cima, continua seguindo", () => {
+    expect(escolhasModulosParaGravar([{ modulo: "ebd", ativo: true }], deCimaModulos)).toEqual([]);
+  });
+
+  it("quem já tem configuração própria continua com ela, mesmo ficando igual à de cima", () => {
+    const linhas = [...deCimaModulos, linhaModulo("ebd", false, 0, "Cong")];
+    expect(escolhasModulosParaGravar([{ modulo: "ebd", ativo: true }], linhas)).toEqual([
+      { modulo: "ebd", ativo: true },
     ]);
   });
 });

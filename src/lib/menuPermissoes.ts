@@ -30,6 +30,28 @@ export function isModulo(valor: string): valor is Modulo {
   return (MODULOS_LIBERAVEIS as readonly string[]).includes(valor);
 }
 
+/**
+ * Módulos que a igreja pode desligar inteiramente (Configurações → Acessos,
+ * e já na criação da conta). "dashboard" e "membros" ficam de fora: são a
+ * base do sistema e continuam sempre ligados. Desligado, o módulo some do
+ * menu de TODO MUNDO — inclusive Responsável/Administrador — e o banco
+ * repete a regra (modulo_ativo(), consultado por tem_acesso()).
+ */
+export const MODULOS_DESLIGAVEIS = [
+  "acompanhamento",
+  "ebd",
+  "programacao",
+  "events",
+  "campaigns",
+  "relationships",
+  "tesouraria",
+] as const satisfies readonly Modulo[];
+export type ModuloDesligavel = (typeof MODULOS_DESLIGAVEIS)[number];
+
+export function isModuloDesligavel(valor: string): valor is ModuloDesligavel {
+  return (MODULOS_DESLIGAVEIS as readonly string[]).includes(valor);
+}
+
 export interface MenuDef {
   /** Chave estável; nos módulos liberáveis é a mesma gravada em cargo_acessos.modulo. */
   key: string;
@@ -136,6 +158,12 @@ export interface PessoaAcesso {
   acessos: string[];
   /** Ensina em alguma classe: abre a EBD só nas classes dela. */
   professor_ebd: boolean;
+  /**
+   * Módulos DESLIGÁVEIS que a igreja mantém ativos (RPC modulos_ativos()).
+   * Um módulo desligado pela igreja some do menu de todo mundo, mesmo quem
+   * administra ou tem o cargo — por isso o gate vem antes de papel e cargo.
+   */
+  modulosAtivos: string[];
 }
 
 /**
@@ -148,18 +176,28 @@ export function acessosDaPessoa(porCargo: string[]): Modulo[] {
   return MODULOS_LIBERAVEIS.filter((m) => todos.has(m));
 }
 
-/** A pessoa gerencia o módulo? (administra a igreja ou tem o módulo liberado) */
-export function podeNoModulo(pessoa: Pick<PessoaAcesso, "role" | "acessos">, modulo: Modulo): boolean {
+/** O módulo está ligado para a igreja? (módulo não desligável sempre está) */
+function moduloLigado(pessoa: Pick<PessoaAcesso, "modulosAtivos">, modulo: string): boolean {
+  return !isModuloDesligavel(modulo) || pessoa.modulosAtivos.includes(modulo);
+}
+
+/** A pessoa gerencia o módulo? (ligado para a igreja E administra ou tem o módulo liberado) */
+export function podeNoModulo(
+  pessoa: Pick<PessoaAcesso, "role" | "acessos" | "modulosAtivos">,
+  modulo: Modulo,
+): boolean {
+  if (!moduloLigado(pessoa, modulo)) return false;
   return pessoa.role === "owner" || pessoa.role === "admin" || pessoa.acessos.includes(modulo);
 }
 
 /** Chaves dos menus que a pessoa vê. */
 export function menusVisiveis(pessoa: PessoaAcesso): string[] {
   return (
-    MENUS.filter(
-      (m) =>
-        m.roles.includes(pessoa.role) || pessoa.acessos.includes(m.key) || (m.key === "ebd" && pessoa.professor_ebd),
-    )
+    MENUS.filter((m) => moduloLigado(pessoa, m.key))
+      .filter(
+        (m) =>
+          m.roles.includes(pessoa.role) || pessoa.acessos.includes(m.key) || (m.key === "ebd" && pessoa.professor_ebd),
+      )
       // Patrocínio fora das telas por enquanto (src/config/features.ts).
       .filter((m) => m.key !== "sponsors" || features.patrocinioVisivel)
       .map((m) => m.key)
@@ -268,5 +306,70 @@ export function escolhasParaGravar(
   );
   const jaTemPropria = linhas.some((l) => l.nivel === 0);
   const mudouAlgo = validas.some((d) => d.permitido !== deCima.get(chave(d.cargoId, d.modulo))?.herdado);
+  return jaTemPropria || mudouAlgo ? validas : [];
+}
+
+/**
+ * Módulos ativos por igreja: MESMA herança de `resolverAcessos`, mas numa
+ * dimensão só (módulo → estado), sem cargo. Sem nenhuma definição em toda a
+ * cadeia, o módulo está ativo (padrão oposto ao de cargo, que começa em
+ * "não liberado": aqui começa em "ligado").
+ */
+export interface LinhaModulo {
+  modulo: string;
+  ativo: boolean;
+  /** Da própria igreja (nivel 0) ou de uma acima (1 = mãe...). */
+  nivel: number;
+  /** Nome da igreja que definiu. */
+  igreja: string;
+}
+
+export interface CelulaModulo {
+  /** O que vale agora. */
+  ativo: boolean;
+  /** O que valeria sem a escolha desta igreja. */
+  herdado: boolean;
+  /** Igreja acima que definiu o herdado; null = ninguém acima definiu. */
+  herdadoDe: string | null;
+  /** Esta igreja tem escolha própria neste ponto. */
+  propria: boolean;
+}
+
+export function resolverModulos(linhas: LinhaModulo[]): Map<ModuloDesligavel, CelulaModulo> {
+  const proprias = new Map<string, LinhaModulo>();
+  const acima = new Map<string, LinhaModulo>();
+  for (const l of [...linhas].sort((a, b) => a.nivel - b.nivel)) {
+    if (l.nivel === 0) proprias.set(l.modulo, l);
+    else if (!acima.has(l.modulo)) acima.set(l.modulo, l);
+  }
+
+  const matriz = new Map<ModuloDesligavel, CelulaModulo>();
+  for (const modulo of MODULOS_DESLIGAVEIS) {
+    const pai = acima.get(modulo);
+    const minha = proprias.get(modulo);
+    const herdado = pai?.ativo ?? true;
+    matriz.set(modulo, {
+      herdado,
+      herdadoDe: pai?.igreja ?? null,
+      propria: minha !== undefined,
+      ativo: minha ? minha.ativo : herdado,
+    });
+  }
+  return matriz;
+}
+
+/**
+ * O que gravar quando a igreja salva os módulos ativos. Mesma regra de
+ * `escolhasParaGravar`: quem mexe passa a ter configuração própria e
+ * inteira; sem mudar nada, continua seguindo a igreja acima.
+ */
+export function escolhasModulosParaGravar(
+  desejado: Array<{ modulo: string; ativo: boolean }>,
+  linhas: LinhaModulo[],
+): Array<{ modulo: ModuloDesligavel; ativo: boolean }> {
+  const deCima = resolverModulos(linhas.filter((l) => l.nivel > 0));
+  const validas = desejado.flatMap((d) => (isModuloDesligavel(d.modulo) ? [{ modulo: d.modulo, ativo: d.ativo }] : []));
+  const jaTemPropria = linhas.some((l) => l.nivel === 0);
+  const mudouAlgo = validas.some((d) => d.ativo !== deCima.get(d.modulo)?.herdado);
   return jaTemPropria || mudouAlgo ? validas : [];
 }

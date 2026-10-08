@@ -10,6 +10,7 @@ import {
   CHURCH_NETWORK_NAME_MAX_LENGTH,
   CHURCH_SURNAME_MAX_LENGTH,
 } from "@/lib/churchName";
+import { MODULOS_DESLIGAVEIS, MODULO_INFO } from "@/lib/menuPermissoes";
 import { createCompanyAction } from "@/server/actions/tenant";
 
 export function CreateCompanyForm({
@@ -83,6 +84,26 @@ export function CreateCompanyForm({
           </div>
         ) : null}
       </div>
+      <fieldset className="flex flex-col gap-3">
+        <legend className="text-sm font-medium">Quais módulos sua igreja vai usar?</legend>
+        <p className="text-xs text-muted-foreground">
+          Todos começam marcados. Desmarque o que sua igreja não usa — dá pra mudar depois em Configurações →
+          Acessos.
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {MODULOS_DESLIGAVEIS.map((modulo) => (
+            <label key={modulo} className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                name={`modulo_${modulo}`}
+                defaultChecked
+                className="mt-0.5 size-4 accent-primary"
+              />
+              <span>{MODULO_INFO[modulo].titulo}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       {/* Onboarding (1º acesso): aceite dos termos vigentes antes de criar.
           O required do checkbox é UX; a validação real é na server action. */}
       {requireTerms ? <TermsCheckboxes /> : null}

@@ -28,7 +28,7 @@ const serverEnvSchema = z.object({
   EMAIL_PROVIDER: z.enum(["resend", "console"]).default("console"),
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.email().optional(),
-  /** Nome que aparece como remetente ("Conecta Igreja <no-reply@...>"). Padrão: o nome do produto. */
+  /** Nome que aparece como remetente ("AssembleiaApp <no-reply@...>"). Padrão: o nome do produto. */
   EMAIL_FROM_NAME: z.string().min(1).max(60).optional(),
   /** Para onde vão as respostas (ex.: suporte@...). Sem ele, respondem ao remetente. */
   EMAIL_REPLY_TO: z.email().optional(),
