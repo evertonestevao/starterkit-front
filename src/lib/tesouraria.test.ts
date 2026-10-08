@@ -113,7 +113,7 @@ describe("somas", () => {
   });
 
   it("dizimistas: junta o membro pelo vínculo, o de fora pelo nome, e deixa o sem nome por último", () => {
-    expect(agruparPorDizimista(lista)).toEqual([
+    expect(agruparPorDizimista(lista).map(({ nome, quantidade, total }) => ({ nome, quantidade, total }))).toEqual([
       { nome: "Ana Souza", quantidade: 2, total: 35000 },
       { nome: "José de fora", quantidade: 2, total: 20000 },
       { nome: "Sem nome", quantidade: 1, total: 5000 },
