@@ -4,16 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthForm } from "@/features/auth/components/auth-form";
+import { CampoSenhaNova } from "@/features/auth/components/campo-senha-nova";
 import { safeSponsorPath } from "@/lib/sponsorPaths";
 import { signUpAction } from "@/server/actions/auth";
 
 export const metadata: Metadata = { title: "Criar conta de patrocinador" };
 
-export default async function SponsorSignUpPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ next?: string }>;
-}) {
+export default async function SponsorSignUpPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;
   const destination = safeSponsorPath(next);
   // Depois das credenciais vem o cadastro do patrocinador, que devolve a
@@ -24,9 +21,7 @@ export default async function SponsorSignUpPage({
     <Card>
       <CardHeader>
         <CardTitle>Criar conta</CardTitle>
-        <CardDescription>
-          Você não precisa ser membro da igreja para apoiá-la.
-        </CardDescription>
+        <CardDescription>Você não precisa ser membro da igreja para apoiá-la.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <AuthForm action={signUpAction} submitLabel="Continuar">
@@ -40,17 +35,7 @@ export default async function SponsorSignUpPage({
             <Input id="email" name="email" type="email" autoComplete="email" required />
             <p className="text-xs text-muted-foreground">As faturas são enviadas para este email.</p>
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Senha</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              required
-            />
-          </div>
+          <CampoSenhaNova />
         </AuthForm>
         <p className="text-center text-sm text-muted-foreground">
           Já tem conta?{" "}

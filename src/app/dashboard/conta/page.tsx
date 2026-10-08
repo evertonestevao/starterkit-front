@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { BellRing } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlterarSenhaForm } from "@/features/auth/components/alterar-senha-form";
 import { AcceptInviteButton } from "@/features/companies/components/accept-invite-button";
 import { AvatarForm, LeaveCompanyButton, ProfileForm } from "@/features/companies/components/settings-forms";
 import { PAPEL_LABEL } from "@/lib/papeis";
@@ -78,6 +79,19 @@ export default async function ContaPage() {
         <CardContent className="flex flex-col gap-6">
           <AvatarForm initialAvatarUrl={profile?.avatar_url ?? null} userName={profile?.full_name ?? ""} />
           <ProfileForm initialName={profile?.full_name ?? ""} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Senha</CardTitle>
+          <CardDescription>
+            Para trocar, confirme a senha atual. Esqueceu? Saia e use &quot;Esqueci minha senha&quot; na tela de
+            entrada.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AlterarSenhaForm />
         </CardContent>
       </Card>
 
