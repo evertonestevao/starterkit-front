@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import {
@@ -83,6 +84,7 @@ function Formulario({
   onOutro: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  useActionToast(state);
 
   if (state?.success) {
     return (
@@ -107,11 +109,6 @@ function Formulario({
     <form action={formAction} className="relative flex flex-col gap-3">
       <CamposAntiRobo />
       {children}
-      {state?.error ? (
-        <p role="alert" className="text-sm text-[var(--pg-danger)]">
-          {state.error}
-        </p>
-      ) : null}
       <Enviar pending={pending}>{botao}</Enviar>
     </form>
   );

@@ -1,7 +1,7 @@
 "use client";
 
+import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState, useState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,7 @@ export function PublicSponsorshipForm({
   priceLabel: string;
 }) {
   const [state, formAction, pending] = useActionState(startPublicSponsorshipAction, undefined);
+  useActionToast(state);
   const [kind, setKind] = useState<SponsorKind>(
     (state?.values?.kind as SponsorKind) || DEFAULT_SPONSOR_KIND,
   );
@@ -32,16 +33,6 @@ export function PublicSponsorshipForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success ? (
-        <Alert>
-          <AlertDescription>{state.success}</AlertDescription>
-        </Alert>
-      ) : null}
 
       <input type="hidden" name="churchPublicCode" value={churchPublicCode} />
 

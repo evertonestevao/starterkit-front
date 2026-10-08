@@ -1,8 +1,8 @@
 "use client";
 
+import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState } from "react";
 import { Mail } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,20 +20,10 @@ export function AccessLinkForm() {
     requestSponsorAccessLinkAction,
     undefined,
   );
+  useActionToast(state);
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success ? (
-        <Alert>
-          <Mail className="size-4" />
-          <AlertDescription>{state.success}</AlertDescription>
-        </Alert>
-      ) : null}
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="access-email">Email</Label>
