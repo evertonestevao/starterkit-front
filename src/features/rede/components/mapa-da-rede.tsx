@@ -1,16 +1,23 @@
 "use client";
 
-import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, ChevronDown, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { nomeNivel } from "@/lib/niveisRede";
 import {
   agruparPorRamo,
+  bateNoFiltro,
+  filtrarGrupos,
   formatarPorcento,
   fraseDaRede,
+  ordenarGrupos,
   saudeDaUnidade,
   serieSemanal,
   tendenciaDaPresenca,
   VARIACAO_MINIMA,
+  type GrupoDaRede,
   type NivelDeSaude,
   type SemanaDaRede,
   type Tendencia,
@@ -30,6 +37,15 @@ import type { ChurchTipo } from "@/types/database";
  */
 
 const NIVEIS: NivelDeSaude[] = ["boa", "atencao", "parada"];
+
+/**
+ * Rede grande não cabe inteira na tela: o mapa mostra os primeiros blocos (os
+ * que mais precisam de atenção, pela ordenação) e o resto vem com "Listar mais".
+ */
+const RAMOS_DE_INICIO = 4;
+const ABAIXO_DE_INICIO = 4;
+const BLOCOS_DE_INICIO = 6;
+const PASSO = 8;
 
 const VISUAL: Record<NivelDeSaude, { rotulo: string; ponto: string; bloco: string; texto: string }> = {
   boa: {
@@ -186,6 +202,55 @@ function Bloco({
   );
 }
 
+function ListarMais({ restam, aoClicar, oQue }: { restam: number; aoClicar: () => void; oQue: string }) {
+  if (restam <= 0) return null;
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={aoClicar} className="self-start">
+      <ChevronDown className="size-4" aria-hidden />
+      Listar mais {oQue} ({restam})
+    </Button>
+  );
+}
+
+/** Um ramo: a igreja de cima e, ao lado, as que estão ligadas a ela — as primeiras, com "Listar mais". */
+function Ramo({
+  grupo,
+  semanas,
+  hoje,
+  aoEscolher,
+}: {
+  grupo: GrupoDaRede;
+  semanas: SemanaDaRede[];
+  hoje: string;
+  aoEscolher: (churchId: string) => void;
+}) {
+  const [visiveis, setVisiveis] = useState(ABAIXO_DE_INICIO);
+  const abaixo = grupo.abaixo.slice(0, visiveis);
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+      {/* Igreja de cima que não bateu no filtro fica apagada: está ali só para dizer de quem são as de baixo. */}
+      <div className={cn("self-start", grupo.deContexto && "opacity-50")}>
+        <Bloco unidade={grupo.unidade} semanas={semanas} hoje={hoje} aoEscolher={aoEscolher} />
+      </div>
+      {grupo.abaixo.length > 0 ? (
+        <div className="flex flex-col gap-3 border-l-2 border-dashed pl-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {abaixo.map((u) => (
+              <Bloco key={u.churchId} unidade={u} semanas={semanas} hoje={hoje} aoEscolher={aoEscolher} />
+            ))}
+          </div>
+          <ListarMais
+            restam={grupo.abaixo.length - abaixo.length}
+            aoClicar={() => setVisiveis((n) => n + PASSO)}
+            oQue={`de ${grupo.unidade.churchName}`}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function MapaDaRede({
   unidades,
   semanas,
@@ -199,10 +264,25 @@ export function MapaDaRede({
   saude: Record<NivelDeSaude, number>;
   aoEscolher: (churchId: string) => void;
 }) {
+  const [busca, setBusca] = useState("");
+  const [nivel, setNivel] = useState<NivelDeSaude | null>(null);
+  const [visiveis, setVisiveis] = useState<number | null>(null);
+
   const total = unidades.length;
-  const grupos = agruparPorRamo(unidades);
-  const temAndares = grupos.some((g) => g.abaixo.length > 0);
+  const todos = useMemo(() => ordenarGrupos(agruparPorRamo(unidades), hoje), [unidades, hoje]);
+  const temAndares = todos.some((g) => g.abaixo.length > 0);
+  const grupos = useMemo(() => filtrarGrupos(todos, busca, nivel, hoje), [todos, busca, nivel, hoje]);
+  const encontradas = unidades.filter((u) => bateNoFiltro(u, busca, nivel, hoje)).length;
+  const limite = visiveis ?? (temAndares ? RAMOS_DE_INICIO : BLOCOS_DE_INICIO);
+  const naTela = grupos.slice(0, limite);
   const geral = tendenciaDaPresenca(semanas, null, hoje);
+  const filtrando = busca.trim() !== "" || nivel !== null;
+
+  // Mudou a busca ou o filtro: a lista recomeça do início.
+  function aoFiltrar(acao: () => void) {
+    acao();
+    setVisiveis(null);
+  }
 
   return (
     <Card>
@@ -217,46 +297,100 @@ export function MapaDaRede({
             ) : null}
           </div>
           <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-            {NIVEIS.map((nivel) =>
-              saude[nivel] > 0 ? (
-                <div
-                  key={nivel}
-                  className={VISUAL[nivel].ponto}
-                  style={{ width: `${(100 * saude[nivel]) / total}%` }}
-                />
+            {NIVEIS.map((n) =>
+              saude[n] > 0 ? (
+                <div key={n} className={VISUAL[n].ponto} style={{ width: `${(100 * saude[n]) / total}%` }} />
               ) : null,
             )}
           </div>
-          <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-            {NIVEIS.map((nivel) => (
-              <li key={nivel} className="flex items-center gap-1.5">
-                <span className={cn("size-2.5 rounded-full", VISUAL[nivel].ponto)} aria-hidden />
-                <span className="font-medium tabular-nums">{saude[nivel]}</span>
-                <span className="text-muted-foreground">{VISUAL[nivel].rotulo.toLocaleLowerCase("pt-BR")}</span>
-              </li>
-            ))}
-          </ul>
         </div>
+
+        {/* Busca pelo nome e filtro pela situação (os contadores são os botões). */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar pela situação">
+            <button
+              type="button"
+              aria-pressed={nivel === null}
+              onClick={() => aoFiltrar(() => setNivel(null))}
+              className={cn(
+                "rounded-full border px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                nivel === null
+                  ? "border-foreground/40 bg-muted font-medium"
+                  : "text-muted-foreground hover:bg-muted/60",
+              )}
+            >
+              Todas <span className="tabular-nums">{total}</span>
+            </button>
+            {NIVEIS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                aria-pressed={nivel === n}
+                disabled={saude[n] === 0}
+                onClick={() => aoFiltrar(() => setNivel(nivel === n ? null : n))}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+                  nivel === n ? "border-foreground/40 bg-muted font-medium" : "text-muted-foreground hover:bg-muted/60",
+                )}
+              >
+                <span className={cn("size-2.5 rounded-full", VISUAL[n].ponto)} aria-hidden />
+                {VISUAL[n].rotulo} <span className="tabular-nums">{saude[n]}</span>
+              </button>
+            ))}
+          </div>
+          <div className="relative sm:w-72">
+            <Search
+              className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              type="search"
+              value={busca}
+              onChange={(e) => aoFiltrar(() => setBusca(e.target.value))}
+              placeholder="Buscar igreja no mapa"
+              aria-label="Buscar igreja no mapa"
+              className="pl-8"
+            />
+          </div>
+        </div>
+
+        {filtrando ? (
+          <p className="text-sm text-muted-foreground" role="status">
+            {encontradas === 0
+              ? "Nenhuma igreja com esse nome ou nessa situação."
+              : `${encontradas} de ${total} ${total === 1 ? "igreja" : "igrejas"}.`}{" "}
+            <button
+              type="button"
+              className="underline underline-offset-4"
+              onClick={() =>
+                aoFiltrar(() => {
+                  setBusca("");
+                  setNivel(null);
+                })
+              }
+            >
+              Limpar
+            </button>
+          </p>
+        ) : null}
 
         {temAndares ? (
           // Cada igreja logo abaixo, com as que estão ligadas a ela ao lado.
           <div className="flex flex-col gap-4">
-            {grupos.map((grupo) => (
-              <div key={grupo.unidade.churchId} className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-                <Bloco unidade={grupo.unidade} semanas={semanas} hoje={hoje} aoEscolher={aoEscolher} />
-                {grupo.abaixo.length > 0 ? (
-                  <div className="grid gap-3 border-l-2 border-dashed pl-3 sm:grid-cols-2">
-                    {grupo.abaixo.map((u) => (
-                      <Bloco key={u.churchId} unidade={u} semanas={semanas} hoje={hoje} aoEscolher={aoEscolher} />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+            {naTela.map((grupo) => (
+              // A chave leva o filtro: ao filtrar, o "listar mais" de dentro do ramo recomeça.
+              <Ramo
+                key={`${grupo.unidade.churchId}-${busca}-${nivel ?? ""}`}
+                grupo={grupo}
+                semanas={semanas}
+                hoje={hoje}
+                aoEscolher={aoEscolher}
+              />
             ))}
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {grupos.map((grupo) => (
+            {naTela.map((grupo) => (
               <Bloco
                 key={grupo.unidade.churchId}
                 unidade={grupo.unidade}
@@ -267,6 +401,11 @@ export function MapaDaRede({
             ))}
           </div>
         )}
+        <ListarMais
+          restam={grupos.length - naTela.length}
+          aoClicar={() => setVisiveis(limite + PASSO)}
+          oQue="igrejas"
+        />
 
         {/* Como ler: nada aqui depende de adivinhar o que a cor, a seta ou os "pontos" querem dizer. */}
         <div className="rounded-lg bg-muted/50 p-3 text-xs leading-5 text-muted-foreground">
@@ -305,6 +444,10 @@ export function MapaDaRede({
                 presença abaixo de 60%, muitas faltas seguidas, pedido de visita sem contato, registro atrasado ou
                 mensalidade pendente.
               </dd>
+            </div>
+            <div>
+              <dt className="inline font-medium text-foreground">Ordem: </dt>
+              <dd className="inline">quem mais precisa de atenção aparece primeiro; as demais vêm no “Listar mais”.</dd>
             </div>
             <div>
               <dt className="inline font-medium text-foreground">Para ver uma igreja: </dt>

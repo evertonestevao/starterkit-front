@@ -345,7 +345,12 @@ export function tendenciaDaPresenca(semanas: SemanaDaRede[], churchId: string | 
   };
 }
 
-export type GrupoDaRede = { unidade: UnidadeDaRede; abaixo: UnidadeDaRede[] };
+export type GrupoDaRede = {
+  unidade: UnidadeDaRede;
+  abaixo: UnidadeDaRede[];
+  /** A igreja de cima não bateu no filtro: está ali só para dizer de quem são as de baixo. */
+  deContexto?: boolean;
+};
 
 /**
  * A árvore em dois andares, como a tela desenha: cada unidade logo abaixo de
@@ -372,6 +377,49 @@ export function agruparPorRamo(unidades: UnidadeDaRede[]): GrupoDaRede[] {
   return [...grupos.values()];
 }
 
+const ORDEM_DA_SAUDE: Record<NivelDeSaude, number> = { parada: 0, atencao: 1, boa: 2 };
+
+/**
+ * Os ramos que sobram depois da busca pelo nome e do filtro por situação.
+ * Quando a igreja de cima não bate mas alguma abaixo dela sim, ela continua
+ * (é o contexto: "de quem é essa congregação"), só com as que bateram ao lado.
+ * Sem busca nem filtro, devolve tudo como veio.
+ */
+/** A igreja bate na busca pelo nome E no filtro por situação? (os dois vazios: sempre) */
+export function bateNoFiltro(u: UnidadeDaRede, busca: string, nivel: NivelDeSaude | null, hoje: string): boolean {
+  const termo = semAcento(busca);
+  return (!termo || semAcento(u.churchName).includes(termo)) && (!nivel || saudeDaUnidade(u, hoje).nivel === nivel);
+}
+
+export function filtrarGrupos(
+  grupos: GrupoDaRede[],
+  busca: string,
+  nivel: NivelDeSaude | null,
+  hoje: string,
+): GrupoDaRede[] {
+  if (!semAcento(busca) && !nivel) return grupos;
+  const bate = (u: UnidadeDaRede) => bateNoFiltro(u, busca, nivel, hoje);
+  return grupos
+    .map((g): GrupoDaRede => ({ unidade: g.unidade, abaixo: g.abaixo.filter(bate), deContexto: !bate(g.unidade) }))
+    .filter((g) => !g.deContexto || g.abaixo.length > 0);
+}
+
+/**
+ * Quem precisa de atenção primeiro: dentro de cada ramo, as igrejas de baixo
+ * por urgência; e os ramos pela pior situação que houver neles. Assim, numa
+ * rede grande, o que fica atrás do "listar mais" são as que estão bem.
+ */
+export function ordenarGrupos(grupos: GrupoDaRede[], hoje: string): GrupoDaRede[] {
+  const ordem = (u: UnidadeDaRede) => ORDEM_DA_SAUDE[saudeDaUnidade(u, hoje).nivel];
+  return grupos
+    .map((g, i) => {
+      const abaixo = porUrgencia(g.abaixo, hoje);
+      return { g: { unidade: g.unidade, abaixo }, i, pior: Math.min(ordem(g.unidade), ...abaixo.map(ordem)) };
+    })
+    .sort((x, y) => x.pior - y.pior || x.i - y.i)
+    .map((x) => x.g);
+}
+
 /** O menu do painel da rede. */
 export const MENU_REDE = "rede";
 
@@ -379,8 +427,6 @@ export const MENU_REDE = "rede";
 export function menusComRede(menus: string[], temUnidades: boolean): string[] {
   return temUnidades ? menus : menus.filter((m) => m !== MENU_REDE);
 }
-
-const ORDEM_DA_SAUDE: Record<NivelDeSaude, number> = { parada: 0, atencao: 1, boa: 2 };
 
 /** Quem mais precisa de atenção primeiro; no empate, a ordem da árvore que veio do banco. */
 export function porUrgencia(unidades: UnidadeDaRede[], hoje: string): UnidadeDaRede[] {

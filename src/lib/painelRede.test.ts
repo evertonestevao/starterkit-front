@@ -3,8 +3,10 @@ import {
   agruparPorRamo,
   buscarUnidades,
   domingoDaSemana,
+  filtrarGrupos,
   fraseDaRede,
   menusComRede,
+  ordenarGrupos,
   percentual,
   porUrgencia,
   recorte,
@@ -288,5 +290,59 @@ describe("agruparPorRamo", () => {
   it("para a subsede, as congregações são cada uma o seu ramo", () => {
     const lista = [unidade({ churchId: "a", parentId: "norte" }), unidade({ churchId: "b", parentId: "norte" })];
     expect(agruparPorRamo(lista).map((g) => g.unidade.churchId)).toEqual(["a", "b"]);
+  });
+});
+
+describe("filtrarGrupos e ordenarGrupos", () => {
+  const parada = { cultoUltimaChamada: null, ebdUltimaAula: null };
+  const grupos = () =>
+    agruparPorRamo([
+      unidade({ churchId: "norte", churchName: "Subsede Norte", parentId: "sede" }),
+      unidade({ churchId: "aurora", churchName: "Congregação Aurora", parentId: "norte", nivel: 2 }),
+      unidade({
+        churchId: "vila",
+        churchName: "Congregação Vila Nova",
+        parentId: "norte",
+        nivel: 2,
+        visitasSemContato: 2,
+      }),
+      unidade({ churchId: "sul", churchName: "Subsede Sul", parentId: "sede" }),
+      unidade({ churchId: "centro", churchName: "Congregação São José", parentId: "sul", nivel: 2, ...parada }),
+    ]);
+  const forma = (gs: ReturnType<typeof grupos>) => gs.map((g) => [g.unidade.churchId, g.abaixo.map((u) => u.churchId)]);
+
+  it("sem busca nem filtro, não mexe em nada", () => {
+    expect(filtrarGrupos(grupos(), "  ", null, HOJE)).toEqual(grupos());
+  });
+
+  it("busca que bate numa igreja de baixo mantém a de cima como contexto, só com as que bateram", () => {
+    expect(forma(filtrarGrupos(grupos(), "sao jose", null, HOJE))).toEqual([["sul", ["centro"]]]);
+    expect(forma(filtrarGrupos(grupos(), "congregação", null, HOJE))).toEqual([
+      ["norte", ["aurora", "vila"]],
+      ["sul", ["centro"]],
+    ]);
+  });
+
+  it("marca a igreja de cima que está ali só como contexto", () => {
+    expect(filtrarGrupos(grupos(), "sao jose", null, HOJE)[0].deContexto).toBe(true);
+    expect(filtrarGrupos(grupos(), "norte", null, HOJE)[0].deContexto).toBe(false);
+  });
+
+  it("busca que bate só na de cima mostra a de cima sozinha", () => {
+    expect(forma(filtrarGrupos(grupos(), "norte", null, HOJE))).toEqual([["norte", []]]);
+  });
+
+  it("filtro por situação, sozinho ou junto com a busca", () => {
+    expect(forma(filtrarGrupos(grupos(), "", "parada", HOJE))).toEqual([["sul", ["centro"]]]);
+    expect(forma(filtrarGrupos(grupos(), "", "atencao", HOJE))).toEqual([["norte", ["vila"]]]);
+    expect(forma(filtrarGrupos(grupos(), "aurora", "parada", HOJE))).toEqual([]);
+  });
+
+  it("ordena os ramos pela pior situação e as de baixo por urgência", () => {
+    // O ramo Sul tem uma parada: vem antes. No Norte, a Vila Nova (atenção) passa à frente da Aurora (bem).
+    expect(forma(ordenarGrupos(grupos(), HOJE))).toEqual([
+      ["sul", ["centro"]],
+      ["norte", ["vila", "aurora"]],
+    ]);
   });
 });
