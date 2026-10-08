@@ -8874,6 +8874,81 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Ficha: campos do rol (migration 20261009110000). a2 é membro da AC Cong
+-- (d2, de 002); e9 é da AC Outra (d3, de 005). Número da ficha e CPF são
+-- únicos POR IGREJA, e só quem tem o módulo Membros lê.
+-- ---------------------------------------------------------------------------
+insert into public.rol_membros (id, church_id, nome)
+values ('f1c4a000-0000-4000-8000-000000000001', 'acacacac-0000-4000-8000-0000000000d2', 'Segundo da Ficha');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare r record;
+begin
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2', jsonb_build_object(
+    'numero_ficha', 'A-123', 'cpf', '529.982.247-25', 'rg', '12.345.678-9', 'telefone2', '(14) 3522-0000',
+    'batismo_aguas_local', 'Rio Dourado', 'batismo_espirito_data', '2020-05-17', 'batismo_espirito_local', 'Sede',
+    'consagracao_ministerio', 'Diaconato', 'consagracao_onde_por_quem', 'Na sede, pelo Pr. Fulano'));
+  select * into r from public.rol_membro_fichas where membro_id = 'cacacaca-0000-4000-8000-0000000000a2';
+  -- O CPF fica só com os dígitos, venha como vier.
+  if r.cpf <> '52998224725' or r.numero_ficha <> 'A-123' or r.rg <> '12.345.678-9' or r.telefone2 is null
+     or r.batismo_espirito_data <> date '2020-05-17' or r.consagracao_ministerio <> 'Diaconato' then
+    raise exception 'FALHA ficha: campos do rol nao foram gravados (%/%)', r.cpf, r.numero_ficha;
+  end if;
+
+  begin
+    perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2', '{"cpf":"123"}'::jsonb);
+    raise exception 'FALHA ficha: CPF sem 11 digitos foi aceito';
+  exception when sqlstate '23514' then null;
+  end;
+  -- Outra pessoa da MESMA igreja não repete o CPF nem o número da ficha (nem trocando maiúsculas).
+  begin
+    perform public.salvar_ficha_membro('f1c4a000-0000-4000-8000-000000000001', '{"cpf":"52998224725"}'::jsonb);
+    raise exception 'FALHA ficha: CPF repetido na mesma igreja foi aceito';
+  exception when sqlstate '23505' then null;
+  end;
+  begin
+    perform public.salvar_ficha_membro('f1c4a000-0000-4000-8000-000000000001', '{"numero_ficha":"a-123"}'::jsonb);
+    raise exception 'FALHA ficha: numero de ficha repetido na mesma igreja foi aceito';
+  exception when sqlstate '23505' then null;
+  end;
+  -- Regravar a própria ficha com os mesmos valores não esbarra em si mesma.
+  perform public.salvar_ficha_membro('cacacaca-0000-4000-8000-0000000000a2',
+    '{"numero_ficha":"A-123","cpf":"52998224725"}'::jsonb);
+end $$;
+
+-- Em OUTRA igreja o mesmo CPF e o mesmo número valem (cada igreja tem o seu rol).
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  perform public.salvar_ficha_membro('acacacac-0000-4000-8000-0000000000e9',
+    '{"numero_ficha":"A-123","cpf":"52998224725"}'::jsonb);
+  -- ...e a outra igreja não lê o documento do membro da primeira.
+  select count(*) into n from public.rol_membro_fichas where membro_id = 'cacacaca-0000-4000-8000-0000000000a2';
+  if n <> 0 then raise exception 'FALHA ficha: outra rede leu a ficha (com CPF) do membro'; end if;
+end $$;
+
+-- Membro comum da igreja, sem cargo que libere Membros (003), e a igreja de cima (001) não leem CPF nem RG.
+do $$
+declare v_quem text; n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.rol_membro_fichas
+    where church_id = 'acacacac-0000-4000-8000-0000000000d2' and cpf is not null;
+    if n <> 0 then raise exception 'FALHA ficha: % leu CPF de membro', v_quem; end if;
+  end loop;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.
 -- ---------------------------------------------------------------------------

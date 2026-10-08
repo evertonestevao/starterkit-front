@@ -52,7 +52,7 @@ export const FINALIDADES = [
     chave: "cadastro",
     titulo: "Cadastro e acompanhamento",
     texto:
-      "Guardar meus dados de cadastro (nome, contatos, endereço, datas e vida na igreja) e registrar minha presença, para a igreja manter o rol de membros, entrar em contato comigo e me acompanhar.",
+      "Guardar meus dados de cadastro (nome, documentos, contatos, endereço, datas e vida na igreja) e registrar minha presença, para a igreja manter o rol de membros, entrar em contato comigo e me acompanhar.",
   },
   {
     chave: "foto",

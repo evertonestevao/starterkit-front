@@ -1,12 +1,5 @@
 import { formatarData } from "@/lib/acompanhamento";
-import {
-  ESTADO_CIVIL_LABEL,
-  FORMA_ENTRADA_LABEL,
-  SEXO_LABEL,
-  SITUACAO_LABEL,
-  SITUACOES,
-  mascaraCep,
-} from "@/lib/fichaMembro";
+import { ESTADO_CIVIL_LABEL, FORMA_ENTRADA_LABEL, SEXO_LABEL, SITUACAO_LABEL, SITUACOES, mascaraCep, mascaraCpf } from "@/lib/fichaMembro";
 import { saudar } from "@/lib/saudacao";
 import { mascaraTelefone } from "@/lib/telefone";
 import type { Aniversario, FichaMembro, RolMembro, SituacaoMembro, TipoAniversario } from "@/types/acompanhamento";
@@ -68,6 +61,8 @@ export function membrosParaCsv(
       "Sexo", "Estado civil", "Cônjuge", "Casamento", "Pai", "Mãe", "Filhos", "Naturalidade", "Profissão",
       "CEP", "Endereço", "Número", "Complemento", "Bairro", "Cidade", "UF",
       "Conversão", "Membro desde", "Entrada", "Igreja de origem", "Situação desde", "Motivo da situação",
+      "Nº da ficha", "CPF", "RG", "Segundo telefone", "Local do batismo nas águas",
+      "Batismo no Espírito Santo", "Local do batismo no Espírito Santo", "Consagração", "Consagração: onde e por quem",
     );
   }
   const linhas = membros.map((m) => {
@@ -106,6 +101,15 @@ export function membrosParaCsv(
         f?.igrejaOrigem ?? "",
         data(f?.situacaoEm),
         f?.situacaoMotivo ?? "",
+        f?.numeroFicha ?? "",
+        f?.cpf ? mascaraCpf(f.cpf) : "",
+        f?.rg ?? "",
+        f?.telefone2 ?? "",
+        f?.batismoAguasLocal ?? "",
+        data(f?.batismoEspiritoData),
+        f?.batismoEspiritoLocal ?? "",
+        f?.consagracaoMinisterio ?? "",
+        f?.consagracaoOndePorQuem ?? "",
       );
     }
     return linha;

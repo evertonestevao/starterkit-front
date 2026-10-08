@@ -7,6 +7,7 @@ import {
   SITUACAO_LABEL,
   enderecoEmLinha,
   fichaPreenchida,
+  mascaraCpf,
 } from "@/lib/fichaMembro";
 import type { FichaMembro } from "@/types/acompanhamento";
 import { FichaForm } from "./ficha-form";
@@ -26,6 +27,10 @@ export function FichaCard({
   abrirFormulario?: boolean;
 }) {
   const itens: Array<[string, string | null]> = [
+    ["Nº da ficha", ficha.numeroFicha],
+    ["CPF", ficha.cpf ? mascaraCpf(ficha.cpf) : null],
+    ["RG", ficha.rg],
+    ["Segundo telefone", ficha.telefone2],
     ["Sexo", ficha.sexo ? SEXO_LABEL[ficha.sexo] : null],
     ["Estado civil", ficha.estadoCivil ? ESTADO_CIVIL_LABEL[ficha.estadoCivil] : null],
     ["Cônjuge", ficha.conjugeNome],
@@ -39,6 +44,14 @@ export function FichaCard({
     ["Membro desde", ficha.membroDesde ? formatarData(ficha.membroDesde) : null],
     ["Entrada", ficha.entradaForma ? FORMA_ENTRADA_LABEL[ficha.entradaForma] : null],
     ["Igreja de origem", ficha.igrejaOrigem],
+    ["Local do batismo nas águas", ficha.batismoAguasLocal],
+    [
+      "Batismo no Espírito Santo",
+      [ficha.batismoEspiritoData ? formatarData(ficha.batismoEspiritoData) : null, ficha.batismoEspiritoLocal]
+        .filter(Boolean)
+        .join(" · ") || null,
+    ],
+    ["Consagração", [ficha.consagracaoMinisterio, ficha.consagracaoOndePorQuem].filter(Boolean).join(" · ") || null],
   ];
   const preenchidos = itens.filter((item): item is [string, string] => item[1] !== null);
   const endereco = enderecoEmLinha(ficha);
@@ -48,7 +61,13 @@ export function FichaCard({
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">Ficha</CardTitle>
-          <FichaForm membroId={membroId} nome={nome} ficha={ficha} temLogin={temLogin} abrirAoEntrar={abrirFormulario} />
+          <FichaForm
+            membroId={membroId}
+            nome={nome}
+            ficha={ficha}
+            temLogin={temLogin}
+            abrirAoEntrar={abrirFormulario}
+          />
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">

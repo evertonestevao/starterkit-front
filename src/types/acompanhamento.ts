@@ -54,6 +54,13 @@ export type SituacaoMembro = "ativo" | "afastado" | "transferido" | "desligado" 
  * Membros lê e grava: endereço e família não aparecem para quem só faz a chamada.
  */
 export interface FichaMembro {
+  /** O número do rol, como a secretaria cita o membro. Único na igreja. */
+  numeroFicha: string | null;
+  /** Só os 11 dígitos. Identificação — não é login. Único na igreja. */
+  cpf: string | null;
+  rg: string | null;
+  /** Segundo telefone (fixo, recado). O principal é o WhatsApp do cadastro. */
+  telefone2: string | null;
   sexo: SexoMembro | null;
   estadoCivil: EstadoCivil | null;
   naturalidade: string | null;
@@ -77,6 +84,13 @@ export interface FichaMembro {
   entradaForma: FormaEntrada | null;
   membroDesde: string | null;
   igrejaOrigem: string | null;
+  /** Onde foi batizado nas águas (a data fica no cadastro do membro). */
+  batismoAguasLocal: string | null;
+  batismoEspiritoData: string | null;
+  batismoEspiritoLocal: string | null;
+  /** A qual ministério foi consagrado (diaconato, presbitério...). */
+  consagracaoMinisterio: string | null;
+  consagracaoOndePorQuem: string | null;
   /** Diferente de "ativo" tira a pessoa da chamada e dos alertas. */
   situacao: SituacaoMembro;
   situacaoEm: string | null;

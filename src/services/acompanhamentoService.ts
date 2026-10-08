@@ -7,7 +7,7 @@ import {
   proximosAniversarios,
   type ProximoAniversario,
 } from "@/lib/rolMembros";
-import { ESTADOS_CIVIS, FORMAS_ENTRADA, SEXOS, SITUACOES, UFS, fichaVazia, temConjuge } from "@/lib/fichaMembro";
+import { ESTADOS_CIVIS, FORMAS_ENTRADA, SEXOS, SITUACOES, UFS, cpfValido, fichaVazia, temConjuge } from "@/lib/fichaMembro";
 import {
   MOTIVOS,
   RESULTADOS,
@@ -331,6 +331,17 @@ const textoCurto = (max: number, msg: string) => vazioVira(z.string().trim().max
 
 const fichaSchema = z
   .object({
+    numeroFicha: textoCurto(20, "Número da ficha longo demais"),
+    cpf: vazioVira(
+      z
+        .string()
+        .transform((v) => v.replace(/\D/g, ""))
+        .refine(cpfValido, "CPF inválido: confira os números"),
+    ),
+    rg: textoCurto(20, "RG longo demais"),
+    telefone2: vazioVira(
+      z.string().trim().min(8, "Segundo telefone curto demais").max(20, "Segundo telefone longo demais"),
+    ),
     sexo: vazioVira(z.enum(SEXOS, "Sexo inválido")),
     estadoCivil: vazioVira(z.enum(ESTADOS_CIVIS, "Estado civil inválido")),
     naturalidade: textoCurto(120, "Naturalidade longa demais"),
@@ -356,6 +367,11 @@ const fichaSchema = z
     entradaForma: vazioVira(z.enum(FORMAS_ENTRADA, "Forma de entrada inválida")),
     membroDesde: vazioVira(dataISO),
     igrejaOrigem: textoCurto(160, "Igreja de origem longa demais"),
+    batismoAguasLocal: textoCurto(120, "Local do batismo longo demais"),
+    batismoEspiritoData: vazioVira(dataISO),
+    batismoEspiritoLocal: textoCurto(120, "Local do batismo no Espírito Santo longo demais"),
+    consagracaoMinisterio: textoCurto(120, "Ministério da consagração longo demais"),
+    consagracaoOndePorQuem: textoCurto(200, "Texto da consagração longo demais"),
     situacao: z.enum(SITUACOES, "Situação inválida"),
     situacaoEm: vazioVira(dataISO),
     situacaoMotivo: textoCurto(300, "Motivo longo demais"),
@@ -650,6 +666,7 @@ export function createAcompanhamentoService(deps: {
         [ficha.dataCasamento, "casamento"],
         [ficha.dataConversao, "conversão"],
         [ficha.membroDesde, "entrada como membro"],
+        [ficha.batismoEspiritoData, "batismo no Espírito Santo"],
         [ficha.situacaoEm, "situação"],
       ] as const) {
         if (data && data > hojeData) throw new AppError("validation_error", `A data de ${nome} não pode ser no futuro.`);

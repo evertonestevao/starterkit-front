@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { enderecoEmLinha, fichaPreenchida, fichaVazia, mascaraCep, temConjuge } from "./fichaMembro";
+import {
+  cpfValido,
+  enderecoEmLinha,
+  fichaPreenchida,
+  fichaVazia,
+  mascaraCep,
+  mascaraCpf,
+  temConjuge,
+} from "./fichaMembro";
 
 describe("mascaraCep", () => {
   it("põe o traço depois do quinto dígito e corta em 8", () => {
@@ -53,5 +61,24 @@ describe("temConjuge", () => {
     expect(temConjuge("uniao_estavel")).toBe(true);
     expect(temConjuge("viuvo")).toBe(false);
     expect(temConjuge(null)).toBe(false);
+  });
+});
+
+describe("CPF", () => {
+  it("mascaraCpf formata enquanto digita e ignora o que não é número", () => {
+    expect(mascaraCpf("529")).toBe("529");
+    expect(mascaraCpf("5299822")).toBe("529.982.2");
+    expect(mascaraCpf("52998224725")).toBe("529.982.247-25");
+    expect(mascaraCpf("529.982.247-25 extra 99")).toBe("529.982.247-25");
+    expect(mascaraCpf(null)).toBe("");
+  });
+
+  it("cpfValido confere os dígitos verificadores", () => {
+    expect(cpfValido("529.982.247-25")).toBe(true);
+    expect(cpfValido("52998224725")).toBe(true);
+    expect(cpfValido("52998224724")).toBe(false); // um dígito trocado
+    expect(cpfValido("11111111111")).toBe(false); // todos iguais
+    expect(cpfValido("123")).toBe(false);
+    expect(cpfValido("")).toBe(false);
   });
 });
