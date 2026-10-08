@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { Download, LogOut, Moon, Sun, UserRound } from "lucide-react";
+import { Download, KeyRound, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -86,6 +86,10 @@ export function UserMenu({ userName, userEmail, avatarUrl, convitesPendentes = 0
                 {convitesPendentes}
               </span>
             ) : null}
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href={`${ROTA_MINHA_CONTA}#senha`} />}>
+            <KeyRound className="size-4" />
+            Trocar senha
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
             {resolvedTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}

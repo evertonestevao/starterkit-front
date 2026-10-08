@@ -82,7 +82,7 @@ export default async function ContaPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="senha" className="scroll-mt-20">
         <CardHeader>
           <CardTitle>Senha</CardTitle>
           <CardDescription>
