@@ -16,7 +16,7 @@ import { createRateLimiter } from "./rateLimit";
  * cada instância do servidor conta separado.
  */
 
-export type FormularioPublico = "oracao" | "visita" | "evento" | "doacao";
+export type FormularioPublico = "oracao" | "visita" | "evento" | "doacao" | "venda";
 
 /** Teste automático: sem tempo mínimo e com limites folgados (ver PUBLIC_FORMS_RELAXED). */
 const relaxado = getServerEnv().PUBLIC_FORMS_RELAXED === "true";

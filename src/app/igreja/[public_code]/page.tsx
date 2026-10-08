@@ -11,6 +11,7 @@ import { buildPixPayload } from "@/lib/pixPayload";
 import { qrPngDataUrl } from "@/lib/qr";
 import { trackChurchVisit } from "@/server/churchVisits";
 import { enderecoAtualDoCodigoAntigo, getPublicChurchRepository, loadPublicChurch } from "@/server/publicChurch";
+import { getVendasPublicasService } from "@/server/vendas";
 
 /** Quantos eventos a página inicial mostra antes do "ver todos os eventos". */
 const EVENTOS_NA_PREVIA = 3;
@@ -81,7 +82,7 @@ export default async function PublicChurchPage({
   const repo = await getPublicChurchRepository();
   // Nenhuma das duas listas pode derrubar a página da igreja: vazia é melhor
   // do que tela de erro para quem veio pelo QR Code.
-  const [sponsors, eventos, campanhas, programacao, linkCartao, linkPix, temRede] = await Promise.all([
+  const [sponsors, eventos, campanhas, programacao, linkCartao, linkPix, temRede, temVendas] = await Promise.all([
     // Porta fechada pra patrocinador (ou patrocínio fora das telas): nem
     // consulta — a seção nem aparece.
     !church.aceita_patrocinio || !features.patrocinioVisivel
@@ -122,6 +123,14 @@ export default async function PublicChurchPage({
           console.error("[church-page] falha ao verificar a rede", err);
           return false;
         }),
+    // Só para saber se o atalho "Vendas" aparece; a lista tem tela própria.
+    getVendasPublicasService()
+      .then((s) => s.listar(church.id))
+      .then((l) => l.length > 0)
+      .catch((err: unknown) => {
+        console.error("[church-page] falha ao carregar vendas", err);
+        return false;
+      }),
   ]);
 
   // O QR do PIX sai da chave da própria igreja e aponta direto para ela: a
@@ -153,6 +162,7 @@ export default async function PublicChurchPage({
         sponsors={sponsors}
         eventos={eventos}
         campanhas={campanhas}
+        temVendas={temVendas}
         programacao={programacao}
         pixCopiaECola={pixCopiaECola}
         pixQrDataUrl={pixQrDataUrl}

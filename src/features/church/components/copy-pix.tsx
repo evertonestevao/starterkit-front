@@ -19,7 +19,8 @@ export function CopyPix({
   qrDataUrl,
 }: {
   chave: string;
-  churchId: string;
+  /** Para a métrica de intenção de doar. Sem ele (venda, não doação), nada é registrado. */
+  churchId?: string;
   /** BR Code ("copia e cola"): é o que o QR carrega e o que o botão copia. */
   copiaECola?: string | null;
   qrDataUrl?: string | null;
@@ -31,7 +32,7 @@ export function CopyPix({
     // abre a doação com o recebedor preenchido. A chave crua é o plano B.
     await copy(copiaECola || chave);
     // Métrica anônima de intenção de doar. Nunca atrapalha a cópia.
-    void registerPixCopyAction(churchId).catch(() => {});
+    if (churchId) void registerPixCopyAction(churchId).catch(() => {});
   }
 
   return (
