@@ -67,7 +67,8 @@ export interface ChurchProfile {
 
 export interface ChurchProfileRepository {
   listCompanyChurches(companyId: string): Promise<ChurchProfile[]>;
-  updateProfile(input: {
+/** Dados da igreja (Configurações → Geral): nome, sobrenome e endereço. */
+  updateDados(input: {
     churchId: string;
     companyId: string;
     /** O nome PRÓPRIO: o efetivo (`name`) é derivado pelo banco. */
@@ -76,6 +77,11 @@ export interface ChurchProfileRepository {
     herdarNome: boolean;
     address: string | null;
     endereco: PartesDoEndereco;
+  }): Promise<void>;
+  /** O que só existe na página pública: texto, endereço da página e redes. */
+  updatePagina(input: {
+    churchId: string;
+    companyId: string;
     sobre: string | null;
     publicCode: string;
     socialLinks: Record<string, string>;
@@ -147,7 +153,7 @@ function textoOpcional(max: number, mensagem: string) {
   return z.string().trim().max(max, mensagem).transform(vazioViraNull);
 }
 
-const profileSchema = z.object({
+const dadosSchema = z.object({
   churchId: z.uuid("Igreja inválida"),
   name: z.string().trim().min(2, "Informe o nome da igreja").max(120, "Nome muito longo"),
   sobrenome: z
@@ -171,6 +177,10 @@ const profileSchema = z.object({
     .toUpperCase()
     .refine((v) => v === "" || /^[A-Z]{2}$/.test(v), "Escolha a UF")
     .transform(vazioViraNull),
+});
+
+const paginaSchema = z.object({
+  churchId: z.uuid("Igreja inválida"),
   publicCode: publicCodeSchema,
   // Texto simples (a página mostra sem interpretar HTML). Ausente = sem texto.
   sobre: z
@@ -273,10 +283,11 @@ export function createChurchProfileService(deps: {
       return deps.repo.listCompanyChurches(companyId);
     },
 
-    async save(actor: ProfileActor, input: unknown): Promise<void> {
+/** Nome, sobrenome e endereço da igreja (Configurações → Geral). */
+    async saveDados(actor: ProfileActor, input: unknown): Promise<void> {
       exigePermissao(actor);
 
-      const parsed = profileSchema.safeParse(input);
+      const parsed = dadosSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
       const dados = parsed.data;
 
@@ -297,15 +308,7 @@ export function createChurchProfileService(deps: {
         uf: dados.uf,
       };
 
-      const socialLinks = validarRedes({
-        instagram: dados.instagram,
-        whatsapp: dados.whatsapp,
-        youtube: dados.youtube,
-        facebook: dados.facebook,
-        site: dados.site,
-      });
-
-      await deps.repo.updateProfile({
+      await deps.repo.updateDados({
         churchId: dados.churchId,
         companyId: actor.companyId,
         nomeProprio: dados.name,
@@ -315,6 +318,43 @@ export function createChurchProfileService(deps: {
         // endereço não pode apagar a linha que já estava na página.
         address: linhaDoEndereco(endereco) ?? (temPartes(igreja.endereco) ? null : igreja.address),
         endereco,
+      });
+
+      await deps.audit
+        ?.record({
+          companyId: actor.companyId,
+          userId: actor.userId,
+          action: "church.dados.updated",
+          entityType: "church",
+          entityId: dados.churchId,
+          metadata: { nome: dados.name, sobrenome: dados.sobrenome, herdar_nome: dados.herdarNome },
+        })
+        .catch((err) => log.error("[church-profile] falha ao registrar auditoria", err));
+    },
+
+    /** Texto, endereço da página e redes (Configurações → Página da igreja). */
+    async savePagina(actor: ProfileActor, input: unknown): Promise<void> {
+      exigePermissao(actor);
+
+      const parsed = paginaSchema.safeParse(input);
+      if (!parsed.success) throw toValidationError(parsed.error.issues);
+      const dados = parsed.data;
+
+      const igrejas = await deps.repo.listCompanyChurches(actor.companyId);
+      const igreja = igrejas.find((c) => c.id === dados.churchId);
+      if (!igreja) throw new AppError("not_found", "Igreja não encontrada.");
+
+      const socialLinks = validarRedes({
+        instagram: dados.instagram,
+        whatsapp: dados.whatsapp,
+        youtube: dados.youtube,
+        facebook: dados.facebook,
+        site: dados.site,
+      });
+
+      await deps.repo.updatePagina({
+        churchId: dados.churchId,
+        companyId: actor.companyId,
         sobre: dados.sobre,
         publicCode: dados.publicCode,
         socialLinks,
@@ -332,7 +372,7 @@ export function createChurchProfileService(deps: {
             // fica registrada com o valor antigo, não só com o novo.
             igreja.publicCode !== dados.publicCode
               ? { public_code_anterior: igreja.publicCode, public_code_novo: dados.publicCode }
-              : { nome: dados.name, sobrenome: dados.sobrenome, herdar_nome: dados.herdarNome },
+              : {},
         })
         .catch((err) => log.error("[church-profile] falha ao registrar auditoria", err));
     },

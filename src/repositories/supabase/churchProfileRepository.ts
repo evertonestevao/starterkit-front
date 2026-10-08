@@ -131,18 +131,7 @@ export function createSupabaseChurchProfileRepository(
       );
     },
 
-    async updateProfile({
-      churchId,
-      companyId,
-      nomeProprio,
-      sobrenome,
-      herdarNome,
-      address,
-      endereco,
-      sobre,
-      publicCode,
-      socialLinks,
-    }) {
+    async updateDados({ churchId, companyId, nomeProprio, sobrenome, herdarNome, address, endereco }) {
       const { error } = await client
         .from("churches")
         .update({
@@ -152,6 +141,20 @@ export function createSupabaseChurchProfileRepository(
           herdar_nome: herdarNome,
           address,
           ...endereco,
+        })
+        .eq("id", churchId)
+        .eq("company_id", companyId);
+      if (!error) return;
+      if (error.code === CHECK_VIOLATION) {
+        throw new AppError("validation_error", "Algum campo do endereço está em formato inválido.", error);
+      }
+      throw new AppError("internal_error", "Falha ao salvar os dados da igreja", error);
+    },
+
+    async updatePagina({ churchId, companyId, sobre, publicCode, socialLinks }) {
+      const { error } = await client
+        .from("churches")
+        .update({
           sobre,
           // Gravado em `public_code`: o gatilho entende como troca de código e
           // refaz a chave (migration 20261006150000).

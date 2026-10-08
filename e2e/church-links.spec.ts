@@ -138,22 +138,23 @@ test("link da superior: não quero, recusa, aprovação com posição ajustada, 
   const publica = await filha.getByRole("link", { name: /Ver a página/ }).getAttribute("href");
   expect(publica).toBeTruthy();
 
+  await filha.goto("/dashboard/settings");
   await filha.getByRole("checkbox", { name: /Usar o nome de/ }).check();
   await expect(filha.locator("#name")).toBeDisabled();
   await expect(filha.locator("#name")).toHaveValue(nomeSede);
   await filha.locator("#sobrenome").fill("Prainha - Promissão");
-  await filha.getByRole("button", { name: "Salvar página" }).click();
-  await expect(filha.getByText("Página da igreja atualizada.").first()).toBeVisible();
+  await filha.getByRole("button", { name: "Salvar dados" }).click();
+  await expect(filha.getByText("Dados da igreja atualizados.").first()).toBeVisible();
 
   await filha.goto(publica!);
   await expect(filha.getByRole("heading", { level: 1, name: nomeSede })).toBeVisible();
   await expect(filha.getByText("Prainha - Promissão", { exact: true })).toBeVisible();
 
   const novoNome = `Sede Renomeada ${sufixo}`;
-  await sede.goto("/dashboard/settings/igreja");
+  await sede.goto("/dashboard/settings");
   await sede.locator("#name").fill(novoNome);
-  await sede.getByRole("button", { name: "Salvar página" }).click();
-  await expect(sede.getByText("Página da igreja atualizada.").first()).toBeVisible();
+  await sede.getByRole("button", { name: "Salvar dados" }).click();
+  await expect(sede.getByText("Dados da igreja atualizados.").first()).toBeVisible();
   await filha.goto(publica!);
   await expect(filha.getByRole("heading", { level: 1, name: novoNome })).toBeVisible();
 

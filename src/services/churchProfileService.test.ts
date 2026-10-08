@@ -45,7 +45,8 @@ function build(sobrescrever: Partial<ChurchProfile> = {}) {
         ...sobrescrever,
       },
     ]),
-    updateProfile: vi.fn(async () => undefined),
+    updateDados: vi.fn(async () => undefined),
+    updatePagina: vi.fn(async () => undefined),
     updateLogo: vi.fn(async () => undefined),
     setPaginaAtiva: vi.fn(async () => undefined),
     updateAppearance: vi.fn(async () => undefined),
@@ -86,8 +87,8 @@ async function erroDe(promise: Promise<unknown>) {
 describe("endereço", () => {
   it("grava as partes e monta a linha da página", async () => {
     const { repo, service } = build();
-    await service.save(ADMIN, base);
-    expect(repo.updateProfile).toHaveBeenCalledWith(
+    await service.saveDados(ADMIN, base);
+    expect(repo.updateDados).toHaveBeenCalledWith(
       expect.objectContaining({
         address: "Rua das Flores, 540 - Centro, Lins/SP, 16400-010",
         endereco: {
@@ -106,20 +107,20 @@ describe("endereço", () => {
   it("igreja antiga só com a linha: salvar sem preencher as partes mantém a linha", async () => {
     const { repo, service } = build();
     const semEndereco = { cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "" };
-    await service.save(ADMIN, { ...base, ...semEndereco });
-    expect(repo.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ address: "Rua A, 10" }));
+    await service.saveDados(ADMIN, { ...base, ...semEndereco });
+    expect(repo.updateDados).toHaveBeenCalledWith(expect.objectContaining({ address: "Rua A, 10" }));
 
     // Quem já tinha partes e apagou tudo fica sem endereço.
     const comPartes = build({ endereco: { ...ENDERECO_VAZIO, cidade: "Lins" } });
-    await comPartes.service.save(ADMIN, { ...base, ...semEndereco });
-    expect(comPartes.repo.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ address: null }));
+    await comPartes.service.saveDados(ADMIN, { ...base, ...semEndereco });
+    expect(comPartes.repo.updateDados).toHaveBeenCalledWith(expect.objectContaining({ address: null }));
   });
 
   it("recusa CEP incompleto e UF que não existe", async () => {
     const { repo, service } = build();
-    expect(isAppError(await erroDe(service.save(ADMIN, { ...base, cep: "1640" })))).toBe(true);
-    expect(isAppError(await erroDe(service.save(ADMIN, { ...base, uf: "São Paulo" })))).toBe(true);
-    expect(repo.updateProfile).not.toHaveBeenCalled();
+    expect(isAppError(await erroDe(service.saveDados(ADMIN, { ...base, cep: "1640" })))).toBe(true);
+    expect(isAppError(await erroDe(service.saveDados(ADMIN, { ...base, uf: "São Paulo" })))).toBe(true);
+    expect(repo.updateDados).not.toHaveBeenCalled();
   });
 });
 
@@ -135,18 +136,18 @@ describe("publicCodeSchema", () => {
   });
 });
 
-describe("save", () => {
-  it("grava nome, endereço e redes válidas", async () => {
+describe("savePagina", () => {
+  it("grava texto, endereço da página e redes válidas", async () => {
     const { repo, service } = build();
 
-    await service.save(ADMIN, {
+    await service.savePagina(ADMIN, {
       ...base,
       instagram: "@igrejabetel",
       whatsapp: "14999998888",
       site: "https://betel.org.br",
     });
 
-    expect(repo.updateProfile).toHaveBeenCalledWith(
+    expect(repo.updatePagina).toHaveBeenCalledWith(
       expect.objectContaining({
         churchId: IGREJA,
         companyId: EMPRESA,
@@ -163,16 +164,16 @@ describe("save", () => {
   it("recusa rede que a página pública ignoraria em silêncio", async () => {
     const { repo, service } = build();
 
-    const err = await erroDe(service.save(ADMIN, { ...base, whatsapp: "123" }));
+    const err = await erroDe(service.savePagina(ADMIN, { ...base, whatsapp: "123" }));
 
     expect(isAppError(err) && err.message).toMatch(/WhatsApp inválido/);
-    expect(repo.updateProfile).not.toHaveBeenCalled();
+    expect(repo.updatePagina).not.toHaveBeenCalled();
   });
 
   it("registra a troca do endereço público com o valor antigo", async () => {
     const { audit, service } = build();
 
-    await service.save(ADMIN, { ...base, publicCode: "betel-novo" });
+    await service.savePagina(ADMIN, { ...base, publicCode: "betel-novo" });
 
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -185,27 +186,27 @@ describe("save", () => {
   it("member não edita a página da igreja", async () => {
     const { repo, service } = build();
 
-    const err = await erroDe(service.save({ ...ADMIN, role: "member" }, base));
+    const err = await erroDe(service.savePagina({ ...ADMIN, role: "member" }, base));
 
     expect(isAppError(err) && err.code).toBe("forbidden");
-    expect(repo.updateProfile).not.toHaveBeenCalled();
+    expect(repo.updatePagina).not.toHaveBeenCalled();
   });
 
   it("igreja de outra empresa não é encontrada", async () => {
     const { repo, service } = build();
 
-    const err = await erroDe(service.save(ADMIN, { ...base, churchId: OUTRA }));
+    const err = await erroDe(service.savePagina(ADMIN, { ...base, churchId: OUTRA }));
 
     expect(isAppError(err) && err.code).toBe("not_found");
-    expect(repo.updateProfile).not.toHaveBeenCalled();
+    expect(repo.updatePagina).not.toHaveBeenCalled();
   });
 
   it("campo de rede vazio não vira link quebrado", async () => {
     const { repo, service } = build();
 
-    await service.save(ADMIN, base);
+    await service.savePagina(ADMIN, base);
 
-    expect(repo.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ socialLinks: {} }));
+    expect(repo.updatePagina).toHaveBeenCalledWith(expect.objectContaining({ socialLinks: {} }));
   });
 });
 
@@ -339,12 +340,26 @@ describe("saveAppearance", () => {
 });
 
 describe("nome e sobrenome", () => {
+  it("member não edita os dados da igreja", async () => {
+    const { repo, service } = build();
+    const err = await erroDe(service.saveDados({ ...ADMIN, role: "member" }, base));
+    expect(isAppError(err) && err.code).toBe("forbidden");
+    expect(repo.updateDados).not.toHaveBeenCalled();
+  });
+
+  it("igreja de outra empresa não é encontrada", async () => {
+    const { repo, service } = build();
+    const err = await erroDe(service.saveDados(ADMIN, { ...base, churchId: OUTRA }));
+    expect(isAppError(err) && err.code).toBe("not_found");
+    expect(repo.updateDados).not.toHaveBeenCalled();
+  });
+
   it("grava o nome próprio e o sobrenome normalizado (espaços aparados)", async () => {
     const { repo, service } = build();
 
-    await service.save(ADMIN, { ...base, name: "Assembleia de Deus Ministério no Ipiranga", sobrenome: "  Prainha   - Promissão " });
+    await service.saveDados(ADMIN, { ...base, name: "Assembleia de Deus Ministério no Ipiranga", sobrenome: "  Prainha   - Promissão " });
 
-    expect(repo.updateProfile).toHaveBeenCalledWith(
+    expect(repo.updateDados).toHaveBeenCalledWith(
       expect.objectContaining({
         nomeProprio: "Assembleia de Deus Ministério no Ipiranga",
         sobrenome: "Prainha - Promissão",
@@ -356,29 +371,29 @@ describe("nome e sobrenome", () => {
   it("sobrenome em branco é gravado como nenhum", async () => {
     const { repo, service } = build();
 
-    await service.save(ADMIN, { ...base, sobrenome: "   " });
+    await service.saveDados(ADMIN, { ...base, sobrenome: "   " });
 
-    expect(repo.updateProfile).toHaveBeenCalledWith(expect.objectContaining({ sobrenome: null }));
+    expect(repo.updateDados).toHaveBeenCalledWith(expect.objectContaining({ sobrenome: null }));
   });
 
   it("recusa sobrenome grande demais", async () => {
     const { repo, service } = build();
 
-    const err = await erroDe(service.save(ADMIN, { ...base, sobrenome: "x".repeat(121) }));
+    const err = await erroDe(service.saveDados(ADMIN, { ...base, sobrenome: "x".repeat(121) }));
 
     expect(isAppError(err) && err.code).toBe("validation_error");
-    expect(repo.updateProfile).not.toHaveBeenCalled();
+    expect(repo.updateDados).not.toHaveBeenCalled();
   });
 
   it("só herda o nome quem tem igreja superior", async () => {
     const semMae = build();
-    const err = await erroDe(semMae.service.save(ADMIN, { ...base, herdarNome: true }));
+    const err = await erroDe(semMae.service.saveDados(ADMIN, { ...base, herdarNome: true }));
     expect(isAppError(err) && err.code).toBe("validation_error");
-    expect(semMae.repo.updateProfile).not.toHaveBeenCalled();
+    expect(semMae.repo.updateDados).not.toHaveBeenCalled();
 
     const comMae = build({ hasParent: true, parentName: "Comunidade da Graça" });
-    await comMae.service.save(ADMIN, { ...base, herdarNome: true, sobrenome: "Prainha" });
-    expect(comMae.repo.updateProfile).toHaveBeenCalledWith(
+    await comMae.service.saveDados(ADMIN, { ...base, herdarNome: true, sobrenome: "Prainha" });
+    expect(comMae.repo.updateDados).toHaveBeenCalledWith(
       // O nome próprio segue gravado (volta a valer se ela deixar de herdar); o sobrenome é só dela.
       expect.objectContaining({ herdarNome: true, nomeProprio: "Igreja Betel", sobrenome: "Prainha" }),
     );
