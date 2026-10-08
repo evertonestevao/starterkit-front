@@ -5,10 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { ActionState } from "@/server/actions/action-state";
 
-type AuthAction = (
-  prev: ActionState | undefined,
-  formData: FormData,
-) => Promise<ActionState>;
+type AuthAction = (prev: ActionState | undefined, formData: FormData) => Promise<ActionState>;
 
 interface AuthFormProps {
   action: AuthAction;

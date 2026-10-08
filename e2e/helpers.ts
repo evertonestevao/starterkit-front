@@ -47,7 +47,7 @@ export function uniqueEmail(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e4)}@e2e.local`;
 }
 
-export const PASSWORD = "senha-e2e-12345";
+export const PASSWORD = "Senha-e2e-12345";
 
 /**
  * Descobre o link de convite de patrocínio da igreja da empresa ativa.
