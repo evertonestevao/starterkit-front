@@ -1,3 +1,4 @@
+import type { ChurchTipo } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AppError } from "@/lib/errors";
 import type {
@@ -27,14 +28,18 @@ export function createSupabaseRedeCadastroRepository(client: SupabaseClient): Re
         if (error.code === "23505") throw new AppError("conflict", "Endereço repetido", error);
         if (error.code === "P0002") throw new AppError("not_found", "Igreja não encontrada.", error);
         if (error.code === "22023" || error.code === "23514") {
-          throw new AppError("validation_error", "Esta igreja não pode cadastrar esse tipo de igreja abaixo dela.", error);
+          throw new AppError(
+            "validation_error",
+            "Esta igreja não pode cadastrar esse tipo de igreja abaixo dela.",
+            error,
+          );
         }
         throw new AppError("internal_error", "Falha ao cadastrar a igreja", error);
       }
       return data as string;
     },
 
-    async convidar({ churchId, tokenHash, email, nome, cargo, whatsapp, validadeHoras }) {
+    async convidar({ churchId, tokenHash, email, nome, cargo, whatsapp, validadeHoras, substituir }) {
       const { data, error } = await client.rpc("convidar_responsavel", {
         p_church_id: churchId,
         p_token_hash: tokenHash,
@@ -43,12 +48,18 @@ export function createSupabaseRedeCadastroRepository(client: SupabaseClient): Re
         p_cargo: cargo ?? "",
         p_whatsapp: whatsapp ?? "",
         p_validade_horas: validadeHoras,
+        p_substituir: substituir,
       });
       if (error) {
         if (error.code === "P0002") {
-          throw new AppError("not_found", "Esta igreja não está mais aguardando responsável.", error);
+          throw new AppError(
+            "not_found",
+            "Esta igreja já tem responsável: só o Responsável da igreja de cima convida um novo.",
+            error,
+          );
         }
-        if (error.code === "23514") throw new AppError("validation_error", "Confira o nome, o e-mail e o WhatsApp.", error);
+        if (error.code === "23514")
+          throw new AppError("validation_error", "Confira o nome, o e-mail e o WhatsApp.", error);
         throw new AppError("internal_error", "Falha ao gerar o convite", error);
       }
       return data as string;
@@ -60,8 +71,10 @@ export function createSupabaseRedeCadastroRepository(client: SupabaseClient): Re
         p: { nome, sobrenome, sobre, address, ...endereco },
       });
       if (error) {
-        if (error.code === "P0002") throw new AppError("not_found", "Esta igreja já tem responsável: só ela edita agora.", error);
-        if (error.code === "23514") throw new AppError("validation_error", "Algum campo está fora do permitido.", error);
+        if (error.code === "P0002")
+          throw new AppError("not_found", "Esta igreja já tem responsável: só ela edita agora.", error);
+        if (error.code === "23514")
+          throw new AppError("validation_error", "Algum campo está fora do permitido.", error);
         throw new AppError("internal_error", "Falha ao salvar os dados da igreja", error);
       }
     },
@@ -89,30 +102,32 @@ export function createSupabaseRedeCadastroRepository(client: SupabaseClient): Re
           convite_email: string | null;
           convite_expira: string | null;
         }>
-      ).map(
-        (r): IgrejaAguardando => ({
-          churchId: r.church_id,
-          nome: r.church_name,
-          nomeProprio: r.nome_proprio,
-          sobrenome: r.sobrenome,
-          sobre: r.sobre,
-          endereco: {
-            cep: r.cep,
-            logradouro: r.logradouro,
-            numero: r.numero,
-            complemento: r.complemento,
-            bairro: r.bairro,
-            cidade: r.cidade,
-            uf: r.uf,
-          },
-          tipo: r.tipo,
-          criadaEm: r.created_at,
-          convite:
-            r.convite_email && r.convite_expira
-              ? { nome: r.convite_nome ?? "", email: r.convite_email, expiraEm: r.convite_expira }
-              : null,
-        }),
-      );
+      ).map((r): IgrejaAguardando => ({
+        churchId: r.church_id,
+        nome: r.church_name,
+        nomeProprio: r.nome_proprio,
+        sobrenome: r.sobrenome,
+        sobre: r.sobre,
+        endereco: {
+          cep: r.cep,
+          logradouro: r.logradouro,
+          numero: r.numero,
+          complemento: r.complemento,
+          bairro: r.bairro,
+          cidade: r.cidade,
+          uf: r.uf,
+        },
+        tipo: r.tipo,
+        criadaEm: r.created_at,
+        convite:
+          r.convite_email && r.convite_expira
+            ? {
+                nome: r.convite_nome ?? "",
+                email: r.convite_email,
+                expiraEm: r.convite_expira,
+              }
+            : null,
+      }));
     },
 
     async consultarConvite(token) {
@@ -126,6 +141,7 @@ export function createSupabaseRedeCadastroRepository(client: SupabaseClient): Re
           mae_name: string | null;
           email: string | null;
           nome: string;
+          substituir: boolean | null;
         }>
       )[0];
       if (!r) return null;
@@ -136,24 +152,90 @@ export function createSupabaseRedeCadastroRepository(client: SupabaseClient): Re
         mae: r.mae_name,
         email: r.email,
         nome: r.nome,
+        substituir: Boolean(r.substituir),
       };
       return convite;
     },
 
     async aceitar(token) {
-      const { data, error } = await client.rpc("aceitar_responsavel", { p_token: token });
+      const { data, error } = await client.rpc("aceitar_responsavel", {
+        p_token: token,
+      });
       if (error) {
         if (error.code === "P0002") {
           throw new AppError("not_found", "Este convite não vale mais. Peça um novo a quem cadastrou a igreja.", error);
         }
         if (error.code === "42501") {
-          throw new AppError("forbidden", "Este convite é para outro e-mail. Saia e entre com o e-mail do convite.", error);
+          throw new AppError(
+            "forbidden",
+            "Este convite é para outro e-mail. Saia e entre com o e-mail do convite.",
+            error,
+          );
         }
         throw new AppError("internal_error", "Falha ao assumir a igreja", error);
       }
-      const r = ((data ?? []) as Array<{ company_id: string; church_name: string }>)[0];
+      const r = (
+        (data ?? []) as Array<{
+          company_id: string;
+          church_name: string;
+          removidos: string[] | null;
+        }>
+      )[0];
       if (!r) throw new AppError("internal_error", "Falha ao assumir a igreja");
-      return { companyId: r.company_id, igreja: r.church_name };
+      return {
+        companyId: r.company_id,
+        igreja: r.church_name,
+        removidos: r.removidos ?? [],
+      };
+    },
+
+    async responsaveis(maeId) {
+      const { data, error } = await client.rpc("responsaveis_da_rede", {
+        p_church_id: maeId,
+      });
+      if (error) throw new AppError("internal_error", "Falha ao carregar os responsáveis da rede", error);
+      return (
+        (data ?? []) as Array<{
+          church_id: string;
+          church_name: string;
+          tipo: ChurchTipo;
+          member_id: string;
+          nome: string;
+          email: string;
+          desde: string | null;
+        }>
+      ).map((r) => ({
+        churchId: r.church_id,
+        igreja: r.church_name,
+        tipo: r.tipo,
+        memberId: r.member_id,
+        nome: r.nome,
+        email: r.email,
+        desde: r.desde,
+      }));
+    },
+
+    async remover(memberId) {
+      const { data, error } = await client.rpc("remover_responsavel_abaixo", {
+        p_member_id: memberId,
+      });
+      if (error) {
+        if (error.code === "P0002") throw new AppError("not_found", "Responsável não encontrado.", error);
+        throw new AppError("internal_error", "Falha ao remover o responsável", error);
+      }
+      const r = (
+        (data ?? []) as Array<{
+          email: string | null;
+          ficou_sem_responsavel: boolean;
+          church_name: string;
+        }>
+      )[0];
+      if (!r) throw new AppError("internal_error", "Falha ao remover o responsável");
+      return {
+        email: r.email,
+        ficouSemResponsavel: r.ficou_sem_responsavel,
+        igreja: r.church_name,
+      };
     },
   };
 }
@@ -167,7 +249,9 @@ export function createSupabaseRedeCadastroRepository(client: SupabaseClient): Re
 export function createSupabaseContasDoServidor(admin: SupabaseClient, client: SupabaseClient): ContasDoServidor {
   return {
     async contaExiste(email) {
-      const { data, error } = await admin.rpc("conta_existe_para_email", { p_email: email });
+      const { data, error } = await admin.rpc("conta_existe_para_email", {
+        p_email: email,
+      });
       if (error) throw new AppError("internal_error", "Falha ao conferir a conta", error);
       return data === true;
     },
@@ -183,14 +267,23 @@ export function createSupabaseContasDoServidor(admin: SupabaseClient, client: Su
         if (/already|registered|exists/i.test(error.message)) {
           throw new AppError("conflict", "Este e-mail já tem conta. Entre com a sua senha para assumir.", error);
         }
-        if (/password/i.test(error.message)) throw new AppError("validation_error", "Senha fraca. Use letras, números e símbolo.", error, "senha");
+        if (/password/i.test(error.message))
+          throw new AppError("validation_error", "Senha fraca. Use letras, números e símbolo.", error, "senha");
         throw new AppError("internal_error", "Falha ao criar a conta", error);
       }
     },
 
     async entrar(email, senha) {
-      const { error } = await client.auth.signInWithPassword({ email, password: senha });
-      if (error) throw new AppError("internal_error", "Conta criada, mas não foi possível entrar. Tente entrar pela tela de login.", error);
+      const { error } = await client.auth.signInWithPassword({
+        email,
+        password: senha,
+      });
+      if (error)
+        throw new AppError(
+          "internal_error",
+          "Conta criada, mas não foi possível entrar. Tente entrar pela tela de login.",
+          error,
+        );
     },
   };
 }

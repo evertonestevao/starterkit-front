@@ -35,7 +35,12 @@ export function createEmailService({ provider: envio, appUrl }: EmailServiceDeps
     send: (m: EmailMessage) =>
       envio.send({
         ...m,
-        html: molduraDeEmail({ marca: brand.name, site: base, titulo: m.subject, conteudo: m.html }),
+        html: molduraDeEmail({
+          marca: brand.name,
+          site: base,
+          titulo: m.subject,
+          conteudo: m.html,
+        }),
       }),
   };
 
@@ -337,6 +342,21 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
       );
     },
 
+    /** Aviso simples sobre a troca de Responsável. As linhas vêm escapadas (nome de igreja é texto do usuário). */
+    async sendAvisoDeResponsavel(input: { to: string[]; subject: string; lines: string[] }): Promise<void> {
+      if (input.to.length === 0) return;
+      await Promise.all(
+        input.to.map((to) =>
+          provider.send({
+            to,
+            subject: input.subject,
+            text: input.lines.join("\n\n"),
+            html: input.lines.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n"),
+          }),
+        ),
+      );
+    },
+
     async sendPlatformStaffAlert(input: { to: string[]; subject: string; lines: string[] }): Promise<void> {
       if (input.to.length === 0) return;
       await Promise.all(
@@ -396,7 +416,11 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
       if (input.to.length === 0) return;
       const painel = `${base}/dashboard/settings/vinculos`;
       const resumo = input.approved
-        ? describeApproved({ parentName: input.parentName, childName: input.childName, tipo: input.tipo })
+        ? describeApproved({
+            parentName: input.parentName,
+            childName: input.childName,
+            tipo: input.tipo,
+          })
         : `${input.parentName} não aprovou o pedido de vínculo de ${input.childName}.`;
       const motivo = !input.approved && input.motivo ? `Motivo informado: ${input.motivo}` : null;
 

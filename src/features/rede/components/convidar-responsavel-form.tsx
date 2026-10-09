@@ -17,24 +17,33 @@ import { convidarResponsavelAction } from "@/server/actions/redeCadastro";
  * hash): copiar, mandar pelo WhatsApp ou mostrar o QR Code para a pessoa
  * apontar a câmera. Gerar outro cancela o anterior.
  */
-export function ConvidarResponsavelForm({ churchId, igreja }: { churchId: string; igreja: string }) {
+export function ConvidarResponsavelForm({
+  churchId,
+  igreja,
+  troca = false,
+}: {
+  churchId: string;
+  igreja: string;
+  /** A igreja já tem Responsável: é uma troca (só o Responsável de cima). */
+  troca?: boolean;
+}) {
   const [state, action, pending] = useActionState(convidarResponsavelAction, undefined);
   useEffect(() => {
     if (state?.error) toast.error(state.error);
   }, [state]);
   const [cargo, setCargo] = useState<"pastor" | "secretario">("pastor");
   const { copied, copy } = useCopyToClipboard(2500);
+  const [substituir, setSubstituir] = useState(true);
 
   if (state?.success) {
     const g = state.success;
     const mensagem = `Olá, ${g.nome.split(" ")[0]}! A igreja ${igreja} já está cadastrada no AssembleiaApp e você foi convidado para ser o responsável por ela. Toque no link para assumir (vale até ${formatarData(g.expiraEm.slice(0, 10))}):\n${g.link}`;
     // Com o WhatsApp da pessoa, abre a conversa com ela; sem, abre para escolher o contato.
-    const whats = (g.whatsapp && linkWhatsapp(g.whatsapp, mensagem)) || `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
+    const whats =
+      (g.whatsapp && linkWhatsapp(g.whatsapp, mensagem)) || `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
     return (
       <div className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-primary/5 p-3" role="status">
-        <p className="text-sm font-medium">
-          Convite para {g.nome} gerado. Mande agora: este link não aparece de novo.
-        </p>
+        <p className="text-sm font-medium">Convite para {g.nome} gerado. Mande agora: este link não aparece de novo.</p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -73,6 +82,7 @@ export function ConvidarResponsavelForm({ churchId, igreja }: { churchId: string
     <Formulario action={action} estado={state} className="flex flex-col gap-3">
       <input type="hidden" name="churchId" value={churchId} />
       <input type="hidden" name="cargo" value={cargo} />
+      {troca && substituir ? <input type="hidden" name="substituir" value="on" /> : null}
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Quem vai assumir">
         {(
           [
@@ -109,6 +119,23 @@ export function ConvidarResponsavelForm({ churchId, igreja }: { churchId: string
         A conta dele fica no e-mail informado (é por ele que recupera a senha): confira com a pessoa. O convite vale 7
         dias e só funciona para esse e-mail.
       </p>
+      {troca ? (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={substituir}
+            onChange={(e) => setSubstituir(e.target.checked)}
+            className="mt-0.5 accent-primary"
+          />
+          <span>
+            Substituir os responsáveis atuais quando ele assumir
+            <span className="block text-xs text-muted-foreground">
+              Quem responde hoje perde o acesso (o cadastro de membro continua) e é avisado por e-mail. Desmarcado, os
+              dois ficam como Responsáveis.
+            </span>
+          </span>
+        </label>
+      ) : null}
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? "Gerando..." : "Gerar convite"}
       </Button>
