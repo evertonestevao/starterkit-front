@@ -140,20 +140,9 @@ export function ClasseForm({ classe }: { classe?: EbdClasse }) {
                 />
               </div>
               <p className="col-span-2 text-xs text-muted-foreground">
-                Usadas para sugerir a classe de cada aluno na promoção. Deixe em branco se não tiver limite.
+                Usadas para sugerir a classe de cada aluno na promoção e para pôr as classes em ordem, da menor
+                para a maior idade. Deixe em branco se não tiver limite.
               </p>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`cl-ordem-${id}`}>Ordem no resumo</Label>
-              <Input
-                id={`cl-ordem-${id}`}
-                name="ordem"
-                type="number"
-                min={0}
-                max={999}
-                defaultValue={classe?.ordem ?? 100}
-                className="w-28"
-              />
             </div>
             <DialogFooter>
               <DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Cancelar</DialogClose>

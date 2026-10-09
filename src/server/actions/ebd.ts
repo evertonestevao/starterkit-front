@@ -37,7 +37,6 @@ export async function salvarClasseAction(
       nome: texto(formData, "nome"),
       faixaEtaria: texto(formData, "faixaEtaria"),
       sala: texto(formData, "sala"),
-      ordem: Number(formData.get("ordem") ?? 100) || 100,
       idadeMinima: texto(formData, "idadeMinima"),
       idadeMaxima: texto(formData, "idadeMaxima"),
     };
