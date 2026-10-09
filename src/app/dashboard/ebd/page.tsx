@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BookOpen, ClipboardCheck, FileDown, Users } from "lucide-react";
+import { ClipboardCheck, FileDown } from "lucide-react";
 import { DataAuto } from "@/components/data-auto";
-import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ClasseForm } from "@/features/ebd/components/ebd-classe-acoes";
 import { formatarData, formatarPercentual, hojeISO } from "@/lib/acompanhamento";
 import { domingoSugerido, formatarReais, totaisDoDia, trimestreDe } from "@/lib/ebd";
 import { getEbdActorAutorizado, getEbdService } from "@/server/ebd";
@@ -35,8 +33,7 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
   const data = sp.data && DATA.test(sp.data) ? sp.data : domingoSugerido(hojeISO());
 
   const service = await getEbdService();
-  const [{ classes, gestao }, resumo, trimestres, rede] = await Promise.all([
-    service.classes(actor),
+  const [resumo, trimestres, rede] = await Promise.all([
     service.resumoDoDia(actor, data),
     service.trimestres(actor),
     // Só números das igrejas abaixo; um complemento — se falhar, segue sem ele.
@@ -47,8 +44,6 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
   ]);
   const trimestre = trimestreDe(trimestres, data);
   const t = totaisDoDia(resumo);
-  const ativas = classes.filter((c) => c.ativa);
-  const encerradas = classes.filter((c) => !c.ativa);
 
   return (
     <div className="flex flex-col gap-6">
@@ -86,7 +81,12 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
           </div>
 
           {resumo.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma classe ativa.</p>
+            <p className="text-sm text-muted-foreground">
+              Nenhuma classe ativa.{" "}
+              <Link href="/dashboard/ebd/classes" className="font-medium text-primary underline underline-offset-4">
+                Abrir Salas
+              </Link>
+            </p>
           ) : (
             <>
               <LegendaPresenca
@@ -197,50 +197,6 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
         </CardContent>
       </Card>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="flex items-center gap-2 font-medium">
-            <BookOpen className="size-4 text-primary" /> {gestao ? "Classes" : "Suas classes"}
-          </h3>
-          {gestao ? <ClasseForm /> : null}
-        </div>
-        {ativas.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            {gestao ? "Nenhuma classe ainda. Crie a primeira (ex.: Adultos, Jovens, Juniores)." : "Você ainda não tem classe."}
-          </p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {ativas.map((c) => (
-              <Link key={c.id} href={`/dashboard/ebd/classes/${c.id}`} className="rounded-lg border p-3 transition-colors hover:bg-muted">
-                <p className="font-medium">{c.nome}</p>
-                <p className="text-xs text-muted-foreground">
-                  {[c.faixaEtaria, c.sala].filter(Boolean).join(" · ") || "—"}
-                </p>
-                <p className="mt-2 flex items-center gap-1 text-sm">
-                  <Users className="size-3.5 text-muted-foreground" /> {c.matriculados} aluno(s)
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {c.professores.length > 0 ? `Prof.: ${c.professores.map((p) => p.nome).join(", ")}` : "Sem professor definido"}
-                </p>
-              </Link>
-            ))}
-          </div>
-        )}
-        {gestao && encerradas.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Encerradas:{" "}
-            {encerradas.map((c, i) => (
-              <span key={c.id}>
-                {i > 0 ? ", " : ""}
-                <Link href={`/dashboard/ebd/classes/${c.id}`} className="underline-offset-4 hover:underline">
-                  {c.nome}
-                </Link>
-              </span>
-            ))}{" "}
-            <Badge variant="outline">histórico</Badge>
-          </p>
-        ) : null}
-      </section>
 
       {rede.length > 0 ? (
         <Card>
