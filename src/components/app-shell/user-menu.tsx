@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { Download, KeyRound, LogOut, Moon, Sun, UserRound } from "lucide-react";
+import { CreditCard, Download, KeyRound, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { InstrucoesIos } from "@/components/pwa/instalar-app";
 import { useInstalarApp } from "@/hooks/useInstalarApp";
-import { ROTA_MINHA_CONTA } from "@/lib/menuPermissoes";
+import { MENUS, ROTA_MINHA_CONTA } from "@/lib/menuPermissoes";
+import { useTenant } from "@/providers/tenant-provider";
+
+const ROTA_MENSALIDADE = MENUS.find((m) => m.key === "mensalidade")?.href ?? "/dashboard/mensalidade";
 import { signOutAction } from "@/server/actions/auth";
 
 export interface UserMenuProps {
@@ -34,6 +37,9 @@ export function UserMenu({ userName, userEmail, avatarUrl, convitesPendentes = 0
   // "Instalar o app" só aparece onde o navegador instala e o app ainda não está instalado.
   const { modo, abrirJanela } = useInstalarApp();
   const [instrucoesIos, setInstrucoesIos] = useState(false);
+  // Mensalidade saiu da barra lateral: abre por aqui, para quem tem acesso (quem administra).
+  const { menus } = useTenant();
+  const verMensalidade = menus.includes("mensalidade");
   const podeInstalar = modo === "botao" || modo === "instrucoes_ios" || modo === "abrir_no_safari";
   const initials = userName
     .split(/\s+/)
@@ -87,6 +93,12 @@ export function UserMenu({ userName, userEmail, avatarUrl, convitesPendentes = 0
               </span>
             ) : null}
           </DropdownMenuItem>
+          {verMensalidade ? (
+            <DropdownMenuItem render={<Link href={ROTA_MENSALIDADE} />}>
+              <CreditCard className="size-4" />
+              Mensalidade
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem render={<Link href={`${ROTA_MINHA_CONTA}#senha`} />}>
             <KeyRound className="size-4" />
             Trocar senha
