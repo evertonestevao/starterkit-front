@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { formatChurchName } from "@/lib/churchName";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { safeChurchLinkPath, tokenDoCaminho } from "@/lib/churchLinks";
@@ -60,7 +61,10 @@ export async function createCompanyAction(_prev: ActionState | undefined, formDa
       redeNome: formData.get("rede_nome"),
       modulosInativos,
       // Convite da plataforma, ou o token do link de vínculo de onde a pessoa veio.
-      convite: String(formData.get("igreja_nova") ?? "") || tokenDoCaminho(safeChurchLinkPath(formData.get("next")) ?? "") || null,
+      convite:
+        String(formData.get("igreja_nova") ?? "") ||
+        tokenDoCaminho(safeChurchLinkPath(formData.get("next")) ?? "") ||
+        null,
     });
     companyId = company.id;
     await setActiveCompanyCookie(companyId);
@@ -152,14 +156,19 @@ export async function convidarComLinkAction(
   companyId: string,
   email: string,
   role: "admin" | "member",
-): Promise<ActionState & { url?: string; email?: string }> {
+): Promise<ActionState & { url?: string; email?: string; igreja?: string }> {
   try {
     const conviteId = await convidarParaSistema({ companyId, email, role: role === "admin" ? "admin" : "member" });
     revalidatePath("/dashboard/membros", "layout");
     revalidatePath("/dashboard/settings/quem-acessa");
     await exigeGestaoDeConvites(companyId);
     const { token, email: destino } = await (await getInviteService()).tokenDoConvite(conviteId, companyId);
-    return { success: "Convite criado", url: linkDeAceite(getServerEnv().APP_URL, token), email: destino };
+    return {
+      success: "Convite criado",
+      url: linkDeAceite(getServerEnv().APP_URL, token),
+      email: destino,
+      igreja: await nomeCompletoDaIgreja(companyId, ""),
+    };
   } catch (err) {
     return toActionError(err);
   }
@@ -187,6 +196,21 @@ export async function revokeInviteAction(inviteId: string, companyId: string): P
 }
 
 /** Quem administra a igreja e está logado; devolve o id de quem age. */
+/** Nome completo da igreja da conta (com o complemento), para a mensagem do convite. */
+async function nomeCompletoDaIgreja(companyId: string, padrao: string): Promise<string> {
+  const { data } = await (
+    await getSupabaseServerClient()
+  )
+    .from("churches")
+    .select("name, sobrenome")
+    .eq("company_id", companyId)
+    .is("deleted_at", null)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle<{ name: string; sobrenome: string | null }>();
+  return data ? formatChurchName(data.name, data.sobrenome) : padrao;
+}
+
 async function exigeGestaoDeConvites(companyId: string): Promise<string> {
   const tenant = await getTenantService();
   const role = await tenant.requireMembership(companyId);
@@ -217,11 +241,15 @@ export async function reenviarConviteAction(inviteId: string, companyId: string)
 export async function linkDoConviteAction(
   inviteId: string,
   companyId: string,
-): Promise<ActionState & { url?: string; email?: string }> {
+): Promise<ActionState & { url?: string; email?: string; igreja?: string }> {
   try {
     await exigeGestaoDeConvites(companyId);
     const { token, email } = await (await getInviteService()).tokenDoConvite(inviteId, companyId);
-    return { url: linkDeAceite(getServerEnv().APP_URL, token), email };
+    return {
+      url: linkDeAceite(getServerEnv().APP_URL, token),
+      email,
+      igreja: await nomeCompletoDaIgreja(companyId, ""),
+    };
   } catch (err) {
     return toActionError(err);
   }

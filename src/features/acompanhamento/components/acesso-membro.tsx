@@ -4,6 +4,7 @@ import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Copy, Crown, KeyRound, Mail, MessageCircle, ShieldCheck, UserMinus, X } from "lucide-react";
+import { mensagemDoConviteDeAcesso } from "@/lib/conviteAcesso";
 import { saudar } from "@/lib/saudacao";
 import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
@@ -94,7 +95,12 @@ export function AcessoMembroCard({
         toast.error(r.error ?? "Não foi possível gerar o link do convite.");
         return;
       }
-      const mensagem = `${saudar(saudacao)} A ${active.name} convidou você para acessar o sistema da igreja. Abra este link e entre com o e-mail ${r.email}: ${r.url}`;
+      const mensagem = mensagemDoConviteDeAcesso({
+        saudacao: saudar(saudacao),
+        igreja: r.igreja || active.name,
+        email: r.email ?? "",
+        url: r.url,
+      });
       if (destino === "whatsapp") {
         const wa = linkWhatsapp(membro.whatsapp, mensagem);
         if (wa) window.open(wa, "_blank", "noopener,noreferrer");
@@ -337,7 +343,12 @@ function ConvidarForm({
         toast.error(r.error ?? "Não foi possível criar o convite.");
         return;
       }
-      const mensagem = `${saudar(saudacao)} A ${active.name} convidou você para acessar o sistema da igreja. Abra este link e entre com o e-mail ${r.email}: ${r.url}`;
+      const mensagem = mensagemDoConviteDeAcesso({
+        saudacao: saudar(saudacao),
+        igreja: r.igreja || active.name,
+        email: r.email ?? "",
+        url: r.url,
+      });
       const wa = linkWhatsapp(membro.whatsapp, mensagem);
       if (janela && wa) {
         janela.opener = null;
