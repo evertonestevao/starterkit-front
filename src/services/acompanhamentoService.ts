@@ -567,6 +567,33 @@ export function createAcompanhamentoService(deps: {
       };
     },
 
+    /**
+     * Configurações → Quem acessa: só o Responsável. Cada pessoa com acesso
+     * ao sistema ou convite pendente, ligada ao cadastro de membro dela.
+     */
+    async quemAcessa(actor: AcompanhamentoActor): Promise<{
+      pessoas: Array<{ membro: RolMembro; acesso?: AcessoMembro; convite?: ConvitePendente }>;
+      convitesSemMembro: ConvitePendente[];
+    }> {
+      if (actor.role !== "owner") throw new AppError("forbidden", "Só o Responsável vê quem acessa o sistema.");
+      const church = await igreja(actor);
+      const [{ acessos, convites }, membros] = await Promise.all([
+        repo.listAcessos(actor.companyId),
+        repo.listMembros(church.id),
+      ]);
+      const acessoPorUsuario = new Map(acessos.map((a) => [a.userId, a]));
+      const convitePorEmail = new Map(convites.map((c) => [c.email.toLowerCase(), c]));
+      const pessoas = membros
+        .map((membro) => ({
+          membro,
+          acesso: membro.userId ? acessoPorUsuario.get(membro.userId) : undefined,
+          convite: membro.email ? convitePorEmail.get(membro.email.toLowerCase()) : undefined,
+        }))
+        .filter((p) => p.acesso || p.convite);
+      const emailsDoRol = new Set(membros.flatMap((m) => (m.email ? [m.email.toLowerCase()] : [])));
+      return { pessoas, convitesSemMembro: convites.filter((c) => !emailsDoRol.has(c.email.toLowerCase())) };
+    },
+
     /** Indicadores do topo da tela de Membros. */
     async kpisMembros(actor: AcompanhamentoActor): Promise<MembrosKpis> {
       const church = await igreja(actor);

@@ -135,6 +135,7 @@ export async function inviteMemberAction(_prev: ActionState | undefined, formDat
       role: formData.get("role") === "admin" ? "admin" : "member",
     });
     revalidatePath("/dashboard/membros", "layout");
+    revalidatePath("/dashboard/settings/quem-acessa");
     return { success: "Convite enviado" };
   } catch (err) {
     return toActionError(err);
@@ -154,6 +155,7 @@ export async function revokeInviteAction(inviteId: string, companyId: string): P
     await invites.revoke(inviteId, companyId, data.user?.id ?? "");
     await syncCompanySeats(companyId);
     revalidatePath("/dashboard/membros", "layout");
+    revalidatePath("/dashboard/settings/quem-acessa");
   } catch (err) {
     // Erro (incl. falha de auditoria, que desfaz a action) vira mensagem
     // segura para o client exibir — nunca falha silenciosa.
@@ -229,6 +231,7 @@ export async function changeMemberRoleAction(
       metadata: { previous_role: previousRole, new_role: newRole },
     });
     revalidatePath("/dashboard/membros", "layout");
+    revalidatePath("/dashboard/settings/quem-acessa");
   } catch (err) {
     return toActionError(err);
   }
@@ -285,6 +288,7 @@ export async function removeMemberAction(companyId: string, memberId: string): P
     });
     await syncCompanySeats(companyId);
     revalidatePath("/dashboard/membros", "layout");
+    revalidatePath("/dashboard/settings/quem-acessa");
   } catch (err) {
     return toActionError(err);
   }

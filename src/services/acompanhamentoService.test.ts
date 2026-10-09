@@ -664,3 +664,34 @@ describe("atalho de cargos na lista", () => {
     expect(salvos).toHaveLength(0);
   });
 });
+
+describe("quem acessa", () => {
+  it("só o Responsável vê a lista", async () => {
+    const { svc } = service({
+      listAcessos: async () => ({ acessos: [], convites: [] }),
+    } as Partial<AcompanhamentoRepository>);
+    for (const quem of [{ ...owner, role: "admin" as const }, secretario, member]) {
+      await expect(svc.quemAcessa(quem)).rejects.toMatchObject({ code: "forbidden" });
+    }
+  });
+
+  it("junta acesso e convite ao cadastro do membro", async () => {
+    const { svc } = service({
+      listMembros: async () => [
+        { ...membro, id: "a", nome: "Com acesso", userId: "u1", email: null },
+        { ...membro, id: "b", nome: "Convidado", userId: null, email: "Conv@x.org" },
+        { ...membro, id: "c", nome: "Nada", userId: null, email: null },
+      ],
+      listAcessos: async () => ({
+        acessos: [{ companyMemberId: "cm1", userId: "u1", role: "admin" }],
+        convites: [
+          { id: "i1", email: "conv@x.org", role: "member", expiraEm: "2026-12-01" },
+          { id: "i2", email: "fora@x.org", role: "member", expiraEm: "2026-12-01" },
+        ],
+      }),
+    } as unknown as Partial<AcompanhamentoRepository>);
+    const r = await svc.quemAcessa(owner);
+    expect(r.pessoas.map((p) => p.membro.nome)).toEqual(["Com acesso", "Convidado"]);
+    expect(r.convitesSemMembro.map((c) => c.email)).toEqual(["fora@x.org"]);
+  });
+});
