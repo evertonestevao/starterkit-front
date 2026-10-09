@@ -621,6 +621,27 @@ export function createAcompanhamentoService(deps: {
     },
 
     /**
+     * Só os cargos do membro (atalho da lista). Cargo é acesso: só quem
+     * administra a igreja; a lista enviada passa a ser exatamente os cargos.
+     */
+    async definirCargos(actor: AcompanhamentoActor, membroId: unknown, cargoIds: unknown): Promise<void> {
+      if (!canConfigurar(actor.role)) {
+        throw new AppError("forbidden", "Só o Responsável ou o Administrador altera os cargos.");
+      }
+      const church = await igreja(actor);
+      const id = validar(uuid("Membro inválido"), membroId);
+      const cargos = validar(cargosDoMembroSchema, cargoIds);
+      const membro = await repo.getMembro(church.id, id);
+      if (!membro) throw new AppError("not_found", "Membro não encontrado.");
+      const disponiveis = new Set((await repo.listCargosDisponiveis(church.id)).map((c) => c.id));
+      const atuais = new Set(membro.cargos.map((c) => c.id));
+      if (cargos.some((c) => !disponiveis.has(c) && !atuais.has(c))) {
+        throw new AppError("validation_error", "Um dos cargos não está disponível para esta igreja. Atualize a página.");
+      }
+      await repo.setCargosDoMembro(church.id, id, [...new Set(cargos)]);
+    },
+
+    /**
      * Exclui um cadastro feito por engano. Quem tem login não sai por aqui:
      * primeiro remove-se o acesso (só quem administra), depois exclui.
      */

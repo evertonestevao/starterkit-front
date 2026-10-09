@@ -8,6 +8,7 @@ import { mascaraTelefone } from "@/lib/telefone";
 import type { AcessoMembro, ConvitePendente, RolMembro } from "@/types/acompanhamento";
 import type { CargoResumo } from "@/types/cargos";
 import { AcessoBadge, ConvidarDialog } from "./acesso-membro";
+import { CargosRapido } from "./cargos-rapido";
 import { MembroForm } from "./membro-form";
 
 /**
@@ -90,7 +91,7 @@ export function MembrosLista({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <CargosDoMembro membro={m} />
+                  {gerenciaAcesso ? <CargosRapido membro={m} cargos={cargos} /> : <CargosDoMembro membro={m} />}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">{mascaraTelefone(m.whatsapp) || "—"}</TableCell>
                 <TableCell>
@@ -122,12 +123,18 @@ export function MembrosLista({
                 ) : null}
               </p>
               {/* No cartão, sem cargo não mostra nada (o "—" fica só na tabela). */}
-              {m.cargos.length > 0 ? <CargosDoMembro membro={m} /> : null}
+              {!gerenciaAcesso && m.cargos.length > 0 ? <CargosDoMembro membro={m} /> : null}
               <p className="text-xs text-muted-foreground">
                 {mascaraTelefone(m.whatsapp) || "Sem telefone"}
                 {m.ativo ? "" : ` · ${SITUACAO_LABEL[m.situacao]}`}
               </p>
             </Link>
+            {/* Fora do link: o atalho de cargo é um botão. */}
+            {gerenciaAcesso ? (
+              <div>
+                <CargosRapido membro={m} cargos={cargos} />
+              </div>
+            ) : null}
             <Acoes m={m} />
           </li>
         ))}

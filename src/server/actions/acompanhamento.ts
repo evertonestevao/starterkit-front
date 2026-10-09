@@ -28,6 +28,17 @@ function revalidar() {
   revalidatePath("/dashboard");
 }
 
+/** Atalho da lista de membros: só os cargos. */
+export async function definirCargosDoMembroAction(membroId: string, cargoIds: string[]): Promise<ActionState> {
+  try {
+    await (await getAcompanhamentoService()).definirCargos(await ator(), membroId, cargoIds);
+    revalidatePath("/dashboard/membros", "layout");
+    return { success: "Cargos salvos." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
 export async function salvarMembroAction(
   _prev: ActionState | undefined,
   formData: FormData,
