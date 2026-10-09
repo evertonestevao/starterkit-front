@@ -64,7 +64,7 @@ function ChurchNameFields({ igreja }: { igreja: ChurchProfile }) {
           name="sobrenome"
           defaultValue={igreja.sobrenome ?? ""}
           maxLength={120}
-          placeholder="Prainha - Promissão"
+          placeholder="Vila Mariana - São Paulo"
         />
         <p className="text-xs text-muted-foreground">
           Distingue esta igreja das irmãs de mesmo nome. Aparece logo abaixo do nome na página; sem ele, nada

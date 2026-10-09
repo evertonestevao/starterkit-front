@@ -66,8 +66,8 @@ describe("filterNetwork", () => {
   });
 
   it("acha pelo sobrenome", () => {
-    const comSobrenome = buildNetwork([igreja("x", "Igreja X", "subsede", "Prainha")], {});
-    expect(filterNetwork(comSobrenome, "prainha")).toHaveLength(1);
+    const comSobrenome = buildNetwork([igreja("x", "Igreja X", "subsede", "Vila Mariana")], {});
+    expect(filterNetwork(comSobrenome, "vila mariana")).toHaveLength(1);
   });
 
   it("acha a igreja pelo nome do Pastor, e a subsede pelo Pastor de uma congregação dela", () => {

@@ -2,7 +2,7 @@
 -- Nome e sobrenome da igreja
 -- ---------------------------------------------------------------------------
 -- A igreja passa a ter um NOME ("Assembleia de Deus Ministério no Ipiranga") e
--- um SOBRENOME opcional ("Prainha - Promissão"), que a distingue das irmãs de
+-- um SOBRENOME opcional ("Vila Mariana - São Paulo"), que a distingue das irmãs de
 -- mesmo nome. O nome pode ser herdado da igreja superior (o padrão do
 -- ministério); o sobrenome é sempre individual.
 --

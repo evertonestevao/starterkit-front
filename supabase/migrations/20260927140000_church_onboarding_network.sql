@@ -3,7 +3,7 @@
 -- ---------------------------------------------------------------------------
 -- O onboarding só perguntava o nome. Agora a igreja já nasce com:
 --   sobrenome          — o complemento que a distingue das irmãs de mesmo nome
---                        ("Prainha - Promissão"); coluna que já existia, só não
+--                        ("Vila Mariana - São Paulo"); coluna que já existia, só não
 --                        era preenchida no cadastro;
 --   faz_parte_de_rede  — a igreja declara que pertence a uma rede/ministério;
 --   rede_nome          — nome dessa rede (opcional), para a moderação agrupar.
