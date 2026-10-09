@@ -75,3 +75,34 @@ describe("authService: senha forte no cadastro e na nova senha", () => {
     );
   });
 });
+
+describe("signUp: volta depois de confirmar o e-mail", () => {
+  it("o link do e-mail leva de volta ao convite; sem destino, ao cadastro da igreja; nunca para fora", async () => {
+    const repo = {
+      signUp: vi.fn(async () => {}),
+      signInWithPassword: vi.fn(),
+      signOut: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      updatePassword: vi.fn(),
+      emailDoUsuarioAtual: vi.fn(),
+      senhaConfere: vi.fn(),
+    };
+    const service = createAuthService({
+      repo,
+      rateLimiter: { consume: vi.fn(async () => {}) } as never,
+      appUrl: "https://www.assembleiaapp.com.br/",
+    });
+    const dados = { fullName: "Ana", email: "ana@igreja.com", password: "Senha-forte-1" };
+
+    await service.signUp(dados, "/vinculo/abc123");
+    expect(repo.signUp).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        redirectTo: "https://www.assembleiaapp.com.br/auth/confirm?next=%2Fvinculo%2Fabc123",
+      }),
+    );
+    await service.signUp(dados);
+    expect(repo.signUp).toHaveBeenLastCalledWith(expect.objectContaining({ redirectTo: expect.stringContaining("next=%2Fonboarding") }));
+    await service.signUp(dados, "//golpe.com");
+    expect(repo.signUp).toHaveBeenLastCalledWith(expect.objectContaining({ redirectTo: expect.stringContaining("next=%2Fonboarding") }));
+  });
+});

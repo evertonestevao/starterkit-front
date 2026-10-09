@@ -39,6 +39,17 @@ export function safeChurchLinkPath(value: unknown): string | null {
   return typeof value === "string" && /^\/vinculo\/[A-Za-z0-9_%-]{20,300}$/.test(value) ? value : null;
 }
 
+/** O token de um caminho de retorno já conferido por `safeChurchLinkPath`. */
+export function tokenDoCaminho(caminho: string): string | null {
+  const seguro = safeChurchLinkPath(caminho);
+  if (!seguro) return null;
+  try {
+    return decodeURIComponent(seguro.slice("/vinculo/".length));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * O que esta igreja pode oferecer em um link. Congregação não tem igrejas
  * abaixo; só uma igreja SEM superior pode ter subsedes (subsede de subsede não

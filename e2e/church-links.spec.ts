@@ -229,14 +229,15 @@ test("quem não tem conta cria a conta pelo link e o pedido fica pendente para a
   await expect(nova).toHaveURL(new RegExp(caminho));
   await nova.getByRole("link", { name: "Cadastrar minha igreja" }).click();
   await expect(nova).toHaveURL(/\/onboarding\?next=/);
+  // O cadastro já vem com o nome de quem convidou e a rede marcada.
+  await expect(nova.getByLabel("Nome da igreja")).toHaveValue(nomeSede);
+  await expect(nova.getByRole("checkbox", { name: /faz parte de uma rede/ })).toBeChecked();
   await nova.getByLabel("Nome da igreja").fill(nomeNova);
   await nova.getByRole("checkbox", { name: /Li e aceito/ }).check();
   await nova.getByRole("button", { name: "Criar igreja" }).click();
 
-  // Depois de criar a igreja, volta ao link e pede o vínculo.
+  // Depois de criar a igreja, volta ao link com o pedido já feito (sem outro clique).
   await expect(nova).toHaveURL(new RegExp(caminho));
-  await expect(nova.getByText(/convida a sua igreja para fazer parte da rede dela/)).toBeVisible();
-  await nova.getByRole("button", { name: "Quero solicitar o vínculo" }).click();
   await expect(nova.getByText(new RegExp(`Aguardando a aprovação de ${nomeSede}`))).toBeVisible();
 
   // A igreja nova segue independente até a superior aprovar.

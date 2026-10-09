@@ -1,4 +1,4 @@
-import { AppError } from "@/lib/errors";
+import { AppError, toValidationError } from "@/lib/errors";
 import type { RateLimiter } from "@/server/rateLimit";
 import {
   alterarSenhaSchema,
@@ -14,7 +14,8 @@ import {
  */
 
 export interface AuthRepository {
-  signUp(data: { email: string; password: string; fullName: string }): Promise<void>;
+  /** `redirectTo`: para onde o link do e-mail de confirmação leva. */
+  signUp(data: { email: string; password: string; fullName: string; redirectTo: string }): Promise<void>;
   signInWithPassword(data: { email: string; password: string }): Promise<void>;
   signOut(): Promise<void>;
   /** Dispara o email de recuperação com link para redirectTo. */
@@ -37,13 +38,17 @@ interface AuthServiceDeps {
 export function createAuthService({ repo, rateLimiter, appUrl }: AuthServiceDeps) {
   const base = appUrl.replace(/\/+$/, "");
 
-  async function signUp(input: unknown): Promise<void> {
+  /**
+   * `voltarPara`: caminho do site para onde a pessoa vai depois de confirmar o
+   * e-mail (ex.: o link de vínculo que ela abriu). Sem isso, a confirmação leva
+   * ao cadastro da igreja. Só caminho relativo (nada de redirecionar para fora).
+   */
+  async function signUp(input: unknown, voltarPara?: string): Promise<void> {
     const parsed = signUpSchema.safeParse(input);
-    if (!parsed.success) {
-      throw new AppError("validation_error", parsed.error.issues[0]?.message ?? "Dados inválidos");
-    }
+    if (!parsed.success) throw toValidationError(parsed.error.issues);
     await rateLimiter.consume(`signup:${parsed.data.email.toLowerCase()}`);
-    await repo.signUp(parsed.data);
+    const destino = voltarPara && voltarPara.startsWith("/") && !voltarPara.startsWith("//") ? voltarPara : "/onboarding";
+    await repo.signUp({ ...parsed.data, redirectTo: `${base}/auth/confirm?next=${encodeURIComponent(destino)}` });
   }
 
   async function signIn(input: unknown): Promise<void> {
