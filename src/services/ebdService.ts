@@ -6,6 +6,7 @@ import type { EstadoPresenca } from "@/types/acompanhamento";
 import type { RoleCode } from "@/types/database";
 import type {
   EbdAlerta,
+  EbdProfessorDaIgreja,
   EbdAluno,
   EbdAlunoDaIgreja,
   EbdAulaParaPreencher,
@@ -62,6 +63,9 @@ export interface EbdRepository {
   removerProfessor(churchId: string, classeId: string, membroId: string): Promise<void>;
   alunos(classeId: string, data: string): Promise<EbdAluno[]>;
   buscarPessoas(churchId: string, termo: string): Promise<EbdPessoaBusca[]>;
+  professores(churchId: string): Promise<EbdProfessorDaIgreja[]>;
+  darCargoProfessor(membroId: string): Promise<void>;
+  tirarCargoProfessor(membroId: string): Promise<void>;
   matricular(classeId: string, membroId: string): Promise<void>;
   matricularNovo(input: {
     classeId: string;
@@ -358,6 +362,26 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
       const church = await gestao(actor);
       await exigeClasse(church.id, classeId);
       await repo.removerProfessor(church.id, classeId, membroId);
+    },
+
+    /** Professores: quem tem o cargo e quem dá aula, com as classes (só gestão). */
+    async professores(actor: EbdActor): Promise<EbdProfessorDaIgreja[]> {
+      const church = await gestao(actor);
+      return repo.professores(church.id);
+    },
+
+    /** Dá o cargo Professor(a) da EBD (só esse; o banco confere a igreja). */
+    async darCargoProfessor(actor: EbdActor, membroId: string): Promise<void> {
+      await gestao(actor);
+      if (!z.uuid().safeParse(membroId).success) throw new AppError("validation_error", "Pessoa inválida.");
+      await repo.darCargoProfessor(membroId);
+    },
+
+    /** Tira o cargo de quem não dá aula em nenhuma classe. */
+    async tirarCargoProfessor(actor: EbdActor, membroId: string): Promise<void> {
+      await gestao(actor);
+      if (!z.uuid().safeParse(membroId).success) throw new AppError("validation_error", "Pessoa inválida.");
+      await repo.tirarCargoProfessor(membroId);
     },
 
     /** Busca no rol para matricular ou indicar professor (só gestão). */

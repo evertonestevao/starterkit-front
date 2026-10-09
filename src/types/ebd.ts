@@ -96,6 +96,16 @@ export interface EbdResumoClasse {
   licao: string | null;
 }
 
+/** Professor(a) da EBD: tem o cargo e/ou dá aula em alguma classe. */
+export interface EbdProfessorDaIgreja {
+  membroId: string;
+  nome: string;
+  temCargo: boolean;
+  /** Tem login ligado (sem login, aparece na classe mas não entra no sistema). */
+  temLogin: boolean;
+  classes: Array<{ id: string; nome: string }>;
+}
+
 export interface EbdPessoaBusca {
   membroId: string;
   nome: string;
