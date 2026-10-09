@@ -14,6 +14,7 @@ import { useActionToast } from "@/hooks/useActionToast";
 import { useTenant } from "@/providers/tenant-provider";
 import {
   changeMemberRoleAction,
+  convidarComLinkAction,
   definirResponsavelAction,
   inviteMemberAction,
   linkDoConviteAction,
@@ -271,7 +272,7 @@ export function AcessoMembroCard({
             </div>
           </div>
         ) : membro.email ? (
-          <ConvidarForm email={membro.email} companyId={active.id} />
+          <ConvidarForm email={membro.email} companyId={active.id} membro={membro} />
         ) : (
           <p className="text-muted-foreground">
             Sem acesso. Para convidar, primeiro edite o membro e informe o e-mail dele.
@@ -298,16 +299,56 @@ export function ConvidarDialog({ membro }: { membro: RolMembro }) {
             <DialogTitle>Convidar {membro.nome} para o sistema</DialogTitle>
             <DialogDescription>A pessoa recebe um e-mail para criar a senha e entrar no painel.</DialogDescription>
           </DialogHeader>
-          <ConvidarForm email={membro.email} companyId={active.id} onEnviado={() => setAberto(false)} />
+          <ConvidarForm email={membro.email} companyId={active.id} membro={membro} onEnviado={() => setAberto(false)} />
         </DialogContent>
       </Dialog>
     </>
   );
 }
 
-function ConvidarForm({ email, companyId, onEnviado }: { email: string; companyId: string; onEnviado?: () => void }) {
+function ConvidarForm({
+  email,
+  companyId,
+  membro,
+  onEnviado,
+}: {
+  email: string;
+  companyId: string;
+  membro: RolMembro;
+  onEnviado?: () => void;
+}) {
+  const { active, saudacao } = useTenant();
   const [papel, setPapel] = useState<"member" | "admin">("member");
   const [state, formAction, pending] = useActionState(inviteMemberAction, undefined);
+  const [enviandoWhats, startWhats] = useTransition();
+  const temWhats = !!linkWhatsapp(membro.whatsapp, "");
+
+  /**
+   * Convida e abre o WhatsApp do membro com o link. A janela abre já no
+   * clique (senão o navegador bloqueia como pop-up) e recebe o endereço
+   * quando o convite fica pronto.
+   */
+  function convidarPeloWhatsApp() {
+    const janela = window.open("about:blank", "_blank");
+    startWhats(async () => {
+      const r = await convidarComLinkAction(companyId, email, papel);
+      if (r.error || !r.url) {
+        janela?.close();
+        toast.error(r.error ?? "Não foi possível criar o convite.");
+        return;
+      }
+      const mensagem = `${saudar(saudacao)} A ${active.name} convidou você para acessar o sistema da igreja. Abra este link e entre com o e-mail ${r.email}: ${r.url}`;
+      const wa = linkWhatsapp(membro.whatsapp, mensagem);
+      if (janela && wa) {
+        janela.opener = null;
+        janela.location.href = wa;
+      } else if (wa) {
+        window.location.href = wa;
+      }
+      toast.success("Convite criado. Confira a mensagem no WhatsApp e envie.");
+      onEnviado?.();
+    });
+  }
   useActionToast(state);
   // Fechar o diálogo é efeito do resultado da action (sistema externo: o diálogo do pai).
   useEffect(() => {
@@ -319,8 +360,8 @@ function ConvidarForm({ email, companyId, onEnviado }: { email: string; companyI
       <input type="hidden" name="companyId" value={companyId} />
       <input type="hidden" name="email" value={email} />
       <p className="text-muted-foreground">
-        Sem acesso. Enviamos um convite para <strong className="text-foreground">{email}</strong>; ao aceitar, a conta
-        fica ligada a este membro.
+        Sem acesso. O convite vale só para <strong className="text-foreground">{email}</strong>: mesmo que o link seja
+        encaminhado, só entra quem usar esse e-mail. Ao aceitar, a conta fica ligada a este membro.
       </p>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1.5">
@@ -335,8 +376,13 @@ function ConvidarForm({ email, companyId, onEnviado }: { email: string; companyI
             <option value="admin">Administrador — gerencia equipe e configurações</option>
           </select>
         </label>
-        <Button type="submit" disabled={pending}>
-          <Mail className="size-4" /> {pending ? "Enviando..." : "Convidar para o sistema"}
+        {temWhats ? (
+          <Button type="button" disabled={pending || enviandoWhats} onClick={convidarPeloWhatsApp}>
+            <MessageCircle className="size-4" /> {enviandoWhats ? "Criando..." : "Convidar e enviar pelo WhatsApp"}
+          </Button>
+        ) : null}
+        <Button type="submit" variant={temWhats ? "outline" : "default"} disabled={pending || enviandoWhats}>
+          <Mail className="size-4" /> {pending ? "Enviando..." : temWhats ? "Só por e-mail" : "Convidar para o sistema"}
         </Button>
       </div>
     </Formulario>

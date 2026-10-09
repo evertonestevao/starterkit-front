@@ -144,6 +144,27 @@ export async function inviteMemberAction(_prev: ActionState | undefined, formDat
   }
 }
 
+/**
+ * Convida e já devolve o link de aceite, para mandar pelo WhatsApp num clique.
+ * O link continua valendo só para o e-mail convidado (o banco confere ao aceitar).
+ */
+export async function convidarComLinkAction(
+  companyId: string,
+  email: string,
+  role: "admin" | "member",
+): Promise<ActionState & { url?: string; email?: string }> {
+  try {
+    const conviteId = await convidarParaSistema({ companyId, email, role: role === "admin" ? "admin" : "member" });
+    revalidatePath("/dashboard/membros", "layout");
+    revalidatePath("/dashboard/settings/quem-acessa");
+    await exigeGestaoDeConvites(companyId);
+    const { token, email: destino } = await (await getInviteService()).tokenDoConvite(conviteId, companyId);
+    return { success: "Convite criado", url: linkDeAceite(getServerEnv().APP_URL, token), email: destino };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
 export async function revokeInviteAction(inviteId: string, companyId: string): Promise<ActionState | void> {
   try {
     const tenant = await getTenantService();
