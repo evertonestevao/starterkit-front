@@ -1,28 +1,17 @@
 import { notFound } from "next/navigation";
-import { RouteTabs, type RouteTab } from "@/components/route-tabs";
+import { RouteTabs } from "@/components/route-tabs";
+import { abasDaTesouraria } from "@/server/abasDoMenu";
 import { exigeMenu } from "@/server/menuPermissoes";
-import { getTesourariaActorAutorizado } from "@/server/tesouraria";
-import { canEditPix } from "@/services/churchPixService";
-import { canConfigureReceiving } from "@/services/churchReceivingService";
-
-const BASE = "/dashboard/tesouraria";
 
 /**
- * Tesouraria: dízimos e ofertas dos cultos. Sem o módulo, 404 mesmo com a URL
- * na mão; o service e a RLS (`tem_acesso`) recusam de novo.
+ * Tesouraria: dízimos e ofertas dos cultos, a chave PIX e o cartão. Sem o
+ * módulo, 404 mesmo com a URL na mão; o service e a RLS (`tem_acesso`)
+ * recusam de novo.
  */
 export default async function TesourariaLayout({ children }: { children: React.ReactNode }) {
   await exigeMenu("tesouraria");
-  const actor = await getTesourariaActorAutorizado();
-  if (!actor) notFound();
-
-  const tabs: RouteTab[] = [
-    { href: BASE, label: "Lançamentos" },
-    { href: `${BASE}/relatorio`, label: "Relatório mensal" },
-  ];
-  // A chave PIX é só do Responsável e do Administrador (o service e a RLS conferem de novo).
-  if (canEditPix(actor.role)) tabs.push({ href: `${BASE}/pix`, label: "Chave PIX" });
-  if (canConfigureReceiving(actor.role)) tabs.push({ href: `${BASE}/cartao`, label: "Cartão" });
+  const tabs = await abasDaTesouraria();
+  if (!tabs) notFound();
 
   return (
     <div className="flex flex-col gap-5">

@@ -18,6 +18,7 @@ import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getSponsorService } from "@/server/sponsor";
 import { getActiveTenant } from "@/server/tenant";
 import { getMenusVisiveis } from "@/server/menuPermissoes";
+import { getSubmenus } from "@/server/abasDoMenu";
 import { isPlatformStaff } from "@/server/platform";
 import { exigeUsuarioValido } from "@/server/session";
 import { getTermsService } from "@/server/terms";
@@ -127,6 +128,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Como a rede desta igreja chama os níveis (sede, subsede, congregação).
   const nomesNiveis = await getNomesNiveisDaEmpresa(active.id);
   const { saudacao } = await getSaudacaoDaEmpresa(active.id);
+  // Subitens de cada seção, para o menu lateral mostrar antes do clique.
+  const submenus = await getSubmenus();
 
   return (
     <TenantProvider value={{ companies, active, menus, visitasSemContato, saudacao }}>
@@ -138,6 +141,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           avatarUrl={profile?.avatar_url ?? null}
           pendingInvitesCount={myInvites.length}
           unseenPrayerRequestsCount={unseenPrayerRequestsCount}
+          submenus={submenus}
         >
           <RegistraServiceWorker />
           <AvisoInstalarApp />
