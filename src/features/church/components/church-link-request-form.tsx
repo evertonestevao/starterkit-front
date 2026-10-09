@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
@@ -28,7 +29,7 @@ export function ChurchLinkRequestForm({
   const [igreja, setIgreja] = useState(churches[0]?.id ?? "");
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       <input type="hidden" name="token" value={token} />
       <input type="hidden" name="churchId" value={igreja} />
 
@@ -72,6 +73,6 @@ export function ChurchLinkRequestForm({
       <p className="text-xs text-muted-foreground">
         Se não quiser, nada é enviado e ninguém é avisado. Você pode simplesmente fechar esta página.
       </p>
-    </form>
+    </Formulario>
   );
 }

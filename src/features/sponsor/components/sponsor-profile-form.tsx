@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,7 +69,7 @@ export function SponsorProfileForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
         <Label htmlFor="displayName">Nome exibido</Label>
         <Input
@@ -166,6 +167,6 @@ export function SponsorProfileForm({
           {pending ? "Salvando..." : "Salvar"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

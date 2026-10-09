@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { caminhoDaIgreja, partesDaChave } from "@/lib/churchPaths";
@@ -77,7 +78,7 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
 
       {/* key: remonta ao trocar de igreja OU quando um salvamento troca algum
           valor de verdade — ver o comentário de versaoDosCampos acima. */}
-      <form key={versaoDosCampos} action={formAction} className="flex flex-col gap-4">
+      <Formulario key={versaoDosCampos} action={formAction} estado={state} className="flex flex-col gap-4">
         <input type="hidden" name="churchId" value={igreja.id} />
 
         <div className="flex flex-col gap-1.5">
@@ -193,9 +194,9 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
             Salvar página
           </Button>
         </div>
-      </form>
+      </Formulario>
 
-      <form action={logoAction} className="flex flex-col gap-3 border-t pt-6">
+      <Formulario action={logoAction} estado={logoState} className="flex flex-col gap-3 border-t pt-6">
         <input type="hidden" name="churchId" value={igreja.id} />
 
         <div className="flex items-center gap-4">
@@ -222,7 +223,7 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
             {enviandoLogo ? "Enviando..." : "Enviar logo"}
           </Button>
         </div>
-      </form>
+      </Formulario>
 
       {/* key: o estado do formulário nasce das props; troca de igreja ou um
           salvamento que mudou a escolha remonta com os valores novos. */}

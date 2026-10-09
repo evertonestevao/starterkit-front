@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState } from "react";
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ export function AbuseReportReview({ report }: { report: AbuseReport }) {
   useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
       <input type="hidden" name="reportId" value={report.id} />
 
       <div className="flex flex-col gap-2">
@@ -61,6 +62,6 @@ export function AbuseReportReview({ report }: { report: AbuseReport }) {
           Improcedente
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

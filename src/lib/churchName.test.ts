@@ -10,14 +10,14 @@ describe("normalizeSurname", () => {
   });
 
   it("apara e junta espaços repetidos", () => {
-    expect(normalizeSurname("  Prainha   -  Promissão ")).toBe("Prainha - Promissão");
+    expect(normalizeSurname("  Vila Mariana   -  São Paulo ")).toBe("Vila Mariana - São Paulo");
   });
 });
 
 describe("formatChurchName", () => {
   it("junta nome e sobrenome", () => {
-    expect(formatChurchName("Assembleia de Deus Ministério no Ipiranga", "Prainha - Promissão")).toBe(
-      "Assembleia de Deus Ministério no Ipiranga · Prainha - Promissão",
+    expect(formatChurchName("Assembleia de Deus Ministério no Ipiranga", "Vila Mariana - São Paulo")).toBe(
+      "Assembleia de Deus Ministério no Ipiranga · Vila Mariana - São Paulo",
     );
   });
 

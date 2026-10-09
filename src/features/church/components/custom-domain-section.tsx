@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useTransition } from "react";
 import {
   AlertTriangle,
@@ -303,7 +304,7 @@ export function CustomDomainSection({
           ) : null}
 
           {canManage ? (
-            <form action={formAction} className="flex flex-col gap-3">
+            <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
               <input type="hidden" name="churchId" value={view.churchId} />
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`domain-${view.churchId}`}>
@@ -331,7 +332,7 @@ export function CustomDomainSection({
                   ter registrado esse domínio (no Registro.br ou equivalente).
                 </p>
               </div>
-            </form>
+            </Formulario>
           ) : (
             <p className="text-sm text-muted-foreground">
               Só quem administra a igreja pode configurar o domínio próprio.

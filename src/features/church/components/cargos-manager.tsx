@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Lock, Pencil, Plus, Power } from "lucide-react";
@@ -177,7 +178,7 @@ function CargoForm({ cargo }: { cargo?: Cargo }) {
               O cargo identifica a pessoa (ex.: Diácono). Não dá acesso ao sistema.
             </DialogDescription>
           </DialogHeader>
-          <form action={formAction} className="flex flex-col gap-3">
+          <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
             {cargo ? <input type="hidden" name="id" value={cargo.id} /> : null}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`cargo-nome-${id}`}>Nome</Label>
@@ -221,7 +222,7 @@ function CargoForm({ cargo }: { cargo?: Cargo }) {
                 {pending ? "Salvando..." : "Salvar"}
               </Button>
             </DialogFooter>
-          </form>
+          </Formulario>
         </DialogContent>
       </Dialog>
     </>

@@ -3,7 +3,7 @@
  *
  * O NOME é o que a igreja (ou o ministério dela) se chama — "Assembleia de
  * Deus Ministério no Ipiranga". O SOBRENOME, opcional, é o que a distingue das
- * irmãs de mesmo nome — "Prainha - Promissão". Na página pública o nome vem em
+ * irmãs de mesmo nome — "Vila Mariana - São Paulo". Na página pública o nome vem em
  * cima e o sobrenome logo abaixo, menor; em listas e mensagens, junto.
  */
 

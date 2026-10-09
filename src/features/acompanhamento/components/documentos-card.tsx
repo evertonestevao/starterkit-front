@@ -123,7 +123,7 @@ function Emitir({
             maxLength={160}
             value={destino}
             onChange={(e) => setDestino(e.target.value)}
-            placeholder="Ex.: Assembleia de Deus em Bauru"
+            placeholder="Ex.: Assembleia de Deus no Brás"
             autoFocus
           />
         </div>

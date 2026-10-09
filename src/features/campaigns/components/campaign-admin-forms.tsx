@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { PaginacaoLocal } from "@/components/paginacao-local";
@@ -38,7 +39,7 @@ export function EditCampaignForm({ campanha }: { campanha: CompanyCampaign }) {
   const sugeridos = [sugerido1, sugerido2, sugerido3];
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-5">
       <input type="hidden" name="campaignId" value={campanha.id} />
 
       <div className="flex flex-col gap-2">
@@ -171,7 +172,7 @@ export function EditCampaignForm({ campanha }: { campanha: CompanyCampaign }) {
           {pending ? "Salvando..." : "Salvar alterações"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }
 
@@ -187,31 +188,31 @@ export function CampaignStatusActions({ campanha }: { campanha: CompanyCampaign 
   return (
     <div className="flex flex-wrap gap-2">
       {campanha.status === "rascunho" ? (
-        <form action={activateAction}>
+        <Formulario action={activateAction} estado={activateState}>
           <input type="hidden" name="campaignId" value={campanha.id} />
           <Button type="submit" disabled={activating}>
             {activating ? "Ativando..." : "Ativar e publicar"}
           </Button>
-        </form>
+        </Formulario>
       ) : null}
 
       {campanha.status === "ativa" ? (
-        <form action={closeAction}>
+        <Formulario action={closeAction} estado={closeState}>
           <input type="hidden" name="campaignId" value={campanha.id} />
           <Button type="submit" variant="outline" disabled={closing}>
             {closing ? "Encerrando..." : "Encerrar campanha"}
           </Button>
-        </form>
+        </Formulario>
       ) : null}
 
       {campanha.status === "rascunho" ? (
-        <form action={removeAction}>
+        <Formulario action={removeAction} estado={removeState}>
           <input type="hidden" name="campaignId" value={campanha.id} />
           <Button type="submit" variant="ghost" className="gap-1.5 text-destructive" disabled={removing}>
             <Trash2 className="size-3.5" aria-hidden />
             Remover
           </Button>
-        </form>
+        </Formulario>
       ) : null}
     </div>
   );
@@ -236,7 +237,7 @@ export function CampaignCoverForm({ campanha }: { campanha: CompanyCampaign }) {
   useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
       <input type="hidden" name="campaignId" value={campanha.id} />
       <div className="flex items-center gap-4">
         <CoverPreview url={campanha.fotoCapaUrl} titulo={campanha.titulo} />
@@ -250,7 +251,7 @@ export function CampaignCoverForm({ campanha }: { campanha: CompanyCampaign }) {
           {pending ? "Enviando..." : "Enviar capa"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }
 
@@ -267,7 +268,7 @@ export function CampaignFeedbackForm({ campanha }: { campanha: CompanyCampaign }
 
   return (
     <div className="flex flex-col gap-5">
-      <form action={textoAction} className="flex flex-col gap-3">
+      <Formulario action={textoAction} estado={textoState} className="flex flex-col gap-3">
         <input type="hidden" name="campaignId" value={campanha.id} />
         <div className="flex flex-col gap-2">
           <Label htmlFor="feedbackTexto">
@@ -288,9 +289,9 @@ export function CampaignFeedbackForm({ campanha }: { campanha: CompanyCampaign }
             {salvandoTexto ? "Salvando..." : "Salvar texto"}
           </Button>
         </div>
-      </form>
+      </Formulario>
 
-      <form action={fotoAction} className="flex flex-col gap-3 border-t pt-5">
+      <Formulario action={fotoAction} estado={fotoState} className="flex flex-col gap-3 border-t pt-5">
         <input type="hidden" name="campaignId" value={campanha.id} />
         <div className="flex items-center gap-4">
           <CoverPreview url={campanha.feedbackFotoUrl} titulo={`devolutiva de ${campanha.titulo}`} />
@@ -312,7 +313,7 @@ export function CampaignFeedbackForm({ campanha }: { campanha: CompanyCampaign }
             {enviandoFoto ? "Enviando..." : "Enviar foto"}
           </Button>
         </div>
-      </form>
+      </Formulario>
     </div>
   );
 }
@@ -344,13 +345,13 @@ function ConfirmPixDonationButton({
   useActionToast(state);
 
   return (
-    <form action={formAction}>
+    <Formulario action={formAction} estado={state}>
       <input type="hidden" name="campaignId" value={campaignId} />
       <input type="hidden" name="donationId" value={donationId} />
       <Button type="submit" size="sm" disabled={pending} aria-label={`Confirmar doação de ${nome}`}>
         {pending ? "Confirmando..." : "Confirmar"}
       </Button>
-    </form>
+    </Formulario>
   );
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Camera, FileSignature, Printer, Trash2 } from "lucide-react";
@@ -171,7 +172,7 @@ function TermoForm({
   }, [state, onFeito]);
 
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <Formulario action={action} estado={state} className="flex flex-col gap-4">
       <input type="hidden" name="membroId" value={membroId} />
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-1 text-sm font-medium">O que o membro autorizou</legend>
@@ -239,7 +240,7 @@ function TermoForm({
           {pending ? "Salvando..." : "Registrar"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Copy, Crown, KeyRound, Mail, MessageCircle, ShieldCheck, UserMinus, X } from "lucide-react";
@@ -314,7 +315,7 @@ function ConvidarForm({ email, companyId, onEnviado }: { email: string; companyI
   }, [state, onEnviado]);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
       <input type="hidden" name="companyId" value={companyId} />
       <input type="hidden" name="email" value={email} />
       <p className="text-muted-foreground">
@@ -338,6 +339,6 @@ function ConvidarForm({ email, companyId, onEnviado }: { email: string; companyI
           <Mail className="size-4" /> {pending ? "Enviando..." : "Convidar para o sistema"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

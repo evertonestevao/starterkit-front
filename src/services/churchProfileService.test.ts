@@ -357,12 +357,12 @@ describe("nome e sobrenome", () => {
   it("grava o nome próprio e o sobrenome normalizado (espaços aparados)", async () => {
     const { repo, service } = build();
 
-    await service.saveDados(ADMIN, { ...base, name: "Assembleia de Deus Ministério no Ipiranga", sobrenome: "  Prainha   - Promissão " });
+    await service.saveDados(ADMIN, { ...base, name: "Assembleia de Deus Ministério no Ipiranga", sobrenome: "  Vila Mariana   - São Paulo " });
 
     expect(repo.updateDados).toHaveBeenCalledWith(
       expect.objectContaining({
         nomeProprio: "Assembleia de Deus Ministério no Ipiranga",
-        sobrenome: "Prainha - Promissão",
+        sobrenome: "Vila Mariana - São Paulo",
         herdarNome: false,
       }),
     );
@@ -392,10 +392,10 @@ describe("nome e sobrenome", () => {
     expect(semMae.repo.updateDados).not.toHaveBeenCalled();
 
     const comMae = build({ hasParent: true, parentName: "Comunidade da Graça" });
-    await comMae.service.saveDados(ADMIN, { ...base, herdarNome: true, sobrenome: "Prainha" });
+    await comMae.service.saveDados(ADMIN, { ...base, herdarNome: true, sobrenome: "Vila Mariana" });
     expect(comMae.repo.updateDados).toHaveBeenCalledWith(
       // O nome próprio segue gravado (volta a valer se ela deixar de herdar); o sobrenome é só dela.
-      expect.objectContaining({ herdarNome: true, nomeProprio: "Igreja Betel", sobrenome: "Prainha" }),
+      expect.objectContaining({ herdarNome: true, nomeProprio: "Igreja Betel", sobrenome: "Vila Mariana" }),
     );
   });
 });

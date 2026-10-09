@@ -177,7 +177,7 @@ export interface Church {
   name: string;
   /** O nome que a própria igreja escolheu. Quem escreve é ele; `name` é derivado por trigger. */
   nome_proprio: string;
-  /** Sobrenome opcional ("Prainha - Promissão"): distingue igrejas de mesmo nome. Sempre individual. */
+  /** Sobrenome opcional ("Vila Mariana - São Paulo"): distingue igrejas de mesmo nome. Sempre individual. */
   sobrenome: string | null;
   /** Usa o nome da igreja superior. */
   herdar_nome: boolean;

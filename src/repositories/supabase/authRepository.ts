@@ -30,7 +30,7 @@ export function createSupabaseAuthRepository(client: SupabaseClient): AuthReposi
     async signInWithPassword({ email, password }) {
       const { error } = await client.auth.signInWithPassword({ email, password });
       if (error) {
-        throw new AppError("unauthorized", "Email ou senha incorretos", error);
+        throw new AppError("unauthorized", "Email ou senha incorretos", error, "password");
       }
     },
 

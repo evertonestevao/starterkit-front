@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState, useTransition, type ChangeEvent, type FormEvent } from "react";
 import { CreditCard, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -139,18 +140,18 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
           <span className="text-xs text-muted-foreground">{conta.motivoRecusa}</span>
         ) : null}
         {conta?.externalAccountId ? (
-          <form action={syncAction} className="ml-auto">
+          <Formulario action={syncAction} estado={syncState} className="ml-auto">
             <input type="hidden" name="churchId" value={igreja.id} />
             <Button type="submit" size="sm" variant="ghost" disabled={syncing}>
               Atualizar situação
             </Button>
-          </form>
+          </Formulario>
         ) : null}
       </div>
 
       {status === "aprovada" ? (
         <>
-          <form action={cardAction} className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
+          <Formulario action={cardAction} estado={cardState} className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
             <input type="hidden" name="churchId" value={igreja.id} />
             <input type="hidden" name="aceita" value={ativo ? "false" : "true"} />
             <CreditCard className="size-5 text-primary" aria-hidden />
@@ -165,14 +166,14 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
             <Button type="submit" variant={ativo ? "outline" : "default"} disabled={switching}>
               {ativo ? "Desligar cartão" : "Ligar cartão"}
             </Button>
-          </form>
+          </Formulario>
 
           <div className="flex flex-col gap-2 rounded-lg border p-4">
             <p className="text-sm font-medium">Qual Pix aparece na página</p>
             <p className="text-xs text-muted-foreground">
               Só um dos dois por vez — mostrar as duas opções de Pix juntas confunde quem doa.
             </p>
-            <form action={pixAction} className="mt-1 flex flex-wrap gap-2">
+            <Formulario action={pixAction} estado={pixState} className="mt-1 flex flex-wrap gap-2">
               <input type="hidden" name="churchId" value={igreja.id} />
               <input type="hidden" name="fonte" value="propria" />
               <Button
@@ -183,8 +184,8 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
               >
                 Chave própria da igreja
               </Button>
-            </form>
-            <form action={pixAction} className="flex flex-wrap gap-2">
+            </Formulario>
+            <Formulario action={pixAction} estado={pixState} className="flex flex-wrap gap-2">
               <input type="hidden" name="churchId" value={igreja.id} />
               <input type="hidden" name="fonte" value="asaas" />
               <Button
@@ -195,7 +196,7 @@ export function ReceivingForms({ igrejas }: { igrejas: ReceivingChurch[] }) {
               >
                 Pix pela Asaas (confirma sozinho)
               </Button>
-            </form>
+            </Formulario>
           </div>
         </>
       ) : null}

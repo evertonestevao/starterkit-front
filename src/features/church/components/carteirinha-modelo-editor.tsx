@@ -298,7 +298,7 @@ export function CarteirinhaModeloEditor({
             value={modelo.rodape ?? ""}
             maxLength={RODAPE_MAX}
             onChange={(e) => mudar({ rodape: e.target.value || null })}
-            placeholder="Ex.: Campo de Lins · CNPJ 00.000.000/0001-00"
+            placeholder="Ex.: Campo do Ipiranga · CNPJ 00.000.000/0001-00"
           />
         </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,7 +64,7 @@ function ChurchNameFields({ igreja }: { igreja: ChurchProfile }) {
           name="sobrenome"
           defaultValue={igreja.sobrenome ?? ""}
           maxLength={120}
-          placeholder="Prainha - Promissão"
+          placeholder="Vila Mariana - São Paulo"
         />
         <p className="text-xs text-muted-foreground">
           Distingue esta igreja das irmãs de mesmo nome. Aparece logo abaixo do nome na página; sem ele, nada
@@ -103,7 +104,7 @@ export function ChurchDataForm({ igrejas }: { igrejas: ChurchProfile[] }) {
     <div className="flex flex-col gap-6">
       {igrejas.length > 1 ? <SeletorDeIgreja igrejas={igrejas} valor={churchId} aoTrocar={setChurchId} /> : null}
 
-      <form key={versaoDosCampos} action={formAction} className="flex flex-col gap-4">
+      <Formulario key={versaoDosCampos} action={formAction} estado={state} className="flex flex-col gap-4">
         <input type="hidden" name="churchId" value={igreja.id} />
         <ChurchNameFields igreja={igreja} />
         <CampoEnderecoDaIgreja endereco={igreja.endereco} enderecoAntigo={igreja.address} />
@@ -112,7 +113,7 @@ export function ChurchDataForm({ igrejas }: { igrejas: ChurchProfile[] }) {
             {pending ? "Salvando..." : "Salvar dados"}
           </Button>
         </div>
-      </form>
+      </Formulario>
     </div>
   );
 }

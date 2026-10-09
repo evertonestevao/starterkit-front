@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState, type CSSProperties } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -73,7 +74,7 @@ export function ChurchAppearanceForm({ igreja }: { igreja: ChurchProfile }) {
   const corDoSeletor = parseAccentColor(cor).ok && cor !== "" ? cor : THEME_PALETTES[tema]["--pg-accent"];
 
   return (
-    <form action={formAction} className="flex flex-col gap-5 border-t pt-6">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-5 border-t pt-6">
       <input type="hidden" name="churchId" value={igreja.id} />
       <input type="hidden" name="publicCode" value={igreja.publicCode} />
       <input type="hidden" name="mode" value={modo} />
@@ -221,6 +222,6 @@ export function ChurchAppearanceForm({ igreja }: { igreja: ChurchProfile }) {
           {pending ? "Salvando..." : "Salvar aparência"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

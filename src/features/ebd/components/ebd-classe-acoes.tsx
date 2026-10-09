@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { GraduationCap, Pencil, Plus, Power, Search, UserMinus, UserPlus, X } from "lucide-react";
@@ -80,7 +81,7 @@ export function ClasseForm({ classe }: { classe?: EbdClasse }) {
             <DialogTitle>{classe ? `Editar ${classe.nome}` : "Nova classe"}</DialogTitle>
             <DialogDescription>Ex.: Adultos, Jovens, Juniores (9 a 11 anos), Primários.</DialogDescription>
           </DialogHeader>
-          <form action={formAction} className="flex flex-col gap-3">
+          <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
             {classe ? <input type="hidden" name="id" value={classe.id} /> : null}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`cl-nome-${id}`}>Nome</Label>
@@ -160,7 +161,7 @@ export function ClasseForm({ classe }: { classe?: EbdClasse }) {
                 {pending ? "Salvando..." : "Salvar"}
               </Button>
             </DialogFooter>
-          </form>
+          </Formulario>
         </DialogContent>
       </Dialog>
     </>
@@ -382,7 +383,7 @@ export function NovoAluno({
               aparece na chamada dos cultos.
             </DialogDescription>
           </DialogHeader>
-          <form action={formAction} className="flex flex-col gap-3">
+          <Formulario action={formAction} className="flex flex-col gap-3">
             <input type="hidden" name="classeId" value={classeId} />
             {visitante ? <input type="hidden" name="visitanteId" value={visitante.id} /> : null}
             <div className="flex flex-col gap-1.5">
@@ -417,7 +418,7 @@ export function NovoAluno({
                 {pending ? "Salvando..." : "Matricular"}
               </Button>
             </DialogFooter>
-          </form>
+          </Formulario>
         </DialogContent>
       </Dialog>
     </>

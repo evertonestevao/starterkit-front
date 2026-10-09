@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
@@ -16,11 +17,11 @@ export function ConfirmSponsorshipForm({
   useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
       <input type="hidden" name="churchId" value={churchId} />
       <Button type="submit" size="lg" disabled={pending} className="w-full">
         {pending ? "Registrando..." : submitLabel}
       </Button>
-    </form>
+    </Formulario>
   );
 }

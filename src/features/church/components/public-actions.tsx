@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario as FormSemReset } from "@/components/formulario";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
@@ -106,11 +107,11 @@ function Formulario({
   }
 
   return (
-    <form action={formAction} className="relative flex flex-col gap-3">
+    <FormSemReset action={formAction} estado={state} className="relative flex flex-col gap-3">
       <CamposAntiRobo />
       {children}
       <Enviar pending={pending}>{botao}</Enviar>
-    </form>
+    </FormSemReset>
   );
 }
 

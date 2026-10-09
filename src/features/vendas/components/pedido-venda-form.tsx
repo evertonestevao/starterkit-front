@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Check, MessageCircle, Minus, Plus, Ticket } from "lucide-react";
@@ -184,6 +185,7 @@ export function PedidoVendaForm({
             copiaECola={state.success.pixCopiaECola}
             qrDataUrl={state.success.pixQrDataUrl}
             rotuloBotao="Copiar código Pix (já com o valor)"
+            rotuloCopiado="Código copiado!"
           />
         </Passo>
 
@@ -261,7 +263,7 @@ export function PedidoVendaForm({
     ) : null;
 
   return (
-    <form action={action} className="relative flex flex-col gap-3">
+    <Formulario action={action} estado={state} className="relative flex flex-col gap-3">
       <CamposAntiRobo />
       <input type="hidden" name="vendaId" value={venda.id} />
       <input
@@ -398,6 +400,6 @@ export function PedidoVendaForm({
             ? "Escolha pelo menos um item"
             : `Gerar Pix de ${formatCents(total)}`}
       </button>
-    </form>
+    </Formulario>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ export function SaudacaoForm({ churchId, saudacao }: { churchId: string; saudaca
   useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
       <input type="hidden" name="churchId" value={churchId} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="saudacao">Saudação</Label>
@@ -52,6 +53,6 @@ export function SaudacaoForm({ churchId, saudacao }: { churchId: string; saudaca
           {pending ? "Salvando..." : "Salvar saudação"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

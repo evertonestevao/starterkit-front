@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { Eye, EyeOff, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,7 @@ export function SponsorCardActions({
   return (
     <div className="flex flex-col gap-3">
       {denunciando ? (
-        <form action={reportAction} className="flex flex-col gap-2">
+        <Formulario action={reportAction} estado={reportState} className="flex flex-col gap-2">
           <input type="hidden" name="sponsorshipId" value={sponsorshipId} />
           <Label htmlFor={`motivo-${sponsorshipId}`}>O que houve?</Label>
           <Input
@@ -65,10 +66,10 @@ export function SponsorCardActions({
               Cancelar
             </Button>
           </div>
-        </form>
+        </Formulario>
       ) : (
         <div className="flex flex-wrap gap-2">
-          <form action={hideAction}>
+          <Formulario action={hideAction} estado={hideState}>
             <input type="hidden" name="sponsorshipId" value={sponsorshipId} />
             <input type="hidden" name="acao" value={hidden ? "exibir" : "esconder"} />
             <Button type="submit" size="sm" variant="outline" disabled={hidePending} className="gap-1.5">
@@ -84,7 +85,7 @@ export function SponsorCardActions({
                 </>
               )}
             </Button>
-          </form>
+          </Formulario>
 
           {denunciaAberta ? (
             <span className="self-center text-xs text-muted-foreground">

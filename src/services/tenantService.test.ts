@@ -117,9 +117,9 @@ describe("tenantService.createCompany", () => {
   it("limpa o complemento (espaços) e trata vazio como ausente", async () => {
     const received: unknown[] = [];
     const service = createTenantService(repoQueGuarda(received));
-    await service.createCompany({ name: "Igreja Esperança", sobrenome: "  Prainha   -  Promissão " });
+    await service.createCompany({ name: "Igreja Esperança", sobrenome: "  Vila Mariana   -  São Paulo " });
     await service.createCompany({ name: "Igreja Esperança", sobrenome: "   " });
-    expect(received[0]).toMatchObject({ sobrenome: "Prainha - Promissão" });
+    expect(received[0]).toMatchObject({ sobrenome: "Vila Mariana - São Paulo" });
     expect(received[1]).toMatchObject({ sobrenome: null });
   });
 

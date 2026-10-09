@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ export function AddScheduleItemForm({ igrejas }: { igrejas: Array<{ id: string; 
   }, [state]);
 
   return (
-    <form action={formAction} ref={form} className="flex flex-col gap-4">
+    <Formulario action={formAction} estado={state} ref={form} className="flex flex-col gap-4">
       {unica ? (
         <input type="hidden" name="churchId" value={unica.id} />
       ) : (
@@ -148,7 +149,7 @@ export function AddScheduleItemForm({ igrejas }: { igrejas: Array<{ id: string; 
           {pending ? "Adicionando..." : "Adicionar à programação"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }
 
@@ -156,7 +157,7 @@ export function RemoveScheduleItemButton({ itemId, titulo }: { itemId: string; t
   const [state, formAction, pending] = useActionState(removeScheduleItemAction, undefined);
   useActionToast(state);
   return (
-    <form action={formAction} className="flex shrink-0 items-center gap-2">
+    <Formulario action={formAction} estado={state} className="flex shrink-0 items-center gap-2">
       <input type="hidden" name="itemId" value={itemId} />
       <Button
         type="submit"
@@ -167,7 +168,7 @@ export function RemoveScheduleItemButton({ itemId, titulo }: { itemId: string; t
       >
         <Trash2 className="size-4" />
       </Button>
-    </form>
+    </Formulario>
   );
 }
 
@@ -215,7 +216,7 @@ export function EditScheduleItemForm({
   ].join("\u0000");
 
   return (
-    <form key={versaoDoItem} action={formAction} className="flex flex-col gap-3 border-t px-3 py-3">
+    <Formulario key={versaoDoItem} action={formAction} estado={state} className="flex flex-col gap-3 border-t px-3 py-3">
       <input type="hidden" name="itemId" value={item.id} />
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -294,6 +295,6 @@ export function EditScheduleItemForm({
           Salvar alterações
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

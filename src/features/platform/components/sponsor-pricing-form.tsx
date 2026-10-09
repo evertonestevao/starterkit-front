@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,7 @@ export function SponsorPricingForm({ tiers }: { tiers: PriceTier[] }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <form action={formAction} className="flex flex-col gap-4">
+        <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
           <div className="flex flex-wrap gap-3">
             {posicoes.map((position) => (
               <div key={position} className="flex items-end gap-1">
@@ -96,7 +97,7 @@ export function SponsorPricingForm({ tiers }: { tiers: PriceTier[] }) {
               {pending ? "Salvando..." : "Salvar preços"}
             </Button>
           </div>
-        </form>
+        </Formulario>
       </CardContent>
     </Card>
   );

@@ -30,7 +30,7 @@ test("pedido de oração enviado na página pública aparece no painel", async (
   await form.locator('textarea[name="message"], input[name="message"]').first().fill(pedido);
   await form.locator('button[type="submit"]').click();
   // O visitante precisa SABER que chegou — antes a página não dizia nada.
-  await expect(visitorPage.getByText("Recebemos o seu pedido")).toBeVisible();
+  await expect(visitorPage.getByRole("status").getByText("Recebemos o seu pedido")).toBeVisible();
   await visitor.close();
 
   // Antes de abrir a caixa: o menu já avisa que tem 1 pedido não visto.
@@ -78,7 +78,7 @@ test("igreja não vê pedido enviado para outra igreja", async ({ page, context 
   await form.locator('textarea[name="message"], input[name="message"]').first().fill(segredo);
   await form.locator('button[type="submit"]').click();
   // O visitante precisa SABER que chegou — antes a página não dizia nada.
-  await expect(visitorPage.getByText("Recebemos o seu pedido")).toBeVisible();
+  await expect(visitorPage.getByRole("status").getByText("Recebemos o seu pedido")).toBeVisible();
   await visitor.close();
 
   // Pastor de OUTRA igreja, em sessão limpa, não pode ver nada disso.

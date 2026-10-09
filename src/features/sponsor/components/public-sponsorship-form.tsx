@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ export function PublicSponsorshipForm({
   const isBusiness = kind === "business";
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-5">
 
       <input type="hidden" name="churchPublicCode" value={churchPublicCode} />
 
@@ -143,6 +144,6 @@ export function PublicSponsorshipForm({
       <p className="text-center text-xs text-muted-foreground">
         Cobrança mensal no cartão, sem parcelamento. Você pode cancelar quando quiser.
       </p>
-    </form>
+    </Formulario>
   );
 }

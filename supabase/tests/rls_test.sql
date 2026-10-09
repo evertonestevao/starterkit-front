@@ -828,9 +828,9 @@ declare
 begin
   begin
     v_company := public.create_company_with_church(
-      'Igreja Rede RLS', 'rls-igreja-rede', '  Prainha - Promissão ', true, ' Ministério do Belém ');
+      'Igreja Rede RLS', 'rls-igreja-rede', '  Vila Mariana - São Paulo ', true, ' Ministério do Belém ');
     select * into v_church from public.churches where company_id = v_company.id;
-    if v_church.sobrenome is distinct from 'Prainha - Promissão' then
+    if v_church.sobrenome is distinct from 'Vila Mariana - São Paulo' then
       raise exception 'FALHA cadastro: sobrenome nao gravado/aparado (%)', v_church.sobrenome;
     end if;
     if not v_church.faz_parte_de_rede or v_church.rede_nome is distinct from 'Ministério do Belém' then
@@ -3687,7 +3687,7 @@ set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"5e5e5e5e-0000-4000-8000-000000000005","email":"rls-congb@test.local","role":"authenticated"}', true);
 
-update public.churches set herdar_nome = true, sobrenome = 'Prainha'
+update public.churches set herdar_nome = true, sobrenome = 'Vila Mariana'
 where id = '7d7d7d7d-0000-4000-8000-000000000005';
 
 reset role;
@@ -3696,7 +3696,7 @@ do $$
 declare v_nome text; v_sob text;
 begin
   select name, sobrenome into v_nome, v_sob from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
-  if v_nome is distinct from 'Sub Y Novo' or v_sob is distinct from 'Prainha' then
+  if v_nome is distinct from 'Sub Y Novo' or v_sob is distinct from 'Vila Mariana' then
     raise exception 'FALHA nome: Cong B nao herdou o nome da Sub Y (%/%)', v_nome, v_sob;
   end if;
 end $$;
@@ -3735,10 +3735,10 @@ do $$
 declare v_sob text;
 begin
   select sobrenome into v_sob from public.churches where id = '7d7d7d7d-0000-4000-8000-000000000005';
-  if v_sob is distinct from 'Prainha' then
+  if v_sob is distinct from 'Vila Mariana' then
     raise exception 'FALHA nome: anon nao le o sobrenome (%)', coalesce(v_sob, '<null>');
   end if;
-  if public.church_full_name('AD Ipiranga', 'Prainha') <> 'AD Ipiranga · Prainha'
+  if public.church_full_name('AD Ipiranga', 'Vila Mariana') <> 'AD Ipiranga · Vila Mariana'
      or public.church_full_name('AD Ipiranga', '  ') <> 'AD Ipiranga' then
     raise exception 'FALHA nome: church_full_name inesperado';
   end if;

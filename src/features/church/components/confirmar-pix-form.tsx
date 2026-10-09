@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState } from "react";
 import { CheckCircle2 } from "lucide-react";
@@ -25,7 +26,7 @@ export function ConfirmarPixForm({ token, chave, titular }: { token: string; cha
   }
 
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <Formulario action={action} estado={state} className="flex flex-col gap-4">
       <input type="hidden" name="token" value={token} />
       <dl className="flex flex-col gap-3 rounded-lg border p-3 text-sm">
         <div>
@@ -44,6 +45,6 @@ export function ConfirmarPixForm({ token, chave, titular }: { token: string; cha
       <Button type="submit" disabled={pending} className="self-start">
         Confirmar esta chave
       </Button>
-    </form>
+    </Formulario>
   );
 }

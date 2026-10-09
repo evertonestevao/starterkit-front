@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState } from "react";
 import { LockOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,12 +62,12 @@ export function SecurityHoldList({ holds }: { holds: SecurityHold[] }) {
                 </p>
               ) : null}
             </div>
-            <form action={formAction}>
+            <Formulario action={formAction} estado={state}>
               <input type="hidden" name="sponsorAccountId" value={hold.sponsorAccountId} />
               <Button type="submit" size="sm" variant="outline" disabled={pending}>
                 Liberar conta
               </Button>
-            </form>
+            </Formulario>
           </div>
         ))}
       </CardContent>

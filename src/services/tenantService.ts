@@ -67,7 +67,7 @@ const companyNameSchema = z.string().trim().min(2, "Nome muito curto").max(80);
 
 /** Dados da igreja pedidos no cadastro, além do nome (que também nomeia a empresa). */
 export interface NewChurchDetails {
-  /** Complemento que distingue igrejas de mesmo nome ("Prainha - Promissão"). */
+  /** Complemento que distingue igrejas de mesmo nome ("Vila Mariana - São Paulo"). */
   sobrenome: string | null;
   /** Declaração da igreja; não liga ninguém na árvore. */
   fazParteDeRede: boolean;
