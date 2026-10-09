@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { formatChurchName } from "@/lib/churchName";
+import { nomeCompletoDaIgreja } from "@/server/nomeDaIgreja";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { safeChurchLinkPath, tokenDoCaminho } from "@/lib/churchLinks";
@@ -197,21 +197,6 @@ export async function revokeInviteAction(inviteId: string, companyId: string): P
 }
 
 /** Quem administra a igreja e está logado; devolve o id de quem age. */
-/** Nome completo da igreja da conta (com o complemento), para a mensagem do convite. */
-async function nomeCompletoDaIgreja(companyId: string, padrao: string): Promise<string> {
-  const { data } = await (
-    await getSupabaseServerClient()
-  )
-    .from("churches")
-    .select("name, sobrenome")
-    .eq("company_id", companyId)
-    .is("deleted_at", null)
-    .order("created_at")
-    .limit(1)
-    .maybeSingle<{ name: string; sobrenome: string | null }>();
-  return data ? formatChurchName(data.name, data.sobrenome) : padrao;
-}
-
 async function exigeGestaoDeConvites(companyId: string): Promise<string> {
   const tenant = await getTenantService();
   const role = await tenant.requireMembership(companyId);
