@@ -1,5 +1,6 @@
 import { formatarData } from "@/lib/acompanhamento";
 import { celulaCsv } from "@/lib/rolMembros";
+import type { Aba, Celula } from "@/lib/xlsx";
 import type {
   ItemPedido,
   PedidoVenda,
@@ -72,7 +73,11 @@ export interface ResumoPedidos {
 
 /** Totais da venda (cancelados ficam de fora). */
 export function resumirPedidos(
-  pedidos: Array<Pick<PedidoVenda, "quantidade" | "totalCents" | "status"> & { entregueEm?: string | null }>,
+  pedidos: Array<
+    Pick<PedidoVenda, "quantidade" | "totalCents" | "status"> & {
+      entregueEm?: string | null;
+    }
+  >,
 ): ResumoPedidos {
   const validos = pedidos.filter((p) => p.status !== "cancelado");
   return {
@@ -228,7 +233,9 @@ export function pedidosParaCsv(
   const colunasItens = venda.temOpcoes
     ? [
         ...venda.opcoes.map((o) => o.nome),
-        ...totais.map((t) => t.nome).filter((n) => !venda.opcoes.some((o) => o.nome === n)),
+        ...totais
+          .map((t) => t.nome)
+          .filter((n) => !venda.opcoes.some((o) => o.nome === n)),
       ]
     : [];
 
@@ -259,7 +266,11 @@ export function pedidosParaCsv(
         valorCsv(p.totalCents),
         celulaCsv(p.observacao),
         ...(venda.geraVoucher
-          ? [p.voucherCodigo ?? "", p.entregueEm ? dataHoraCsv(p.entregueEm) : "", celulaCsv(p.entregaObs)]
+          ? [
+              p.voucherCodigo ?? "",
+              p.entregueEm ? dataHoraCsv(p.entregueEm) : "",
+              celulaCsv(p.entregaObs),
+            ]
           : []),
       ].join(";"),
     );
@@ -281,10 +292,19 @@ export function pedidosParaCsv(
   linhas.push(["Unidades", String(resumo.unidades)].join(";"));
   linhas.push(["Pago", valorCsv(resumo.pagoCents)].join(";"));
   linhas.push(["A confirmar", valorCsv(resumo.pendenteCents)].join(";"));
-  if (venda.geraVoucher) linhas.push(["Pedidos entregues", String(resumo.entregues)].join(";"));
+  if (venda.geraVoucher)
+    linhas.push(["Pedidos entregues", String(resumo.entregues)].join(";"));
   if (venda.temOpcoes) {
     linhas.push("");
-    linhas.push(["Opção", "Unidades", "Pagas", ...(venda.geraVoucher ? ["Entregues"] : []), "Total"].join(";"));
+    linhas.push(
+      [
+        "Opção",
+        "Unidades",
+        "Pagas",
+        ...(venda.geraVoucher ? ["Entregues"] : []),
+        "Total",
+      ].join(";"),
+    );
     for (const t of totais)
       linhas.push(
         [
@@ -299,22 +319,158 @@ export function pedidosParaCsv(
   return `﻿${linhas.join("\r\n")}\r\n`;
 }
 
-export type FiltroPedido = "todos" | StatusPedido;
+export type FiltroPedido = "todos" | StatusPedido | "entregue" | "a_entregar";
 
 /** Filtro da lista de pedidos: situação e nome/WhatsApp (sem acento, sem maiúscula). */
-export function filtrarPedidos(pedidos: PedidoVenda[], filtro: { status: FiltroPedido; busca: string }): PedidoVenda[] {
-  const sem = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+export function filtrarPedidos(
+  pedidos: PedidoVenda[],
+  filtro: { status: FiltroPedido; busca: string },
+): PedidoVenda[] {
+  const sem = (t: string) =>
+    t
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
   const termo = sem(filtro.busca.trim());
   const digitos = filtro.busca.replace(/\D/g, "");
   return pedidos.filter(
     (p) =>
-      (filtro.status === "todos" || p.status === filtro.status) &&
-      (!termo || sem(p.nome).includes(termo) || (digitos.length >= 4 && p.telefone.replace(/\D/g, "").includes(digitos))),
+      passaNoFiltro(p, filtro.status) &&
+      (!termo ||
+        sem(p.nome).includes(termo) ||
+        (digitos.length >= 4 &&
+          p.telefone.replace(/\D/g, "").includes(digitos))),
   );
 }
 
 /** Código curto do voucher como a pessoa digita ("k7p4qx", "K7P 4QX") → "K7P-4QX"; null se não parece um. */
 export function normalizarCodigoVoucher(texto: string): string | null {
   const limpo = texto.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return /^[A-Z0-9]{6}$/.test(limpo) ? `${limpo.slice(0, 3)}-${limpo.slice(3)}` : null;
+  return /^[A-Z0-9]{6}$/.test(limpo)
+    ? `${limpo.slice(0, 3)}-${limpo.slice(3)}`
+    : null;
+}
+
+/**
+ * A mesma planilha do CSV, em abas do Excel: "Pedidos" (uma coluna por
+ * opção), "Por opção" (quando há opções) e "Resumo". Valores em centavos
+ * nas colunas de reais — o gerador aplica o formato R$.
+ */
+export function pedidosParaAbas(
+  venda: Pick<Venda, "titulo" | "temOpcoes" | "opcoes" | "geraVoucher">,
+  pedidos: PedidoVenda[],
+): Aba[] {
+  const totais = totaisPorItem(
+    pedidos,
+    venda.opcoes.map((o) => o.nome),
+  );
+  const colunasItens = venda.temOpcoes
+    ? [
+        ...venda.opcoes.map((o) => o.nome),
+        ...totais
+          .map((t) => t.nome)
+          .filter((n) => !venda.opcoes.some((o) => o.nome === n)),
+      ]
+    : [];
+  const cabecalho = [
+    "Data",
+    "Nome",
+    "WhatsApp",
+    "Situação",
+    ...(venda.temOpcoes ? colunasItens : ["Quantidade"]),
+    "Total",
+    "Observação",
+    ...(venda.geraVoucher ? ["Voucher", "Entregue em", "Obs. da entrega"] : []),
+  ];
+  const colunaTotal = 4 + (venda.temOpcoes ? colunasItens.length : 1);
+  const linhas: Celula[][] = [cabecalho];
+  for (const p of [...pedidos].sort((a, b) =>
+    a.createdAt.localeCompare(b.createdAt),
+  )) {
+    const porNome = new Map(p.itens.map((i) => [i.nome, i.quantidade]));
+    linhas.push([
+      dataHoraCsv(p.createdAt),
+      p.nome,
+      p.telefone,
+      STATUS_PEDIDO[p.status],
+      ...(venda.temOpcoes
+        ? colunasItens.map((n) => porNome.get(n) ?? 0)
+        : [p.quantidade]),
+      p.totalCents,
+      p.observacao,
+      ...(venda.geraVoucher
+        ? [
+            p.voucherCodigo,
+            p.entregueEm ? dataHoraCsv(p.entregueEm) : null,
+            p.entregaObs,
+          ]
+        : []),
+    ]);
+  }
+
+  const resumo = resumirPedidos(pedidos);
+  const abas: Aba[] = [
+    {
+      nome: "Pedidos",
+      linhas,
+      colunasEmReais: [colunaTotal],
+      larguras: cabecalho.map((c, i) =>
+        i === 1 ? 28 : i === colunaTotal + 1 ? 36 : Math.max(12, c.length + 2),
+      ),
+    },
+  ];
+  if (venda.temOpcoes) {
+    abas.push({
+      nome: "Por opção",
+      linhas: [
+        [
+          "Opção",
+          "Unidades",
+          "Pagas",
+          ...(venda.geraVoucher ? ["Entregues"] : []),
+          "Total",
+        ],
+        ...totais.map((t) => [
+          t.nome,
+          t.unidades,
+          t.pagas,
+          ...(venda.geraVoucher ? [t.entregues] : []),
+          t.totalCents,
+        ]),
+      ],
+      colunasEmReais: [venda.geraVoucher ? 4 : 3],
+      larguras: [28, 12, 12, 12, 14],
+    });
+  }
+  abas.push({
+    nome: "Resumo",
+    linhas: [
+      ["Resumo (sem cancelados)", ""],
+      ["Venda", venda.titulo],
+      ["Pedidos", resumo.pedidos],
+      ["Unidades", resumo.unidades],
+      // A coluna mistura contagem e reais: os valores em reais vão já escritos.
+      ["Pago", formatarReais(resumo.pagoCents)],
+      ["A confirmar", formatarReais(resumo.pendenteCents)],
+      ...(venda.geraVoucher
+        ? [["Pedidos entregues", resumo.entregues] as Celula[]]
+        : []),
+    ],
+    larguras: [26, 30],
+  });
+  return abas;
+}
+
+const formatarReais = (centavos: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+    centavos / 100,
+  );
+
+/** Situação do filtro: de pagamento, ou de retirada (com voucher). */
+function passaNoFiltro(p: PedidoVenda, filtro: FiltroPedido): boolean {
+  if (filtro === "todos") return true;
+  if (filtro === "entregue") return Boolean(p.entregueEm);
+  // A entregar: o que ainda vai ser retirado (cancelado não entra).
+  if (filtro === "a_entregar") return !p.entregueEm && p.status !== "cancelado";
+  return p.status === filtro;
 }
