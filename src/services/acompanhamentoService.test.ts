@@ -695,3 +695,22 @@ describe("quem acessa", () => {
     expect(r.convitesSemMembro.map((c) => c.email)).toEqual(["fora@x.org"]);
   });
 });
+
+describe("e-mail pelo cartão de acesso", () => {
+  it("valida, normaliza e grava só o e-mail; quem não cuida do rol não grava", async () => {
+    const salvos: unknown[][] = [];
+    const { svc } = service({
+      definirEmail: async (...args: unknown[]) => {
+        salvos.push(args);
+        return true;
+      },
+    } as unknown as Partial<AcompanhamentoRepository>);
+    await expect(svc.definirEmail(owner, MEMBRO, "não é email")).rejects.toMatchObject({
+      code: "validation_error",
+      field: "email",
+    });
+    await expect(svc.definirEmail(member, MEMBRO, "a@b.org")).rejects.toMatchObject({ code: "forbidden" });
+    await svc.definirEmail(secretario, MEMBRO, "  Joao@Igreja.ORG ");
+    expect(salvos).toEqual([[IGREJA, MEMBRO, "joao@igreja.org"]]);
+  });
+});

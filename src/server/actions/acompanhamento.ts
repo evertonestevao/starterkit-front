@@ -28,6 +28,19 @@ function revalidar() {
   revalidatePath("/dashboard");
 }
 
+/** Atalho do cartão de acesso: só o e-mail, para poder convidar. */
+export async function definirEmailDoMembroAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
+  try {
+    await (
+      await getAcompanhamentoService()
+    ).definirEmail(await ator(), String(fd.get("membroId") ?? ""), fd.get("email"));
+    revalidatePath("/dashboard/membros", "layout");
+    return { success: "E-mail salvo. Agora já dá para convidar." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
 /** Atalho da lista de membros: só os cargos. */
 export async function definirCargosDoMembroAction(membroId: string, cargoIds: string[]): Promise<ActionState> {
   try {

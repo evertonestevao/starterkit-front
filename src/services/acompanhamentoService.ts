@@ -133,6 +133,8 @@ export interface AcompanhamentoRepository {
   listCargosDisponiveis(churchId: string): Promise<CargoResumo[]>;
   /** Troca os cargos do membro pelos da lista (tira os que saíram, põe os novos). */
   setCargosDoMembro(churchId: string, membroId: string, cargoIds: string[]): Promise<void>;
+  /** Só o e-mail (atalho do cartão de acesso). false = membro não encontrado. */
+  definirEmail(churchId: string, membroId: string, email: string): Promise<boolean>;
   getMembro(churchId: string, membroId: string): Promise<RolMembro | null>;
   createMembro(churchId: string, input: NovoMembro): Promise<string>;
   /** Vários de uma vez (importação). Devolve quantos entraram. */
@@ -645,6 +647,21 @@ export function createAcompanhamentoService(deps: {
       }
       if (cargos) await repo.setCargosDoMembro(church.id, id, [...new Set(cargos)]);
       return id;
+    },
+
+    /** Atalho do cartão de acesso: grava o e-mail para poder convidar. */
+    async definirEmail(actor: AcompanhamentoActor, membroId: unknown, email: unknown): Promise<void> {
+      const church = await igreja(actor);
+      const id = validar(uuid("Membro inválido"), membroId);
+      const parsed = z
+        .string()
+        .trim()
+        .pipe(z.email("E-mail inválido").max(254, "E-mail longo demais"))
+        .safeParse(email);
+      if (!parsed.success) throw toValidationError(parsed.error.issues.map((i) => ({ ...i, path: ["email"] })));
+      if (!(await repo.definirEmail(church.id, id, parsed.data.toLowerCase()))) {
+        throw new AppError("not_found", "Membro não encontrado.");
+      }
     },
 
     /**
