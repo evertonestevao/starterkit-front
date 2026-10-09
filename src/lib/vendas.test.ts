@@ -365,3 +365,25 @@ describe("planilha em Excel e filtro de entrega", () => {
     expect(abas[2].linhas).toContainEqual(["Pedidos entregues", 1]);
   });
 });
+
+describe("busca única", () => {
+  const base = {
+    vendaId: "v",
+    quantidade: 1,
+    totalCents: 800,
+    observacao: null,
+    createdAt: "2026-10-08T22:30:00Z",
+    itens: [],
+    entregueEm: null,
+    entregaObs: null,
+    status: "pago" as const,
+  };
+  const lista = [
+    { ...base, id: "1", nome: "Ana", telefone: "(14) 99999-8888", voucherCodigo: "K7P-4QX" },
+    { ...base, id: "2", nome: "Bia", telefone: "(14) 98888-7777", voucherCodigo: "AB2-CD3" },
+  ];
+  it("acha pelo código do voucher, digitado de qualquer jeito", () => {
+    expect(filtrarPedidos(lista, { status: "todos", busca: "k7p4qx" }).map((p) => p.id)).toEqual(["1"]);
+    expect(filtrarPedidos(lista, { status: "todos", busca: "AB2-CD3" }).map((p) => p.id)).toEqual(["2"]);
+  });
+});

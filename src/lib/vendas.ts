@@ -333,11 +333,14 @@ export function filtrarPedidos(
       .toLowerCase();
   const termo = sem(filtro.busca.trim());
   const digitos = filtro.busca.replace(/\D/g, "");
+  // Uma busca só: nome, final do WhatsApp ou código do voucher.
+  const voucher = normalizarCodigoVoucher(filtro.busca);
   return pedidos.filter(
     (p) =>
       passaNoFiltro(p, filtro.status) &&
       (!termo ||
         sem(p.nome).includes(termo) ||
+        (voucher !== null && p.voucherCodigo === voucher) ||
         (digitos.length >= 4 &&
           p.telefone.replace(/\D/g, "").includes(digitos))),
   );

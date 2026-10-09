@@ -18,7 +18,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BuscarVoucher } from "@/features/vendas/components/buscar-voucher";
 import { PedidosLista } from "@/features/vendas/components/pedidos-lista";
 import { VendaAcoes } from "@/features/vendas/components/venda-acoes";
 import { VendaForm } from "@/features/vendas/components/venda-form";
@@ -27,6 +26,8 @@ import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { isAppError } from "@/lib/errors";
 import { mascaraTelefone } from "@/lib/telefone";
 import { cn } from "@/lib/utils";
+import { PaginationControls } from "@/components/pagination-controls";
+import { paginaDaUrl, paginar } from "@/lib/paginacao";
 import {
   SITUACAO_VENDA,
   STATUS_PEDIDO,
@@ -51,6 +52,8 @@ const FILTROS_PAGAMENTO: FiltroPedido[] = [
 ];
 /** Com voucher, dá para filtrar também pela retirada. */
 const FILTROS_ENTREGA: FiltroPedido[] = ["a_entregar", "entregue"];
+/** Pedidos por página (o segundo é o padrão). */
+const POR_PAGINA = [10, 25, 50, 100];
 const ROTULO_FILTRO: Record<string, string> = {
   todos: "Todos",
   a_entregar: "A entregar",
@@ -62,7 +65,13 @@ export default async function VendaPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ status?: string; q?: string; editar?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    q?: string;
+    editar?: string;
+    page?: string;
+    por?: string;
+  }>;
 }) {
   const actor = await getVendasActorAutorizado();
   if (!actor) notFound();
@@ -97,8 +106,24 @@ export default async function VendaPage({
   // Venda pronta não fica aberta para edição: o formulário abre pelo botão.
   const editando = sp.editar === "1";
   const busca = (sp.q ?? "").slice(0, 80);
-  const filtrados = filtrarPedidos(pedidos, { status, busca });
   const base = `/dashboard/vendas/${venda.id}`;
+  const filtrados = filtrarPedidos(pedidos, { status, busca });
+  const porPagina = POR_PAGINA.includes(Number(sp.por))
+    ? Number(sp.por)
+    : POR_PAGINA[1];
+  const pag = paginar(filtrados, paginaDaUrl(sp.page), porPagina);
+  // O que a URL leva ao trocar de página, filtro ou tamanho da página.
+  const paramsDaLista = {
+    status: status !== "todos" ? status : undefined,
+    q: busca || undefined,
+    por: porPagina !== POR_PAGINA[1] ? String(porPagina) : undefined,
+  };
+  const linkDaLista = (troca: Record<string, string | undefined>) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries({ ...paramsDaLista, ...troca }))
+      if (v) qs.set(k, v);
+    return qs.size ? `${base}?${qs}` : base;
+  };
   // Link para a página pública da venda (a igreja ativa).
   const igreja = (
     await (
@@ -247,7 +272,6 @@ export default async function VendaPage({
       <section className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-medium">Pedidos</h3>
-          {venda.geraVoucher ? <BuscarVoucher /> : null}
           {pedidos.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               <a
@@ -283,14 +307,13 @@ export default async function VendaPage({
                   status: f,
                   busca: "",
                 }).length;
-                const params = new URLSearchParams({
-                  ...(f !== "todos" ? { status: f } : {}),
-                  ...(busca ? { q: busca } : {}),
-                });
                 return (
                   <Link
                     key={f}
-                    href={`${base}${params.size ? `?${params}` : ""}`}
+                    href={linkDaLista({
+                      status: f !== "todos" ? f : undefined,
+                      page: undefined,
+                    })}
                     className={buttonVariants({
                       variant: status === f ? "default" : "ghost",
                       size: "sm",
@@ -306,13 +329,16 @@ export default async function VendaPage({
             {status !== "todos" ? (
               <input type="hidden" name="status" value={status} />
             ) : null}
-            <div className="relative sm:ml-auto sm:w-64">
+            {paramsDaLista.por ? (
+              <input type="hidden" name="por" value={paramsDaLista.por} />
+            ) : null}
+            <div className="relative sm:ml-auto sm:w-72">
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
                 name="q"
                 defaultValue={busca}
-                placeholder="Nome ou WhatsApp"
+                placeholder="Nome, WhatsApp ou voucher"
                 aria-label="Buscar pedido"
                 className="h-9 pl-8"
               />
@@ -332,12 +358,44 @@ export default async function VendaPage({
             Nenhum pedido com este filtro.
           </p>
         ) : (
-          <PedidosLista
-            pedidos={filtrados}
-            titulo={venda.titulo}
-            temOpcoes={venda.temOpcoes}
-            geraVoucher={venda.geraVoucher}
-          />
+          <>
+            <PedidosLista
+              pedidos={pag.itens}
+              titulo={venda.titulo}
+              temOpcoes={venda.temOpcoes}
+              geraVoucher={venda.geraVoucher}
+            />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                Por página:
+                {POR_PAGINA.map((n) => (
+                  <Link
+                    key={n}
+                    href={linkDaLista({
+                      por: n !== POR_PAGINA[1] ? String(n) : undefined,
+                      page: undefined,
+                    })}
+                    className={buttonVariants({
+                      variant: n === porPagina ? "secondary" : "ghost",
+                      size: "sm",
+                    })}
+                    aria-current={n === porPagina ? "true" : undefined}
+                  >
+                    {n}
+                  </Link>
+                ))}
+              </div>
+              <div className="sm:min-w-80">
+                <PaginationControls
+                  page={pag.pagina}
+                  pageSize={porPagina}
+                  total={pag.total}
+                  basePath={base}
+                  params={paramsDaLista}
+                />
+              </div>
+            </div>
+          </>
         )}
       </section>
 
