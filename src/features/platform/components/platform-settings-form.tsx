@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +27,7 @@ export function AutopatrocinioForm({ amountCents }: { amountCents: number }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={formAction} className="flex flex-wrap items-end gap-3">
+        <Formulario action={formAction} estado={state} className="flex flex-wrap items-end gap-3">
           <div className="flex max-w-[12rem] flex-col gap-1.5">
             <Label htmlFor="autopatrocinio-amount">Valor mensal</Label>
             <Input
@@ -41,7 +42,7 @@ export function AutopatrocinioForm({ amountCents }: { amountCents: number }) {
           <Button type="submit" disabled={pending}>
             {pending ? "Salvando..." : "Salvar"}
           </Button>
-        </form>
+        </Formulario>
       </CardContent>
     </Card>
   );
@@ -57,7 +58,7 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
   useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-6">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-6">
       <Card>
         <CardHeader>
           <CardTitle>Vagas de primeiro patrocínio</CardTitle>
@@ -129,6 +130,6 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
           Salvar configurações
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

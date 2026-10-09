@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState } from "react";
 import { Mail } from "lucide-react";
@@ -23,7 +24,7 @@ export function AccessLinkForm() {
   useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="access-email">Email</Label>
@@ -44,6 +45,6 @@ export function AccessLinkForm() {
       <p className="text-xs leading-5 text-muted-foreground">
         Assinou pelo link de uma igreja? Você não criou senha — entre por aqui.
       </p>
-    </form>
+    </Formulario>
   );
 }

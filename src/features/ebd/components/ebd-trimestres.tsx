@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -116,7 +117,7 @@ function TrimestreForm({
             <DialogTitle>{trimestre ? `Editar ${trimestre.nome}` : "Novo trimestre"}</DialogTitle>
             <DialogDescription>Datas e a revista usada no período.</DialogDescription>
           </DialogHeader>
-          <form action={formAction} className="flex flex-col gap-3">
+          <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
             {trimestre ? <input type="hidden" name="id" value={trimestre.id} /> : null}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`tr-nome-${id}`}>Nome</Label>
@@ -142,7 +143,7 @@ function TrimestreForm({
                 {pending ? "Salvando..." : "Salvar"}
               </Button>
             </DialogFooter>
-          </form>
+          </Formulario>
         </DialogContent>
       </Dialog>
     </>

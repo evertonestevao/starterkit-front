@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -20,7 +21,7 @@ export function CompanyNameForm() {
   useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       <input type="hidden" name="companyId" value={active.id} />
       <div className="flex flex-col gap-2">
         <Label htmlFor="company-name">Nome no menu</Label>
@@ -29,7 +30,7 @@ export function CompanyNameForm() {
       <Button type="submit" disabled={pending} className="w-fit">
         {pending ? "Salvando..." : "Salvar"}
       </Button>
-    </form>
+    </Formulario>
   );
 }
 
@@ -38,7 +39,7 @@ export function ProfileForm({ initialName }: { initialName: string }) {
   useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label htmlFor="profile-name">Seu nome</Label>
         <Input id="profile-name" name="fullName" defaultValue={initialName} minLength={2} required />
@@ -46,7 +47,7 @@ export function ProfileForm({ initialName }: { initialName: string }) {
       <Button type="submit" disabled={pending} className="w-fit">
         {pending ? "Salvando..." : "Salvar"}
       </Button>
-    </form>
+    </Formulario>
   );
 }
 
@@ -80,7 +81,7 @@ export function AvatarForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       {clientError ? (
         <Alert variant="destructive">
           <AlertDescription>{clientError}</AlertDescription>
@@ -106,7 +107,7 @@ export function AvatarForm({
       <Button type="submit" disabled={pending || Boolean(clientError)} className="w-fit">
         {pending ? "Enviando..." : "Salvar foto"}
       </Button>
-    </form>
+    </Formulario>
   );
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,7 @@ export function AlterarSenhaForm() {
   }, [state]);
 
   return (
-    <form ref={formRef} action={formAction} className="flex max-w-md flex-col gap-4">
+    <Formulario ref={formRef} action={formAction} estado={state} className="flex max-w-md flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label htmlFor="senha-atual">Senha atual</Label>
         <Input id="senha-atual" name="senhaAtual" type="password" autoComplete="current-password" required />
@@ -38,6 +39,6 @@ export function AlterarSenhaForm() {
       <Button type="submit" disabled={pending} className="w-fit">
         {pending ? "Trocando..." : "Trocar a senha"}
       </Button>
-    </form>
+    </Formulario>
   );
 }

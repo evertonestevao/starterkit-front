@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClipboardList, Pencil, UserPlus } from "lucide-react";
@@ -89,7 +90,7 @@ export function MembroForm({
               {!membro ? " Endereço, família e vida na igreja ficam na ficha completa, no passo seguinte." : ""}
             </DialogDescription>
           </DialogHeader>
-          <form action={formAction} className="flex flex-col gap-3">
+          <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
             {membro ? <input type="hidden" name="id" value={membro.id} /> : null}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`nome-${id}`}>Nome</Label>
@@ -232,7 +233,7 @@ export function MembroForm({
                 {pending ? "Salvando..." : "Salvar"}
               </Button>
             </DialogFooter>
-          </form>
+          </Formulario>
         </DialogContent>
       </Dialog>
     </>

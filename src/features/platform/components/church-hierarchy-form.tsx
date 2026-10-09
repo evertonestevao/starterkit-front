@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useActionToast } from "@/hooks/useActionToast";
@@ -34,7 +35,7 @@ export function ChurchHierarchyForm({
   const parentAtualValido = opcoes.some((c) => c.id === church.parentId);
 
   return (
-    <form action={formAction} className="flex flex-col gap-2">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-2">
       <input type="hidden" name="churchId" value={church.id} />
       <div className="grid gap-2 sm:grid-cols-[10rem_1fr_auto]">
         <select
@@ -70,6 +71,6 @@ export function ChurchHierarchyForm({
           Salvar
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

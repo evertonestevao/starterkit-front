@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -27,12 +28,12 @@ function ReenviarConfirmacao({ churchId }: { churchId: string }) {
   const [state, action, pending] = useActionState(reenviarConfirmacaoPixAction, undefined);
   useActionToast(state);
   return (
-    <form action={action}>
+    <Formulario action={action} estado={state}>
       <input type="hidden" name="churchId" value={churchId} />
       <Button type="submit" variant="outline" size="sm" disabled={pending}>
         Reenviar e-mail de confirmação
       </Button>
-    </form>
+    </Formulario>
   );
 }
 
@@ -66,7 +67,7 @@ export function PixForm({ igrejas }: { igrejas: PixChurch[] }) {
   return (
     <div className="flex flex-col gap-4">
       {igreja?.pixStatus === "aguardando" ? <ReenviarConfirmacao churchId={igreja.id} /> : null}
-      <form action={formAction} className="flex flex-col gap-4">
+      <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
         <input type="hidden" name="churchId" value={churchId} />
         <input type="hidden" name="confirmado" value={confirmando ? "true" : "false"} />
 
@@ -175,7 +176,7 @@ export function PixForm({ igrejas }: { igrejas: PixChurch[] }) {
             </Button>
           )}
         </div>
-      </form>
+      </Formulario>
     </div>
   );
 }

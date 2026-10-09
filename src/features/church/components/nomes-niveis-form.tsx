@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useTransition } from "react";
 import { toast } from "sonner";
 import { Layers, RotateCcw } from "lucide-react";
@@ -49,7 +50,7 @@ export function NomesNiveisForm({ churchId, nomes }: { churchId: string; nomes: 
       </CardHeader>
       <CardContent>
         {/* A `key` remonta o formulário quando os nomes mudam (salvar ou restaurar). */}
-        <form action={formAction} className="flex flex-col gap-4" key={JSON.stringify(nomes)}>
+        <Formulario action={formAction} estado={state} className="flex flex-col gap-4" key={JSON.stringify(nomes)}>
           <input type="hidden" name="churchId" value={churchId} />
           {NIVEIS.map((nivel, i) => (
             <fieldset key={nivel} className="grid gap-3 sm:grid-cols-2">
@@ -110,7 +111,7 @@ export function NomesNiveisForm({ churchId, nomes }: { churchId: string; nomes: 
               {pending ? "Salvando..." : "Salvar nomes"}
             </Button>
           </div>
-        </form>
+        </Formulario>
       </CardContent>
     </Card>
   );

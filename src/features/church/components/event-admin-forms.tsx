@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ export function EventAdminForms({ evento }: { evento: EditableEvent }) {
 
   return (
     <div className="flex flex-col gap-3 border-t px-3 py-3">
-      <form key={versaoDoEvento} action={formAction} className="flex flex-col gap-3">
+      <Formulario key={versaoDoEvento} action={formAction} estado={state} className="flex flex-col gap-3">
         <input type="hidden" name="eventId" value={evento.id} />
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -114,15 +115,15 @@ export function EventAdminForms({ evento }: { evento: EditableEvent }) {
             Salvar alterações
           </Button>
         </div>
-      </form>
+      </Formulario>
 
-      <form action={removeAction}>
+      <Formulario action={removeAction} estado={removeState}>
         <input type="hidden" name="eventId" value={evento.id} />
         <Button type="submit" size="sm" variant="ghost" className="gap-1.5 text-destructive" disabled={removing}>
           <Trash2 className="size-3.5" aria-hidden />
           Tirar da página
         </Button>
-      </form>
+      </Formulario>
     </div>
   );
 }

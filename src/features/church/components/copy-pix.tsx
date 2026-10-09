@@ -18,6 +18,7 @@ export function CopyPix({
   copiaECola,
   qrDataUrl,
   rotuloBotao = "Copiar chave PIX",
+  rotuloCopiado = "Chave copiada!",
 }: {
   chave: string;
   /** Para a métrica de intenção de doar. Sem ele (venda, não doação), nada é registrado. */
@@ -27,6 +28,7 @@ export function CopyPix({
   qrDataUrl?: string | null;
   /** Texto do botão. Com valor embutido, vale dizer isso (a pessoa não digita o valor). */
   rotuloBotao?: string;
+  rotuloCopiado?: string;
 }) {
   const { copied: copiado, copy } = useCopyToClipboard(2500);
 
@@ -64,7 +66,7 @@ export function CopyPix({
         className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--pg-accent)] font-semibold text-[var(--pg-accent-fg)]"
       >
         {copiado ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-        <span aria-live="polite">{copiado ? "Copiado!" : rotuloBotao}</span>
+        <span aria-live="polite">{copiado ? rotuloCopiado : rotuloBotao}</span>
       </button>
     </div>
   );

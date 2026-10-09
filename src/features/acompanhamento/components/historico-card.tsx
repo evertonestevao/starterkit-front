@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { FileSignature, FileText, History, IdCard, PencilLine, Plus, Trash2, UserCheck, UserPlus } from "lucide-react";
@@ -149,7 +150,7 @@ function AnotarForm({ membroId, hoje, onFeito }: { membroId: string; hoje: strin
   }, [state, onFeito]);
 
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <Formulario action={action} estado={state} className="flex flex-col gap-4">
       <input type="hidden" name="membroId" value={membroId} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="hist-titulo">O que aconteceu</Label>
@@ -171,6 +172,6 @@ function AnotarForm({ membroId, hoje, onFeito }: { membroId: string; hoje: strin
           {pending ? "Salvando..." : "Anotar"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

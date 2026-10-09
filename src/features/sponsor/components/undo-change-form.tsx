@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState } from "react";
 import { ShieldAlert } from "lucide-react";
@@ -27,11 +28,11 @@ export function UndoChangeForm({ token }: { token: string }) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       <input type="hidden" name="token" value={token} />
       <Button type="submit" variant="destructive" disabled={pending} className="w-full">
         {pending ? "Desfazendo..." : "Desfazer e bloquear minha conta"}
       </Button>
-    </form>
+    </Formulario>
   );
 }

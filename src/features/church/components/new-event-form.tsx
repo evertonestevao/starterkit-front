@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,7 @@ export function NewEventForm({
   const unica = igrejas.length === 1 ? igrejas[0] : null;
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-5">
       {unica ? (
         <input type="hidden" name="churchId" value={unica.id} />
       ) : (
@@ -117,6 +118,6 @@ export function NewEventForm({
           {pending ? "Publicando..." : "Publicar evento"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

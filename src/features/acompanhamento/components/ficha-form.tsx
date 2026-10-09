@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ClipboardList } from "lucide-react";
@@ -107,7 +108,7 @@ export function FichaForm({
               ficam no botão Editar.
             </DialogDescription>
           </DialogHeader>
-          <form action={formAction} className="flex flex-col gap-5">
+          <Formulario action={formAction} estado={state} className="flex flex-col gap-5">
             <input type="hidden" name="membroId" value={membroId} />
 
             <Bloco titulo="Identificação">
@@ -398,7 +399,7 @@ export function FichaForm({
                 {pending ? "Salvando..." : "Salvar ficha"}
               </Button>
             </DialogFooter>
-          </form>
+          </Formulario>
         </DialogContent>
       </Dialog>
     </>

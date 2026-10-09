@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ export function CreateCompanyForm({
   const [inNetwork, setInNetwork] = useState(false);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       {next ? <input type="hidden" name="next" value={next} /> : null}
       <div className="flex flex-col gap-2">
         <Label htmlFor="name">Nome da igreja</Label>
@@ -110,6 +111,6 @@ export function CreateCompanyForm({
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Criando..." : "Criar igreja"}
       </Button>
-    </form>
+    </Formulario>
   );
 }

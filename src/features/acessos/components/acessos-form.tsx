@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import { RotateCcw } from "lucide-react";
@@ -55,7 +56,7 @@ export function AcessosForm({ cargos }: { cargos: CargoAcessos[] }) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       {acima ? (
         <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
           {temPropria
@@ -111,6 +112,6 @@ export function AcessosForm({ cargos }: { cargos: CargoAcessos[] }) {
           </Button>
         ) : null}
       </div>
-    </form>
+    </Formulario>
   );
 }

@@ -42,7 +42,8 @@ test("igreja publica evento, visitante se inscreve e o pastor vê filtrado", asy
   await visitorPage.getByLabel("Seu nome").fill("Visitante Eventos E2E");
   await visitorPage.getByLabel("WhatsApp, telefone ou email").fill("11988887777");
   await visitorPage.getByRole("button", { name: /Inscrever-me/ }).click();
-  await expect(visitorPage.getByText("Inscrição feita")).toBeVisible();
+  // A frase aparece na página e no aviso do canto: confere a da página.
+  await expect(visitorPage.getByRole("status").getByText("Inscrição feita")).toBeVisible();
   // Evento pago sem chave PIX cadastrada: a igreja combina o pagamento.
   await expect(visitorPage.getByText(/vai falar com você para combinar o pagamento/)).toBeVisible();
   await visitor.close();

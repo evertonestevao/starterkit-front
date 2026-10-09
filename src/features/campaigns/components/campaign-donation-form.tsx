@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -167,7 +168,7 @@ function PixDonationForm({
   }
 
   return (
-    <form action={formAction} className="relative flex flex-col gap-3">
+    <Formulario action={formAction} estado={state} className="relative flex flex-col gap-3">
       <CamposAntiRobo />
       <input type="hidden" name="campaignId" value={campaignId} />
       <DadosDoDoador telefoneObrigatorio />
@@ -179,7 +180,7 @@ function PixDonationForm({
         onChange={setValor}
       />
       <Enviar pending={pending}>Gerar PIX</Enviar>
-    </form>
+    </Formulario>
   );
 }
 
@@ -194,7 +195,7 @@ function GatewayDonationForm({
   const [valor, setValor] = useState(valorPadraoCents ? formatCents(valorPadraoCents) : "");
 
   return (
-    <form action={formAction} className="relative flex flex-col gap-3">
+    <Formulario action={formAction} estado={state} className="relative flex flex-col gap-3">
       <CamposAntiRobo />
       <input type="hidden" name="campaignId" value={campaignId} />
       <DadosDoDoador telefoneObrigatorio={false} />
@@ -211,7 +212,7 @@ function GatewayDonationForm({
         valor chegar à conta dela.
       </p>
       <Enviar pending={pending}>Continuar para o pagamento</Enviar>
-    </form>
+    </Formulario>
   );
 }
 

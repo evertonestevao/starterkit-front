@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Building2, Check, ChevronDown, Church, Copy, House, Link2, MessageCircle, Network, X } from "lucide-react";
@@ -113,7 +114,7 @@ function PendingRequestCard({ request, tipos }: { request: ChurchLinkRequest; ti
         ) : null}
       </div>
 
-      <form action={formAction} className="flex flex-col gap-3">
+      <Formulario action={formAction} className="flex flex-col gap-3">
         <input type="hidden" name="requestId" value={request.id} />
         {recusando ? (
           <div className="flex flex-col gap-1.5">
@@ -163,7 +164,7 @@ function PendingRequestCard({ request, tipos }: { request: ChurchLinkRequest; ti
             </>
           )}
         </div>
-      </form>
+      </Formulario>
     </li>
   );
 }
@@ -202,13 +203,13 @@ function GeneratedLink({ url, intro }: { url: string; intro: string }) {
 function RevokeInviteButton({ inviteId }: { inviteId: string }) {
   const [formAction, pending] = useToastedAction(revokeChurchLinkInviteAction);
   return (
-    <form action={formAction}>
+    <Formulario action={formAction}>
       <input type="hidden" name="inviteId" value={inviteId} />
       <Button type="submit" variant="ghost" size="sm" disabled={pending} className="gap-1 text-muted-foreground">
         <X className="size-3.5" aria-hidden />
         Cancelar link
       </Button>
-    </form>
+    </Formulario>
   );
 }
 
@@ -297,7 +298,7 @@ function CreateInviteCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {aberto ? (
-          <form id="gerar-link-form" action={formAction} className="flex flex-col gap-5">
+          <Formulario id="gerar-link-form" action={formAction} estado={state} className="flex flex-col gap-5">
             <input type="hidden" name="churchId" value={church.id} />
             <input type="hidden" name="tipo" value={tipo} />
             <input type="hidden" name="validade" value={validade ?? ""} />
@@ -399,7 +400,7 @@ function CreateInviteCard({
                 <span className="text-xs text-muted-foreground">Escolha a validade e o número de pedidos.</span>
               ) : null}
             </div>
-          </form>
+          </Formulario>
         ) : null}
 
         {state?.url ? (
@@ -438,12 +439,12 @@ function CreateInviteCard({
 function CancelRequestButton({ requestId }: { requestId: string }) {
   const [formAction, pending] = useToastedAction(cancelChurchLinkRequestAction);
   return (
-    <form action={formAction}>
+    <Formulario action={formAction}>
       <input type="hidden" name="requestId" value={requestId} />
       <Button type="submit" variant="outline" size="sm" disabled={pending}>
         Cancelar pedido
       </Button>
-    </form>
+    </Formulario>
   );
 }
 

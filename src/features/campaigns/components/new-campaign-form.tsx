@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,7 @@ export function NewCampaignForm({ igrejas }: { igrejas: Array<{ id: string; name
   const sugeridos = [sugerido1, sugerido2, sugerido3];
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-5">
       {unica ? (
         <input type="hidden" name="churchId" value={unica.id} />
       ) : (
@@ -154,6 +155,6 @@ export function NewCampaignForm({ igrejas }: { igrejas: Array<{ id: string; name
           {pending ? "Criando..." : "Criar campanha"}
         </Button>
       </div>
-    </form>
+    </Formulario>
   );
 }

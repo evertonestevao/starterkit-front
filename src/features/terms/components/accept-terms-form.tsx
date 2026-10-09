@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { useActionToast } from "@/hooks/useActionToast";
@@ -11,11 +12,11 @@ export function AcceptTermsForm() {
   useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       <TermsCheckboxes />
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Registrando..." : "Aceitar e continuar"}
       </Button>
-    </form>
+    </Formulario>
   );
 }

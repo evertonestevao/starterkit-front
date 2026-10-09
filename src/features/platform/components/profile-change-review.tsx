@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ export function ProfileChangeReview({ change }: { change: PendingProfileChange }
   const [recusando, setRecusando] = useState(false);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
       <input type="hidden" name="changeId" value={change.id} />
 
       {recusando ? (
@@ -88,6 +89,6 @@ export function ProfileChangeReview({ change }: { change: PendingProfileChange }
           </>
         )}
       </div>
-    </form>
+    </Formulario>
   );
 }

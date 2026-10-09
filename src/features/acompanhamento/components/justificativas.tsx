@@ -1,5 +1,6 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
 import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CalendarX, Pencil, Plus } from "lucide-react";
@@ -65,7 +66,7 @@ export function JustificativaForm({
               Vale para todos os cultos entre as duas datas. Para um culto só, deixe a data final em branco.
             </DialogDescription>
           </DialogHeader>
-          <form action={formAction} className="flex flex-col gap-3">
+          <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
             {justificativa ? (
               <>
                 <input type="hidden" name="id" value={justificativa.id} />
@@ -119,7 +120,7 @@ export function JustificativaForm({
                 {pending ? "Salvando..." : "Salvar"}
               </Button>
             </DialogFooter>
-          </form>
+          </Formulario>
         </DialogContent>
       </Dialog>
     </>
