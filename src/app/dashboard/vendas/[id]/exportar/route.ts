@@ -5,11 +5,13 @@ import { gerarXlsx } from "@/lib/xlsx";
 import { recordAudit } from "@/server/audit";
 import { getMenusVisiveis } from "@/server/menuPermissoes";
 import { getVendasActorAutorizado, getVendasService } from "@/server/vendas";
+import { gerarVendaPdf } from "@/server/vendasPdf";
+import { hojeISO } from "@/lib/acompanhamento";
 
 /**
  * Planilha dos pedidos de uma venda: uma linha por pedido, uma coluna por
  * opção e o total de cada no fim. `?formato=xlsx` = Excel (com abas e R$
- * formatado); sem nada, CSV.
+ * formatado); `?formato=pdf` = PDF para imprimir; sem nada, CSV.
  *
  * Route handler não passa pelo layout de Vendas, então a guarda é repetida
  * aqui: sem o menu, 404. Leva nome e WhatsApp de quem comprou — toda
@@ -21,7 +23,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return new NextResponse("Não encontrado", { status: 404 });
   }
   const { id } = await params;
-  const excel = new URL(request.url).searchParams.get("formato") === "xlsx";
+  const formato = new URL(request.url).searchParams.get("formato");
+  const excel = formato === "xlsx";
+  const emPdf = formato === "pdf";
 
   try {
     const { venda, pedidos } = await (await getVendasService()).detalhe(actor, id);
@@ -31,7 +35,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       action: "venda.pedidos_exportados",
       entityType: "venda",
       entityId: venda.id,
-      metadata: { titulo: venda.titulo, quantidade: pedidos.length, formato: excel ? "xlsx" : "csv" },
+      metadata: { titulo: venda.titulo, quantidade: pedidos.length, formato: excel ? "xlsx" : emPdf ? "pdf" : "csv" },
     });
 
     // Nome do arquivo só com letras simples: o título é digitado por quem cria a venda.
@@ -42,6 +46,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .replace(/\s+/g, "-")
       .toLowerCase()
       .slice(0, 50);
+
+    if (emPdf) {
+      const igreja = (await (await getVendasService()).nomeDaIgreja(actor)) ?? "";
+      const bytes = await gerarVendaPdf({ igreja, emitidoEm: hojeISO(), venda, pedidos });
+      return new NextResponse(Buffer.from(bytes), {
+        headers: {
+          "Cache-Control": "private, no-store",
+          "Content-Type": "application/pdf",
+          // inline: abre no navegador para imprimir; quem quiser baixa de lá.
+          "Content-Disposition": `inline; filename="pedidos-${nome || "venda"}.pdf"`,
+        },
+      });
+    }
 
     if (excel) {
       return new NextResponse(Buffer.from(gerarXlsx(pedidosParaAbas(venda, pedidos))), {

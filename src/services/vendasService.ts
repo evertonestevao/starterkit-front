@@ -252,6 +252,11 @@ export function createVendasService(deps: {
       return { vendas, pedidos: vendas.length ? await repo.pedidos(vendas.map((v) => v.id)) : [] };
     },
 
+    /** Nome da igreja (para o cabeçalho do PDF). */
+    async nomeDaIgreja(actor: VendasActor): Promise<string | null> {
+      return (await igreja(actor)).name;
+    },
+
     async detalhe(actor: VendasActor, id: string): Promise<{ venda: Venda; pedidos: PedidoVenda[] }> {
       const { venda } = await vendaDaIgreja(actor, id);
       return { venda, pedidos: await repo.pedidos([venda.id]) };

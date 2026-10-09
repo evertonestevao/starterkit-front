@@ -4,9 +4,9 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   Clock,
-  Download,
   ExternalLink,
   FileSpreadsheet,
+  FileText,
   Package,
   Pencil,
   Search,
@@ -284,13 +284,15 @@ export default async function VendaPage({
                 <FileSpreadsheet className="size-4" /> Baixar Excel
               </a>
               <a
-                href={`${base}/exportar`}
+                href={`${base}/exportar?formato=pdf`}
+                target="_blank"
+                rel="noreferrer"
                 className={cn(
-                  buttonVariants({ variant: "ghost", size: "sm" }),
+                  buttonVariants({ variant: "outline", size: "sm" }),
                   "gap-2",
                 )}
               >
-                <Download className="size-4" /> CSV
+                <FileText className="size-4" /> PDF
               </a>
             </div>
           ) : null}
