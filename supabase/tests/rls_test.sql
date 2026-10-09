@@ -6823,6 +6823,8 @@ begin
       'list_church_sponsors', 'nomes_dos_niveis', 'pix_publico', 'posso_ver_previa_da_pagina',
       -- link de confirmação da chave Pix, enviado ao e-mail do Responsável
       'pix_confirmacao_por_token', 'pix_confirmar_por_token',
+      -- vendas: lista das abertas (sem a chave) e o link de confirmação da chave de cada venda
+      'vendas_publicas', 'venda_pix_confirmacao_por_token', 'venda_pix_confirmar_por_token', 'voucher_por_token',
       -- carteirinha de membro: link pessoal e verificação pelo QR Code
       'carteirinha_por_token', 'verificar_carteirinha',
       'rede_igrejas_publicas', 'resolve_church_by_domain', 'cancel_profile_change_by_token',
@@ -9028,6 +9030,414 @@ begin
   perform public.modulos_ativos();
   raise exception 'FALHA modulos: anon consultou os modulos';
 exception when sqlstate '42501' then null;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Vendas (migration 20261012100000). AC Cong (d2, conta c2) é de 002; 004
+-- (Secretario AC) é da mesma conta, sem o módulo vendas. AC Sede (d1, de 001)
+-- fica ACIMA; AC Outra (d3, de 005) é outra rede.
+-- ---------------------------------------------------------------------------
+update public.churches set pagina_ativa = true where id = 'acacacac-0000-4000-8000-0000000000d2';
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v_id uuid; v_precisa boolean; n int;
+begin
+  select id, precisa_confirmar into v_id, v_precisa from public.salvar_venda(
+    'acacacac-0000-4000-8000-0000000000d2', null, jsonb_build_object(
+      'titulo', 'Camiseta do congresso', 'preco_cents', 5500, 'pix_chave', 'jovens@igreja.test',
+      'pix_titular', 'Lider dos Jovens', 'estoque', '3', 'max_por_pedido', '2'));
+  if not v_precisa then raise exception 'FALHA vendas: venda nova nao pediu confirmacao da chave'; end if;
+  perform set_config('rls.venda', v_id::text, true);
+
+  select count(*) into n from public.vendas where id = v_id;
+  if n <> 1 then raise exception 'FALHA vendas: quem tem acesso nao leu a propria venda'; end if;
+
+  -- Escrever é só pelas funções.
+  begin
+    insert into public.vendas (church_id, titulo, preco_cents, pix_chave, pix_titular)
+    values ('acacacac-0000-4000-8000-0000000000d2', 'Direto', 100, 'golpe@x.test', 'Golpista');
+    raise exception 'FALHA vendas: insert direto na tabela';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    update public.vendas set pix_confirmado_em = now() where id = v_id;
+    raise exception 'FALHA vendas: confirmou a chave por update direto';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Igreja de outra rede: não cria.
+  begin
+    perform public.salvar_venda('acacacac-0000-4000-8000-0000000000d3', null, jsonb_build_object(
+      'titulo', 'Pastel', 'preco_cents', 800, 'pix_chave', 'x@x.test', 'pix_titular', 'Fulano'));
+    raise exception 'FALHA vendas: criou venda na igreja de outra rede';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Preço zero não entra.
+  begin
+    perform public.salvar_venda('acacacac-0000-4000-8000-0000000000d2', null, jsonb_build_object(
+      'titulo', 'Gratis', 'preco_cents', 0, 'pix_chave', 'x@x.test', 'pix_titular', 'Fulano'));
+    raise exception 'FALHA vendas: aceitou preco zero';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Criar o pedido de confirmação é só do servidor.
+  begin
+    perform public.venda_pix_criar_confirmacao(v_id, repeat('a', 64), null);
+    raise exception 'FALHA vendas: usuario criou o proprio link de confirmacao';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- Antes de confirmar, a venda não aparece na página.
+set local role anon;
+do $$
+declare n int;
+begin
+  select count(*) into n from public.vendas_publicas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA vendas: venda com chave nao confirmada apareceu na pagina'; end if;
+  begin
+    select count(*) into n from public.vendas;
+    raise exception 'FALHA vendas: anon leu a tabela de vendas';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.criar_pedido_venda(current_setting('rls.venda')::uuid, 'Ana', '14999998888', 1, null);
+    raise exception 'FALHA vendas: anon fez pedido direto no banco (sem o servidor)';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- O servidor cria o link; o e-mail vai para o Responsável (owner) da conta.
+do $$
+declare v text;
+begin
+  select string_agg(email, ',') into v
+  from public.venda_pix_criar_confirmacao(current_setting('rls.venda')::uuid,
+    encode(sha256(convert_to('token-da-venda', 'UTF8')), 'hex'), null);
+  if v is null or v not like '%rls-ac-cong@test.local%' then
+    raise exception 'FALHA vendas: link nao foi para o Responsavel (%)', v;
+  end if;
+end $$;
+
+-- Quem tem o link confirma (sem login); link inventado não confirma.
+set local role anon;
+do $$
+declare n int;
+begin
+  begin
+    perform public.venda_pix_confirmar_por_token('token-inventado');
+    raise exception 'FALHA vendas: token inventado confirmou a chave';
+  exception when sqlstate 'P0002' then null;
+  end;
+  perform public.venda_pix_confirmar_por_token('token-da-venda');
+  select count(*) into n from public.vendas_publicas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 1 then raise exception 'FALHA vendas: venda confirmada nao apareceu na pagina (%)', n; end if;
+  -- O link não serve duas vezes.
+  begin
+    perform public.venda_pix_confirmar_por_token('token-da-venda');
+    raise exception 'FALHA vendas: link de confirmacao usado duas vezes';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+reset role;
+
+-- Pedidos pelo servidor: máximo por pedido e estoque conferidos no banco.
+do $$
+declare v_venda uuid := current_setting('rls.venda')::uuid; v_pedido uuid; v_total int;
+begin
+  begin
+    perform public.criar_pedido_venda(v_venda, 'Ana', '14999998888', 3, null);
+    raise exception 'FALHA vendas: passou do maximo por pedido';
+  exception when sqlstate 'P0001' then null;
+  end;
+  select pedido_id, total_cents into v_pedido, v_total
+  from public.criar_pedido_venda(v_venda, 'Ana', '14999998888', 2, '1 G e 1 M');
+  if v_total <> 11000 then raise exception 'FALHA vendas: total errado (%)', v_total; end if;
+  perform set_config('rls.pedido', v_pedido::text, true);
+  begin
+    perform public.criar_pedido_venda(v_venda, 'Bia', '14999997777', 2, null);
+    raise exception 'FALHA vendas: passou do estoque';
+  exception when sqlstate 'P0001' then null;
+  end;
+  perform public.criar_pedido_venda(v_venda, 'Bia', '14999997777', 1, null);
+end $$;
+
+-- Esgotado: some da página.
+set local role anon;
+do $$
+declare n int;
+begin
+  select count(*) into n from public.vendas_publicas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA vendas: venda esgotada continuou na pagina'; end if;
+end $$;
+reset role;
+
+-- Quem cuida marca o pedido; cancelar devolve ao estoque. Trocar a chave
+-- tira a venda da página até nova confirmação.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare n int; v_precisa boolean;
+begin
+  perform public.marcar_pedido_venda(current_setting('rls.pedido')::uuid, 'pago');
+  select count(*) into n from public.venda_pedidos where id = current_setting('rls.pedido')::uuid and status = 'pago';
+  if n <> 1 then raise exception 'FALHA vendas: pedido nao foi marcado como pago'; end if;
+  begin
+    update public.venda_pedidos set status = 'cancelado' where id = current_setting('rls.pedido')::uuid;
+    raise exception 'FALHA vendas: update direto no pedido';
+  exception when sqlstate '42501' then null;
+  end;
+  perform public.marcar_pedido_venda(current_setting('rls.pedido')::uuid, 'cancelado');
+  select count(*) into n from public.vendas_publicas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 1 then raise exception 'FALHA vendas: pedido cancelado nao devolveu o estoque'; end if;
+
+  select precisa_confirmar into v_precisa from public.salvar_venda(
+    'acacacac-0000-4000-8000-0000000000d2', current_setting('rls.venda')::uuid, jsonb_build_object(
+      'titulo', 'Camiseta do congresso', 'preco_cents', 5500, 'pix_chave', 'outra@chave.test',
+      'pix_titular', 'Lider dos Jovens', 'estoque', '3', 'max_por_pedido', '2'));
+  if not v_precisa then raise exception 'FALHA vendas: troca da chave nao pediu nova confirmacao'; end if;
+  select count(*) into n from public.vendas_publicas('acacacac-0000-4000-8000-0000000000d2');
+  if n <> 0 then raise exception 'FALHA vendas: chave trocada continuou publicada'; end if;
+end $$;
+
+-- Sem o módulo (mesma conta), a igreja de cima e a de outra rede: não veem nem mexem.
+do $$
+declare v_quem text; n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.vendas;
+    if n <> 0 then raise exception 'FALHA vendas: % leu % venda(s)', v_quem, n; end if;
+    select count(*) into n from public.venda_pedidos;
+    if n <> 0 then raise exception 'FALHA vendas: % leu % pedido(s) (nome e telefone)', v_quem, n; end if;
+    begin
+      perform public.marcar_pedido_venda(current_setting('rls.pedido')::uuid, 'pago');
+      raise exception 'FALHA vendas: % marcou pedido de outra igreja', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.excluir_venda(current_setting('rls.venda')::uuid);
+      raise exception 'FALHA vendas: % excluiu venda de outra igreja', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+  end loop;
+end $$;
+reset role;
+
+-- Vendas com opções (migration 20261012120000): o banco confere a opção e o
+-- preço de cada item; outra igreja não lê opções nem itens.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v_id uuid; n int;
+begin
+  select id into v_id from public.salvar_venda('acacacac-0000-4000-8000-0000000000d2', null, jsonb_build_object(
+    'titulo', 'Pastel', 'preco_cents', 800, 'pix_chave', 'mocidade@igreja.test', 'pix_titular', 'Mocidade',
+    'tem_opcoes', true, 'opcoes', jsonb_build_array(
+      jsonb_build_object('nome', 'Carne'),
+      jsonb_build_object('nome', 'Especial', 'preco_cents', '1200'))));
+  perform set_config('rls.venda_opcoes', v_id::text, true);
+  select count(*) into n from public.venda_opcoes where venda_id = v_id and ativo;
+  if n <> 2 then raise exception 'FALHA vendas opcoes: opcoes nao foram gravadas (%)', n; end if;
+  begin
+    perform public.salvar_venda('acacacac-0000-4000-8000-0000000000d2', null, jsonb_build_object(
+      'titulo', 'Sem opcoes', 'preco_cents', 800, 'pix_chave', 'x@igreja.test', 'pix_titular', 'Fulano',
+      'tem_opcoes', true, 'opcoes', '[]'::jsonb));
+    raise exception 'FALHA vendas opcoes: aceitou venda com opcoes e lista vazia';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    insert into public.venda_opcoes (venda_id, nome) values (v_id, 'Direto');
+    raise exception 'FALHA vendas opcoes: insert direto em venda_opcoes';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- Confirma a chave (como o link faria) e faz pedidos pelo servidor.
+update public.vendas set pix_confirmado_em = now() where id = current_setting('rls.venda_opcoes')::uuid;
+do $$
+declare
+  v_venda uuid := current_setting('rls.venda_opcoes')::uuid;
+  v_carne uuid; v_especial uuid; v_outra uuid; v_total int; v_pedido uuid; n int;
+begin
+  select id into v_carne from public.venda_opcoes where venda_id = v_venda and nome = 'Carne';
+  select id into v_especial from public.venda_opcoes where venda_id = v_venda and nome = 'Especial';
+  -- Opção de OUTRA venda não entra.
+  select id into v_outra from public.venda_opcoes where venda_id <> v_venda limit 1;
+  if v_outra is null then
+    insert into public.venda_opcoes (venda_id, nome)
+    values (current_setting('rls.venda')::uuid, 'De outra venda') returning id into v_outra;
+  end if;
+
+  select pedido_id, total_cents into v_pedido, v_total from public.criar_pedido_venda(
+    v_venda, 'Ana', '14999998888', 0, null,
+    jsonb_build_array(jsonb_build_object('opcao_id', v_carne, 'quantidade', 2),
+                      jsonb_build_object('opcao_id', v_especial, 'quantidade', 1)));
+  if v_total <> 2800 then raise exception 'FALHA vendas opcoes: total errado (%), esperado 2800', v_total; end if;
+  select count(*) into n from public.venda_pedido_itens where pedido_id = v_pedido;
+  if n <> 2 then raise exception 'FALHA vendas opcoes: pedido sem os dois itens (%)', n; end if;
+  select quantidade into n from public.venda_pedidos where id = v_pedido;
+  if n <> 3 then raise exception 'FALHA vendas opcoes: quantidade do pedido nao somou os itens (%)', n; end if;
+
+  begin
+    perform public.criar_pedido_venda(v_venda, 'Bia', '14999997777', 0, null,
+      jsonb_build_array(jsonb_build_object('opcao_id', v_outra, 'quantidade', 1)));
+    raise exception 'FALHA vendas opcoes: aceitou opcao de outra venda';
+  exception when sqlstate 'P0001' then null;
+  end;
+  begin
+    perform public.criar_pedido_venda(v_venda, 'Bia', '14999997777', 5, null, '[]'::jsonb);
+    raise exception 'FALHA vendas opcoes: venda com opcoes aceitou pedido sem itens';
+  exception when sqlstate 'P0001' then null;
+  end;
+
+  -- Opção tirada da venda não aceita mais pedido; o pedido antigo continua com o nome dela.
+  update public.venda_opcoes set ativo = false where id = v_especial;
+  begin
+    perform public.criar_pedido_venda(v_venda, 'Bia', '14999997777', 0, null,
+      jsonb_build_array(jsonb_build_object('opcao_id', v_especial, 'quantidade', 1)));
+    raise exception 'FALHA vendas opcoes: aceitou opcao desativada';
+  exception when sqlstate 'P0001' then null;
+  end;
+  select count(*) into n from public.venda_pedido_itens where pedido_id = v_pedido and nome = 'Especial';
+  if n <> 1 then raise exception 'FALHA vendas opcoes: pedido antigo perdeu a opcao tirada'; end if;
+end $$;
+
+-- Ninguém de fora lê opções nem itens; anon não lê nada direto.
+set local role authenticated;
+do $$
+declare v_quem text; n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.venda_opcoes;
+    if n <> 0 then raise exception 'FALHA vendas opcoes: % leu % opcao(oes)', v_quem, n; end if;
+    select count(*) into n from public.venda_pedido_itens;
+    if n <> 0 then raise exception 'FALHA vendas opcoes: % leu % item(ns) de pedido', v_quem, n; end if;
+  end loop;
+end $$;
+reset role;
+
+set local role anon;
+do $$
+declare n int;
+begin
+  begin
+    select count(*) into n from public.venda_pedido_itens;
+    raise exception 'FALHA vendas opcoes: anon leu itens de pedido';
+  exception when sqlstate '42501' then null;
+  end;
+  -- A lista pública leva as opções com o preço que vale (Especial saiu).
+  select jsonb_array_length(opcoes) into n from public.vendas_publicas('acacacac-0000-4000-8000-0000000000d2')
+  where titulo = 'Pastel';
+  if n is distinct from 1 then raise exception 'FALHA vendas opcoes: lista publica com % opcao(oes), esperado 1', n; end if;
+end $$;
+reset role;
+
+-- Voucher (migration 20261012130000): o link abre só o voucher (sem
+-- telefone); entregar é de quem cuida das vendas da igreja.
+update public.vendas set gera_voucher = true where id = current_setting('rls.venda_opcoes')::uuid;
+do $$
+declare v_pedido uuid; v_codigo text; v_sem uuid; v_codigo_sem text;
+begin
+  select pedido_id, voucher_codigo into v_pedido, v_codigo from public.criar_pedido_venda(
+    current_setting('rls.venda_opcoes')::uuid, 'Carla Mendes', '14977776666', 0, 'sem cebola',
+    jsonb_build_array(jsonb_build_object('opcao_id',
+      (select id from public.venda_opcoes where venda_id = current_setting('rls.venda_opcoes')::uuid and nome = 'Carne'),
+      'quantidade', 1)),
+    encode(sha256(convert_to('token-do-voucher', 'UTF8')), 'hex'));
+  if v_codigo !~ '^[A-Z0-9]{3}-[A-Z0-9]{3}$' then raise exception 'FALHA voucher: codigo curto invalido (%)', v_codigo; end if;
+  perform set_config('rls.pedido_voucher', v_pedido::text, true);
+
+  -- Hash fora do formato não entra.
+  begin
+    perform public.criar_pedido_venda(current_setting('rls.venda')::uuid, 'Ana', '14999998888', 1, null, '[]'::jsonb, 'nao-e-hash');
+    raise exception 'FALHA voucher: aceitou hash invalido';
+  exception when sqlstate 'P0001' then null;
+  end;
+end $$;
+
+set local role anon;
+do $$
+declare r record; n int;
+begin
+  select * into r from public.voucher_por_token('token-do-voucher');
+  if r.primeiro_nome is distinct from 'Carla' then raise exception 'FALHA voucher: link nao mostrou so o primeiro nome (%)', r.primeiro_nome; end if;
+  if r.itens is null or jsonb_array_length(r.itens) <> 1 then raise exception 'FALHA voucher: itens nao vieram'; end if;
+  select count(*) into n from public.voucher_por_token('token-inventado');
+  if n <> 0 then raise exception 'FALHA voucher: token inventado abriu um voucher'; end if;
+  begin
+    perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, true, null);
+    raise exception 'FALHA voucher: anon marcou entrega';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- Quem cuida entrega e desfaz; fica gravado quem foi.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare r record; v text;
+begin
+  perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, true, 'falta 1');
+  select entregue_em, entregue_por, entrega_obs into r from public.venda_pedidos where id = current_setting('rls.pedido_voucher')::uuid;
+  if r.entregue_em is null or r.entregue_por is distinct from 'acacacac-0000-4000-8000-000000000002'::uuid or r.entrega_obs <> 'falta 1' then
+    raise exception 'FALHA voucher: entrega nao gravou quem, quando e a observacao';
+  end if;
+  select public.quem_entregou_venda(current_setting('rls.pedido_voucher')::uuid) into v;
+  if v is null then raise exception 'FALHA voucher: nao mostrou quem entregou'; end if;
+  perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, false, null);
+  select entregue_em, entregue_por into r from public.venda_pedidos where id = current_setting('rls.pedido_voucher')::uuid;
+  if r.entregue_em is not null or r.entregue_por is not null then raise exception 'FALHA voucher: desfazer nao limpou a entrega'; end if;
+
+  -- Pedido cancelado não é entregue.
+  perform public.marcar_pedido_venda(current_setting('rls.pedido_voucher')::uuid, 'cancelado');
+  begin
+    perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, true, null);
+    raise exception 'FALHA voucher: entregou pedido cancelado';
+  exception when sqlstate 'P0001' then null;
+  end;
+  perform public.marcar_pedido_venda(current_setting('rls.pedido_voucher')::uuid, 'pendente');
+end $$;
+
+-- Sem o módulo, a igreja de cima e a de outra rede: não entregam nem veem quem entregou.
+do $$
+declare v_quem text; v text;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    begin
+      perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, true, null);
+      raise exception 'FALHA voucher: % marcou entrega de outra igreja', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    select public.quem_entregou_venda(current_setting('rls.pedido_voucher')::uuid) into v;
+    if v is not null then raise exception 'FALHA voucher: % viu quem entregou', v_quem; end if;
+  end loop;
 end $$;
 reset role;
 

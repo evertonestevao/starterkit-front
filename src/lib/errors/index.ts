@@ -37,13 +37,19 @@ export class AppError extends Error {
   readonly status: number;
   /** Detalhes internos para log de servidor. Nunca serializar para o client. */
   readonly internal?: unknown;
+  /**
+   * Campo do formulário que causou o erro (nome do campo, nada interno): a
+   * tela mostra a mensagem embaixo dele em vez de só um aviso solto.
+   */
+  readonly field?: string;
 
-  constructor(code: AppErrorCode, message: string, internal?: unknown) {
+  constructor(code: AppErrorCode, message: string, internal?: unknown, field?: string) {
     super(message);
     this.name = "AppError";
     this.code = code;
     this.status = HTTP_STATUS[code];
     this.internal = internal;
+    this.field = field;
   }
 }
 
@@ -72,6 +78,13 @@ export function isAppError(err: unknown): err is AppError {
  * Primeira mensagem de um erro de validação do Zod, no formato público. O
  * usuário lê uma frase por vez; a lista inteira só serve para o log.
  */
-export function toValidationError(issues: { message: string }[]): AppError {
-  return new AppError("validation_error", issues[0]?.message ?? "Dados inválidos");
+export function toValidationError(issues: { message: string; path?: PropertyKey[] }[]): AppError {
+  const primeiro = issues[0];
+  const campo = primeiro?.path?.[0];
+  return new AppError(
+    "validation_error",
+    primeiro?.message ?? "Dados inválidos",
+    undefined,
+    typeof campo === "string" ? campo : undefined,
+  );
 }

@@ -14,6 +14,7 @@ import {
   Network,
   ScrollText,
   Settings,
+  ShoppingBag,
   Wallet,
 } from "lucide-react";
 import { MENUS, ROTA_MINHA_CONTA, type MenuDef } from "@/lib/menuPermissoes";
@@ -39,6 +40,7 @@ const ICONES: Record<string, LucideIcon> = {
   events: CalendarDays,
   campaigns: HandCoins,
   tesouraria: Wallet,
+  vendas: ShoppingBag,
   sponsors: Landmark,
   relationships: HeartHandshake,
   mensalidade: CreditCard,

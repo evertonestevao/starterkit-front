@@ -298,6 +298,45 @@ Isso cancela o pedido e bloqueia novas alterações na sua conta até falar com 
       );
     },
 
+    /** Venda nova (ou com a chave trocada): só aparece na página depois desta confirmação. */
+    async sendVendaPixConfirmation(input: {
+      to: string[];
+      churchName: string;
+      titulo: string;
+      chaveMascarada: string;
+      titular: string;
+      whatsapp: string | null;
+      alteradoPor: string;
+      token: string;
+      validadeHoras: number;
+    }): Promise<void> {
+      const link = `${base}/confirmar-venda/${input.token}`;
+      const linhas = [
+        `${input.alteradoPor} cadastrou a venda "${input.titulo}" na página de ${input.churchName}.`,
+        `O pagamento vai para a chave Pix ${input.chaveMascarada}, de ${input.titular}.`,
+        ...(input.whatsapp ? [`Quem compra manda o comprovante para o WhatsApp ${input.whatsapp}.`] : []),
+        "A venda só aparece na página depois que você confirmar. Abra o link, confira a chave inteira e confirme:",
+      ];
+      const depois = [
+        `O link vale por ${input.validadeHoras} horas.`,
+        "Se você não reconhece esta venda ou a chave, não confirme: sem a sua confirmação ela não é publicada. Troque a senha da conta e avise a equipe.",
+      ];
+      await Promise.all(
+        input.to.map((to) =>
+          provider.send({
+            to,
+            subject: `Confirme a chave Pix da venda "${input.titulo}"`,
+            text: [...linhas, link, ...depois].join("\n\n"),
+            html: [
+              ...linhas.map((l) => `<p>${escapeHtml(l)}</p>`),
+              `<p><a href="${link}">Conferir e confirmar a chave Pix</a></p>`,
+              ...depois.map((l) => `<p>${escapeHtml(l)}</p>`),
+            ].join("\n"),
+          }),
+        ),
+      );
+    },
+
     async sendPlatformStaffAlert(input: { to: string[]; subject: string; lines: string[] }): Promise<void> {
       if (input.to.length === 0) return;
       await Promise.all(

@@ -11,6 +11,7 @@ import {
   MapPin,
   Navigation,
   Share2,
+  ShoppingBag,
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
@@ -57,6 +58,8 @@ export type ChurchPageTemplateProps = {
   programacao: ChurchScheduleItem[];
   /** Sede com igrejas ligadas: mostra o atalho para a tela "Nossas igrejas". */
   temRede?: boolean;
+  /** Tem venda aberta (camiseta, pastel...): mostra o atalho para a tela de vendas. */
+  temVendas?: boolean;
   /** Página ainda fora do ar, vista por quem administra a igreja. */
   previa?: boolean;
   /** BR Code do PIX e o QR dele, montados no servidor a partir da chave. */
@@ -181,6 +184,7 @@ export function ChurchPageRenderer({
   campanhas,
   programacao,
   temRede = false,
+  temVendas = false,
   previa = false,
   pixCopiaECola = null,
   pixQrDataUrl = null,
@@ -223,6 +227,9 @@ export function ChurchPageRenderer({
     // Campanhas só aparece com pelo menos uma (ativa ou encerrada) publicada.
     ...(campanhas.length > 0
       ? [{ rotulo: "Campanhas", icone: HandCoins, href: `${caminhoDaIgreja(church.public_code)}/campanhas` }]
+      : []),
+    ...(temVendas
+      ? [{ rotulo: "Vendas", icone: ShoppingBag, href: `${caminhoDaIgreja(church.public_code)}/vendas` }]
       : []),
     ...(temCultos ? [{ rotulo: "Programação", icone: Clock3, href: "#programacao" }] : []),
     // Abre a lista numa tela própria: um ministério pode ter centenas de igrejas.

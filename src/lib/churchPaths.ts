@@ -21,7 +21,7 @@ export const SEPARADOR_REDE = "~";
 export const CABECALHO_DOMINIO_DA_IGREJA = "x-dominio-da-igreja";
 
 /** Subpáginas de /igreja/{codigo}/... — por isso não podem ser código de igreja. */
-export const SUBPAGINAS_DA_IGREJA = ["eventos", "campanhas", "igrejas"];
+export const SUBPAGINAS_DA_IGREJA = ["eventos", "campanhas", "igrejas", "vendas"];
 
 const CODIGO = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 

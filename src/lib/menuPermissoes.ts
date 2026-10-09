@@ -23,6 +23,7 @@ export const MODULOS_LIBERAVEIS = [
   "campaigns",
   "relationships",
   "tesouraria",
+  "vendas",
 ] as const;
 export type Modulo = (typeof MODULOS_LIBERAVEIS)[number];
 
@@ -45,6 +46,7 @@ export const MODULOS_DESLIGAVEIS = [
   "campaigns",
   "relationships",
   "tesouraria",
+  "vendas",
 ] as const satisfies readonly Modulo[];
 export type ModuloDesligavel = (typeof MODULOS_DESLIGAVEIS)[number];
 
@@ -98,6 +100,9 @@ export const MENUS: readonly MenuDef[] = [
   // Dízimos e ofertas dos cultos (a oferta da EBD fica na EBD). Só a própria
   // igreja: a de cima não lê.
   { key: "tesouraria", title: "Tesouraria", href: "/dashboard/tesouraria", roles: ["owner", "admin"] },
+  // Camiseta, pastel, lanche vendidos pela página. O dinheiro vai para o Pix de
+  // quem organiza, não para o caixa da igreja.
+  { key: "vendas", title: "Vendas", href: "/dashboard/vendas", roles: ["owner", "admin"] },
   { key: "sponsors", title: "Patrocinadores", href: "/dashboard/sponsors", roles: ["owner", "admin"] },
   // Pedidos de visita (nome e telefone de quem pediu).
   { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin"] },
@@ -143,6 +148,12 @@ export const MODULO_INFO: Record<Modulo, { titulo: string; libera: string; aviso
     titulo: "Tesouraria",
     libera: "Lançar dízimos e ofertas dos cultos, corrigir e excluir lançamentos e emitir o relatório mensal.",
     aviso: "Mostra quanto cada pessoa entregou de dízimo. Libere só para quem cuida do caixa.",
+  },
+  vendas: {
+    titulo: "Vendas",
+    libera: "Criar vendas (camiseta, pastel, lanche) com o Pix de quem recebe, ver os pedidos e marcar quem pagou.",
+    aviso:
+      "Mostra nome e WhatsApp de quem comprou. Toda chave Pix nova precisa da confirmação do Responsável, por e-mail, antes de a venda aparecer na página.",
   },
   relationships: {
     titulo: "Quem quer visita",
