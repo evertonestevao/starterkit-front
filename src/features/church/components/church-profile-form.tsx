@@ -99,8 +99,8 @@ export function ChurchProfileForm({ igrejas, appUrl }: { igrejas: ChurchProfile[
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="publicCode">Endereço da página</Label>
-          <div className="flex items-center gap-1.5">
-            <span className="shrink-0 text-sm text-muted-foreground">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+            <span className="min-w-0 break-all text-sm text-muted-foreground sm:shrink-0 sm:break-normal">
               {base}/igreja/{redeDaIgreja ? `${redeDaIgreja}/` : ""}
             </span>
             <Input
