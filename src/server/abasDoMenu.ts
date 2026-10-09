@@ -113,6 +113,8 @@ export const abasDasConfiguracoes = cache(async (): Promise<RouteTab[]> => {
     tabs.push({ href: `${base}/igreja`, label: "Página da igreja" });
     tabs.push({ href: `${base}/cargos`, label: "Cargos" });
     if (canConfigurarAcessos(active.role)) tabs.push({ href: `${base}/acessos`, label: "Acessos" });
+    // Quem entra no sistema e com que papel: só o Responsável.
+    if (active.role === "owner") tabs.push({ href: `${base}/quem-acessa`, label: "Quem acessa" });
     tabs.push({ href: `${base}/documentos`, label: "Documentos" });
     if (await defineCarteirinha()) tabs.push({ href: `${base}/carteirinha`, label: "Carteirinha" });
     tabs.push({ href: `${base}/vinculos`, label: "Vínculos" });
