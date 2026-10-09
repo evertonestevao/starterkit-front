@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { confirmar } from "@/components/confirmar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MODELOS_DE_OPCOES } from "@/lib/vendas";
@@ -37,13 +38,18 @@ export function OpcoesEditor({ temOpcoes, opcoes }: { temOpcoes: boolean; opcoes
   const alterar = (chave: string, campo: "nome" | "preco", valor: string) =>
     setLinhas((ls) => ls.map((l) => (l.chave === chave ? { ...l, [campo]: valor } : l)));
 
-  function usarModelo(nomes: string[]) {
-    // Mantém o que já foi digitado; o modelo só completa o que falta.
-    setLinhas((ls) => {
-      const preenchidas = ls.filter((l) => l.nome.trim());
-      const existentes = new Set(preenchidas.map((l) => l.nome.trim().toLowerCase()));
-      return [...preenchidas, ...nomes.filter((n) => !existentes.has(n.toLowerCase())).map((n) => nova(n))];
-    });
+  /** O modelo substitui a lista inteira. Com opções já preenchidas, pergunta antes. */
+  async function usarModelo(modelo: { nome: string; opcoes: string[] }) {
+    if (linhas.some((l) => l.nome.trim())) {
+      const sim = await confirmar({
+        titulo: `Trocar as opções pelo modelo "${modelo.nome}"?`,
+        descricao:
+          "As opções da lista saem e entram as do modelo. Pedidos já feitos não mudam: as opções antigas continuam neles.",
+        botao: "Trocar",
+      });
+      if (!sim) return;
+    }
+    setLinhas(modelo.opcoes.map((n) => nova(n)));
   }
 
   const json = JSON.stringify(
@@ -83,7 +89,7 @@ export function OpcoesEditor({ temOpcoes, opcoes }: { temOpcoes: boolean; opcoes
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             Começar de um modelo:
             {MODELOS_DE_OPCOES.map((m) => (
-              <Button key={m.nome} type="button" variant="outline" size="sm" onClick={() => usarModelo(m.opcoes)}>
+              <Button key={m.nome} type="button" variant="outline" size="sm" onClick={() => usarModelo(m)}>
                 {m.nome}
               </Button>
             ))}
