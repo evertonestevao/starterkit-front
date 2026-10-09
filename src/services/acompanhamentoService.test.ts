@@ -631,3 +631,36 @@ describe("importarMembros", () => {
     expect(isAppError(semAcesso) && semAcesso.code).toBe("forbidden");
   });
 });
+
+describe("atalho de cargos na lista", () => {
+  const CARGO = "99999999-9999-4999-8999-999999999999";
+  const repoCargos = (salvos: unknown[][]) => ({
+    listCargosDisponiveis: async () => [{ id: CARGO, nome: "Diácono", ordem: 4, desativado: false }],
+    setCargosDoMembro: async (...args: unknown[]) => {
+      salvos.push(args);
+    },
+  });
+
+  it("só owner/admin; quem cuida do cadastro não dá cargo", async () => {
+    const salvos: unknown[][] = [];
+    const { svc } = service(repoCargos(salvos));
+    for (const quem of [secretario, member]) {
+      await expect(svc.definirCargos(quem, MEMBRO, [CARGO])).rejects.toMatchObject({ code: "forbidden" });
+    }
+    expect(salvos).toHaveLength(0);
+    await svc.definirCargos(owner, MEMBRO, [CARGO, CARGO]);
+    expect(salvos).toEqual([[IGREJA, MEMBRO, [CARGO]]]);
+  });
+
+  it("cargo que não é da igreja e membro de outra igreja são recusados", async () => {
+    const salvos: unknown[][] = [];
+    const { svc } = service(repoCargos(salvos));
+    await expect(svc.definirCargos(owner, MEMBRO, ["11111111-2222-4333-8444-555555555555"])).rejects.toMatchObject({
+      code: "validation_error",
+    });
+    await expect(svc.definirCargos(owner, "11111111-2222-4333-8444-555555555555", [CARGO])).rejects.toMatchObject({
+      code: "not_found",
+    });
+    expect(salvos).toHaveLength(0);
+  });
+});
