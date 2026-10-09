@@ -31,11 +31,16 @@ export async function signUpAction(_prev: ActionState | undefined, formData: For
   const next = formData.get("next");
   try {
     const auth = await getAuthService();
-    await auth.signUp({
-      fullName: formData.get("fullName"),
-      email: formData.get("email"),
-      password: formData.get("password"),
-    });
+    // Quem veio de um link (ex.: convite de vínculo) volta a ele depois de
+    // confirmar o e-mail — sem isso, o convite se perdia na confirmação.
+    await auth.signUp(
+      {
+        fullName: formData.get("fullName"),
+        email: formData.get("email"),
+        password: formData.get("password"),
+      },
+      typeof next === "string" ? next : undefined,
+    );
   } catch (err) {
     return toActionError(err);
   }

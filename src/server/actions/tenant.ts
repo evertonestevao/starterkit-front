@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { safeChurchLinkPath } from "@/lib/churchLinks";
+import { safeChurchLinkPath, tokenDoCaminho } from "@/lib/churchLinks";
+import { getChurchLinkService } from "@/server/churchLinks";
 import { AppError } from "@/lib/errors";
 import { MODULOS_DESLIGAVEIS } from "@/lib/menuPermissoes";
 import { recordAudit } from "@/server/audit";
@@ -64,8 +65,31 @@ export async function createCompanyAction(_prev: ActionState | undefined, formDa
   } catch (err) {
     return toActionError(err);
   }
-  // Quem chegou por um link de vínculo volta a ele (só esse caminho é aceito).
-  redirect(safeChurchLinkPath(formData.get("next")) ?? "/dashboard");
+  // Quem chegou por um link de vínculo volta a ele (só esse caminho é aceito),
+  // já com o pedido feito.
+  const voltar = safeChurchLinkPath(formData.get("next"));
+  if (voltar) await pedirVinculoDoConvite(companyId, voltar);
+  redirect(voltar ?? "/dashboard");
+}
+
+/**
+ * Igreja criada a partir de um link de vínculo: o pedido sai sozinho, sem
+ * outro clique. Falhar aqui não desfaz a igreja — a página do link mostra o
+ * botão de pedir, como antes.
+ */
+async function pedirVinculoDoConvite(companyId: string, caminho: string): Promise<void> {
+  const token = tokenDoCaminho(caminho);
+  if (!token) return;
+  try {
+    const { data } = await (await getSupabaseServerClient()).auth.getUser();
+    if (!data.user) return;
+    const actor = { companyId, role: "owner" as RoleCode, userId: data.user.id };
+    const links = await getChurchLinkService();
+    const [igreja] = await links.listChurches(actor);
+    if (igreja) await links.requestLink(actor, { token, churchId: igreja.id });
+  } catch (err) {
+    console.error("[onboarding] não foi possível pedir o vínculo sozinho", err);
+  }
 }
 
 // Nota: actions chamadas imperativamente (fora de <form action>) NÃO usam

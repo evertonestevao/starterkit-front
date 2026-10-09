@@ -13,11 +13,11 @@ const SENHA_FRACA =
 
 export function createSupabaseAuthRepository(client: SupabaseClient): AuthRepository {
   return {
-    async signUp({ email, password, fullName }) {
+    async signUp({ email, password, fullName, redirectTo }) {
       const { error } = await client.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        options: { data: { full_name: fullName }, emailRedirectTo: redirectTo },
       });
       if (error) {
         // Senha fraca não revela nada sobre a conta: pode dizer o porquê.

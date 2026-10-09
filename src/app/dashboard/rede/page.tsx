@@ -1,36 +1,71 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { IgrejasCadastradas } from "@/features/rede/components/igrejas-cadastradas";
 import { PainelRede } from "@/features/rede/components/painel-rede";
 import { hojeISO } from "@/lib/acompanhamento";
 import { exigeMenu } from "@/server/menuPermissoes";
-import { getRedePainelService } from "@/server/redePainel";
+import { getNomesNiveis } from "@/server/niveisRede";
+import { getIgrejaQueCadastra, getRedeCadastroActor, getRedeCadastroService } from "@/server/redeCadastro";
+import { getRedePainelService, getTemUnidadesAbaixo } from "@/server/redePainel";
 import { getActiveTenant } from "@/server/tenant";
+import { NomesNiveisProvider } from "@/providers/niveis-provider";
 
 export const metadata: Metadata = { title: "Rede" };
 
 /**
- * Painel da rede: a saúde das igrejas abaixo da igreja ativa. Só existe para
- * quem administra uma igreja que tem unidades ligadas a ela (o menu some para
- * as demais, e esta guarda responde 404). O que chega aqui são números — o
- * banco não devolve pessoa nenhuma das outras igrejas.
+ * Rede: duas partes, cada uma para quem pode.
+ *  - Painel: a saúde das igrejas abaixo. Só quem ADMINISTRA uma igreja que já
+ *    tem unidades ligadas (tem números de tesouraria e mensalidade delas). O
+ *    banco não devolve pessoa nenhuma das outras igrejas.
+ *  - Cadastrar igrejas: quem tem "Cadastrar igrejas na rede" (Responsável,
+ *    Administrador, ou o cargo liberado), numa igreja que não é congregação.
  */
 export default async function RedePage() {
   await exigeMenu("rede");
   const { active } = await getActiveTenant();
   if (!active) notFound();
 
-  const painel = await (await getRedePainelService()).carregar({ companyId: active.id, role: active.role });
+  const administra = active.role === "owner" || active.role === "admin";
+  const [temUnidades, igreja] = await Promise.all([
+    administra ? getTemUnidadesAbaixo() : Promise.resolve(false),
+    getIgrejaQueCadastra(),
+  ]);
+  const painel = temUnidades
+    ? await (await getRedePainelService()).carregar({ companyId: active.id, role: active.role })
+    : null;
+
+  const actor = igreja ? await getRedeCadastroActor() : null;
+  const aguardando =
+    igreja && actor
+      ? await (await getRedeCadastroService()).aguardando(actor, igreja.id).catch((err: unknown) => {
+          console.error("[rede] falha ao carregar as igrejas aguardando", err);
+          return [];
+        })
+      : [];
+  const nomes = await getNomesNiveis(igreja?.id);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">Rede</h2>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Como estão as igrejas ligadas a {active.name}. Aqui aparecem só números: quem são as pessoas, o que cada uma
-          pediu e quem entregou cada dízimo continua só com a própria igreja.
-        </p>
+    <NomesNiveisProvider nomes={nomes}>
+      <div className="flex flex-col gap-6">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Rede</h2>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            {painel
+              ? `Como estão as igrejas ligadas a ${active.name}. Aqui aparecem só números: quem são as pessoas, o que cada uma pediu e quem entregou cada dízimo continua só com a própria igreja.`
+              : `As igrejas ligadas a ${active.name}.`}
+          </p>
+        </div>
+        {igreja ? (
+          <IgrejasCadastradas
+            maeId={igreja.id}
+            nomeDaMae={igreja.name}
+            podeSubsede={igreja.parentId === null}
+            aguardando={aguardando}
+            nomes={nomes}
+          />
+        ) : null}
+        {painel ? <PainelRede painel={painel} hoje={hojeISO()} /> : null}
       </div>
-      <PainelRede painel={painel} hoje={hojeISO()} />
-    </div>
+    </NomesNiveisProvider>
   );
 }

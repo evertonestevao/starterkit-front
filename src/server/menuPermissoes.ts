@@ -8,6 +8,7 @@ import { createMenuPermissoesService, type MenuPermissoesService } from "@/servi
 import { getSupabaseServerClient } from "./supabase-server";
 import { getMensalidadeBloqueada } from "./mensalidadeBloqueio";
 import { getTemUnidadesAbaixo } from "./redePainel";
+import { getIgrejaQueCadastra } from "./redeCadastro";
 import { getActiveTenant } from "./tenant";
 
 export async function getMenuPermissoesService(): Promise<MenuPermissoesService> {
@@ -24,7 +25,10 @@ export async function getMenusVisiveis(): Promise<string[]> {
   if (!active) return [];
   const menus = menusVisiveis(active);
   // "Rede" só para a igreja que tem unidades abaixo (e só consulta se o papel já dá o item).
-  const comRede = menus.includes(MENU_REDE) ? menusComRede(menus, await getTemUnidadesAbaixo()) : menus;
+  let comRede = menus.includes(MENU_REDE) ? menusComRede(menus, await getTemUnidadesAbaixo()) : menus;
+  // Quem cadastra igrejas na rede também abre "Rede" (é lá que cadastra), mesmo
+  // antes de ter alguma abaixo — o painel com os números fica só para quem administra.
+  if (!comRede.includes(MENU_REDE) && (await getIgrejaQueCadastra())) comRede = [...comRede, MENU_REDE];
   return menusComBloqueio(comRede, await getMensalidadeBloqueada());
 }
 

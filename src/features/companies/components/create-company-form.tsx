@@ -17,30 +17,45 @@ import { createCompanyAction } from "@/server/actions/tenant";
 export function CreateCompanyForm({
   requireTerms = false,
   next,
+  convite,
 }: {
   requireTerms?: boolean;
   /** Para onde voltar depois de criar a igreja (só um link de vínculo; o servidor confere). */
   next?: string;
+  /** Chegou por convite: o nome da igreja que convidou vem sugerido, e a rede marcada. */
+  convite?: { nome: string; igreja: string };
 }) {
   const [state, formAction, pending] = useActionState(
     createCompanyAction,
     undefined,
   );
   useActionToast(state);
-  const [inNetwork, setInNetwork] = useState(false);
+  const [inNetwork, setInNetwork] = useState(Boolean(convite));
 
   return (
     <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       {next ? <input type="hidden" name="next" value={next} /> : null}
+      {convite ? (
+        <p className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+          Você foi convidado por <strong>{convite.igreja}</strong>. Ao criar a igreja, o pedido para entrar na rede
+          dela já vai junto: é só esperar a aprovação.
+        </p>
+      ) : null}
       <div className="flex flex-col gap-2">
         <Label htmlFor="name">Nome da igreja</Label>
         <Input
           id="name"
           name="name"
           placeholder="Assembleia de Deus Ministério no Ipiranga"
+          defaultValue={convite?.nome}
           minLength={2}
           required
         />
+        {convite ? (
+          <p className="text-xs text-muted-foreground">
+            Sugerimos o nome da igreja que convidou. Use o complemento abaixo para separar a sua (ex.: o bairro).
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="sobrenome">Complemento do nome (opcional)</Label>
@@ -75,6 +90,7 @@ export function CreateCompanyForm({
               id="rede_nome"
               name="rede_nome"
               placeholder="Ministério do Belém"
+              defaultValue={convite?.igreja}
               maxLength={CHURCH_NETWORK_NAME_MAX_LENGTH}
               aria-describedby="rede-help"
             />

@@ -10,7 +10,9 @@ import {
 } from "@/components/ui/card";
 import { brand } from "@/config/brand";
 import { CreateCompanyForm } from "@/features/companies/components/create-company-form";
-import { safeChurchLinkPath } from "@/lib/churchLinks";
+import { safeChurchLinkPath, tokenDoCaminho } from "@/lib/churchLinks";
+import { formatChurchName } from "@/lib/churchName";
+import { getChurchLinkService } from "@/server/churchLinks";
 import { isPlatformStaff } from "@/server/platform";
 import { getActiveTenant } from "@/server/tenant";
 import { getTermsService } from "@/server/terms";
@@ -44,6 +46,15 @@ export default async function OnboardingPage({
   const terms = await getTermsService();
   const requireTerms = !(await terms.hasAcceptedCurrent("igreja"));
 
+  // Chegou por um link de vínculo ainda válido: o cadastro já sugere o nome da
+  // igreja que convidou e marca a rede. Link inválido só não sugere nada.
+  const token = next ? tokenDoCaminho(next) : null;
+  const preview = token ? await (await getChurchLinkService()).previewInvite(token).catch(() => null) : null;
+  const convite =
+    preview && preview.status === "ativo" && !preview.isMine
+      ? { nome: preview.church.name, igreja: formatChurchName(preview.church.name, preview.church.sobrenome) }
+      : undefined;
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="mb-8 text-2xl font-semibold tracking-tight">
@@ -58,7 +69,7 @@ export default async function OnboardingPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CreateCompanyForm requireTerms={requireTerms} next={next ?? undefined} />
+          <CreateCompanyForm requireTerms={requireTerms} next={next ?? undefined} convite={convite} />
         </CardContent>
       </Card>
     </div>

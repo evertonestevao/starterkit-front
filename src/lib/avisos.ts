@@ -8,6 +8,7 @@ export type TipoDeAviso = "success" | "error" | "info" | "warning";
 
 export const AVISOS = {
   "senha-trocada": { tipo: "success", texto: "Senha trocada. Use a nova no próximo acesso." },
+  "igreja-assumida": { tipo: "success", texto: "Pronto! Você agora é o Responsável desta igreja." },
 } as const satisfies Record<string, { tipo: TipoDeAviso; texto: string }>;
 
 export type ChaveDeAviso = keyof typeof AVISOS;

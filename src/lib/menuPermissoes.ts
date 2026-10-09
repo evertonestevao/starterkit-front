@@ -24,6 +24,8 @@ export const MODULOS_LIBERAVEIS = [
   "relationships",
   "tesouraria",
   "vendas",
+  // Permissão, não menu: cadastrar igrejas abaixo desta (Configurações → Vínculos).
+  "rede_cadastro",
 ] as const;
 export type Modulo = (typeof MODULOS_LIBERAVEIS)[number];
 
@@ -148,6 +150,13 @@ export const MODULO_INFO: Record<Modulo, { titulo: string; libera: string; aviso
     titulo: "Tesouraria",
     libera: "Lançar dízimos e ofertas dos cultos, corrigir e excluir lançamentos e emitir o relatório mensal.",
     aviso: "Mostra quanto cada pessoa entregou de dízimo. Libere só para quem cuida do caixa.",
+  },
+  rede_cadastro: {
+    titulo: "Cadastrar igrejas na rede",
+    libera:
+      "Cadastrar subsedes e congregações abaixo desta igreja, preparar a página delas e convidar quem vai assumir (pelo WhatsApp ou por QR Code).",
+    aviso:
+      "Cada igreja cadastrada passa a ter mensalidade própria, a partir do dia em que a pessoa convidada assumir. Quem cadastra não vê os dados da igreja depois que ela tem responsável.",
   },
   vendas: {
     titulo: "Vendas",
