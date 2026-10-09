@@ -8,13 +8,40 @@ import { TelefoneInput } from "@/components/telefone-input";
 import { CopyPix } from "@/features/church/components/copy-pix";
 import { campo, rotulo } from "@/features/church/components/public-actions";
 import { linkWhatsapp } from "@/lib/acompanhamento";
-import { descreverItens, maximoParaPedir, mensagemDoComprovante } from "@/lib/vendas";
+import {
+  descreverItens,
+  maximoParaPedir,
+  mensagemDoComprovante,
+} from "@/lib/vendas";
 import { fazerPedidoVendaAction } from "@/server/actions/publicVendas";
 import { formatCents } from "@/services/sponsorPricing";
 import type { VendaPublica } from "@/types/vendas";
 
 const botao =
   "flex size-10 shrink-0 items-center justify-center rounded-xl border border-[var(--pg-border)] bg-[var(--pg-surface-2)] text-[var(--pg-text)] disabled:opacity-40";
+
+/** Um passo numerado da tela depois do pedido. */
+function Passo({
+  numero,
+  titulo,
+  children,
+}: {
+  numero: number;
+  titulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="flex items-center gap-2 font-semibold text-[var(--pg-text)]">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--pg-accent)] text-sm text-[var(--pg-accent-fg)]">
+          {numero}
+        </span>
+        {titulo}
+      </h3>
+      {children}
+    </section>
+  );
+}
 
 /** − quantidade + */
 function Contador({
@@ -34,13 +61,28 @@ function Contador({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <button type="button" onClick={onMenos} disabled={!podeMenos} aria-label={`Diminuir ${rotuloItem}`} className={botao}>
+      <button
+        type="button"
+        onClick={onMenos}
+        disabled={!podeMenos}
+        aria-label={`Diminuir ${rotuloItem}`}
+        className={botao}
+      >
         <Minus className="size-4" />
       </button>
-      <span className="min-w-7 text-center text-lg font-semibold tabular-nums" aria-live="polite">
+      <span
+        className="min-w-7 text-center text-lg font-semibold tabular-nums"
+        aria-live="polite"
+      >
         {valor}
       </span>
-      <button type="button" onClick={onMais} disabled={!podeMais} aria-label={`Aumentar ${rotuloItem}`} className={botao}>
+      <button
+        type="button"
+        onClick={onMais}
+        disabled={!podeMais}
+        aria-label={`Aumentar ${rotuloItem}`}
+        className={botao}
+      >
         <Plus className="size-4" />
       </button>
     </div>
@@ -53,8 +95,17 @@ function Contador({
  * calculado na hora, e o Pix sai com ele embutido. O banco confere preço,
  * opções, estoque e limites de novo.
  */
-export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; whatsappHref: string | null }) {
-  const [state, action, pending] = useActionState(fazerPedidoVendaAction, undefined);
+export function PedidoVendaForm({
+  venda,
+  whatsappHref,
+}: {
+  venda: VendaPublica;
+  whatsappHref: string | null;
+}) {
+  const [state, action, pending] = useActionState(
+    fazerPedidoVendaAction,
+    undefined,
+  );
   // O "sucesso" traz o Pix (não é uma mensagem): só o erro vira aviso.
   useEffect(() => {
     if (state?.error) toast.error(state.error);
@@ -64,7 +115,9 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
   const [quantidade, setQuantidade] = useState(1);
   const [porOpcao, setPorOpcao] = useState<Record<string, number>>({});
 
-  const unidades = comOpcoes ? Object.values(porOpcao).reduce((s, n) => s + n, 0) : quantidade;
+  const unidades = comOpcoes
+    ? Object.values(porOpcao).reduce((s, n) => s + n, 0)
+    : quantidade;
   const total = comOpcoes
     ? venda.opcoes.reduce((s, o) => s + o.precoCents * (porOpcao[o.id] ?? 0), 0)
     : venda.precoCents * quantidade;
@@ -72,7 +125,10 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
     .filter((o) => (porOpcao[o.id] ?? 0) > 0)
     .map((o) => ({ opcaoId: o.id, nome: o.nome, quantidade: porOpcao[o.id] }));
   const mudar = (id: string, delta: number) =>
-    setPorOpcao((atual) => ({ ...atual, [id]: Math.max(0, (atual[id] ?? 0) + delta) }));
+    setPorOpcao((atual) => ({
+      ...atual,
+      [id]: Math.max(0, (atual[id] ?? 0) + delta),
+    }));
   // Preço diferente em alguma opção: mostra o de cada linha.
   const precosVariam = new Set(venda.opcoes.map((o) => o.precoCents)).size > 1;
 
@@ -93,84 +149,103 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
             }),
           )
         : null;
+    const temVoucher = Boolean(state.success.voucher);
+    // Passos numerados: um QR Code só na tela (o do Pix). O voucher aparece
+    // como código + botão; o QR dele fica na página do voucher.
     return (
-      <div className="flex flex-col gap-3 rounded-xl bg-[var(--pg-accent-soft)] p-4" role="status">
+      <div
+        className="flex flex-col gap-4 rounded-xl bg-[var(--pg-accent-soft)] p-4"
+        role="status"
+      >
         <p className="flex items-start gap-2 text-sm leading-6 text-[var(--pg-text)]">
-          <Check className="mt-0.5 size-4 shrink-0 text-[var(--pg-accent)]" aria-hidden />
+          <Check
+            className="mt-0.5 size-4 shrink-0 text-[var(--pg-accent)]"
+            aria-hidden
+          />
           <span>
-            Pedido anotado! Pague <strong>{formatCents(state.success.totalCents)}</strong> no Pix abaixo. O pagamento
-            vai para <strong>{state.success.pixTitular}</strong>.
+            Pedido anotado, {state.pedido?.nome.split(" ")[0] ?? ""}! Agora é só
+            seguir os passos.
           </span>
         </p>
-        <CopyPix
-          chave={state.success.pixChave}
-          copiaECola={state.success.pixCopiaECola}
-          qrDataUrl={state.success.pixQrDataUrl}
-        />
-        {state.success.voucher ? (
-          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[var(--pg-accent)] bg-[var(--pg-surface)] p-4 text-center">
-            <p className="flex items-center gap-2 font-semibold text-[var(--pg-text)]">
-              <Ticket className="size-4 text-[var(--pg-accent)]" aria-hidden />
-              Seu voucher para a retirada
-            </p>
+
+        <Passo
+          numero={1}
+          titulo={`Pague ${formatCents(state.success.totalCents)} no Pix`}
+        >
+          <p className="text-sm text-[var(--pg-muted)]">
+            O pagamento vai para{" "}
+            <strong className="text-[var(--pg-text)]">
+              {state.success.pixTitular}
+            </strong>
+            .
+          </p>
+          <CopyPix
+            chave={state.success.pixChave}
+            copiaECola={state.success.pixCopiaECola}
+            qrDataUrl={state.success.pixQrDataUrl}
+            rotuloBotao="Copiar código Pix (já com o valor)"
+          />
+        </Passo>
+
+        <Passo numero={2} titulo="Envie o comprovante">
+          {comprovante ? (
+            <>
+              <p className="text-sm text-[var(--pg-muted)]">
+                A mensagem já vai com o seu pedido: é só anexar o comprovante.
+              </p>
+              <a
+                href={comprovante}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--pg-accent)] font-semibold text-[var(--pg-accent)]"
+              >
+                <MessageCircle className="size-4" aria-hidden />
+                Enviar comprovante pelo WhatsApp
+              </a>
+            </>
+          ) : (
             <p className="text-sm text-[var(--pg-muted)]">
-              Guarde: apresente na hora de retirar. É diferente do QR Code do Pix acima.
+              {whatsappHref ? (
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-[var(--pg-accent)] underline underline-offset-4"
+                >
+                  Envie pelo WhatsApp da igreja
+                </a>
+              ) : (
+                "Guarde o comprovante"
+              )}
+              . Quem organiza confere e confirma o seu pedido.
             </p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={state.success.voucher.qrDataUrl}
-              alt="QR Code do voucher de retirada"
-              width={512}
-              height={512}
-              className="size-40 rounded-lg bg-white p-2"
-            />
-            <p className="font-mono text-2xl font-bold tracking-widest text-[var(--pg-text)]">
-              {state.success.voucher.codigo}
+          )}
+        </Passo>
+
+        {temVoucher && state.success.voucher ? (
+          <Passo numero={3} titulo="Guarde seu voucher">
+            <p className="text-sm text-[var(--pg-muted)]">
+              Apresente na hora de retirar o pedido.
             </p>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--pg-accent)] px-4 py-3">
+              <Ticket
+                className="size-5 shrink-0 text-[var(--pg-accent)]"
+                aria-hidden
+              />
+              <span className="font-mono text-2xl font-bold tracking-widest text-[var(--pg-text)]">
+                {state.success.voucher.codigo}
+              </span>
+            </div>
             <a
               href={state.success.voucher.url}
               target="_blank"
               rel="noreferrer"
               className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--pg-border)] font-semibold text-[var(--pg-text)]"
             >
-              Abrir meu voucher (para salvar)
+              Abrir meu voucher
             </a>
-          </div>
+          </Passo>
         ) : null}
-        {comprovante ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-sm leading-6 text-[var(--pg-text)]">
-              Depois de pagar, envie o comprovante para quem organiza. A mensagem já vai com o seu pedido: é só anexar
-              o comprovante.
-            </p>
-            <a
-              href={comprovante}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--pg-accent)] font-semibold text-[var(--pg-accent)]"
-            >
-              <MessageCircle className="size-4" aria-hidden />
-              Enviar comprovante pelo WhatsApp
-            </a>
-          </div>
-        ) : (
-          <p className="text-sm leading-6 text-[var(--pg-muted)]">
-            Depois de pagar,{" "}
-            {whatsappHref ? (
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noreferrer"
-                className="font-semibold text-[var(--pg-accent)] underline underline-offset-4"
-              >
-                envie o comprovante pelo WhatsApp da igreja
-              </a>
-            ) : (
-              "guarde o comprovante"
-            )}
-            . Quem organiza confere e confirma o seu pedido.
-          </p>
-        )}
       </div>
     );
   }
@@ -179,7 +254,9 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
     venda.maxPorPedido !== null || venda.disponivel !== null ? (
       <span className="text-xs text-[var(--pg-muted)]">
         {venda.disponivel !== null ? `Restam ${venda.disponivel}. ` : ""}
-        {venda.maxPorPedido !== null ? `Até ${venda.maxPorPedido} por pedido.` : ""}
+        {venda.maxPorPedido !== null
+          ? `Até ${venda.maxPorPedido} por pedido.`
+          : ""}
       </span>
     ) : null;
 
@@ -187,13 +264,26 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
     <form action={action} className="relative flex flex-col gap-3">
       <CamposAntiRobo />
       <input type="hidden" name="vendaId" value={venda.id} />
-      <input type="hidden" name="quantidade" value={comOpcoes ? 0 : quantidade} />
+      <input
+        type="hidden"
+        name="quantidade"
+        value={comOpcoes ? 0 : quantidade}
+      />
       <input
         type="hidden"
         name="itens"
-        value={JSON.stringify(itensEscolhidos.map((i) => ({ opcaoId: i.opcaoId, quantidade: i.quantidade })))}
+        value={JSON.stringify(
+          itensEscolhidos.map((i) => ({
+            opcaoId: i.opcaoId,
+            quantidade: i.quantidade,
+          })),
+        )}
       />
-      <input type="hidden" name="itensTexto" value={comOpcoes ? descreverItens(itensEscolhidos) : ""} />
+      <input
+        type="hidden"
+        name="itensTexto"
+        value={comOpcoes ? descreverItens(itensEscolhidos) : ""}
+      />
 
       {comOpcoes ? (
         <div className="flex flex-col gap-1.5">
@@ -202,11 +292,18 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
             {venda.opcoes.map((o) => {
               const n = porOpcao[o.id] ?? 0;
               return (
-                <li key={o.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                <li
+                  key={o.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2"
+                >
                   <span className="min-w-0">
-                    <span className="block font-medium break-words text-[var(--pg-text)]">{o.nome}</span>
+                    <span className="block font-medium break-words text-[var(--pg-text)]">
+                      {o.nome}
+                    </span>
                     {precosVariam ? (
-                      <span className="block text-xs text-[var(--pg-muted)]">{formatCents(o.precoCents)}</span>
+                      <span className="block text-xs text-[var(--pg-muted)]">
+                        {formatCents(o.precoCents)}
+                      </span>
                     ) : null}
                   </span>
                   <Contador
@@ -227,7 +324,9 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
               <span className="block text-xs text-[var(--pg-muted)]">
                 Total ({unidades} {unidades === 1 ? "unidade" : "unidades"})
               </span>
-              <span className="text-xl font-bold text-[var(--pg-text)] tabular-nums">{formatCents(total)}</span>
+              <span className="text-xl font-bold text-[var(--pg-text)] tabular-nums">
+                {formatCents(total)}
+              </span>
             </span>
           </div>
         </div>
@@ -244,8 +343,12 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
               rotuloItem="quantidade"
             />
             <span className="ml-auto text-right">
-              <span className="block text-xs text-[var(--pg-muted)]">Total</span>
-              <span className="text-xl font-bold text-[var(--pg-text)] tabular-nums">{formatCents(total)}</span>
+              <span className="block text-xs text-[var(--pg-muted)]">
+                Total
+              </span>
+              <span className="text-xl font-bold text-[var(--pg-text)] tabular-nums">
+                {formatCents(total)}
+              </span>
             </span>
           </div>
           {limites}
@@ -254,7 +357,13 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
 
       <label className="flex flex-col gap-1.5">
         <span className={rotulo}>Seu nome</span>
-        <input name="nome" required autoComplete="name" maxLength={120} className={campo} />
+        <input
+          name="nome"
+          required
+          autoComplete="name"
+          maxLength={120}
+          className={campo}
+        />
       </label>
       <label className="flex flex-col gap-1.5">
         <span className={rotulo}>WhatsApp</span>
@@ -262,13 +371,18 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
       </label>
       <label className="flex flex-col gap-1.5">
         <span className={rotulo}>
-          Observação <span className="font-normal text-[var(--pg-muted)]">(opcional)</span>
+          Observação{" "}
+          <span className="font-normal text-[var(--pg-muted)]">(opcional)</span>
         </span>
         <textarea
           name="observacao"
           maxLength={500}
           rows={3}
-          placeholder={comOpcoes ? "Algo mais que quem organiza precisa saber" : "Ex.: 2 tamanho G e 1 M"}
+          placeholder={
+            comOpcoes
+              ? "Algo mais que quem organiza precisa saber"
+              : "Ex.: 2 tamanho G e 1 M"
+          }
           className={`${campo} h-auto py-3`}
         />
       </label>
@@ -278,7 +392,11 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
         disabled={pending || unidades === 0}
         className="mt-1 h-12 w-full rounded-xl bg-[var(--pg-accent)] text-base font-semibold text-[var(--pg-accent-fg)] transition-opacity disabled:opacity-60"
       >
-        {pending ? "Enviando..." : unidades === 0 ? "Escolha pelo menos um item" : `Gerar Pix de ${formatCents(total)}`}
+        {pending
+          ? "Enviando..."
+          : unidades === 0
+            ? "Escolha pelo menos um item"
+            : `Gerar Pix de ${formatCents(total)}`}
       </button>
     </form>
   );

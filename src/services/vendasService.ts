@@ -424,7 +424,7 @@ export function createVendasPublicasService(deps: {
       pixCopiaECola: string;
       pixQrDataUrl: string;
       whatsappComprovante: string | null;
-      voucher: { url: string; codigo: string; qrDataUrl: string } | null;
+      voucher: { url: string; codigo: string } | null;
     }> {
       const parsed = pedidoPublicoSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
@@ -434,10 +434,11 @@ export function createVendasPublicasService(deps: {
         ...parsed.data,
         voucherHash: token && deps.tokens ? deps.tokens.hash(token) : null,
       });
-      let voucher: { url: string; codigo: string; qrDataUrl: string } | null = null;
+      let voucher: { url: string; codigo: string } | null = null;
       if (token && pedido.voucherCodigo && deps.appUrl) {
         const url = `${deps.appUrl.replace(/\/+$/, "")}/voucher/${token}`;
-        voucher = { url, codigo: pedido.voucherCodigo, qrDataUrl: await deps.qr(url) };
+        // O QR Code do voucher fica na página dele (/voucher/...), não na tela do Pix.
+        voucher = { url, codigo: pedido.voucherCodigo };
       }
       const pixCopiaECola = buildPixPayload({
         chave: pedido.pixChave,

@@ -274,7 +274,7 @@ describe("link de confirmação", () => {
 describe("voucher e entrega", () => {
   const TOKEN = "a".repeat(43);
 
-  it("pedido de venda com voucher devolve o link, o código e o QR; o banco recebe só o hash", async () => {
+  it("pedido de venda com voucher devolve o link e o código; o banco recebe só o hash", async () => {
     const criarPedido = vi.fn(async () => ({
       pedidoId: "66666666-6666-4666-8666-666666666666",
       totalCents: 800,
@@ -293,11 +293,7 @@ describe("voucher e entrega", () => {
     });
     const r = await service.pedir({ vendaId: VENDA_ID, nome: "Ana", telefone: "14999998888", quantidade: 1, observacao: null, itens: [] });
     expect(criarPedido).toHaveBeenCalledWith(expect.objectContaining({ voucherHash: `hash-de-${TOKEN}` }));
-    expect(r.voucher).toEqual({
-      url: `https://www.assembleiaapp.com.br/voucher/${TOKEN}`,
-      codigo: "K7P-4QX",
-      qrDataUrl: `qr:https://www.assembleiaapp.com.br/voucher/${TOKEN}`,
-    });
+    expect(r.voucher).toEqual({ url: `https://www.assembleiaapp.com.br/voucher/${TOKEN}`, codigo: "K7P-4QX" });
   });
 
   it("venda sem voucher: nada de link", async () => {
