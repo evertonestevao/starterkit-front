@@ -5577,7 +5577,7 @@ begin
 
   select string_agg(modulo, ',' order by modulo) into v from public.meus_acessos()
   where company_id = 'acacacac-0000-4000-8000-0000000000c2';
-  if v is distinct from 'acompanhamento,campaigns,dashboard,ebd,events,membros,programacao,relationships' then raise exception 'FALHA acessos: meus_acessos veio %', v; end if;
+  if v is distinct from 'acompanhamento,campaigns,dashboard,ebd,events,membros,programacao,rede_cadastro,relationships' then raise exception 'FALHA acessos: meus_acessos veio %', v; end if;
 
   -- Não configura nem enxerga a configuração.
   begin
@@ -6825,6 +6825,8 @@ begin
       'pix_confirmacao_por_token', 'pix_confirmar_por_token',
       -- vendas: lista das abertas (sem a chave) e o link de confirmação da chave de cada venda
       'vendas_publicas', 'venda_pix_confirmacao_por_token', 'venda_pix_confirmar_por_token', 'voucher_por_token',
+      -- convite para assumir uma igreja cadastrada pela de cima (o link mostra a igreja e o e-mail convidado)
+      'convite_responsavel_por_token',
       -- carteirinha de membro: link pessoal e verificação pelo QR Code
       'carteirinha_por_token', 'verificar_carteirinha',
       'rede_igrejas_publicas', 'resolve_church_by_domain', 'cancel_profile_change_by_token',
@@ -9440,6 +9442,221 @@ begin
   end loop;
 end $$;
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- Igreja cadastrada pela de cima (migration 20261013100000). AC Sede (d1, de
+-- 001) cadastra; AC Cong (d2, de 002) é congregação; AC Outra (d3, de 005) é
+-- outra rede. O pastor novo é um login sem igreja nenhuma.
+-- ---------------------------------------------------------------------------
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('adadadad-0000-4000-8000-000000000001', 'rls-pastor-novo@test.local', 'authenticated', 'authenticated',
+   '00000000-0000-0000-0000-000000000000', '{"full_name":"Pastor Novo"}'),
+  ('adadadad-0000-4000-8000-000000000002', 'rls-intruso@test.local', 'authenticated', 'authenticated',
+   '00000000-0000-0000-0000-000000000000', '{"full_name":"Intruso"}');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare v_id uuid; r record; n int;
+begin
+  v_id := public.cadastrar_igreja_da_rede('acacacac-0000-4000-8000-0000000000d1', 'subsede', 'AC Nova', 'Vila Mariana', 'rls-ac-nova');
+  perform set_config('rls.nova', v_id::text, true);
+
+  select aguardando_responsavel, parent_id, company_id into r from public.churches where id = v_id;
+  if not r.aguardando_responsavel or r.parent_id <> 'acacacac-0000-4000-8000-0000000000d1' then
+    raise exception 'FALHA cadastro rede: igreja nao nasceu ligada e aguardando';
+  end if;
+  perform set_config('rls.nova_company', r.company_id::text, true);
+  -- Quem cadastrou NÃO vira dono nem membro da igreja de baixo.
+  if public.is_company_member(r.company_id) or public.is_company_admin(r.company_id) then
+    raise exception 'FALHA cadastro rede: quem cadastrou virou membro da igreja de baixo';
+  end if;
+
+  -- Subsede abaixo de quem já tem mãe não pode; tipo inventado também não.
+  begin
+    perform public.cadastrar_igreja_da_rede(v_id, 'subsede', 'Sub da Sub', null, 'rls-sub-sub');
+    raise exception 'FALHA cadastro rede: cadastrou subsede abaixo de subsede';
+  exception when sqlstate 'P0002' or sqlstate '22023' then null;
+  end;
+  begin
+    perform public.cadastrar_igreja_da_rede('acacacac-0000-4000-8000-0000000000d1', 'sede', 'Outra Sede', null, 'rls-x-sede');
+    raise exception 'FALHA cadastro rede: aceitou tipo sede';
+  exception when sqlstate '22023' then null;
+  end;
+
+  -- Enquanto ninguém assume, a de cima ajusta a página.
+  perform public.editar_igreja_aguardando(v_id, jsonb_build_object('nome', 'AC Nova Editada', 'cidade', 'São Paulo', 'uf', 'sp'));
+  select count(*) into n from public.churches where id = v_id and nome_proprio = 'AC Nova Editada' and uf = 'SP';
+  if n <> 1 then raise exception 'FALHA cadastro rede: a de cima nao editou a igreja aguardando'; end if;
+
+  -- Campos de controle não são graváveis pela API.
+  begin
+    update public.churches set aguardando_responsavel = false where id = v_id;
+    raise exception 'FALHA cadastro rede: mudou aguardando_responsavel direto';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Convite: só o hash; outro convite cancela o anterior.
+  perform public.convidar_responsavel(v_id, encode(sha256(convert_to('convite-velho', 'UTF8')), 'hex'),
+    'RLS-Pastor-Novo@test.local', 'Pastor Novo', 'pastor', '14999998888', 168);
+  perform public.convidar_responsavel(v_id, encode(sha256(convert_to('convite-assumir', 'UTF8')), 'hex'),
+    'RLS-Pastor-Novo@test.local', 'Pastor Novo', 'pastor', '14999998888', 168);
+
+  select count(*) into n from public.igrejas_aguardando_responsavel('acacacac-0000-4000-8000-0000000000d1')
+  where church_id = v_id and convite_email = 'rls-pastor-novo@test.local';
+  if n <> 1 then raise exception 'FALHA cadastro rede: lista de aguardando nao mostrou o convite'; end if;
+end $$;
+
+-- Congregação não cadastra; outra rede e quem não tem a permissão também não.
+do $$
+declare v_quem text;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    begin
+      perform public.cadastrar_igreja_da_rede('acacacac-0000-4000-8000-0000000000d1', 'congregacao', 'Invasora', null, 'rls-invasora');
+      raise exception 'FALHA cadastro rede: % cadastrou igreja na rede da sede', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.editar_igreja_aguardando(current_setting('rls.nova')::uuid, jsonb_build_object('nome', 'Hackeada'));
+      raise exception 'FALHA cadastro rede: % editou igreja aguardando de outra rede', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    begin
+      perform public.convidar_responsavel(current_setting('rls.nova')::uuid, repeat('e', 64), 'golpe@x.test', 'Golpe', null, null, 168);
+      raise exception 'FALHA cadastro rede: % gerou convite para assumir', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+  end loop;
+  -- A congregação (d2) é congregação: não cadastra nada abaixo dela.
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+  begin
+    perform public.cadastrar_igreja_da_rede('acacacac-0000-4000-8000-0000000000d2', 'congregacao', 'Filha da Cong', null, 'rls-filha-cong');
+    raise exception 'FALHA cadastro rede: congregacao cadastrou igreja abaixo';
+  exception when sqlstate 'P0002' or sqlstate '22023' then null;
+  end;
+end $$;
+reset role;
+
+-- O link mostra a igreja e o e-mail; link inventado e o velho não valem.
+set local role anon;
+do $$
+declare r record; n int;
+begin
+  select * into r from public.convite_responsavel_por_token('convite-assumir');
+  if r.estado <> 'valido' or r.email <> 'rls-pastor-novo@test.local' then
+    raise exception 'FALHA assumir: link valido nao mostrou o convite (%)', r.estado;
+  end if;
+  select * into r from public.convite_responsavel_por_token('convite-velho');
+  if r.estado <> 'substituido' or r.email is not null then
+    raise exception 'FALHA assumir: convite substituido ainda mostra o e-mail';
+  end if;
+  select count(*) into n from public.convite_responsavel_por_token('convite-inventado');
+  if n <> 0 then raise exception 'FALHA assumir: token inventado achou convite'; end if;
+  begin
+    perform public.aceitar_responsavel('convite-assumir');
+    raise exception 'FALHA assumir: anon assumiu a igreja';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.conta_existe_para_email('rls-ac-sede@test.local');
+    raise exception 'FALHA assumir: anon perguntou se o e-mail tem conta';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- Logado com outro e-mail não assume; o convite velho não serve; o certo assume.
+set local role authenticated;
+do $$
+declare r record; n int;
+begin
+  perform set_config('request.jwt.claims',
+    '{"sub":"adadadad-0000-4000-8000-000000000002","email":"rls-intruso@test.local","role":"authenticated"}', true);
+  begin
+    perform public.aceitar_responsavel('convite-assumir');
+    raise exception 'FALHA assumir: outro e-mail assumiu a igreja';
+  exception when sqlstate '42501' then null;
+  end;
+  -- A sede também não assume com o link (e-mail diferente do convite).
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+  begin
+    perform public.aceitar_responsavel('convite-assumir');
+    raise exception 'FALHA assumir: quem cadastrou assumiu com o link do pastor';
+  exception when sqlstate '42501' then null;
+  end;
+
+  perform set_config('request.jwt.claims',
+    '{"sub":"adadadad-0000-4000-8000-000000000001","email":"rls-pastor-novo@test.local","role":"authenticated"}', true);
+  begin
+    perform public.aceitar_responsavel('convite-velho');
+    raise exception 'FALHA assumir: convite substituido funcionou';
+  exception when sqlstate 'P0002' then null;
+  end;
+  select * into r from public.aceitar_responsavel('convite-assumir');
+  if r.company_id is distinct from current_setting('rls.nova_company')::uuid then
+    raise exception 'FALHA assumir: nao devolveu a igreja assumida';
+  end if;
+  if not public.is_company_owner(current_setting('rls.nova_company')::uuid) then
+    raise exception 'FALHA assumir: pastor nao virou Responsavel';
+  end if;
+  select count(*) into n from public.rol_membro_cargos mc join public.cargos cg on cg.id = mc.cargo_id
+  where mc.church_id = current_setting('rls.nova')::uuid and cg.slug = 'pastor';
+  if n <> 1 then raise exception 'FALHA assumir: cargo Pastor nao foi dado'; end if;
+  -- O link não serve duas vezes.
+  begin
+    perform public.aceitar_responsavel('convite-assumir');
+    raise exception 'FALHA assumir: link usado duas vezes';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+
+-- Depois que assumiu: a de cima não edita mais nem gera convite.
+do $$
+begin
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+  begin
+    perform public.editar_igreja_aguardando(current_setting('rls.nova')::uuid, jsonb_build_object('nome', 'Depois'));
+    raise exception 'FALHA assumir: a de cima editou depois que o pastor assumiu';
+  exception when sqlstate 'P0002' then null;
+  end;
+  begin
+    perform public.convidar_responsavel(current_setting('rls.nova')::uuid, repeat('f', 64), 'outro@x.test', 'Outro', null, null, 168);
+    raise exception 'FALHA assumir: gerou convite para igreja que ja tem dono';
+  exception when sqlstate 'P0002' then null;
+  end;
+  if public.is_company_member(current_setting('rls.nova_company')::uuid) then
+    raise exception 'FALHA assumir: a sede virou membro da igreja de baixo';
+  end if;
+end $$;
+reset role;
+
+-- Mensalidade: a tolerância conta de quando assumiu; aguardando não é cobrada.
+do $$
+declare v date; n int; v_aguardando uuid;
+begin
+  select desde into v from public.mensalidades_pendentes_base(current_setting('rls.nova_company')::uuid);
+  if v is distinct from current_date then
+    raise exception 'FALHA mensalidade: tolerancia nao contou do dia em que assumiu (%)', v;
+  end if;
+  update public.churches set assumida_em = now() + interval '10 days' where id = current_setting('rls.nova')::uuid;
+  select desde into v from public.mensalidades_pendentes_base(current_setting('rls.nova_company')::uuid);
+  if v is distinct from (current_date + 10) then
+    raise exception 'FALHA mensalidade: desde nao seguiu assumida_em (%)', v;
+  end if;
+  update public.churches set aguardando_responsavel = true where id = current_setting('rls.nova')::uuid;
+  select count(*) into n from public.mensalidades_pendentes_base(current_setting('rls.nova_company')::uuid);
+  if n <> 0 then raise exception 'FALHA mensalidade: igreja aguardando responsavel entrou na cobranca'; end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
