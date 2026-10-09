@@ -5450,6 +5450,78 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- EBD → Professores (migration 20261016100000). Na AC Cong (d2): a secretaria
+-- da EBD (0b) vê os professores e dá/tira SÓ o cargo Professor(a) da EBD. O
+-- professor (0a), a sede (01) e outra rede (05) não veem nem mexem.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+do $$
+declare n int; v_quem text; v_prof uuid;
+begin
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+  select count(*) into n from public.ebd_professores_da_igreja('acacacac-0000-4000-8000-0000000000d2')
+  where jsonb_array_length(classes) = 1;
+  if n <> 1 then raise exception 'FALHA professores: secretaria da EBD nao viu o professor da classe'; end if;
+
+  perform public.ebd_dar_cargo_professor('ebdebdeb-0000-4000-8000-0000000000b3');
+  select count(*) into n from public.ebd_professores_da_igreja('acacacac-0000-4000-8000-0000000000d2')
+  where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b3' and tem_cargo and jsonb_array_length(classes) = 0;
+  if n <> 1 then raise exception 'FALHA professores: cargo dado nao apareceu como professor disponivel'; end if;
+
+  -- Quem ainda dá aula não perde o cargo por aqui.
+  begin
+    select membro_id into v_prof from public.ebd_professores_da_igreja('acacacac-0000-4000-8000-0000000000d2')
+    where nome = 'Prof EBD';
+    perform public.ebd_dar_cargo_professor(v_prof);
+    perform public.ebd_tirar_cargo_professor(v_prof);
+    raise exception 'FALHA professores: tirou o cargo de quem ainda tem classe';
+  exception when sqlstate '23514' then null;
+  end;
+
+  perform public.ebd_tirar_cargo_professor('ebdebdeb-0000-4000-8000-0000000000b3');
+  select count(*) into n from public.ebd_professores_da_igreja('acacacac-0000-4000-8000-0000000000d2')
+  where membro_id = 'ebdebdeb-0000-4000-8000-0000000000b3';
+  if n <> 0 then raise exception 'FALHA professores: cargo tirado continuou na lista'; end if;
+
+  -- Professor, sede (igreja de cima) e outra rede: não veem nem dão o cargo.
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.ebd_professores_da_igreja('acacacac-0000-4000-8000-0000000000d2');
+    if n <> 0 then raise exception 'FALHA professores: % viu os professores', v_quem; end if;
+    begin
+      perform public.ebd_dar_cargo_professor('ebdebdeb-0000-4000-8000-0000000000b3');
+      raise exception 'FALHA professores: % deu o cargo', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+  end loop;
+end $$;
+reset role;
+
+-- Se o Responsável ligou outro módulo ao cargo, dar o cargo seria dar esse
+-- acesso: a secretaria da EBD não dá mais.
+insert into public.cargo_acessos (church_id, cargo_id, modulo, permitido)
+values ('acacacac-0000-4000-8000-0000000000d2', (select id from public.cargos where slug = 'professor_ebd'), 'membros', true);
+set local role authenticated;
+do $$
+begin
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+  begin
+    perform public.ebd_dar_cargo_professor('ebdebdeb-0000-4000-8000-0000000000b3');
+    raise exception 'FALHA professores: secretaria da EBD deu cargo que libera Membros';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+delete from public.cargo_acessos
+where church_id = 'acacacac-0000-4000-8000-0000000000d2' and cargo_id = (select id from public.cargos where slug = 'professor_ebd');
+
+-- ---------------------------------------------------------------------------
 -- meus_cargos (migration 20261001200000): a pessoa vê só os próprios cargos.
 -- O member autorizado (04) da AC Cong ganha o cargo Diácono no rol.
 -- ---------------------------------------------------------------------------

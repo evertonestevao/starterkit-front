@@ -3,6 +3,7 @@ import { AppError } from "@/lib/errors";
 import type { EbdRepository } from "@/services/ebdService";
 import type { EstadoPresenca } from "@/types/acompanhamento";
 import type {
+  EbdProfessorDaIgreja,
   EbdAlerta,
   EbdAluno,
   EbdAulaResumo,
@@ -173,6 +174,44 @@ export function createSupabaseEbdRepository(client: SupabaseClient): EbdReposito
           cuidados: (r.cuidados as string | null) ?? null,
         }),
       );
+    },
+
+    async professores(churchId) {
+      const { data, error } = await client.rpc("ebd_professores_da_igreja", { p_church_id: churchId });
+      if (error) falha("Falha ao carregar os professores", error);
+      return ((data ?? []) as Array<Record<string, unknown>>).map(
+        (r): EbdProfessorDaIgreja => ({
+          membroId: r.membro_id as string,
+          nome: r.nome as string,
+          temCargo: Boolean(r.tem_cargo),
+          temLogin: Boolean(r.tem_login),
+          classes: (r.classes ?? []) as Array<{ id: string; nome: string }>,
+        }),
+      );
+    },
+
+    async darCargoProfessor(membroId) {
+      const { error } = await client.rpc("ebd_dar_cargo_professor", { p_membro_id: membroId });
+      if (!error) return;
+      if (error.code === "P0002") throw new AppError("not_found", "Pessoa não encontrada.", error);
+      if (error.code === "42501") {
+        throw new AppError(
+          "forbidden",
+          "Nesta igreja o cargo Professor(a) da EBD libera outros menus: só o Responsável ou o Administrador pode dar.",
+          error,
+        );
+      }
+      falha("Falha ao dar o cargo", error);
+    },
+
+    async tirarCargoProfessor(membroId) {
+      const { error } = await client.rpc("ebd_tirar_cargo_professor", { p_membro_id: membroId });
+      if (!error) return;
+      if (error.code === "P0002") throw new AppError("not_found", "Pessoa não encontrada.", error);
+      if (error.code === "23514") {
+        throw new AppError("validation_error", "Tire a pessoa das classes antes de tirar o cargo de professor.", error);
+      }
+      falha("Falha ao tirar o cargo", error);
     },
 
     async buscarPessoas(churchId, termo) {

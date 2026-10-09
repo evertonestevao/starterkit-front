@@ -79,6 +79,26 @@ export async function removerProfessorAction(classeId: string, membroId: string)
   }
 }
 
+export async function darCargoProfessorAction(membroId: string): Promise<ActionState> {
+  try {
+    await (await getEbdService()).darCargoProfessor(await ator(), membroId);
+    revalidar();
+    return { success: "Cargo de Professor(a) da EBD dado." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export async function tirarCargoProfessorAction(membroId: string): Promise<ActionState> {
+  try {
+    await (await getEbdService()).tirarCargoProfessor(await ator(), membroId);
+    revalidar();
+    return { success: "Cargo de Professor(a) da EBD tirado." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
 /** Busca no rol (gestão), para matricular ou indicar professor. */
 export async function buscarPessoasEbdAction(
   termo: string,

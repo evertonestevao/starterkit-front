@@ -42,6 +42,7 @@ export const abasDaEbd = cache(async (): Promise<RouteTab[] | null> => {
     { href: `${base}/relatorios`, label: "Relatórios" },
   ];
   if (canGerirEbd(actor.role, actor.podeGerirEbd)) {
+    tabs.splice(2, 0, { href: `${base}/professores`, label: "Professores" });
     tabs.push({ href: `${base}/destaques`, label: "Destaques" });
     tabs.push({ href: `${base}/trimestres`, label: "Trimestres" });
     tabs.push({ href: `${base}/promocao`, label: "Promoção" });

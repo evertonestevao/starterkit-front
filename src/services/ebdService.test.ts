@@ -361,3 +361,32 @@ describe("alunosDaIgreja", () => {
     await expect(svc.alunosDaIgreja(member)).rejects.toMatchObject({ code: "forbidden" });
   });
 });
+
+describe("professores", () => {
+  it("só a gestão da EBD vê professores e dá ou tira o cargo", async () => {
+    const darCargoProfessor = vi.fn(async () => undefined);
+    const tirarCargoProfessor = vi.fn(async () => undefined);
+    const professores = vi.fn(async () => []);
+    const { svc } = build({ darCargoProfessor, tirarCargoProfessor, professores });
+    for (const quem of [professor, member]) {
+      await expect(svc.professores(quem)).rejects.toMatchObject({ code: "forbidden" });
+      await expect(svc.darCargoProfessor(quem, ALUNO)).rejects.toMatchObject({ code: "forbidden" });
+      await expect(svc.tirarCargoProfessor(quem, ALUNO)).rejects.toMatchObject({ code: "forbidden" });
+    }
+    expect(darCargoProfessor).not.toHaveBeenCalled();
+
+    await svc.professores(secretaria);
+    expect(professores).toHaveBeenCalledWith(IGREJA);
+    await svc.darCargoProfessor(secretaria, ALUNO);
+    expect(darCargoProfessor).toHaveBeenCalledWith(ALUNO);
+    await svc.tirarCargoProfessor(owner, ALUNO);
+    expect(tirarCargoProfessor).toHaveBeenCalledWith(ALUNO);
+  });
+
+  it("id inválido não chega ao banco", async () => {
+    const darCargoProfessor = vi.fn(async () => undefined);
+    const { svc } = build({ darCargoProfessor });
+    await expect(svc.darCargoProfessor(secretaria, "1 or 1=1")).rejects.toMatchObject({ code: "validation_error" });
+    expect(darCargoProfessor).not.toHaveBeenCalled();
+  });
+});
