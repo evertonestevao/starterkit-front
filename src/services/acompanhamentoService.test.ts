@@ -714,3 +714,21 @@ describe("e-mail pelo cartão de acesso", () => {
     expect(salvos).toEqual([[IGREJA, MEMBRO, "joao@igreja.org"]]);
   });
 });
+
+describe("WhatsApp pelo cartão de acesso", () => {
+  it("grava só os dígitos e exige DDD", async () => {
+    const salvos: unknown[][] = [];
+    const { svc } = service({
+      definirWhatsapp: async (...args: unknown[]) => {
+        salvos.push(args);
+        return true;
+      },
+    } as unknown as Partial<AcompanhamentoRepository>);
+    await expect(svc.definirWhatsapp(owner, MEMBRO, "9965-6043")).rejects.toMatchObject({
+      code: "validation_error",
+      field: "whatsapp",
+    });
+    await svc.definirWhatsapp(owner, MEMBRO, "(14) 99655-6043");
+    expect(salvos).toEqual([[IGREJA, MEMBRO, "14996556043"]]);
+  });
+});
