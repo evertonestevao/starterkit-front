@@ -18,8 +18,11 @@ export function CreateCompanyForm({
   requireTerms = false,
   next,
   convite,
+  igrejaNova,
 }: {
   requireTerms?: boolean;
+  /** Convite de igreja nova gerado pela plataforma (o banco confere e marca como usado). */
+  igrejaNova?: string;
   /** Para onde voltar depois de criar a igreja (só um link de vínculo; o servidor confere). */
   next?: string;
   /** Chegou por convite: o nome da igreja que convidou vem sugerido, e a rede marcada. */
@@ -35,6 +38,7 @@ export function CreateCompanyForm({
   return (
     <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       {next ? <input type="hidden" name="next" value={next} /> : null}
+      {igrejaNova ? <input type="hidden" name="igreja_nova" value={igrejaNova} /> : null}
       {convite ? (
         <p className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
           Você foi convidado por <strong>{convite.igreja}</strong>. Ao criar a igreja, o pedido para entrar na rede

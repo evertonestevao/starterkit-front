@@ -25,7 +25,7 @@ import { createHostTenantService, type HostTenantService } from "@/services/host
  */
 
 /** Rotas que exigem usuário logado. */
-const PROTECTED_PREFIXES = ["/dashboard", "/vinculo", "/onboarding", "/invites", "/reset-password", "/accept-terms"];
+const PROTECTED_PREFIXES = ["/dashboard", "/vinculo", "/nova-igreja", "/onboarding", "/invites", "/reset-password", "/accept-terms"];
 /** Rotas de auth que usuário logado não deve rever. */
 const AUTH_ONLY_ANONYMOUS = ["/login", "/signup", "/forgot-password"];
 

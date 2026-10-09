@@ -59,6 +59,8 @@ export async function createCompanyAction(_prev: ActionState | undefined, formDa
       fazParteDeRede: formData.get("faz_parte_de_rede") === "on",
       redeNome: formData.get("rede_nome"),
       modulosInativos,
+      // Convite da plataforma, ou o token do link de vínculo de onde a pessoa veio.
+      convite: String(formData.get("igreja_nova") ?? "") || tokenDoCaminho(safeChurchLinkPath(formData.get("next")) ?? "") || null,
     });
     companyId = company.id;
     await setActiveCompanyCookie(companyId);

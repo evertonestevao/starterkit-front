@@ -41,7 +41,8 @@ export interface TenantRepository {
   /** Empresas ativas em que o usuário logado é membro, com o papel dele. */
   listMyCompanies(): Promise<CompanyWithRole[]>;
   /** RPC create_company_with_church: empresa + membership owner + igreja, atômico. */
-  createCompany(name: string, slug: string, church: NewChurchDetails): Promise<CompanyWithRole>;
+  /** `convite`: token do link (vínculo da rede ou convite da plataforma); o banco exige com o cadastro fechado. */
+  createCompany(name: string, slug: string, church: NewChurchDetails, convite: string | null): Promise<CompanyWithRole>;
   updateCompany(companyId: string, data: { name: string }): Promise<void>;
   /** Papel do usuário logado na empresa, ou null se não é membro ativo. */
   getMyRole(companyId: string): Promise<RoleCode | null>;
@@ -130,6 +131,7 @@ export function createTenantService(repo: TenantRepository) {
     fazParteDeRede?: unknown;
     redeNome?: unknown;
     modulosInativos?: unknown;
+    convite?: unknown;
   }): Promise<CompanyWithRole> {
     const parsed = companyNameSchema.safeParse(input.name);
     if (!parsed.success) {
@@ -145,13 +147,14 @@ export function createTenantService(repo: TenantRepository) {
     if (!details.success) {
       throw new AppError("validation_error", details.error.issues[0]?.message ?? "Dados da igreja inválidos");
     }
+    const convite = typeof input.convite === "string" && input.convite.trim() ? input.convite.trim().slice(0, 200) : null;
     try {
-      return await repo.createCompany(name, slugify(name), details.data);
+      return await repo.createCompany(name, slugify(name), details.data, convite);
     } catch (err) {
       if (err instanceof AppError && err.code === "conflict") {
         // Slug em uso: tenta uma vez com sufixo aleatório curto.
         const suffix = Math.random().toString(36).slice(2, 6);
-        return repo.createCompany(name, `${slugify(name)}-${suffix}`, details.data);
+        return repo.createCompany(name, `${slugify(name)}-${suffix}`, details.data, convite);
       }
       throw err;
     }

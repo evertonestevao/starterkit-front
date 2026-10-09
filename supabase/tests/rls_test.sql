@@ -8,6 +8,10 @@
 
 begin;
 
+-- Os testes criam dezenas de igrejas sem convite: o cadastro começa aberto
+-- aqui. O bloco "Cadastro só por convite" testa o fechado.
+update public.platform_settings set cadastro_aberto = true where id = 1;
+
 -- Igreja nova nasce com a página FORA DO AR (migration 20261006170000). Os
 -- testes abaixo, escritos antes disso, criam dezenas de igrejas e abrem a
 -- página pública delas: para não publicar uma a uma, o padrão vira `true` SÓ
@@ -6899,6 +6903,9 @@ begin
       'vendas_publicas', 'venda_pix_confirmacao_por_token', 'venda_pix_confirmar_por_token', 'voucher_por_token',
       -- convite para assumir uma igreja cadastrada pela de cima (o link mostra a igreja e o e-mail convidado)
       'convite_responsavel_por_token',
+      -- Cadastro só por convite: só sim/não (o token chega como hash).
+      'cadastro_aberto',
+      'convite_igreja_valido',
       -- carteirinha de membro: link pessoal e verificação pelo QR Code
       'carteirinha_por_token', 'verificar_carteirinha',
       'rede_igrejas_publicas', 'resolve_church_by_domain', 'cancel_profile_change_by_token',
@@ -9890,6 +9897,99 @@ begin
   end;
 end $$;
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- Cadastro só por convite (migration 20261017100000). Com o cadastro fechado,
+-- igreja nova só nasce com link de vínculo ativo ou convite da plataforma
+-- (uso único). Só a plataforma gera convite e liga/desliga o cadastro.
+-- ---------------------------------------------------------------------------
+update public.platform_settings set cadastro_aberto = false where id = 1;
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('cdcdcdcd-0000-4000-8000-000000000001', 'rls-cad-staff@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Staff"}'),
+  ('cdcdcdcd-0000-4000-8000-000000000002', 'rls-cad-novo@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{"full_name":"Novo"}');
+insert into public.platform_staff (user_id, email) values ('cdcdcdcd-0000-4000-8000-000000000001', 'rls-cad-staff@test.local')
+on conflict (user_id) do update set deleted_at = null;
+insert into public.church_link_invites (church_id, company_id, tipo_subordinada, token_hash, expires_at)
+values ('acacacac-0000-4000-8000-0000000000d1', 'acacacac-0000-4000-8000-0000000000c1', 'congregacao',
+        encode(sha256(convert_to('link-da-rede', 'UTF8')), 'hex'), now() + interval '7 days');
+
+set local role authenticated;
+do $$
+declare v_company public.companies;
+begin
+  -- Quem não é da plataforma não gera convite nem abre o cadastro.
+  perform set_config('request.jwt.claims',
+    '{"sub":"cdcdcdcd-0000-4000-8000-000000000002","email":"rls-cad-novo@test.local","role":"authenticated"}', true);
+  begin
+    perform public.platform_criar_convite_igreja(encode(sha256(convert_to('x', 'UTF8')), 'hex'), 'Intruso', 7);
+    raise exception 'FALHA cadastro: usuario comum gerou convite de igreja';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.platform_definir_cadastro_aberto(true);
+    raise exception 'FALHA cadastro: usuario comum abriu o cadastro';
+  exception when sqlstate '42501' then null;
+  end;
+  if public.cadastro_aberto() then raise exception 'FALHA cadastro: cadastro abriu'; end if;
+
+  -- Sem convite, com convite inventado: não cria.
+  begin
+    perform public.create_company_with_church('Igreja Sem Convite', 'rls-sem-convite');
+    raise exception 'FALHA cadastro: criou igreja sem convite';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.create_company_with_church('Igreja Inventada', 'rls-inventada', null, false, null, '{}', 'inventado');
+    raise exception 'FALHA cadastro: criou igreja com convite inventado';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- Link de vínculo da rede: cria.
+  v_company := public.create_company_with_church('Igreja Pelo Link', 'rls-pelo-link', null, false, null, '{}', 'link-da-rede');
+  if v_company.id is null then raise exception 'FALHA cadastro: link da rede nao criou'; end if;
+
+  -- A plataforma gera um convite.
+  perform set_config('request.jwt.claims',
+    '{"sub":"cdcdcdcd-0000-4000-8000-000000000001","email":"rls-cad-staff@test.local","role":"authenticated"}', true);
+  perform public.platform_criar_convite_igreja(encode(sha256(convert_to('convite-plataforma', 'UTF8')), 'hex'), 'Ministério X', 7);
+
+  perform set_config('request.jwt.claims',
+    '{"sub":"cdcdcdcd-0000-4000-8000-000000000002","email":"rls-cad-novo@test.local","role":"authenticated"}', true);
+  if not public.convite_igreja_valido(encode(sha256(convert_to('convite-plataforma', 'UTF8')), 'hex')) then
+    raise exception 'FALHA cadastro: convite da plataforma nao valeu';
+  end if;
+  v_company := public.create_company_with_church('Igreja Da Plataforma', 'rls-da-plataforma', null, false, null, '{}', 'convite-plataforma');
+  if v_company.id is null then raise exception 'FALHA cadastro: convite da plataforma nao criou'; end if;
+
+  -- Uso único: a segunda vez não cria.
+  begin
+    perform public.create_company_with_church('Igreja Repetida', 'rls-repetida', null, false, null, '{}', 'convite-plataforma');
+    raise exception 'FALHA cadastro: convite da plataforma usado duas vezes';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- O convite usado ficou registrado com a igreja criada; a tabela não é legível.
+do $$
+declare n int;
+begin
+  select count(*) into n from public.platform_church_invites
+  where used_at is not null and company_id is not null and used_by = 'cdcdcdcd-0000-4000-8000-000000000002';
+  if n <> 1 then raise exception 'FALHA cadastro: convite usado nao registrou a igreja'; end if;
+end $$;
+set local role authenticated;
+do $$
+declare n int;
+begin
+  begin
+    select count(*) into n from public.platform_church_invites;
+    raise exception 'FALHA cadastro: convites legiveis por authenticated';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+update public.platform_settings set cadastro_aberto = true where id = 1;
 
 -- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
