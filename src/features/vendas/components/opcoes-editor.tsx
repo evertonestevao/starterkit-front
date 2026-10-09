@@ -57,7 +57,7 @@ export function OpcoesEditor({ temOpcoes, opcoes }: { temOpcoes: boolean; opcoes
   );
 
   return (
-    <fieldset className="flex flex-col gap-3">
+    <fieldset id="opcoes-editor" tabIndex={-1} className="flex flex-col gap-3 outline-none">
       <legend className="mb-1 text-sm font-medium">Esta venda tem opções (sabor, tamanho...)?</legend>
       <input type="hidden" name="temOpcoes" value={ligado ? "sim" : "nao"} />
       <input type="hidden" name="opcoes" value={ligado ? json : "[]"} />

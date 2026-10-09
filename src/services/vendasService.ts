@@ -119,7 +119,7 @@ function vendaSchema(hoje: string) {
       .int("Valor inválido")
       .positive("Informe um valor maior que zero")
       .max(PRECO_MAXIMO, "Valor alto demais. Confira os centavos."),
-    pixChave: z.string().trim().min(5, "Informe a chave Pix de quem recebe").max(140, "Chave Pix longa demais"),
+    pixChave: z.string().trim().min(5, "Chave Pix incompleta. Use CPF, CNPJ, e-mail, celular com +55 ou chave aleatória.").max(140, "Chave Pix longa demais"),
     pixTitular: z.string().trim().min(3, "Informe o nome de quem recebe").max(140, "Nome longo demais"),
     // Só dígitos: DDD + número (com ou sem o 55).
     whatsappComprovante: z
@@ -275,10 +275,12 @@ export function createVendasService(deps: {
         throw new AppError(
           "validation_error",
           "Chave Pix inválida. Use CPF, CNPJ, e-mail, telefone com +55 ou chave aleatória.",
+          undefined,
+          "pixChave",
         );
       }
       if (dados.estoque !== null && dados.maxPorPedido !== null && dados.maxPorPedido > dados.estoque) {
-        throw new AppError("validation_error", "O máximo por pedido não pode passar do estoque.");
+        throw new AppError("validation_error", "O máximo por pedido não pode passar do estoque.", undefined, "maxPorPedido");
       }
 
       const salvo = await repo.salvar(church.id, id, dados);

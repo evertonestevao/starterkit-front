@@ -47,9 +47,9 @@ function lerOpcoes(json: string): Array<{ id: string | null; nome: string; preco
   });
 }
 
-function inteiroOuNulo(valor: string, mensagem: string): number | null {
+function inteiroOuNulo(valor: string, mensagem: string, campo: string): number | null {
   if (valor === "") return null;
-  if (!/^\d+$/.test(valor)) throw new AppError("validation_error", mensagem);
+  if (!/^\d+$/.test(valor)) throw new AppError("validation_error", mensagem, undefined, campo);
   return Number(valor);
 }
 
@@ -60,7 +60,7 @@ export async function salvarVendaAction(_prev: ActionState | undefined, fd: Form
   try {
     const actor = await ator();
     const preco = parseBrlToCents(texto(fd, "preco"));
-    if (preco === null) throw new AppError("validation_error", "Valor inválido.");
+    if (preco === null) throw new AppError("validation_error", "Valor inválido.", undefined, "precoCents");
     const salvo = await (
       await getVendasService()
     ).salvar(actor, id, {
@@ -72,8 +72,8 @@ export async function salvarVendaAction(_prev: ActionState | undefined, fd: Form
       // Sem o campo (caixa desmarcada), a venda não pede comprovante.
       whatsappComprovante: texto(fd, "whatsappComprovante") || null,
       encerraEm: texto(fd, "encerraEm") || null,
-      estoque: inteiroOuNulo(texto(fd, "estoque"), "Estoque inválido."),
-      maxPorPedido: inteiroOuNulo(texto(fd, "maxPorPedido"), "Máximo por pedido inválido."),
+      estoque: inteiroOuNulo(texto(fd, "estoque"), "Estoque inválido.", "estoque"),
+      maxPorPedido: inteiroOuNulo(texto(fd, "maxPorPedido"), "Máximo por pedido inválido.", "maxPorPedido"),
       temOpcoes: texto(fd, "temOpcoes") === "sim",
       geraVoucher: texto(fd, "geraVoucher") === "on",
       opcoes: texto(fd, "temOpcoes") === "sim" ? lerOpcoes(texto(fd, "opcoes")) : [],
