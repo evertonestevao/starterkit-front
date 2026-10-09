@@ -42,7 +42,10 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     if (await defineCarteirinha()) tabs.push({ href: "/dashboard/settings/carteirinha", label: "Carteirinha" });
     tabs.push({ href: "/dashboard/settings/vinculos", label: "Vínculos" });
     tabs.push({ href: "/dashboard/settings/domain", label: "Domínio próprio" });
-    tabs.push({ href: "/dashboard/settings/pix", label: "Dízimos (PIX)" });
+    // Com a Tesouraria ligada, a chave PIX fica numa aba de lá.
+    if (!active.modulosAtivos.includes("tesouraria")) {
+      tabs.push({ href: "/dashboard/settings/pix", label: "Dízimos (PIX)" });
+    }
     tabs.push({ href: "/dashboard/settings/recebimento", label: "Cartão" });
   }
 
