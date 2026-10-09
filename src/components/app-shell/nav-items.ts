@@ -54,8 +54,14 @@ export const navItems: NavItem[] = MENUS.map((menu) => ({ ...menu, icon: ICONES[
  * Itens que a pessoa vê: as chaves vêm do servidor (papel + autorizações +
  * o que a igreja configurou em Configurações → Acessos).
  */
+/**
+ * Menus que existem (permissão, título da página), mas abrem pelo menu do
+ * perfil: a barra lateral é só para as funções do dia a dia da igreja.
+ */
+export const MENUS_NO_PERFIL = new Set(["mensalidade"]);
+
 export function visibleNavItems(menus: string[]): NavItem[] {
-  return navItems.filter((item) => menus.includes(item.key));
+  return navItems.filter((item) => menus.includes(item.key) && !MENUS_NO_PERFIL.has(item.key));
 }
 
 /** Título da página atual a partir do pathname (breadcrumb/header mobile). */
