@@ -38,6 +38,8 @@ export const abasDaEbd = cache(async (): Promise<RouteTab[] | null> => {
   const tabs: RouteTab[] = [
     { href: base, label: "Resumo" },
     { href: `${base}/alunos`, label: "Alunos" },
+    // As classes: a página de cada uma fica embaixo deste endereço.
+    { href: `${base}/classes`, label: "Salas" },
     { href: `${base}/alertas`, label: "Em alerta", count: emAlerta },
     { href: `${base}/relatorios`, label: "Relatórios" },
   ];
