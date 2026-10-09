@@ -66,7 +66,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       return companies.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
     },
 
-    async createCompany(name, slug, church) {
+    async createCompany(name, slug, church, convite) {
       // create_company_with_church: empresa + owner + IGREJA numa transação
       // só. Empresa sem igreja não tem página pública, QR Code, domínio nem
       // link de patrocínio — e não há tela que conserte isso depois.
@@ -78,11 +78,19 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
           p_faz_parte_de_rede: church.fazParteDeRede,
           p_rede_nome: church.redeNome,
           p_modulos_inativos: church.modulosInativos,
+          p_convite: convite,
         })
         .single<Company>();
       if (error || !data) {
         if (error?.code === "23505") {
           throw new AppError("conflict", "Já existe uma igreja com esse identificador");
+        }
+        if (error?.code === "42501") {
+          throw new AppError(
+            "forbidden",
+            "No momento o cadastro de igrejas é só por convite. Use o link que você recebeu.",
+            error,
+          );
         }
         throw new AppError("internal_error", "Falha ao criar igreja", error);
       }

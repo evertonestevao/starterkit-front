@@ -7,6 +7,8 @@ import { createRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { createAuthService } from "@/services/authService";
 import { comAviso } from "@/lib/avisos";
+import { AppError } from "@/lib/errors";
+import { cadastroAberto } from "@/server/cadastro";
 import { toActionError, type ActionState } from "./action-state";
 
 /**
@@ -30,6 +32,11 @@ async function getAuthService() {
 export async function signUpAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
   const next = formData.get("next");
   try {
+    // Cadastro só por convite: conta nova só vindo de um link (a igreja é
+    // travada no banco; aqui é para não juntar contas soltas).
+    if (!(typeof next === "string" && next.startsWith("/") && !next.startsWith("//")) && !(await cadastroAberto())) {
+      throw new AppError("forbidden", "No momento o cadastro é só por convite. Abra o link que você recebeu.");
+    }
     const auth = await getAuthService();
     // Quem veio de um link (ex.: convite de vínculo) volta a ele depois de
     // confirmar o e-mail — sem isso, o convite se perdia na confirmação.

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cadastroAberto } from "@/server/cadastro";
 import {
   ArrowRight,
   BookOpen,
@@ -42,8 +43,7 @@ const benefits = [
   {
     icon: LayoutDashboard,
     title: "Para quem lidera",
-    description:
-      "Um painel com números e gráficos, e cada pessoa da equipe vendo só o que o cargo dela precisa ver.",
+    description: "Um painel com números e gráficos, e cada pessoa da equipe vendo só o que o cargo dela precisa ver.",
   },
 ];
 
@@ -112,8 +112,7 @@ const modules = [
   {
     icon: Megaphone,
     title: "Campanhas",
-    description:
-      "Apresente a causa, defina a meta e mostre o avanço para a comunidade acompanhar até o fim.",
+    description: "Apresente a causa, defina a meta e mostre o avanço para a comunidade acompanhar até o fim.",
   },
   {
     icon: Network,
@@ -130,8 +129,7 @@ const modules = [
   {
     icon: ChartNoAxesCombined,
     title: "Painel e relatórios",
-    description:
-      "Presença por culto e por domingo em gráficos, frequência de cada pessoa e os destaques do trimestre.",
+    description: "Presença por culto e por domingo em gráficos, frequência de cada pessoa e os destaques do trimestre.",
   },
   {
     icon: ShieldCheck,
@@ -159,34 +157,24 @@ const steps = [
   ],
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  // Cadastro só por convite (piloto): os botões de criar conta somem.
+  const aberto = await cadastroAberto();
   return (
     <div className="min-h-screen overflow-hidden bg-[#f8f7f2] text-[#243128]">
       <header className="relative z-20 border-b border-[#dfe5d8]/70 bg-[#f8f7f2]/90 backdrop-blur-md">
         <div className="mx-auto flex h-[76px] max-w-7xl items-center justify-between px-5 sm:px-8">
-          <Link
-            href="/"
-            className="flex items-center gap-3"
-            aria-label={brand.name}
-          >
+          <Link href="/" className="flex items-center gap-3" aria-label={brand.name}>
             <span className="flex size-9 items-center justify-center rounded-xl bg-[#41694b] text-[#f6e6ad]">
               <Sparkles className="size-4" />
             </span>
-            <span className="text-[17px] font-semibold tracking-[-0.03em]">
-              {brand.name}
-            </span>
+            <span className="text-[17px] font-semibold tracking-[-0.03em]">{brand.name}</span>
           </Link>
           <nav className="flex items-center gap-2 sm:gap-5">
-            <Link
-              href="#como-funciona"
-              className="hidden text-sm text-[#637066] hover:text-[#243128] sm:block"
-            >
+            <Link href="#como-funciona" className="hidden text-sm text-[#637066] hover:text-[#243128] sm:block">
               Como funciona
             </Link>
-            <Link
-              href="#modulos"
-              className="hidden text-sm text-[#637066] hover:text-[#243128] sm:block"
-            >
+            <Link href="#modulos" className="hidden text-sm text-[#637066] hover:text-[#243128] sm:block">
               Recursos
             </Link>
             <Link
@@ -209,36 +197,30 @@ export default function LandingPage() {
               A página da sua igreja e o cuidado com as pessoas, em um só lugar.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#637066] sm:text-xl">
-              O{" "}
-              <strong className="font-semibold text-[#36543d]">
-                {brand.name}
-              </strong>{" "}
-              dá a qualquer igreja uma página pronta para a comunidade e as
-              ferramentas do dia a dia da liderança e da secretaria: membros,
-              presença nos cultos, Escola Dominical, dízimos e ofertas,
-              carteirinha, visitas e eventos.
+              O <strong className="font-semibold text-[#36543d]">{brand.name}</strong> dá a qualquer igreja uma página
+              pronta para a comunidade e as ferramentas do dia a dia da liderança e da secretaria: membros, presença nos
+              cultos, Escola Dominical, dízimos e ofertas, carteirinha, visitas e eventos.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link
-                href="/signup"
-                className={cn(
-                  buttonVariants({ size: "lg" }),
-                  "h-12 rounded-xl bg-[#41694b] px-6 text-[15px] text-white shadow-[0_10px_25px_rgba(65,105,75,0.2)] hover:bg-[#34573d]",
-                )}
-              >
-                Conhecer a plataforma <ArrowRight className="size-4" />
-              </Link>
+              {aberto ? (
+                <Link
+                  href="/signup"
+                  className={cn(
+                    buttonVariants({ size: "lg" }),
+                    "h-12 rounded-xl bg-[#41694b] px-6 text-[15px] text-white shadow-[0_10px_25px_rgba(65,105,75,0.2)] hover:bg-[#34573d]",
+                  )}
+                >
+                  Conhecer a plataforma <ArrowRight className="size-4" />
+                </Link>
+              ) : null}
               <Link
                 href="#como-funciona"
                 className="group inline-flex h-12 items-center gap-2 px-3 text-[15px] font-medium text-[#4c6653]"
               >
-                Ver como funciona{" "}
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
+                Ver como funciona <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
-            <p className="mt-5 text-xs text-[#7d897f]">
-              Funciona no celular, sem exigir estrutura técnica própria.
-            </p>
+            <p className="mt-5 text-xs text-[#7d897f]">Funciona no celular, sem exigir estrutura técnica própria.</p>
           </div>
 
           <div className="relative flex min-h-[480px] items-center justify-center lg:min-h-[560px]">
@@ -247,22 +229,15 @@ export default function LandingPage() {
             <div className="relative w-full max-w-[470px]">
               <div className="absolute -right-1 top-7 z-10 hidden w-52 -rotate-3 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-[0_20px_45px_rgba(40,63,45,0.13)] sm:block">
                 <div className="flex items-center gap-2 text-xs font-semibold text-[#36543d]">
-                  <MessageCircleHeart className="size-4 text-[#c39a3a]" /> Novo
-                  pedido de visita
+                  <MessageCircleHeart className="size-4 text-[#c39a3a]" /> Novo pedido de visita
                 </div>
-                <p className="mt-2 text-xs leading-5 text-[#718075]">
-                  Mariana gostaria de receber uma visita.
-                </p>
+                <p className="mt-2 text-xs leading-5 text-[#718075]">Mariana gostaria de receber uma visita.</p>
               </div>
               <div className="relative overflow-hidden rounded-[2rem] border-[7px] border-[#d8dfd2] bg-white shadow-[0_28px_70px_rgba(43,67,47,0.18)]">
                 <div className="flex items-center justify-between bg-[#41694b] px-6 pb-7 pt-5 text-white">
                   <div>
-                    <p className="text-[10px] tracking-[0.2em] text-[#dce7d8] uppercase">
-                      Página + gestão
-                    </p>
-                    <p className="mt-1 text-xl font-semibold">
-                      Igreja Esperança
-                    </p>
+                    <p className="text-[10px] tracking-[0.2em] text-[#dce7d8] uppercase">Página + gestão</p>
+                    <p className="mt-1 text-xl font-semibold">Igreja Esperança</p>
                   </div>
                   <div className="flex size-10 items-center justify-center rounded-full bg-[#f0d991] text-[#41694b]">
                     <Sparkles className="size-5" />
@@ -270,8 +245,7 @@ export default function LandingPage() {
                 </div>
                 <div className="-mt-4 rounded-t-[1.5rem] bg-[#fbfcf9] px-5 pb-6 pt-5">
                   <p className="text-sm leading-6 text-[#637066]">
-                    Um espaço vivo para a comunidade e uma visão clara para quem
-                    cuida dela.
+                    Um espaço vivo para a comunidade e uma visão clara para quem cuida dela.
                   </p>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     {[
@@ -280,16 +254,11 @@ export default function LandingPage() {
                       [Users, "Quero uma visita"],
                       [ChartNoAxesCombined, "Painel da igreja"],
                     ].map(([Icon, label]) => (
-                      <div
-                        key={label as string}
-                        className="rounded-xl border border-[#e5ebe1] bg-white p-3.5"
-                      >
+                      <div key={label as string} className="rounded-xl border border-[#e5ebe1] bg-white p-3.5">
                         <div className="flex size-8 items-center justify-center rounded-lg bg-[#edf3e9] text-[#41694b]">
                           <Icon className="size-4" />
                         </div>
-                        <p className="mt-3 text-xs font-semibold text-[#35463a]">
-                          {label as string}
-                        </p>
+                        <p className="mt-3 text-xs font-semibold text-[#35463a]">{label as string}</p>
                       </div>
                     ))}
                   </div>
@@ -306,22 +275,15 @@ export default function LandingPage() {
                   <QrCode className="size-5" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-[#35463a]">
-                    Acesso por onde fizer sentido
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-[#89938a]">
-                    Link, QR Code ou NFC
-                  </p>
+                  <p className="text-xs font-semibold text-[#35463a]">Acesso por onde fizer sentido</p>
+                  <p className="mt-0.5 text-[11px] text-[#89938a]">Link, QR Code ou NFC</p>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section
-          id="recursos"
-          className="border-y border-[#e3e8df] bg-white/55"
-        >
+        <section id="recursos" className="border-y border-[#e3e8df] bg-white/55">
           <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-24">
             <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-24">
               <div>
@@ -329,21 +291,16 @@ export default function LandingPage() {
                   Do primeiro contato ao cuidado de cada semana.
                 </h2>
                 <p className="mt-5 max-w-sm leading-7 text-[#718075]">
-                  Sua igreja já transforma vidas no encontro presencial. Aqui
-                  esse cuidado continua entre um encontro e outro, sem ninguém
-                  passar despercebido.
+                  Sua igreja já transforma vidas no encontro presencial. Aqui esse cuidado continua entre um encontro e
+                  outro, sem ninguém passar despercebido.
                 </p>
               </div>
               <div className="grid gap-8 sm:grid-cols-3">
                 {benefits.map(({ icon: Icon, title, description }) => (
                   <div key={title} className="border-t border-[#cfd9cb] pt-5">
                     <Icon className="size-6 text-[#41694b]" strokeWidth={1.7} />
-                    <h3 className="mt-5 text-base font-semibold text-[#35463a]">
-                      {title}
-                    </h3>
-                    <p className="mt-3 text-sm leading-6 text-[#718075]">
-                      {description}
-                    </p>
+                    <h3 className="mt-5 text-base font-semibold text-[#35463a]">{title}</h3>
+                    <p className="mt-3 text-sm leading-6 text-[#718075]">{description}</p>
                   </div>
                 ))}
               </div>
@@ -357,25 +314,17 @@ export default function LandingPage() {
               Tudo o que a secretaria e a liderança usam, no mesmo sistema.
             </h2>
             <p className="mt-5 leading-7 text-[#718075]">
-              Comece pelo que a sua igreja precisa hoje. Cada parte funciona
-              sozinha e conversa com as outras.
+              Comece pelo que a sua igreja precisa hoje. Cada parte funciona sozinha e conversa com as outras.
             </p>
           </div>
           <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {modules.map(({ icon: Icon, title, description }) => (
-              <div
-                key={title}
-                className="rounded-2xl border border-[#dfe5d8] bg-white/70 p-5"
-              >
+              <div key={title} className="rounded-2xl border border-[#dfe5d8] bg-white/70 p-5">
                 <div className="flex size-10 items-center justify-center rounded-xl bg-[#edf3e9] text-[#41694b]">
                   <Icon className="size-5" strokeWidth={1.7} />
                 </div>
-                <h3 className="mt-4 text-base font-semibold text-[#35463a]">
-                  {title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-[#718075]">
-                  {description}
-                </p>
+                <h3 className="mt-4 text-base font-semibold text-[#35463a]">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-[#718075]">{description}</p>
               </div>
             ))}
           </div>
@@ -388,14 +337,12 @@ export default function LandingPage() {
                 Toda grande obra começa com uma comunidade que acredita junto.
               </h2>
               <p className="mt-5 max-w-lg leading-7 text-[#718075]">
-                Crie campanhas para reformas, missões, ações sociais ou qualquer
-                sonho da igreja. Apresente a causa com clareza, convide as
-                pessoas a participar e mostre o avanço até a meta.
+                Crie campanhas para reformas, missões, ações sociais ou qualquer sonho da igreja. Apresente a causa com
+                clareza, convide as pessoas a participar e mostre o avanço até a meta.
               </p>
               <div className="mt-7 flex items-center gap-3 text-sm font-medium text-[#41694b]">
                 <Megaphone className="size-5" />
-                Mais transparência para a liderança. Mais confiança para a
-                comunidade.
+                Mais transparência para a liderança. Mais confiança para a comunidade.
               </div>
             </div>
 
@@ -414,37 +361,26 @@ export default function LandingPage() {
                 </span>
               </div>
               <p className="mt-3 max-w-md text-sm leading-6 text-[#718075]">
-                Cada passo aproxima a nossa comunidade de um lugar mais seguro,
-                bonito e preparado para receber a próxima geração.
+                Cada passo aproxima a nossa comunidade de um lugar mais seguro, bonito e preparado para receber a
+                próxima geração.
               </p>
               <div className="mt-6 h-2 overflow-hidden rounded-full bg-[#e6ece2]">
                 <div className="h-full w-[68%] rounded-full bg-[#c39a3a]" />
               </div>
               <div className="mt-3 flex items-center justify-between text-sm">
-                <span className="font-semibold text-[#35463a]">
-                  Mais de dois terços do caminho
-                </span>
+                <span className="font-semibold text-[#35463a]">Mais de dois terços do caminho</span>
                 <span className="text-[#89938a]">Meta definida pela igreja</span>
               </div>
               <div className="mt-6 flex flex-wrap gap-2 border-t border-[#edf0ea] pt-5 text-xs text-[#718075]">
-                <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">
-                  Página pública
-                </span>
-                <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">
-                  Notícias da campanha
-                </span>
-                <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">
-                  Acompanhamento da meta
-                </span>
+                <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">Página pública</span>
+                <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">Notícias da campanha</span>
+                <span className="rounded-lg bg-[#f7f8f5] px-3 py-2">Acompanhamento da meta</span>
               </div>
             </div>
           </div>
         </section>
 
-        <section
-          id="como-funciona"
-          className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-28"
-        >
+        <section id="como-funciona" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-28">
           <div className="flex flex-col justify-between gap-8 border-b border-[#dfe5d8] pb-12 md:flex-row md:items-end">
             <div>
               <h2 className="max-w-xl text-3xl font-semibold leading-tight tracking-[-0.04em] text-[#243128] sm:text-4xl">
@@ -452,8 +388,7 @@ export default function LandingPage() {
               </h2>
             </div>
             <p className="max-w-xs text-sm leading-6 text-[#718075]">
-              Uma estrutura clara para você cuidar do essencial e deixar a
-              tecnologia trabalhar a favor da comunidade.
+              Uma estrutura clara para você cuidar do essencial e deixar a tecnologia trabalhar a favor da comunidade.
             </p>
           </div>
           <div className="grid gap-0 md:grid-cols-3">
@@ -462,15 +397,9 @@ export default function LandingPage() {
                 key={number}
                 className={`py-8 md:pr-10 ${index > 0 ? "border-t border-[#dfe5d8] md:border-l md:border-t-0 md:pl-10" : ""}`}
               >
-                <span className="text-sm font-semibold text-[#b08d3a]">
-                  {number}
-                </span>
-                <h3 className="mt-10 text-xl font-semibold tracking-[-0.03em] text-[#35463a]">
-                  {title}
-                </h3>
-                <p className="mt-3 max-w-xs text-sm leading-6 text-[#718075]">
-                  {description}
-                </p>
+                <span className="text-sm font-semibold text-[#b08d3a]">{number}</span>
+                <h3 className="mt-10 text-xl font-semibold tracking-[-0.03em] text-[#35463a]">{title}</h3>
+                <p className="mt-3 max-w-xs text-sm leading-6 text-[#718075]">{description}</p>
               </div>
             ))}
           </div>
@@ -481,22 +410,20 @@ export default function LandingPage() {
             <div className="absolute -right-16 -top-32 size-80 rounded-full border-[40px] border-[#719371]/25" />
             <div className="relative max-w-2xl">
               <h2 className="text-3xl font-semibold leading-tight tracking-[-0.04em] text-white sm:text-5xl">
-                Tecnologia a serviço do cuidado, do jeito que a sua igreja já
-                trabalha.
+                Tecnologia a serviço do cuidado, do jeito que a sua igreja já trabalha.
               </h2>
               <p className="mt-5 max-w-lg leading-7 text-[#dce7d8]">
-                Publique a página da igreja, cadastre os membros e faça a
-                primeira chamada. O restante você liga quando a equipe
-                precisar.
+                Publique a página da igreja, cadastre os membros e faça a primeira chamada. O restante você liga quando
+                a equipe precisar.
               </p>
               <Link
-                href="/signup"
+                href={aberto ? "/signup" : "/login"}
                 className={cn(
                   buttonVariants({ size: "lg" }),
                   "mt-8 h-12 rounded-xl bg-[#f0d991] px-6 text-[#354b38] hover:bg-[#f7e6ae]",
                 )}
               >
-                Conhecer a plataforma <ArrowRight className="size-4" />
+                {aberto ? "Conhecer a plataforma" : "Já uso o sistema: entrar"} <ArrowRight className="size-4" />
               </Link>
             </div>
           </div>
