@@ -78,19 +78,20 @@ export const ROTA_MINHA_CONTA = "/dashboard/conta";
 export const MENUS: readonly MenuDef[] = [
   // O painel: liberável por cargo. Cada número dele ainda depende do módulo de onde vem.
   { key: "dashboard", title: "Painel", href: "/dashboard", roles: ["owner", "admin"] },
-  // Os números das igrejas de baixo. Só existe para a igreja que TEM unidades
-  // ligadas a ela (o servidor tira o item das demais) e não é liberável por
-  // cargo: inclui tesouraria e mensalidade de outras igrejas.
-  { key: "rede", title: "Rede", href: "/dashboard/rede", roles: ["owner", "admin"] },
-  // Chamada nos cultos, justificativas e quem está faltando. Dado pessoal:
-  // só a própria igreja; a RLS repete a regra (can_acompanhar).
-  { key: "acompanhamento", title: "Presença nos cultos", href: "/dashboard/acompanhamento", roles: ["owner", "admin"] },
   // As pessoas da igreja. O login de cada uma é gerenciado na ficha, só por
   // quem administra.
   { key: "membros", title: "Membros", href: "/dashboard/membros", roles: ["owner", "admin"] },
+  // Chamada nos cultos, justificativas e quem está faltando. Dado pessoal:
+  // só a própria igreja; a RLS repete a regra (can_acompanhar).
+  { key: "acompanhamento", title: "Presença nos cultos", href: "/dashboard/acompanhamento", roles: ["owner", "admin"] },
   // Escola Bíblica Dominical. O professor entra só nas classes dele (a RLS
   // repete: can_ebd_classe).
   { key: "ebd", title: "EBD", href: "/dashboard/ebd", roles: ["owner", "admin"] },
+  // Dízimos e ofertas dos cultos (a oferta da EBD fica na EBD). Só a própria
+  // igreja: a de cima não lê.
+  { key: "tesouraria", title: "Tesouraria", href: "/dashboard/tesouraria", roles: ["owner", "admin"] },
+  // Pedidos de visita (nome e telefone de quem pediu).
+  { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin"] },
   // Dado sensível (LGPD): o texto do pedido é só de quem lidera a igreja.
   // Não é liberável por cargo.
   { key: "prayers", title: "Pedidos de oração", href: "/dashboard/prayers", roles: ["owner", "admin"] },
@@ -99,22 +100,22 @@ export const MENUS: readonly MenuDef[] = [
   // Só o que tem inscrição e/ou pagamento.
   { key: "events", title: "Eventos", href: "/dashboard/events", roles: ["owner", "admin"] },
   { key: "campaigns", title: "Campanhas", href: "/dashboard/campaigns", roles: ["owner", "admin"] },
-  // Dízimos e ofertas dos cultos (a oferta da EBD fica na EBD). Só a própria
-  // igreja: a de cima não lê.
-  { key: "tesouraria", title: "Tesouraria", href: "/dashboard/tesouraria", roles: ["owner", "admin"] },
   // Camiseta, pastel, lanche vendidos pela página. O dinheiro vai para o Pix de
   // quem organiza, não para o caixa da igreja.
   { key: "vendas", title: "Vendas", href: "/dashboard/vendas", roles: ["owner", "admin"] },
   { key: "sponsors", title: "Patrocinadores", href: "/dashboard/sponsors", roles: ["owner", "admin"] },
-  // Pedidos de visita (nome e telefone de quem pediu).
-  { key: "relationships", title: "Quem quer visita", href: "/dashboard/relationships", roles: ["owner", "admin"] },
+  // Os números das igrejas de baixo. Só existe para a igreja que TEM unidades
+  // ligadas a ela (o servidor tira o item das demais) e não é liberável por
+  // cargo: inclui tesouraria e mensalidade de outras igrejas.
+  { key: "rede", title: "Rede", href: "/dashboard/rede", roles: ["owner", "admin"] },
   // Quanto a igreja paga por mês e o cadastro de quem paga. O valor é da
   // plataforma; aqui a igreja só cadastra o pagamento.
   { key: "mensalidade", title: "Mensalidade", href: "/dashboard/mensalidade", roles: ["owner", "admin"] },
-  { key: "audit", title: "Auditoria", href: "/dashboard/audit", roles: ["owner", "admin"] },
   // Configurações DA IGREJA. O que é da pessoa (foto, nome, sair) fica em
   // Minha conta, no menu do perfil — fora deste catálogo, porque é de todos.
   { key: "settings", title: "Configurações", href: "/dashboard/settings", roles: ["owner", "admin"] },
+  // Abre como a última aba de Configurações, não na barra lateral.
+  { key: "audit", title: "Auditoria", href: "/dashboard/settings/auditoria", roles: ["owner", "admin"] },
 ];
 
 /** O que cada módulo liberado deixa fazer (texto da tela de Acessos). */

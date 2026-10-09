@@ -60,8 +60,13 @@ export const navItems: NavItem[] = MENUS.map((menu) => ({ ...menu, icon: ICONES[
  */
 export const MENUS_NO_PERFIL = new Set(["mensalidade"]);
 
+/** Menus que abrem como aba de outra seção (a Auditoria fica em Configurações). */
+const MENUS_EM_OUTRA_SECAO = new Set(["audit"]);
+
 export function visibleNavItems(menus: string[]): NavItem[] {
-  return navItems.filter((item) => menus.includes(item.key) && !MENUS_NO_PERFIL.has(item.key));
+  return navItems.filter(
+    (item) => menus.includes(item.key) && !MENUS_NO_PERFIL.has(item.key) && !MENUS_EM_OUTRA_SECAO.has(item.key),
+  );
 }
 
 /** Título da página atual a partir do pathname (breadcrumb/header mobile). */

@@ -122,6 +122,8 @@ export const abasDasConfiguracoes = cache(async (): Promise<RouteTab[]> => {
       tabs.push({ href: `${base}/recebimento`, label: "Cartão" });
     }
   }
+  // Por último: o histórico do que foi feito.
+  if ((await getMenusVisiveis()).includes("audit")) tabs.push({ href: `${base}/auditoria`, label: "Auditoria" });
   return tabs;
 });
 
