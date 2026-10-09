@@ -33,7 +33,7 @@ export function ConvidarResponsavelForm({
   }, [state]);
   const [cargo, setCargo] = useState<"pastor" | "secretario">("pastor");
   const { copied, copy } = useCopyToClipboard(2500);
-  const [substituir, setSubstituir] = useState(true);
+  const [substituir, setSubstituir] = useState(false);
 
   if (state?.success) {
     const g = state.success;
@@ -120,21 +120,43 @@ export function ConvidarResponsavelForm({
         dias e só funciona para esse e-mail.
       </p>
       {troca ? (
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={substituir}
-            onChange={(e) => setSubstituir(e.target.checked)}
-            className="mt-0.5 accent-primary"
-          />
-          <span>
-            Substituir os responsáveis atuais quando ele assumir
-            <span className="block text-xs text-muted-foreground">
-              Quem responde hoje perde o acesso (o cadastro de membro continua) e é avisado por e-mail. Desmarcado, os
-              dois ficam como Responsáveis.
-            </span>
-          </span>
-        </label>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-sm font-medium">E quem responde hoje?</legend>
+          {(
+            [
+              [false, "Continua", "Ele entra junto: a igreja passa a ter mais um Responsável."],
+              [
+                true,
+                "Sai quando ele assumir",
+                "Quem responde hoje perde o acesso e é avisado por e-mail. O cadastro de membro dele continua.",
+              ],
+            ] as const
+          ).map(([valor, rotulo, explica]) => (
+            <label
+              key={rotulo}
+              className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm ${
+                substituir === valor ? "border-primary bg-primary/5" : ""
+              }`}
+            >
+              <input
+                type="radio"
+                checked={substituir === valor}
+                onChange={() => setSubstituir(valor)}
+                className="mt-0.5 accent-primary"
+              />
+              <span>
+                <span className="font-medium">{rotulo}</span>
+                <span className="block text-xs text-muted-foreground">{explica}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
+      {troca && !substituir && cargo === "pastor" ? (
+        <p className="text-xs text-muted-foreground">
+          A igreja só tem um Pastor: se já houver um, ele entra como Responsável sem o cargo. Para somar alguém à
+          secretaria, escolha Secretário(a) — pode haver vários.
+        </p>
       ) : null}
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? "Gerando..." : "Gerar convite"}

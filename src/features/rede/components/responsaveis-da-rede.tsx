@@ -105,10 +105,10 @@ export function ResponsaveisDaRede({ lista, nomes }: { lista: ResponsavelDaRede[
             ))}
           </ul>
           <details className="mt-3">
-            <summary className="cursor-pointer text-sm font-medium text-primary">Trocar o responsável</summary>
+            <summary className="cursor-pointer text-sm font-medium text-primary">Adicionar ou trocar responsável</summary>
             <div className="mt-3">
               <p className="mb-2 text-xs text-muted-foreground">
-                O novo responsável recebe um link. A troca só acontece quando ele assumir; até lá, nada muda.
+                A pessoa recebe um link e só vira Responsável quando assumir. Até lá, nada muda na igreja.
               </p>
               <ConvidarResponsavelForm churchId={churchId} igreja={g.igreja} troca />
             </div>

@@ -84,8 +84,8 @@ export default async function RedePage() {
             <CardHeader>
               <CardTitle>Responsáveis das igrejas abaixo</CardTitle>
               <CardDescription>
-                Quando um pastor muda de igreja, troque aqui quem responde por ela. Tudo fica registrado na auditoria
-                das duas igrejas.
+                Quem responde por cada igreja abaixo. Aqui você adiciona mais um Responsável, troca o pastor quando ele
+                muda de igreja ou tira um acesso. Tudo fica registrado na auditoria das duas igrejas.
               </CardDescription>
             </CardHeader>
             <CardContent>
