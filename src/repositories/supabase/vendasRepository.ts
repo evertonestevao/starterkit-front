@@ -10,7 +10,7 @@ import type {
 import type { PedidoVenda, StatusPedido, StatusVenda, Venda, VendaPublica } from "@/types/vendas";
 
 const COLS =
-  "id, titulo, descricao, preco_cents, pix_chave, pix_titular, whatsapp_comprovante, pix_confirmado_em, encerra_em, estoque, max_por_pedido, status, created_at";
+  "id, titulo, descricao, preco_cents, pix_chave, pix_titular, whatsapp_comprovante, pix_confirmado_em, encerra_em, estoque, max_por_pedido, status, created_at, tem_opcoes, venda_opcoes(id, nome, preco_cents, ordem, ativo)";
 
 interface VendaRow {
   id: string;
@@ -26,6 +26,8 @@ interface VendaRow {
   max_por_pedido: number | null;
   status: StatusVenda;
   created_at: string;
+  tem_opcoes: boolean;
+  venda_opcoes: Array<{ id: string; nome: string; preco_cents: number | null; ordem: number; ativo: boolean }> | null;
 }
 
 const toVenda = (r: VendaRow): Venda => ({
@@ -42,6 +44,12 @@ const toVenda = (r: VendaRow): Venda => ({
   maxPorPedido: r.max_por_pedido,
   status: r.status,
   createdAt: r.created_at,
+  temOpcoes: r.tem_opcoes,
+  // Só as ativas, na ordem da tela; as desativadas continuam nos pedidos antigos.
+  opcoes: (r.venda_opcoes ?? [])
+    .filter((o) => o.ativo)
+    .sort((a, b) => a.ordem - b.ordem)
+    .map((o) => ({ id: o.id, nome: o.nome, precoCents: o.preco_cents })),
 });
 
 interface PedidoRow {
@@ -50,11 +58,11 @@ interface PedidoRow {
   nome: string;
   telefone: string;
   quantidade: number;
-  preco_unitario_cents: number;
   total_cents: number;
   observacao: string | null;
   status: StatusPedido;
   created_at: string;
+  venda_pedido_itens: Array<{ nome: string; quantidade: number; preco_unitario_cents: number; total_cents: number }> | null;
 }
 
 const toPedido = (r: PedidoRow): PedidoVenda => ({
@@ -63,11 +71,16 @@ const toPedido = (r: PedidoRow): PedidoVenda => ({
   nome: r.nome,
   telefone: r.telefone,
   quantidade: r.quantidade,
-  precoUnitarioCents: r.preco_unitario_cents,
   totalCents: r.total_cents,
   observacao: r.observacao,
   status: r.status,
   createdAt: r.created_at,
+  itens: (r.venda_pedido_itens ?? []).map((i) => ({
+    nome: i.nome,
+    quantidade: i.quantidade,
+    precoUnitarioCents: i.preco_unitario_cents,
+    totalCents: i.total_cents,
+  })),
 });
 
 /** Um teto alto para não ler sem fim; uma venda de igreja fica muito abaixo. */
@@ -131,6 +144,10 @@ export function createSupabaseVendasRepository(client: SupabaseClient, admin?: S
           encerra_em: v.encerraEm ?? "",
           estoque: v.estoque === null ? "" : String(v.estoque),
           max_por_pedido: v.maxPorPedido === null ? "" : String(v.maxPorPedido),
+          tem_opcoes: v.temOpcoes,
+          opcoes: v.temOpcoes
+            ? v.opcoes.map((o) => ({ id: o.id ?? "", nome: o.nome, preco_cents: o.precoCents === null ? "" : String(o.precoCents) }))
+            : [],
         },
       });
       if (error) {
@@ -162,7 +179,9 @@ export function createSupabaseVendasRepository(client: SupabaseClient, admin?: S
     async pedidos(vendaIds) {
       const { data, error } = await client
         .from("venda_pedidos")
-        .select("id, venda_id, nome, telefone, quantidade, preco_unitario_cents, total_cents, observacao, status, created_at")
+        .select(
+          "id, venda_id, nome, telefone, quantidade, total_cents, observacao, status, created_at, venda_pedido_itens(nome, quantidade, preco_unitario_cents, total_cents)",
+        )
         .in("venda_id", vendaIds)
         .order("created_at", { ascending: false })
         .limit(TETO_PEDIDOS);
@@ -214,6 +233,8 @@ export function createSupabaseVendasPublicasRepository(
           encerra_em: string | null;
           max_por_pedido: number | null;
           disponivel: number | null;
+          tem_opcoes: boolean;
+          opcoes: Array<{ id: string; nome: string; preco_cents: number }> | null;
         }>
       ).map(
         (r): VendaPublica => ({
@@ -224,17 +245,20 @@ export function createSupabaseVendasPublicasRepository(
           encerraEm: r.encerra_em,
           maxPorPedido: r.max_por_pedido,
           disponivel: r.disponivel,
+          temOpcoes: r.tem_opcoes,
+          opcoes: (r.opcoes ?? []).map((o) => ({ id: o.id, nome: o.nome, precoCents: o.preco_cents })),
         }),
       );
     },
 
-    async criarPedido({ vendaId, nome, telefone, quantidade, observacao }) {
+    async criarPedido({ vendaId, nome, telefone, quantidade, observacao, itens }) {
       const { data, error } = await admin.rpc("criar_pedido_venda", {
         p_venda_id: vendaId,
         p_nome: nome,
         p_telefone: telefone,
         p_quantidade: quantidade,
         p_observacao: observacao,
+        p_itens: itens.map((i) => ({ opcao_id: i.opcaoId, quantidade: i.quantidade })),
       });
       if (error) {
         // A função escreve as recusas para quem compra ler ("Esgotado", "Só restam 3").

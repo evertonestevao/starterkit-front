@@ -30,7 +30,7 @@ export interface PedidoVendaState {
     whatsappComprovante: string | null;
   };
   /** O que foi pedido, para a mensagem pronta do comprovante. */
-  pedido?: { nome: string; quantidade: number; observacao: string | null };
+  pedido?: { nome: string; quantidade: number; observacao: string | null; itens: string | null };
 }
 
 export async function fazerPedidoVendaAction(
@@ -41,6 +41,13 @@ export async function fazerPedidoVendaAction(
     const vendaId = texto(fd, "vendaId");
     if ((await protegerEnvioPublico("venda", vendaId, fd)).robo) return { error: RECUSA };
     const quantidade = Number(texto(fd, "quantidade"));
+    // Com opções, a tela manda [{opcaoId, quantidade}] num campo escondido.
+    let itens: unknown = [];
+    try {
+      itens = JSON.parse(texto(fd, "itens") || "[]");
+    } catch {
+      return { error: RECUSA };
+    }
     const pedido = {
       nome: texto(fd, "nome").trim(),
       quantidade: Number.isInteger(quantidade) ? quantidade : 0,
@@ -49,9 +56,11 @@ export async function fazerPedidoVendaAction(
     const resultado = await (await getVendasPublicasService()).pedir({
       vendaId,
       telefone: texto(fd, "telefone"),
+      itens,
       ...pedido,
     });
-    return { success: resultado, pedido };
+    // Para a mensagem do comprovante: "2 Carne, 1 Queijo" (nome vem da própria tela).
+    return { success: resultado, pedido: { ...pedido, itens: texto(fd, "itensTexto").slice(0, 500) || null } };
   } catch (err) {
     return toActionError(err) as PedidoVendaState;
   }

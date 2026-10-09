@@ -9,6 +9,7 @@ import { TelefoneInput } from "@/components/telefone-input";
 import { useActionToast } from "@/hooks/useActionToast";
 import { salvarVendaAction } from "@/server/actions/vendas";
 import { formatCents } from "@/services/sponsorPricing";
+import { OpcoesEditor } from "./opcoes-editor";
 import type { Venda } from "@/types/vendas";
 
 const textareaClasses =
@@ -52,7 +53,7 @@ export function VendaForm({ venda, hoje }: { venda?: Venda; hoje: string }) {
           className={textareaClasses}
         />
         <p className="text-xs text-muted-foreground">
-          Diga o que a pessoa precisa escrever na observação do pedido (tamanho, sabor...).
+          Se precisar, diga o que escrever na observação do pedido (ex.: nome para a camiseta).
         </p>
       </div>
 
@@ -72,6 +73,8 @@ export function VendaForm({ venda, hoje }: { venda?: Venda; hoje: string }) {
           placeholder="R$ 0,00"
         />
       </div>
+
+      <OpcoesEditor temOpcoes={venda?.temOpcoes ?? false} opcoes={venda?.opcoes ?? []} />
 
       <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
         <legend className="px-1 text-sm font-medium">Quem recebe o pagamento</legend>

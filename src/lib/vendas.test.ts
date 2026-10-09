@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { maximoParaPedir, mensagemDoComprovante, resumirPedidos, situacaoDaVenda, unidadesReservadas } from "./vendas";
+import {
+  descreverItens,
+  filtrarPedidos,
+  maximoParaPedir,
+  mensagemDoComprovante,
+  pedidosParaCsv,
+  resumirPedidos,
+  situacaoDaVenda,
+  totaisPorItem,
+  unidadesReservadas,
+} from "./vendas";
 
 const base = { status: "ativa" as const, pixConfirmadoEm: "2026-10-01T10:00:00Z", encerraEm: null, estoque: null };
 
@@ -62,5 +72,67 @@ describe("mensagemDoComprovante", () => {
   it("sem observação, não deixa a linha vazia", () => {
     const msg = mensagemDoComprovante({ titulo: "Pastel", nome: "Bia", quantidade: 1, totalFormatado: "R$ 8,00", observacao: null });
     expect(msg).not.toContain("Observação");
+  });
+});
+
+describe("opções", () => {
+  const pedido = (status: "pendente" | "pago" | "cancelado", itens: Array<[string, number, number]>, extra = {}) => ({
+    id: Math.random().toString(),
+    vendaId: "v",
+    nome: "Ana; Souza",
+    telefone: "14999998888",
+    quantidade: itens.reduce((s, i) => s + i[1], 0),
+    totalCents: itens.reduce((s, i) => s + i[1] * i[2], 0),
+    observacao: "=sem cebola",
+    status,
+    createdAt: "2026-10-08T22:30:00Z",
+    itens: itens.map(([nome, quantidade, preco]) => ({ nome, quantidade, precoUnitarioCents: preco, totalCents: quantidade * preco })),
+    ...extra,
+  });
+  const pedidos = [
+    pedido("pago", [["Carne", 2, 800], ["Queijo", 1, 800]]),
+    pedido("pendente", [["Queijo", 3, 800]]),
+    pedido("cancelado", [["Carne", 10, 800]]),
+    pedido("pago", [["Palmito", 1, 1000]]),
+  ];
+
+  it("descreve os itens do pedido", () => {
+    expect(descreverItens(pedidos[0].itens)).toBe("2 Carne, 1 Queijo");
+  });
+
+  it("total por opção na ordem da venda, sem cancelados e com as pagas à parte", () => {
+    expect(totaisPorItem(pedidos, ["Queijo", "Carne"])).toEqual([
+      { nome: "Queijo", unidades: 4, pagas: 1, totalCents: 3200 },
+      { nome: "Carne", unidades: 2, pagas: 2, totalCents: 1600 },
+      // Opção que saiu da venda vai para o fim.
+      { nome: "Palmito", unidades: 1, pagas: 1, totalCents: 1000 },
+    ]);
+  });
+
+  it("planilha: uma coluna por opção, total no fim e texto de terceiros neutralizado", () => {
+    const csv = pedidosParaCsv(
+      { titulo: "Pastel", temOpcoes: true, opcoes: [{ id: "1", nome: "Carne", precoCents: null }, { id: "2", nome: "Queijo", precoCents: null }, { id: "3", nome: "Frango", precoCents: null }] },
+      pedidos,
+    );
+    const linhas = csv.replace("﻿", "").split("\r\n");
+    expect(linhas[0]).toBe("Data;Nome;WhatsApp;Situação;Carne;Queijo;Frango;Palmito;Total;Observação");
+    expect(linhas[1]).toContain(";Pago;2;1;0;0;24,00;");
+    // Nome com ponto e vírgula vai entre aspas; observação que parece fórmula não vira fórmula.
+    expect(linhas[1]).toContain('"Ana; Souza"');
+    expect(linhas[1]).toContain("'=sem cebola");
+    expect(csv).toContain("Queijo;4;1;32,00");
+  });
+});
+
+describe("filtrarPedidos", () => {
+  const base = { vendaId: "v", quantidade: 1, totalCents: 800, observacao: null, createdAt: "2026-10-08T22:30:00Z", itens: [] };
+  const lista = [
+    { ...base, id: "1", nome: "José Antônio", telefone: "(14) 99999-8888", status: "pago" as const },
+    { ...base, id: "2", nome: "Maria", telefone: "(14) 98888-7777", status: "pendente" as const },
+  ];
+  it("por situação, por nome sem acento e pelo final do WhatsApp", () => {
+    expect(filtrarPedidos(lista, { status: "pendente", busca: "" }).map((p) => p.id)).toEqual(["2"]);
+    expect(filtrarPedidos(lista, { status: "todos", busca: "jose antonio" }).map((p) => p.id)).toEqual(["1"]);
+    expect(filtrarPedidos(lista, { status: "todos", busca: "7777" }).map((p) => p.id)).toEqual(["2"]);
   });
 });

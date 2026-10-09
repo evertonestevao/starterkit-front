@@ -22,6 +22,31 @@ async function ator() {
 
 const texto = (fd: FormData, campo: string) => String(fd.get(campo) ?? "").trim();
 
+/**
+ * As opções chegam como JSON num campo escondido (a tela monta a lista):
+ * [{id, nome, preco}] com o preço em texto ("R$ 8,00" ou vazio = o da venda).
+ */
+function lerOpcoes(json: string): Array<{ id: string | null; nome: string; precoCents: number | null }> {
+  let lista: unknown;
+  try {
+    lista = JSON.parse(json || "[]");
+  } catch {
+    throw new AppError("validation_error", "Lista de opções inválida.");
+  }
+  if (!Array.isArray(lista)) throw new AppError("validation_error", "Lista de opções inválida.");
+  return lista.map((o: { id?: unknown; nome?: unknown; preco?: unknown }) => {
+    const preco = typeof o?.preco === "string" && o.preco.trim() ? parseBrlToCents(o.preco) : null;
+    if (typeof o?.preco === "string" && o.preco.trim() && preco === null) {
+      throw new AppError("validation_error", "Valor de opção inválido.");
+    }
+    return {
+      id: typeof o?.id === "string" && o.id ? o.id : null,
+      nome: typeof o?.nome === "string" ? o.nome : "",
+      precoCents: preco === 0 ? null : preco,
+    };
+  });
+}
+
 function inteiroOuNulo(valor: string, mensagem: string): number | null {
   if (valor === "") return null;
   if (!/^\d+$/.test(valor)) throw new AppError("validation_error", mensagem);
@@ -49,6 +74,8 @@ export async function salvarVendaAction(_prev: ActionState | undefined, fd: Form
       encerraEm: texto(fd, "encerraEm") || null,
       estoque: inteiroOuNulo(texto(fd, "estoque"), "Estoque inválido."),
       maxPorPedido: inteiroOuNulo(texto(fd, "maxPorPedido"), "Máximo por pedido inválido."),
+      temOpcoes: texto(fd, "temOpcoes") === "sim",
+      opcoes: texto(fd, "temOpcoes") === "sim" ? lerOpcoes(texto(fd, "opcoes")) : [],
     });
     revalidatePath(BASE, "layout");
     revalidatePath("/igreja/[public_code]", "layout");

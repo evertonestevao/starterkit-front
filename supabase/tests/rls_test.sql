@@ -9236,6 +9236,122 @@ begin
 end $$;
 reset role;
 
+-- Vendas com opções (migration 20261012120000): o banco confere a opção e o
+-- preço de cada item; outra igreja não lê opções nem itens.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare v_id uuid; n int;
+begin
+  select id into v_id from public.salvar_venda('acacacac-0000-4000-8000-0000000000d2', null, jsonb_build_object(
+    'titulo', 'Pastel', 'preco_cents', 800, 'pix_chave', 'mocidade@igreja.test', 'pix_titular', 'Mocidade',
+    'tem_opcoes', true, 'opcoes', jsonb_build_array(
+      jsonb_build_object('nome', 'Carne'),
+      jsonb_build_object('nome', 'Especial', 'preco_cents', '1200'))));
+  perform set_config('rls.venda_opcoes', v_id::text, true);
+  select count(*) into n from public.venda_opcoes where venda_id = v_id and ativo;
+  if n <> 2 then raise exception 'FALHA vendas opcoes: opcoes nao foram gravadas (%)', n; end if;
+  begin
+    perform public.salvar_venda('acacacac-0000-4000-8000-0000000000d2', null, jsonb_build_object(
+      'titulo', 'Sem opcoes', 'preco_cents', 800, 'pix_chave', 'x@igreja.test', 'pix_titular', 'Fulano',
+      'tem_opcoes', true, 'opcoes', '[]'::jsonb));
+    raise exception 'FALHA vendas opcoes: aceitou venda com opcoes e lista vazia';
+  exception when sqlstate '22023' then null;
+  end;
+  begin
+    insert into public.venda_opcoes (venda_id, nome) values (v_id, 'Direto');
+    raise exception 'FALHA vendas opcoes: insert direto em venda_opcoes';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- Confirma a chave (como o link faria) e faz pedidos pelo servidor.
+update public.vendas set pix_confirmado_em = now() where id = current_setting('rls.venda_opcoes')::uuid;
+do $$
+declare
+  v_venda uuid := current_setting('rls.venda_opcoes')::uuid;
+  v_carne uuid; v_especial uuid; v_outra uuid; v_total int; v_pedido uuid; n int;
+begin
+  select id into v_carne from public.venda_opcoes where venda_id = v_venda and nome = 'Carne';
+  select id into v_especial from public.venda_opcoes where venda_id = v_venda and nome = 'Especial';
+  -- Opção de OUTRA venda não entra.
+  select id into v_outra from public.venda_opcoes where venda_id <> v_venda limit 1;
+  if v_outra is null then
+    insert into public.venda_opcoes (venda_id, nome)
+    values (current_setting('rls.venda')::uuid, 'De outra venda') returning id into v_outra;
+  end if;
+
+  select pedido_id, total_cents into v_pedido, v_total from public.criar_pedido_venda(
+    v_venda, 'Ana', '14999998888', 0, null,
+    jsonb_build_array(jsonb_build_object('opcao_id', v_carne, 'quantidade', 2),
+                      jsonb_build_object('opcao_id', v_especial, 'quantidade', 1)));
+  if v_total <> 2800 then raise exception 'FALHA vendas opcoes: total errado (%), esperado 2800', v_total; end if;
+  select count(*) into n from public.venda_pedido_itens where pedido_id = v_pedido;
+  if n <> 2 then raise exception 'FALHA vendas opcoes: pedido sem os dois itens (%)', n; end if;
+  select quantidade into n from public.venda_pedidos where id = v_pedido;
+  if n <> 3 then raise exception 'FALHA vendas opcoes: quantidade do pedido nao somou os itens (%)', n; end if;
+
+  begin
+    perform public.criar_pedido_venda(v_venda, 'Bia', '14999997777', 0, null,
+      jsonb_build_array(jsonb_build_object('opcao_id', v_outra, 'quantidade', 1)));
+    raise exception 'FALHA vendas opcoes: aceitou opcao de outra venda';
+  exception when sqlstate 'P0001' then null;
+  end;
+  begin
+    perform public.criar_pedido_venda(v_venda, 'Bia', '14999997777', 5, null, '[]'::jsonb);
+    raise exception 'FALHA vendas opcoes: venda com opcoes aceitou pedido sem itens';
+  exception when sqlstate 'P0001' then null;
+  end;
+
+  -- Opção tirada da venda não aceita mais pedido; o pedido antigo continua com o nome dela.
+  update public.venda_opcoes set ativo = false where id = v_especial;
+  begin
+    perform public.criar_pedido_venda(v_venda, 'Bia', '14999997777', 0, null,
+      jsonb_build_array(jsonb_build_object('opcao_id', v_especial, 'quantidade', 1)));
+    raise exception 'FALHA vendas opcoes: aceitou opcao desativada';
+  exception when sqlstate 'P0001' then null;
+  end;
+  select count(*) into n from public.venda_pedido_itens where pedido_id = v_pedido and nome = 'Especial';
+  if n <> 1 then raise exception 'FALHA vendas opcoes: pedido antigo perdeu a opcao tirada'; end if;
+end $$;
+
+-- Ninguém de fora lê opções nem itens; anon não lê nada direto.
+set local role authenticated;
+do $$
+declare v_quem text; n int;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    select count(*) into n from public.venda_opcoes;
+    if n <> 0 then raise exception 'FALHA vendas opcoes: % leu % opcao(oes)', v_quem, n; end if;
+    select count(*) into n from public.venda_pedido_itens;
+    if n <> 0 then raise exception 'FALHA vendas opcoes: % leu % item(ns) de pedido', v_quem, n; end if;
+  end loop;
+end $$;
+reset role;
+
+set local role anon;
+do $$
+declare n int;
+begin
+  begin
+    select count(*) into n from public.venda_pedido_itens;
+    raise exception 'FALHA vendas opcoes: anon leu itens de pedido';
+  exception when sqlstate '42501' then null;
+  end;
+  -- A lista pública leva as opções com o preço que vale (Especial saiu).
+  select jsonb_array_length(opcoes) into n from public.vendas_publicas('acacacac-0000-4000-8000-0000000000d2')
+  where titulo = 'Pastel';
+  if n is distinct from 1 then raise exception 'FALHA vendas opcoes: lista publica com % opcao(oes), esperado 1', n; end if;
+end $$;
+reset role;
+
 -- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS
 -- ligada. Tabela nova esquecida quebra o teste aqui, antes de ir para o ar.

@@ -118,6 +118,29 @@ function vendaSchema(hoje: string) {
       .nullable(),
     estoque: inteiroOpcional(1, 100_000, "Estoque inválido"),
     maxPorPedido: inteiroOpcional(1, 1000, "Máximo por pedido inválido"),
+    temOpcoes: z.boolean(),
+    opcoes: z
+      .array(
+        z.object({
+          id: z.uuid("Opção inválida").nullable(),
+          nome: z.string().trim().min(1, "Dê um nome a cada opção").max(80, "Nome de opção longo demais"),
+          precoCents: z
+            .number()
+            .int("Valor inválido")
+            .positive("Valor da opção inválido")
+            .max(PRECO_MAXIMO, "Valor alto demais. Confira os centavos.")
+            .nullable(),
+        }),
+      )
+      .max(40, "No máximo 40 opções"),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.temOpcoes) return;
+    if (v.opcoes.length === 0) ctx.addIssue({ code: "custom", path: ["opcoes"], message: "Cadastre pelo menos uma opção" });
+    const nomes = v.opcoes.map((o) => o.nome.toLowerCase());
+    if (new Set(nomes).size !== nomes.length) {
+      ctx.addIssue({ code: "custom", path: ["opcoes"], message: "Há duas opções com o mesmo nome" });
+    }
   });
 }
 
@@ -125,14 +148,18 @@ const pedidoPublicoSchema = z.object({
   vendaId: z.uuid("Venda não encontrada"),
   nome: z.string().trim().min(2, "Informe seu nome").max(120, "Nome longo demais"),
   telefone: z.string().trim().min(8, "Informe seu WhatsApp").max(20, "WhatsApp inválido"),
-  quantidade: z.number("Informe a quantidade").int("Quantidade inválida").min(1, "Informe a quantidade").max(1000),
+  // Sem opções: a quantidade. Com opções: a quantidade de cada uma (o banco confere qual vale).
+  quantidade: z.number().int("Quantidade inválida").min(0).max(1000),
+  itens: z
+    .array(z.object({ opcaoId: z.uuid("Opção inválida"), quantidade: z.number().int().min(0).max(1000) }))
+    .max(40),
   observacao: z
     .string()
     .trim()
     .max(500, "Observação longa demais")
     .nullable()
     .transform((v) => v || null),
-});
+}).refine((p) => p.quantidade > 0 || p.itens.some((i) => i.quantidade > 0), "Escolha pelo menos uma unidade");
 
 export function createVendasService(deps: {
   repo: VendasRepository;
@@ -301,6 +328,7 @@ export interface VendasPublicasRepository {
     telefone: string;
     quantidade: number;
     observacao: string | null;
+    itens: Array<{ opcaoId: string; quantidade: number }>;
   }): Promise<{
     pedidoId: string;
     totalCents: number;

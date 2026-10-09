@@ -7,7 +7,7 @@ import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { linkWhatsapp } from "@/lib/acompanhamento";
-import { STATUS_PEDIDO } from "@/lib/vendas";
+import { STATUS_PEDIDO, descreverItens } from "@/lib/vendas";
 import { marcarPedidoVendaAction } from "@/server/actions/vendas";
 import { formatCents } from "@/services/sponsorPricing";
 import type { PedidoVenda, StatusPedido } from "@/types/vendas";
@@ -30,7 +30,15 @@ const dataHora = new Intl.DateTimeFormat("pt-BR", {
  * Pedidos de uma venda. Quem cuida confere o comprovante (no WhatsApp ou no
  * extrato) e marca como pago. Uma linha por pedido, que quebra em cartão no celular.
  */
-export function PedidosLista({ pedidos, titulo }: { pedidos: PedidoVenda[]; titulo: string }) {
+export function PedidosLista({
+  pedidos,
+  titulo,
+  temOpcoes,
+}: {
+  pedidos: PedidoVenda[];
+  titulo: string;
+  temOpcoes: boolean;
+}) {
   const [pending, start] = useTransition();
 
   function marcar(p: PedidoVenda, status: StatusPedido) {
@@ -54,9 +62,13 @@ export function PedidosLista({ pedidos, titulo }: { pedidos: PedidoVenda[]; titu
   return (
     <ul className="flex flex-col divide-y rounded-lg border">
       {pedidos.map((p) => {
+        // "2 Carne, 1 Queijo" com opções; "3 × R$ 55,00" sem.
+        const oQue = temOpcoes
+          ? descreverItens(p.itens)
+          : `${p.quantidade} × ${formatCents(p.itens[0]?.precoUnitarioCents ?? p.totalCents / Math.max(p.quantidade, 1))}`;
         const whats = linkWhatsapp(
           p.telefone,
-          `Olá, ${p.nome.split(" ")[0]}! Sobre o seu pedido de ${titulo} (${p.quantidade} × ${formatCents(p.precoUnitarioCents)} = ${formatCents(p.totalCents)}):`,
+          `Olá, ${p.nome.split(" ")[0]}! Sobre o seu pedido de ${titulo} (${oQue} = ${formatCents(p.totalCents)}):`,
         );
         return (
           <li
@@ -70,9 +82,9 @@ export function PedidosLista({ pedidos, titulo }: { pedidos: PedidoVenda[]; titu
                 {p.nome}
                 <Badge variant={VARIANTE[p.status]}>{STATUS_PEDIDO[p.status]}</Badge>
               </p>
+              {temOpcoes ? <p className="text-sm">{oQue}</p> : null}
               <p className="text-xs text-muted-foreground">
-                {p.quantidade} × {formatCents(p.precoUnitarioCents)} · {dataHora.format(new Date(p.createdAt))} ·{" "}
-                {p.telefone}
+                {temOpcoes ? `${p.quantidade} un.` : oQue} · {dataHora.format(new Date(p.createdAt))} · {p.telefone}
               </p>
               {p.observacao ? (
                 <p className="mt-1 rounded-md bg-muted px-2 py-1 text-xs whitespace-pre-line">{p.observacao}</p>

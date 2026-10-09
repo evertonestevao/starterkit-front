@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock, ExternalLink, Package, Wallet } from "lucide-react";
+import { ArrowLeft, Clock, Download, ExternalLink, Package, Search, Wallet } from "lucide-react";
 import { MetricCard } from "@/components/metric-card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PedidosLista } from "@/features/vendas/components/pedidos-lista";
 import { VendaAcoes } from "@/features/vendas/components/venda-acoes";
@@ -13,14 +15,32 @@ import { hojeISO } from "@/lib/acompanhamento";
 import { caminhoDaIgreja } from "@/lib/churchPaths";
 import { isAppError } from "@/lib/errors";
 import { mascaraTelefone } from "@/lib/telefone";
-import { SITUACAO_VENDA, resumirPedidos, situacaoDaVenda, unidadesReservadas } from "@/lib/vendas";
+import { cn } from "@/lib/utils";
+import {
+  SITUACAO_VENDA,
+  STATUS_PEDIDO,
+  filtrarPedidos,
+  resumirPedidos,
+  situacaoDaVenda,
+  totaisPorItem,
+  unidadesReservadas,
+  type FiltroPedido,
+} from "@/lib/vendas";
 import { getChurchProfileService } from "@/server/churchProfile";
 import { getVendasActorAutorizado, getVendasService } from "@/server/vendas";
 import { formatCents } from "@/services/sponsorPricing";
 
 export const metadata: Metadata = { title: "Venda" };
 
-export default async function VendaPage({ params }: { params: Promise<{ id: string }> }) {
+const FILTROS: FiltroPedido[] = ["todos", "pendente", "pago", "cancelado"];
+
+export default async function VendaPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ status?: string; q?: string }>;
+}) {
   const actor = await getVendasActorAutorizado();
   if (!actor) notFound();
   const { id } = await params;
@@ -35,6 +55,15 @@ export default async function VendaPage({ params }: { params: Promise<{ id: stri
   const hoje = hojeISO();
   const situacao = situacaoDaVenda(venda, unidadesReservadas(pedidos), hoje);
   const resumo = resumirPedidos(pedidos);
+  const totais = totaisPorItem(
+    pedidos,
+    venda.opcoes.map((o) => o.nome),
+  );
+  const sp = await searchParams;
+  const status: FiltroPedido = FILTROS.includes(sp.status as FiltroPedido) ? (sp.status as FiltroPedido) : "todos";
+  const busca = (sp.q ?? "").slice(0, 80);
+  const filtrados = filtrarPedidos(pedidos, { status, busca });
+  const base = `/dashboard/vendas/${venda.id}`;
   // Link para a página pública da venda (a igreja ativa).
   const igreja = (await (await getChurchProfileService()).list(actor.companyId).catch(() => []))[0];
   const linkPublico = igreja ? `${caminhoDaIgreja(igreja.chavePublica)}/vendas/${venda.id}` : null;
@@ -92,15 +121,89 @@ export default async function VendaPage({ params }: { params: Promise<{ id: stri
         <MetricCard icon={Clock} label="A confirmar" value={formatCents(resumo.pendenteCents)} />
       </div>
 
+      {totais.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{venda.temOpcoes ? "Total de cada opção" : "Total"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* Lista simples (e não tabela): no celular continua legível. */}
+            <ul className="flex flex-col divide-y text-sm">
+              {totais.map((t) => (
+                <li key={t.nome} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 py-2">
+                  <span className="font-medium">{t.nome}</span>
+                  <span className="flex items-center gap-3 tabular-nums">
+                    <span>
+                      <strong>{t.unidades}</strong> un.
+                      <span className="text-muted-foreground"> · {t.pagas} paga{t.pagas === 1 ? "" : "s"}</span>
+                    </span>
+                    <span className="w-24 text-right">{formatCents(t.totalCents)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-muted-foreground">Pedidos cancelados não entram na conta.</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <section className="flex flex-col gap-2">
-        <h3 className="font-medium">Pedidos</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-medium">Pedidos</h3>
+          {pedidos.length > 0 ? (
+            <a href={`${base}/exportar`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-2")}>
+              <Download className="size-4" /> Baixar planilha (CSV)
+            </a>
+          ) : null}
+        </div>
+        {pedidos.length > 0 ? (
+          // Filtro por URL: funciona sem JS e o link filtrado pode ser guardado.
+          <form className="flex flex-col gap-2 sm:flex-row sm:items-center" role="search">
+            <div className="flex flex-wrap gap-1">
+              {FILTROS.map((f) => {
+                const qtd = f === "todos" ? pedidos.length : pedidos.filter((p) => p.status === f).length;
+                const params = new URLSearchParams({ ...(f !== "todos" ? { status: f } : {}), ...(busca ? { q: busca } : {}) });
+                return (
+                  <Link
+                    key={f}
+                    href={`${base}${params.size ? `?${params}` : ""}`}
+                    className={buttonVariants({ variant: status === f ? "default" : "ghost", size: "sm" })}
+                  >
+                    {f === "todos" ? "Todos" : STATUS_PEDIDO[f]} ({qtd})
+                  </Link>
+                );
+              })}
+            </div>
+            {status !== "todos" ? <input type="hidden" name="status" value={status} /> : null}
+            <div className="relative sm:ml-auto sm:w-64">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                name="q"
+                defaultValue={busca}
+                placeholder="Nome ou WhatsApp"
+                aria-label="Buscar pedido"
+                className="h-9 pl-8"
+              />
+            </div>
+            <Button type="submit" variant="outline" size="sm">
+              Buscar
+            </Button>
+          </form>
+        ) : null}
         {pedidos.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
             Nenhum pedido ainda. Quando alguém comprar pela página, o pedido aparece aqui para você conferir o
             comprovante e marcar como pago.
           </p>
         ) : (
-          <PedidosLista pedidos={pedidos} titulo={venda.titulo} />
+          filtrados.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Nenhum pedido com este filtro.
+            </p>
+          ) : (
+            <PedidosLista pedidos={filtrados} titulo={venda.titulo} temOpcoes={venda.temOpcoes} />
+          )
         )}
       </section>
 
@@ -110,7 +213,7 @@ export default async function VendaPage({ params }: { params: Promise<{ id: stri
         </CardHeader>
         <CardContent>
           <VendaForm
-            key={`${venda.id}:${venda.precoCents}:${venda.pixChave}:${venda.whatsappComprovante ?? ""}`}
+            key={`${venda.id}:${venda.precoCents}:${venda.pixChave}:${venda.whatsappComprovante ?? ""}:${venda.temOpcoes}:${venda.opcoes.map((o) => `${o.id}=${o.nome}=${o.precoCents}`).join(",")}`}
             venda={venda}
             hoje={hoje}
           />

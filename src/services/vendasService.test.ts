@@ -35,6 +35,8 @@ const venda: Venda = {
   maxPorPedido: null,
   status: "ativa",
   createdAt: "2026-10-01T10:00:00Z",
+  temOpcoes: false,
+  opcoes: [],
 };
 
 const entrada = {
@@ -47,6 +49,8 @@ const entrada = {
   encerraEm: "2026-10-20",
   estoque: 80,
   maxPorPedido: 10,
+  temOpcoes: false,
+  opcoes: [],
 };
 
 function build(precisaConfirmar = true) {
@@ -115,6 +119,21 @@ describe("salvar", () => {
         whatsapp: "14999998888",
       }),
     );
+  });
+
+  it("com opções: grava a lista; recusa lista vazia e nome repetido", async () => {
+    const { repo, service } = build();
+    const opcoes = [
+      { id: null, nome: "Carne", precoCents: null },
+      { id: null, nome: "Especial", precoCents: 1200 },
+    ];
+    await service.salvar(ADMIN, null, { ...entrada, temOpcoes: true, opcoes });
+    expect(repo.salvar).toHaveBeenCalledWith(IGREJA.id, null, expect.objectContaining({ temOpcoes: true, opcoes }));
+
+    for (const errado of [[], [{ id: null, nome: "Carne", precoCents: null }, { id: null, nome: "carne", precoCents: null }]]) {
+      const err = await erroDe(service.salvar(ADMIN, null, { ...entrada, temOpcoes: true, opcoes: errado }));
+      expect(isAppError(err) && err.code).toBe("validation_error");
+    }
   });
 
   it("sem WhatsApp do comprovante, grava nulo", async () => {
@@ -195,6 +214,7 @@ describe("página pública", () => {
       telefone: "(14) 99999-8888",
       quantidade: 3,
       observacao: "2 G e 1 M",
+      itens: [],
     });
 
     expect(criarPedido).toHaveBeenCalledWith(expect.objectContaining({ nome: "Ana", quantidade: 3, observacao: "2 G e 1 M" }));
@@ -204,11 +224,27 @@ describe("página pública", () => {
     expect(r.pixCopiaECola).toContain("5406150.00");
   });
 
+  it("com opções, o pedido vai só com os itens", async () => {
+    const criarPedido = vi.fn(async () => ({
+      pedidoId: "66666666-6666-4666-8666-666666666666",
+      totalCents: 2400,
+      pixChave: "tesouraria@igreja.org",
+      pixTitular: "Maria Souza",
+      churchName: "Igreja Betel",
+      churchAddress: null,
+      whatsappComprovante: null,
+    }));
+    const service = createVendasPublicasService({ repo: { listar: vi.fn(), criarPedido }, qr: async () => "" });
+    const itens = [{ opcaoId: "77777777-7777-4777-8777-777777777777", quantidade: 2 }];
+    await service.pedir({ vendaId: VENDA_ID, nome: "Ana", telefone: "14999998888", quantidade: 0, observacao: null, itens });
+    expect(criarPedido).toHaveBeenCalledWith(expect.objectContaining({ quantidade: 0, itens }));
+  });
+
   it("recusa quantidade zero e telefone vazio sem chegar ao banco", async () => {
     const criarPedido = vi.fn();
     const service = createVendasPublicasService({ repo: { listar: vi.fn(), criarPedido }, qr: async () => "" });
     for (const errado of [{ quantidade: 0, telefone: "14999998888" }, { quantidade: 1, telefone: "" }]) {
-      const err = await erroDe(service.pedir({ vendaId: VENDA_ID, nome: "Ana", observacao: null, ...errado }));
+      const err = await erroDe(service.pedir({ vendaId: VENDA_ID, nome: "Ana", observacao: null, itens: [], ...errado }));
       expect(isAppError(err) && err.code).toBe("validation_error");
     }
     expect(criarPedido).not.toHaveBeenCalled();
