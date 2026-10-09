@@ -28,6 +28,22 @@ function revalidar() {
   revalidatePath("/dashboard");
 }
 
+/** Atalho do cartão de acesso: só o WhatsApp, para mandar o convite por lá. */
+export async function definirWhatsappDoMembroAction(
+  _prev: ActionState | undefined,
+  fd: FormData,
+): Promise<ActionState> {
+  try {
+    await (
+      await getAcompanhamentoService()
+    ).definirWhatsapp(await ator(), String(fd.get("membroId") ?? ""), fd.get("whatsapp"));
+    revalidatePath("/dashboard/membros", "layout");
+    return { success: "WhatsApp salvo." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
 /** Atalho do cartão de acesso: só o e-mail, para poder convidar. */
 export async function definirEmailDoMembroAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
   try {

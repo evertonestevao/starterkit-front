@@ -24,7 +24,9 @@ import {
   removeMemberAction,
   revokeInviteAction,
 } from "@/server/actions/tenant";
-import { definirEmailDoMembroAction } from "@/server/actions/acompanhamento";
+import { definirEmailDoMembroAction, definirWhatsappDoMembroAction } from "@/server/actions/acompanhamento";
+import { TelefoneInput } from "@/components/telefone-input";
+import { mascaraTelefone } from "@/lib/telefone";
 import { linkWhatsapp } from "@/lib/acompanhamento";
 import { PAPEL_LABEL } from "@/lib/papeis";
 import { permissionService } from "@/services/permissionService";
@@ -236,6 +238,7 @@ export function AcessoMembroCard({
               Convite aguardando <strong>{convite.email}</strong> aceitar, como {PAPEL_LABEL[convite.role]}. Vale até{" "}
               {new Date(convite.expiraEm).toLocaleDateString("pt-BR")}.
             </p>
+            <WhatsappDoMembro membro={membro} />
             <p className="text-xs text-muted-foreground">
               O e-mail não chegou? Peça para olhar a caixa de spam, reenvie, ou mande o link do convite pelo WhatsApp.
             </p>
@@ -369,36 +372,40 @@ function ConvidarForm({
   }, [state, onEnviado]);
 
   return (
-    <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
-      <input type="hidden" name="companyId" value={companyId} />
-      <input type="hidden" name="email" value={email} />
-      <p className="text-muted-foreground">
-        Sem acesso. O convite vale só para <strong className="text-foreground">{email}</strong>: mesmo que o link seja
-        encaminhado, só entra quem usar esse e-mail. Ao aceitar, a conta fica ligada a este membro.
-      </p>
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-muted-foreground">Papel no sistema</span>
-          <select
-            name="role"
-            className={`${selectClasses} sm:w-72`}
-            value={papel}
-            onChange={(e) => setPapel(e.target.value as "member" | "admin")}
-          >
-            <option value="member">Membro — acesso operacional</option>
-            <option value="admin">Administrador — gerencia equipe e configurações</option>
-          </select>
-        </label>
-        {temWhats ? (
-          <Button type="button" disabled={pending || enviandoWhats} onClick={convidarPeloWhatsApp}>
-            <MessageCircle className="size-4" /> {enviandoWhats ? "Criando..." : "Convidar e enviar pelo WhatsApp"}
+    <div className="flex flex-col gap-3">
+      <WhatsappDoMembro membro={membro} />
+      <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
+        <input type="hidden" name="companyId" value={companyId} />
+        <input type="hidden" name="email" value={email} />
+        <p className="text-muted-foreground">
+          Sem acesso. O convite vale só para <strong className="text-foreground">{email}</strong>: mesmo que o link seja
+          encaminhado, só entra quem usar esse e-mail. Ao aceitar, a conta fica ligada a este membro.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">Papel no sistema</span>
+            <select
+              name="role"
+              className={`${selectClasses} sm:w-72`}
+              value={papel}
+              onChange={(e) => setPapel(e.target.value as "member" | "admin")}
+            >
+              <option value="member">Membro — acesso operacional</option>
+              <option value="admin">Administrador — gerencia equipe e configurações</option>
+            </select>
+          </label>
+          {temWhats ? (
+            <Button type="button" disabled={pending || enviandoWhats} onClick={convidarPeloWhatsApp}>
+              <MessageCircle className="size-4" /> {enviandoWhats ? "Criando..." : "Convidar e enviar pelo WhatsApp"}
+            </Button>
+          ) : null}
+          <Button type="submit" variant={temWhats ? "outline" : "default"} disabled={pending || enviandoWhats}>
+            <Mail className="size-4" />{" "}
+            {pending ? "Enviando..." : temWhats ? "Só por e-mail" : "Convidar para o sistema"}
           </Button>
-        ) : null}
-        <Button type="submit" variant={temWhats ? "outline" : "default"} disabled={pending || enviandoWhats}>
-          <Mail className="size-4" /> {pending ? "Enviando..." : temWhats ? "Só por e-mail" : "Convidar para o sistema"}
-        </Button>
-      </div>
-    </Formulario>
+        </div>
+      </Formulario>
+    </div>
   );
 }
 
@@ -425,6 +432,35 @@ function EmailParaConvidar({ membroId }: { membroId: string }) {
         />
         <Button type="submit" disabled={pending}>
           {pending ? "Salvando..." : "Salvar e-mail"}
+        </Button>
+      </div>
+    </Formulario>
+  );
+}
+
+/**
+ * WhatsApp do membro no cartão de acesso: mostra o número (para conferir antes
+ * de mandar o convite) ou, sem número, o campo para salvar ali mesmo.
+ */
+function WhatsappDoMembro({ membro }: { membro: RolMembro }) {
+  const [state, action, pending] = useActionState(definirWhatsappDoMembroAction, undefined);
+  useActionToast(state);
+  if (membro.whatsapp) {
+    return (
+      <p className="flex items-center gap-1.5 text-sm">
+        <MessageCircle className="size-3.5 text-muted-foreground" aria-hidden />
+        WhatsApp: <strong>{mascaraTelefone(membro.whatsapp)}</strong>
+      </p>
+    );
+  }
+  return (
+    <Formulario action={action} estado={state} className="flex flex-col gap-1.5">
+      <input type="hidden" name="membroId" value={membro.id} />
+      <span className="text-xs text-muted-foreground">Sem WhatsApp na ficha. Salve para mandar o convite por lá:</span>
+      <div className="flex flex-wrap gap-2">
+        <TelefoneInput name="whatsapp" required aria-label="WhatsApp do membro" className="max-w-xs" />
+        <Button type="submit" variant="outline" disabled={pending}>
+          {pending ? "Salvando..." : "Salvar WhatsApp"}
         </Button>
       </div>
     </Formulario>

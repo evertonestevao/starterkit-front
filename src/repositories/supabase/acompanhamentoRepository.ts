@@ -600,6 +600,18 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       return (data ?? []).length > 0;
     },
 
+    async definirWhatsapp(churchId, membroId, whatsapp) {
+      const { data, error } = await client
+        .from("rol_membros")
+        .update({ whatsapp })
+        .eq("church_id", churchId)
+        .eq("id", membroId)
+        .is("deleted_at", null)
+        .select("id");
+      if (error) falha("Falha ao salvar o WhatsApp", error);
+      return (data ?? []).length > 0;
+    },
+
     async definirEmail(churchId, membroId, email) {
       const { data, error } = await client
         .from("rol_membros")

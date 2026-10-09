@@ -135,6 +135,8 @@ export interface AcompanhamentoRepository {
   setCargosDoMembro(churchId: string, membroId: string, cargoIds: string[]): Promise<void>;
   /** Só o e-mail (atalho do cartão de acesso). false = membro não encontrado. */
   definirEmail(churchId: string, membroId: string, email: string): Promise<boolean>;
+  /** Só o WhatsApp (atalho do cartão de acesso). false = membro não encontrado. */
+  definirWhatsapp(churchId: string, membroId: string, whatsapp: string): Promise<boolean>;
   getMembro(churchId: string, membroId: string): Promise<RolMembro | null>;
   createMembro(churchId: string, input: NovoMembro): Promise<string>;
   /** Vários de uma vez (importação). Devolve quantos entraram. */
@@ -660,6 +662,19 @@ export function createAcompanhamentoService(deps: {
         .safeParse(email);
       if (!parsed.success) throw toValidationError(parsed.error.issues.map((i) => ({ ...i, path: ["email"] })));
       if (!(await repo.definirEmail(church.id, id, parsed.data.toLowerCase()))) {
+        throw new AppError("not_found", "Membro não encontrado.");
+      }
+    },
+
+    /** Atalho do cartão de acesso: grava o WhatsApp para mandar o convite por lá. */
+    async definirWhatsapp(actor: AcompanhamentoActor, membroId: unknown, whatsapp: unknown): Promise<void> {
+      const church = await igreja(actor);
+      const id = validar(uuid("Membro inválido"), membroId);
+      const digitos = String(whatsapp ?? "").replace(/\D/g, "");
+      if (digitos.length < 10 || digitos.length > 13) {
+        throw new AppError("validation_error", "WhatsApp com DDD, por favor.", undefined, "whatsapp");
+      }
+      if (!(await repo.definirWhatsapp(church.id, id, digitos))) {
         throw new AppError("not_found", "Membro não encontrado.");
       }
     },
