@@ -45,7 +45,7 @@ function PagePreview({ theme, accent, nome }: { theme: ChurchTheme; accent: stri
         </div>
         <p className="text-xs">
           Quer conhecer a igreja?{" "}
-          <span className="font-semibold text-[var(--pg-accent)]">Quero visitar</span>
+          <span className="font-semibold text-[var(--pg-accent)]">Quero uma visita</span>
         </p>
       </div>
     </div>

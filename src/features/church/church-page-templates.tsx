@@ -219,7 +219,7 @@ export function ChurchPageRenderer({
     : null;
   const pares: Atalho[] = [
     { rotulo: "Pedido de oração", icone: Heart, href: "#oracao" },
-    { rotulo: "Quero visitar", icone: UserPlus, href: "#visita" },
+    { rotulo: "Quero uma visita", icone: UserPlus, href: "#visita" },
     // Eventos abre a tela de eventos — e só aparece com evento agendado.
     ...(eventos.length > 0
       ? [{ rotulo: "Eventos", icone: CalendarCheck, href: `${caminhoDaIgreja(church.public_code)}/eventos` }]
