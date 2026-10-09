@@ -1,10 +1,7 @@
 import { notFound } from "next/navigation";
+import { RouteTabs } from "@/components/route-tabs";
+import { abasDaEbd } from "@/server/abasDoMenu";
 import { exigeMenu } from "@/server/menuPermissoes";
-import { RouteTabs, type RouteTab } from "@/components/route-tabs";
-import { getEbdActorAutorizado, getEbdService } from "@/server/ebd";
-import { canGerirEbd } from "@/services/ebdService";
-
-const BASE = "/dashboard/ebd";
 
 /**
  * EBD — Escola Bíblica Dominical. Quem não é da gestão nem professor recebe
@@ -12,32 +9,8 @@ const BASE = "/dashboard/ebd";
  */
 export default async function EbdLayout({ children }: { children: React.ReactNode }) {
   await exigeMenu("ebd");
-  const actor = await getEbdActorAutorizado();
-  if (!actor) notFound();
-
-  // Quantos em alerta, para o número na aba. Falhar aqui não derruba a página.
-  const emAlerta = await (
-    await getEbdService()
-  )
-    .alertas(actor)
-    .then((r) => r.alertas.filter((a) => a.situacao === "pendente").length)
-    .catch((err: unknown) => {
-      console.error("[ebd] falha ao contar os alertas", err);
-      return 0;
-    });
-
-  const tabs: RouteTab[] = [
-    { href: BASE, label: "Resumo" },
-    { href: `${BASE}/alunos`, label: "Alunos" },
-    { href: `${BASE}/alertas`, label: "Em alerta", count: emAlerta },
-    { href: `${BASE}/relatorios`, label: "Relatórios" },
-  ];
-  if (canGerirEbd(actor.role, actor.podeGerirEbd)) {
-    tabs.push({ href: `${BASE}/destaques`, label: "Destaques" });
-    tabs.push({ href: `${BASE}/trimestres`, label: "Trimestres" });
-    tabs.push({ href: `${BASE}/promocao`, label: "Promoção" });
-    tabs.push({ href: `${BASE}/regras`, label: "Regras" });
-  }
+  const tabs = await abasDaEbd();
+  if (!tabs) notFound();
 
   return (
     <div className="flex max-w-4xl flex-col gap-6 print:max-w-none">

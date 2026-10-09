@@ -22,6 +22,7 @@ import { useTenant } from "@/providers/tenant-provider";
 import { Breadcrumbs } from "./breadcrumbs";
 import { CompanySwitcher } from "./company-switcher";
 import { titleForPath, visibleNavItems } from "./nav-items";
+import type { RouteTab } from "@/components/route-tabs";
 import { SectionSubnavProvider, subitemAtivo, useSectionSubnav } from "./section-subnav";
 import { UserMenu, type UserMenuProps } from "./user-menu";
 
@@ -34,6 +35,8 @@ interface AppShellProps extends UserMenuProps {
   pendingInvitesCount?: number;
   /** Pedidos de oração chegados desde a última vez que ESTA pessoa abriu a tela. */
   unseenPrayerRequestsCount?: number;
+  /** Subitens de cada seção (por endereço), montados no servidor: o menu mostra antes do clique. */
+  submenus?: Record<string, RouteTab[]>;
   children: React.ReactNode;
 }
 
@@ -47,6 +50,7 @@ export function AppShell({
   initialCollapsed,
   pendingInvitesCount = 0,
   unseenPrayerRequestsCount = 0,
+  submenus = {},
   children,
   ...user
 }: AppShellProps) {
@@ -64,81 +68,83 @@ export function AppShell({
 
   return (
     <SectionSubnavProvider>
-    <div className="flex min-h-svh w-full">
-      {/* Sidebar desktop: some abaixo de lg; colapsa para rail de ícones. */}
-      <aside
-        data-collapsed={collapsed}
-        className={cn(
-          "sticky top-0 hidden h-svh shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex print:hidden",
-          collapsed ? "w-14" : "w-60",
-        )}
-      >
-        <div className={cn("flex h-14 items-center border-b px-4", collapsed && "px-2 justify-center")}>
-          <Link href="/dashboard" className="truncate font-semibold tracking-tight">
-            {collapsed ? brand.name.slice(0, 1) : brand.name}
-          </Link>
-        </div>
-        <SidebarNav
-          collapsed={collapsed}
-          pathname={pathname}
-          pendingInvitesCount={pendingInvitesCount}
-          unseenPrayerRequestsCount={unseenPrayerRequestsCount}
-        />
-        <div className="mt-auto border-t p-2">
-          <Button
-            variant="ghost"
-            size={collapsed ? "icon" : "sm"}
-            onClick={toggleCollapsed}
-            className={cn("w-full", !collapsed && "justify-start gap-2")}
-            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-          >
-            {collapsed ? <ChevronsRight /> : <ChevronsLeft />}
-            {collapsed ? null : <span>Recolher</span>}
-          </Button>
-        </div>
-      </aside>
-
-      {/* Sidebar mobile: mesmo SidebarNav dentro de um drawer off-canvas. */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent side="left" className="w-72 p-0 lg:hidden">
-          <SheetHeader className="h-14 justify-center border-b px-4">
-            <SheetTitle className="text-left font-semibold">{brand.name}</SheetTitle>
-          </SheetHeader>
+      <div className="flex min-h-svh w-full">
+        {/* Sidebar desktop: some abaixo de lg; colapsa para rail de ícones. */}
+        <aside
+          data-collapsed={collapsed}
+          className={cn(
+            "sticky top-0 hidden h-svh shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 lg:flex print:hidden",
+            collapsed ? "w-14" : "w-60",
+          )}
+        >
+          <div className={cn("flex h-14 items-center border-b px-4", collapsed && "px-2 justify-center")}>
+            <Link href="/dashboard" className="truncate font-semibold tracking-tight">
+              {collapsed ? brand.name.slice(0, 1) : brand.name}
+            </Link>
+          </div>
           <SidebarNav
-            collapsed={false}
+            collapsed={collapsed}
             pathname={pathname}
             pendingInvitesCount={pendingInvitesCount}
             unseenPrayerRequestsCount={unseenPrayerRequestsCount}
-            onNavigate={() => setDrawerOpen(false)}
+            submenus={submenus}
           />
-        </SheetContent>
-      </Sheet>
+          <div className="mt-auto border-t p-2">
+            <Button
+              variant="ghost"
+              size={collapsed ? "icon" : "sm"}
+              onClick={toggleCollapsed}
+              className={cn("w-full", !collapsed && "justify-start gap-2")}
+              aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+            >
+              {collapsed ? <ChevronsRight /> : <ChevronsLeft />}
+              {collapsed ? null : <span>Recolher</span>}
+            </Button>
+          </div>
+        </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur print:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Abrir menu"
-          >
-            <Menu />
-          </Button>
-          {/* Desktop: breadcrumbs; mobile: título da página atual. */}
-          <div className="hidden min-w-0 lg:block">
-            <Breadcrumbs pathname={pathname} />
-          </div>
-          <h1 className="truncate text-sm font-medium lg:hidden">{titleForPath(pathname)}</h1>
-          <div className="ml-auto flex items-center gap-2">
-            <CompanySwitcher />
-            {/* Convites recebidos são da pessoa, não da igreja: o aviso fica no perfil. */}
-            <UserMenu {...user} convitesPendentes={pendingInvitesCount} />
-          </div>
-        </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 p-4 lg:p-8 print:max-w-none print:p-0">{children}</main>
+        {/* Sidebar mobile: mesmo SidebarNav dentro de um drawer off-canvas. */}
+        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <SheetContent side="left" className="w-72 p-0 lg:hidden">
+            <SheetHeader className="h-14 justify-center border-b px-4">
+              <SheetTitle className="text-left font-semibold">{brand.name}</SheetTitle>
+            </SheetHeader>
+            <SidebarNav
+              collapsed={false}
+              pathname={pathname}
+              pendingInvitesCount={pendingInvitesCount}
+              unseenPrayerRequestsCount={unseenPrayerRequestsCount}
+              submenus={submenus}
+              onNavigate={() => setDrawerOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur print:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Abrir menu"
+            >
+              <Menu />
+            </Button>
+            {/* Desktop: breadcrumbs; mobile: título da página atual. */}
+            <div className="hidden min-w-0 lg:block">
+              <Breadcrumbs pathname={pathname} />
+            </div>
+            <h1 className="truncate text-sm font-medium lg:hidden">{titleForPath(pathname)}</h1>
+            <div className="ml-auto flex items-center gap-2">
+              <CompanySwitcher />
+              {/* Convites recebidos são da pessoa, não da igreja: o aviso fica no perfil. */}
+              <UserMenu {...user} convitesPendentes={pendingInvitesCount} />
+            </div>
+          </header>
+          <main className="mx-auto w-full max-w-6xl flex-1 p-4 lg:p-8 print:max-w-none print:p-0">{children}</main>
+        </div>
       </div>
-    </div>
     </SectionSubnavProvider>
   );
 }
@@ -156,12 +162,14 @@ function SidebarNav({
   pathname,
   pendingInvitesCount = 0,
   unseenPrayerRequestsCount = 0,
+  submenus,
   onNavigate,
 }: {
   collapsed: boolean;
   pathname: string;
   pendingInvitesCount?: number;
   unseenPrayerRequestsCount?: number;
+  submenus: Record<string, RouteTab[]>;
   onNavigate?: () => void;
 }) {
   const { menus, visitasSemContato } = useTenant();
@@ -169,7 +177,12 @@ function SidebarNav({
   const badges = badgesByHref(pendingInvitesCount, unseenPrayerRequestsCount, visitasSemContato);
   // Abas da seção aberta, publicadas pelo layout dela (ver section-subnav).
   const subnav = useSectionSubnav();
-  const subAtivo = subnav ? subitemAtivo(subnav, pathname) : null;
+  const dentroDe = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  // Seções abertas no menu: a da página atual abre sozinha; as outras (e o
+  // fechar), pelo clique na seção, que vale até a pessoa clicar de novo.
+  const [escolhidas, setEscolhidas] = useState<Record<string, boolean>>({});
+  const estaAberta = (href: string) => escolhidas[href] ?? dentroDe(href);
+  const alternar = (href: string) => setEscolhidas((e) => ({ ...e, [href]: !(e[href] ?? dentroDe(href)) }));
   const contador = (count?: number) =>
     count && count > 0 ? (
       <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[0.7rem] leading-5 font-semibold text-white tabular-nums dark:text-neutral-950">
@@ -181,9 +194,13 @@ function SidebarNav({
   return (
     <nav className="flex flex-col gap-1 overflow-y-auto p-2">
       {visible.map((item) => {
-        // Seção aberta: o item é dono das abas publicadas (mesmo prefixo).
-        const subitens =
+        // As abas publicadas pela seção aberta (contadores frescos) valem mais
+        // que as montadas no layout do painel.
+        const publicadas =
           subnav && item.href !== "/dashboard" && subnav.every((t) => t.href.startsWith(item.href)) ? subnav : null;
+        const subitens = publicadas ?? submenus[item.href] ?? null;
+        const subAtivo = subitens ? subitemAtivo(subitens, pathname) : null;
+        const aberta = estaAberta(item.href);
         const pendencias = subitens?.reduce((soma, t) => soma + (t.count ?? 0), 0) ?? 0;
 
         if (subitens && collapsed) {
@@ -195,7 +212,12 @@ function SidebarNav({
                   <button
                     type="button"
                     aria-label={item.title}
-                    className="relative flex items-center justify-center rounded-md bg-sidebar-primary px-2 py-2 text-sm text-sidebar-primary-foreground"
+                    className={cn(
+                      "relative flex items-center justify-center rounded-md px-2 py-2 text-sm",
+                      dentroDe(item.href)
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    )}
                   />
                 }
               >
@@ -226,38 +248,52 @@ function SidebarNav({
         if (subitens) {
           return (
             <div key={item.href} className="flex flex-col gap-0.5">
-              <Link
-                href={item.href}
-                onClick={onNavigate}
-                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              <button
+                type="button"
+                onClick={() => alternar(item.href)}
+                aria-expanded={aberta}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  dentroDe(item.href) ? "font-medium text-sidebar-foreground" : "text-sidebar-foreground/80",
+                )}
               >
                 <item.icon className="size-4 shrink-0" />
                 <span>{item.title}</span>
-                <ChevronDown className="ml-auto size-4 opacity-60" aria-hidden />
-              </Link>
-              <ul className="ml-5 flex flex-col gap-0.5 border-l pl-2">
-                {subitens.map((t) => {
-                  const atual = t.href === subAtivo;
-                  return (
-                    <li key={t.href}>
-                      <Link
-                        href={t.href}
-                        onClick={onNavigate}
-                        aria-current={atual ? "page" : undefined}
-                        className={cn(
-                          "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
-                          atual
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        )}
-                      >
-                        {t.label}
-                        {contador(t.count)}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+                {!aberta ? contador(pendencias) : null}
+                <ChevronDown
+                  className={cn(
+                    "size-4 opacity-60 transition-transform",
+                    !aberta && "-rotate-90",
+                    aberta || !pendencias ? "ml-auto" : "",
+                  )}
+                  aria-hidden
+                />
+              </button>
+              {aberta ? (
+                <ul className="ml-5 flex flex-col gap-0.5 border-l pl-2">
+                  {subitens.map((t) => {
+                    const atual = t.href === subAtivo;
+                    return (
+                      <li key={t.href}>
+                        <Link
+                          href={t.href}
+                          onClick={onNavigate}
+                          aria-current={atual ? "page" : undefined}
+                          className={cn(
+                            "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
+                            atual
+                              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                              : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                          )}
+                        >
+                          {t.label}
+                          {contador(t.count)}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
             </div>
           );
         }
