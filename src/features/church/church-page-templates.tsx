@@ -540,6 +540,9 @@ export function ChurchPageRenderer({
     });
   }
 
+  const primeira = secoes.find((x) => x.id === "programacao") ?? null;
+  const demais = secoes.filter((x) => x !== primeira);
+
   return (
     <PublicShell theme={templateSlug} accent={accent}>
       {previa ? (
@@ -606,7 +609,14 @@ export function ChurchPageRenderer({
         </div>
       </nav>
 
-      {/* Quem sustenta a página, logo abaixo dos atalhos. Sem caixa em volta:
+      {/* Programação primeiro, logo abaixo dos atalhos: é o que mais se procura. */}
+      {primeira ? (
+        <Faixa id={primeira.id} alternada>
+          {primeira.conteudo}
+        </Faixa>
+      ) : null}
+
+      {/* Quem sustenta a página, logo abaixo da programação. Sem caixa em volta:
           é uma faixa leve de "quem apoia", não mais um card — dentro de uma
           faixa que já é um bloco, a borda virava card dentro de card.
           A igreja pode fechar a porta pra patrocinador (Configurações):
@@ -641,8 +651,8 @@ export function ChurchPageRenderer({
         </section>
       ) : null}
 
-      {secoes.map((s, i) => (
-        <Faixa key={s.id} id={s.id} alternada={i % 2 === 0}>
+      {demais.map((s, i) => (
+        <Faixa key={s.id} id={s.id} alternada={(i + (primeira ? 1 : 0)) % 2 === 0}>
           {s.conteudo}
         </Faixa>
       ))}
