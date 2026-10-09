@@ -6,13 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { ClasseForm } from "@/features/ebd/components/ebd-classe-acoes";
 import { getEbdActorAutorizado, getEbdService } from "@/server/ebd";
 
-export const metadata: Metadata = { title: "Salas da EBD" };
+export const metadata: Metadata = { title: "Classes da EBD" };
 
 /**
- * Salas (as classes da EBD): criar, abrir e ver as encerradas. A gestão vê
+ * Classes da EBD: criar, abrir e ver as encerradas. A gestão vê
  * todas; o professor, só as dele (o banco devolve o mesmo recorte).
  */
-export default async function EbdSalasPage() {
+export default async function EbdClassesPage() {
   const actor = await getEbdActorAutorizado();
   if (!actor) notFound();
   const { classes, gestao } = await (await getEbdService()).classes(actor);

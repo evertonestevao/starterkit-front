@@ -84,7 +84,7 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
             <p className="text-sm text-muted-foreground">
               Nenhuma classe ativa.{" "}
               <Link href="/dashboard/ebd/classes" className="font-medium text-primary underline underline-offset-4">
-                Abrir Salas
+                Abrir Classes
               </Link>
             </p>
           ) : (
