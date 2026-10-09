@@ -8,6 +8,7 @@ import { saudar } from "@/lib/saudacao";
 import { confirmar } from "@/components/confirmar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useActionToast } from "@/hooks/useActionToast";
@@ -22,6 +23,7 @@ import {
   removeMemberAction,
   revokeInviteAction,
 } from "@/server/actions/tenant";
+import { definirEmailDoMembroAction } from "@/server/actions/acompanhamento";
 import { linkWhatsapp } from "@/lib/acompanhamento";
 import { PAPEL_LABEL } from "@/lib/papeis";
 import { permissionService } from "@/services/permissionService";
@@ -274,9 +276,7 @@ export function AcessoMembroCard({
         ) : membro.email ? (
           <ConvidarForm email={membro.email} companyId={active.id} membro={membro} />
         ) : (
-          <p className="text-muted-foreground">
-            Sem acesso. Para convidar, primeiro edite o membro e informe o e-mail dele.
-          </p>
+          <EmailParaConvidar membroId={membro.id} />
         )}
       </CardContent>
     </Card>
@@ -383,6 +383,35 @@ function ConvidarForm({
         ) : null}
         <Button type="submit" variant={temWhats ? "outline" : "default"} disabled={pending || enviandoWhats}>
           <Mail className="size-4" /> {pending ? "Enviando..." : temWhats ? "Só por e-mail" : "Convidar para o sistema"}
+        </Button>
+      </div>
+    </Formulario>
+  );
+}
+
+/** Sem e-mail: o campo já fica aqui (atalho), e depois de salvar aparece o convite. */
+function EmailParaConvidar({ membroId }: { membroId: string }) {
+  const [state, action, pending] = useActionState(definirEmailDoMembroAction, undefined);
+  useActionToast(state);
+  return (
+    <Formulario action={action} estado={state} className="flex flex-col gap-2">
+      <input type="hidden" name="membroId" value={membroId} />
+      <p className="text-muted-foreground">
+        Sem acesso. Para convidar, informe o e-mail da pessoa (é por ele que ela entra e recupera a senha).
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Input
+          name="email"
+          type="email"
+          required
+          maxLength={254}
+          autoComplete="off"
+          placeholder="email@exemplo.com"
+          aria-label="E-mail do membro"
+          className="max-w-xs"
+        />
+        <Button type="submit" disabled={pending}>
+          {pending ? "Salvando..." : "Salvar e-mail"}
         </Button>
       </div>
     </Formulario>

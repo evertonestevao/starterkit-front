@@ -600,6 +600,21 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       return (data ?? []).length > 0;
     },
 
+    async definirEmail(churchId, membroId, email) {
+      const { data, error } = await client
+        .from("rol_membros")
+        .update({ email })
+        .eq("church_id", churchId)
+        .eq("id", membroId)
+        .is("deleted_at", null)
+        .select("id");
+      if (error) {
+        if (error.code === "23505") throw new AppError("conflict", "Já existe um membro com esse e-mail.", error);
+        falha("Falha ao salvar o e-mail", error);
+      }
+      return (data ?? []).length > 0;
+    },
+
     // ------------------------------------------------- cultos (programação)
     async listCultos(churchId) {
       const { data, error } = await client
