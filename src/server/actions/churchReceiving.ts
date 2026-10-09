@@ -9,7 +9,7 @@ import { toActionError, type ActionState } from "./action-state";
 
 /** Server actions do recebimento por cartão (subconta da igreja). */
 
-const PAGINA = "/dashboard/settings/recebimento";
+const PAGINA = "/dashboard/tesouraria/cartao";
 
 function texto(formData: FormData, campo: string): string {
   const valor = formData.get(campo);
@@ -51,6 +51,7 @@ export async function submitReceivingRegistrationAction(
     });
 
     revalidatePath(PAGINA);
+    revalidatePath("/dashboard/settings/recebimento");
     return {
       success:
         conta.status === "aprovada"
@@ -73,6 +74,7 @@ export async function syncReceivingStatusAction(
     const status = await service.syncStatus(actor, texto(formData, "churchId"));
 
     revalidatePath(PAGINA);
+    revalidatePath("/dashboard/settings/recebimento");
     const mensagens: Record<string, string> = {
       em_analise: "O provedor ainda está analisando o cadastro.",
       aprovada: "Conta aprovada. Você já pode ligar o cartão na página da igreja.",
@@ -97,6 +99,7 @@ export async function setCardEnabledAction(
     await service.setCardEnabled(actor, texto(formData, "churchId"), aceita);
 
     revalidatePath(PAGINA);
+    revalidatePath("/dashboard/settings/recebimento");
     return {
       success: aceita
         ? "Cartão ligado. O botão já aparece na página da igreja."
@@ -122,6 +125,7 @@ export async function setPixSourceAction(
     await service.setPixSource(actor, texto(formData, "churchId"), fonte);
 
     revalidatePath(PAGINA);
+    revalidatePath("/dashboard/settings/recebimento");
     return {
       success:
         fonte === "asaas"

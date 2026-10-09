@@ -45,8 +45,8 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     // Com a Tesouraria ligada, a chave PIX fica numa aba de lá.
     if (!active.modulosAtivos.includes("tesouraria")) {
       tabs.push({ href: "/dashboard/settings/pix", label: "Dízimos (PIX)" });
+      tabs.push({ href: "/dashboard/settings/recebimento", label: "Cartão" });
     }
-    tabs.push({ href: "/dashboard/settings/recebimento", label: "Cartão" });
   }
 
   return (
