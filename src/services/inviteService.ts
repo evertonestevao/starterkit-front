@@ -99,7 +99,7 @@ export function createInviteService({ repo, rateLimiter, notifier, audit }: Invi
     } catch (err) {
       throw new AppError(
         "email_error",
-        "O convite foi criado, mas o e-mail não saiu. Na ficha do membro, use \"Reenviar e-mail\" ou \"Copiar link\" para mandar pelo WhatsApp.",
+        'O convite foi criado, mas o e-mail não saiu. Na ficha do membro, use "Reenviar e-mail" ou "Copiar link" para mandar pelo WhatsApp.',
         err,
       );
     }
@@ -108,7 +108,8 @@ export function createInviteService({ repo, rateLimiter, notifier, audit }: Invi
   async function pendente(inviteId: string, companyId: string): Promise<CompanyInvite> {
     if (!z.uuid().safeParse(inviteId).success) throw new AppError("validation_error", "Convite inválido");
     const convite = (await repo.listPending(companyId)).find((c) => c.id === inviteId);
-    if (!convite) throw new AppError("not_found", "Convite pendente não encontrado. Ele pode ter sido aceito ou cancelado.");
+    if (!convite)
+      throw new AppError("not_found", "Convite pendente não encontrado. Ele pode ter sido aceito ou cancelado.");
     return convite;
   }
 
@@ -132,9 +133,12 @@ export function createInviteService({ repo, rateLimiter, notifier, audit }: Invi
    * canal (WhatsApp). Só chega aqui quem a RLS deixa ler os convites da
    * empresa — quem administra, que poderia convidar a mesma pessoa de novo.
    */
-  async function tokenDoConvite(inviteId: string, companyId: string): Promise<{ token: string; email: string }> {
+  async function tokenDoConvite(
+    inviteId: string,
+    companyId: string,
+  ): Promise<{ token: string; email: string; expiraEm: string }> {
     const convite = await pendente(inviteId, companyId);
-    return { token: convite.token, email: convite.email };
+    return { token: convite.token, email: convite.email, expiraEm: convite.expires_at };
   }
 
   async function revoke(inviteId: string, companyId: string, revokedBy: string): Promise<void> {

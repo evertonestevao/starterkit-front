@@ -100,6 +100,7 @@ export function AcessoMembroCard({
         igreja: r.igreja || active.name,
         email: r.email ?? "",
         url: r.url,
+        expiraEm: r.expiraEm,
       });
       if (destino === "whatsapp") {
         const wa = linkWhatsapp(membro.whatsapp, mensagem);
@@ -348,6 +349,7 @@ function ConvidarForm({
         igreja: r.igreja || active.name,
         email: r.email ?? "",
         url: r.url,
+        expiraEm: r.expiraEm,
       });
       const wa = linkWhatsapp(membro.whatsapp, mensagem);
       if (janela && wa) {

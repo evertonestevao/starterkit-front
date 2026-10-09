@@ -156,17 +156,18 @@ export async function convidarComLinkAction(
   companyId: string,
   email: string,
   role: "admin" | "member",
-): Promise<ActionState & { url?: string; email?: string; igreja?: string }> {
+): Promise<ActionState & { url?: string; email?: string; igreja?: string; expiraEm?: string }> {
   try {
     const conviteId = await convidarParaSistema({ companyId, email, role: role === "admin" ? "admin" : "member" });
     revalidatePath("/dashboard/membros", "layout");
     revalidatePath("/dashboard/settings/quem-acessa");
     await exigeGestaoDeConvites(companyId);
-    const { token, email: destino } = await (await getInviteService()).tokenDoConvite(conviteId, companyId);
+    const { token, email: destino, expiraEm } = await (await getInviteService()).tokenDoConvite(conviteId, companyId);
     return {
       success: "Convite criado",
       url: linkDeAceite(getServerEnv().APP_URL, token),
       email: destino,
+      expiraEm,
       igreja: await nomeCompletoDaIgreja(companyId, ""),
     };
   } catch (err) {
@@ -241,13 +242,14 @@ export async function reenviarConviteAction(inviteId: string, companyId: string)
 export async function linkDoConviteAction(
   inviteId: string,
   companyId: string,
-): Promise<ActionState & { url?: string; email?: string; igreja?: string }> {
+): Promise<ActionState & { url?: string; email?: string; igreja?: string; expiraEm?: string }> {
   try {
     await exigeGestaoDeConvites(companyId);
-    const { token, email } = await (await getInviteService()).tokenDoConvite(inviteId, companyId);
+    const { token, email, expiraEm } = await (await getInviteService()).tokenDoConvite(inviteId, companyId);
     return {
       url: linkDeAceite(getServerEnv().APP_URL, token),
       email,
+      expiraEm,
       igreja: await nomeCompletoDaIgreja(companyId, ""),
     };
   } catch (err) {
