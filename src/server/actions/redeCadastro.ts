@@ -8,7 +8,14 @@ import { comAviso } from "@/lib/avisos";
 import { qrPngDataUrl } from "@/lib/qr";
 import { AppError } from "@/lib/errors";
 import { createRateLimiter } from "@/server/rateLimit";
-import { getAssumirService, getRedeCadastroActor, getRedeCadastroService } from "@/server/redeCadastro";
+import {
+  churchDaConta,
+  getAssumirService,
+  getIgrejaQueCadastra,
+  getRedeCadastroActor,
+  getRedeCadastroService,
+  getTrocaDeResponsavelService,
+} from "@/server/redeCadastro";
 import { ACTIVE_COMPANY_COOKIE } from "@/server/tenant";
 import { toActionError, type ActionState } from "./action-state";
 
@@ -33,7 +40,9 @@ async function ator() {
 /** Enquanto ninguém assumiu: nome, complemento, endereço e "Sobre" da página. */
 export async function editarIgrejaAguardandoAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
   try {
-    await (await getRedeCadastroService()).editar(await ator(), {
+    await (
+      await getRedeCadastroService()
+    ).editar(await ator(), {
       churchId: texto(fd, "churchId"),
       nome: texto(fd, "name"),
       sobrenome: texto(fd, "sobrenome") || null,
@@ -57,7 +66,9 @@ export async function editarIgrejaAguardandoAction(_prev: ActionState | undefine
 
 export async function cadastrarIgrejaDaRedeAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
   try {
-    await (await getRedeCadastroService()).cadastrar(await ator(), {
+    await (
+      await getRedeCadastroService()
+    ).cadastrar(await ator(), {
       maeId: texto(fd, "maeId"),
       tipo: texto(fd, "tipo"),
       nome: texto(fd, "nome"),
@@ -75,7 +86,13 @@ export async function cadastrarIgrejaDaRedeAction(_prev: ActionState | undefined
 export interface ConviteGeradoState {
   error?: string;
   campo?: string;
-  success?: { link: string; expiraEm: string; nome: string; whatsapp: string | null; qrDataUrl: string };
+  success?: {
+    link: string;
+    expiraEm: string;
+    nome: string;
+    whatsapp: string | null;
+    qrDataUrl: string;
+  };
 }
 
 export async function convidarResponsavelAction(
@@ -83,19 +100,63 @@ export async function convidarResponsavelAction(
   fd: FormData,
 ): Promise<ConviteGeradoState> {
   try {
-    const gerado = await (await getRedeCadastroService()).convidar(await ator(), {
+    const gerado = await (
+      await getRedeCadastroService()
+    ).convidar(await ator(), {
       churchId: texto(fd, "churchId"),
       nome: texto(fd, "nome"),
       email: texto(fd, "email"),
       cargo: texto(fd, "cargo") || null,
       whatsapp: texto(fd, "whatsapp") || null,
+      substituir: fd.get("substituir") === "on",
     });
     revalidatePath(PAGINA);
+    revalidatePath("/dashboard/rede");
     // QR Code do link: para assumir na hora, apontando a câmera do celular.
-    return { success: { ...gerado, qrDataUrl: await qrPngDataUrl(gerado.link, 512) } };
+    return {
+      success: { ...gerado, qrDataUrl: await qrPngDataUrl(gerado.link, 512) },
+    };
   } catch (err) {
     return toActionError(err) as ConviteGeradoState;
   }
+}
+
+/** Tira o acesso de um Responsável de uma igreja abaixo, agora. */
+export async function removerResponsavelAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
+  try {
+    const { ficouSemResponsavel } = await (
+      await getTrocaDeResponsavelService()
+    ).remover(await ator(), texto(fd, "memberId"));
+    revalidatePath("/dashboard/rede");
+    return {
+      success: ficouSemResponsavel
+        ? "Acesso removido. A igreja voltou a aguardar responsável e a mensalidade fica pausada."
+        : "Acesso removido.",
+    };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Esqueceu a senha: o e-mail oficial de recuperação vai para o e-mail do Responsável. */
+export async function enviarRecuperacaoAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
+  try {
+    const mae = await getIgrejaQueCadastra();
+    if (!mae) throw new AppError("forbidden", "Você não tem permissão para isso.");
+    const email = await (
+      await getTrocaDeResponsavelService()
+    ).enviarRecuperacao(await ator(), mae.id, texto(fd, "memberId"));
+    return { success: `E-mail para criar nova senha enviado para ${email}.` };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/** Troca concluída: avisa quem saiu e a igreja de cima (sem travar a entrada). */
+async function avisarSeTrocou(r: { companyId: string; igreja: string; removidos: string[] }) {
+  if (r.removidos.length === 0) return;
+  const churchId = await churchDaConta(r.companyId);
+  if (churchId) await (await getTrocaDeResponsavelService()).avisarTroca(churchId, r);
 }
 
 /** Grava a igreja assumida como a ativa (a pessoa já entra nela). */
@@ -112,8 +173,10 @@ async function abrirIgreja(companyId: string) {
 export async function assumirIgrejaAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
   let companyId: string;
   try {
-    ({ companyId } = await (await getAssumirService()).assumir(texto(fd, "token")));
+    const assumida = await (await getAssumirService()).assumir(texto(fd, "token"));
+    companyId = assumida.companyId;
     await abrirIgreja(companyId);
+    await avisarSeTrocou(assumida);
   } catch (err) {
     return toActionError(err);
   }
@@ -127,11 +190,15 @@ export async function criarContaEAssumirAction(_prev: ActionState | undefined, f
     const token = texto(fd, "token");
     await porPessoa.consume(`assumir:ip:${ipDoPedido(await headers())}`);
     await porConvite.consume(`assumir:convite:${token.slice(0, 16)}`);
-    ({ companyId } = await (await getAssumirService()).criarContaEAssumir(token, {
+    const assumida = await (
+      await getAssumirService()
+    ).criarContaEAssumir(token, {
       nome: texto(fd, "nome"),
       senha: String(fd.get("senha") ?? ""),
-    }));
+    });
+    companyId = assumida.companyId;
     await abrirIgreja(companyId);
+    await avisarSeTrocou(assumida);
   } catch (err) {
     return toActionError(err);
   }

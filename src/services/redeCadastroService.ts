@@ -1,3 +1,4 @@
+import type { ChurchTipo } from "@/types/database";
 import { z } from "zod";
 import { passwordSchema } from "@/features/auth/schemas";
 import { AppError, toValidationError } from "@/lib/errors";
@@ -49,6 +50,17 @@ export interface IgrejaAguardando {
 
 export type EstadoConvite = "valido" | "usado" | "substituido" | "expirado";
 
+/** Quem responde por uma igreja abaixo (para o Responsável de cima). */
+export interface ResponsavelDaRede {
+  churchId: string;
+  igreja: string;
+  tipo: ChurchTipo;
+  memberId: string;
+  nome: string;
+  email: string;
+  desde: string | null;
+}
+
 export interface ConviteResponsavel {
   estado: EstadoConvite;
   igreja: string;
@@ -57,10 +69,18 @@ export interface ConviteResponsavel {
   /** Só enquanto o link vale. */
   email: string | null;
   nome: string;
+  /** Troca: quem assumir substitui os Responsáveis atuais. */
+  substituir: boolean;
 }
 
 export interface RedeCadastroRepository {
-  cadastrar(input: { maeId: string; tipo: TipoCadastrado; nome: string; sobrenome: string | null; slug: string }): Promise<string>;
+  cadastrar(input: {
+    maeId: string;
+    tipo: TipoCadastrado;
+    nome: string;
+    sobrenome: string | null;
+    slug: string;
+  }): Promise<string>;
   convidar(input: {
     churchId: string;
     tokenHash: string;
@@ -69,19 +89,38 @@ export interface RedeCadastroRepository {
     cargo: CargoDeResponsavel | null;
     whatsapp: string | null;
     validadeHoras: number;
+    substituir: boolean;
   }): Promise<string>;
   aguardando(maeId: string): Promise<IgrejaAguardando[]>;
   /** Só enquanto a igreja aguarda responsável (o banco confere). */
-  editar(churchId: string, dados: {
-    nome: string;
-    sobrenome: string | null;
-    sobre: string | null;
-    endereco: PartesDoEndereco;
-    address: string | null;
-  }): Promise<void>;
+  editar(
+    churchId: string,
+    dados: {
+      nome: string;
+      sobrenome: string | null;
+      sobre: string | null;
+      endereco: PartesDoEndereco;
+      address: string | null;
+    },
+  ): Promise<void>;
   consultarConvite(token: string): Promise<ConviteResponsavel | null>;
-  /** Logado com o e-mail do convite: vira Responsável. */
-  aceitar(token: string): Promise<{ companyId: string; igreja: string }>;
+  /** Logado com o e-mail do convite: vira Responsável. `removidos`: e-mails de quem saiu (troca). */
+  aceitar(token: string): Promise<{ companyId: string; igreja: string; removidos: string[] }>;
+  responsaveis(maeId: string): Promise<ResponsavelDaRede[]>;
+  /** Tira o acesso agora. Lança not_found se não é Responsável de uma igreja abaixo. */
+  remover(memberId: string): Promise<{
+    email: string | null;
+    ficouSemResponsavel: boolean;
+    igreja: string;
+  }>;
+}
+
+/** Avisos da troca (e-mail): para quem saiu e para os Responsáveis da igreja de cima. */
+export interface AvisosDaTroca {
+  responsaveisAcima(churchId: string): Promise<string[]>;
+  avisar(input: { to: string[]; assunto: string; linhas: string[] }): Promise<void>;
+  /** E-mail oficial de recuperação de senha, para o e-mail da pessoa. */
+  enviarRecuperacao(email: string): Promise<void>;
 }
 
 /** O que só o servidor (service_role) faz no primeiro acesso de quem não tem conta. */
@@ -148,6 +187,7 @@ const conviteSchema = z.object({
   nome: z.string().trim().min(2, "Informe o nome de quem vai assumir").max(120, "Nome muito longo"),
   email: z.string().trim().toLowerCase().max(254, "E-mail longo demais").pipe(z.email("E-mail inválido")),
   cargo: z.enum(["pastor", "secretario"]).nullable(),
+  substituir: z.boolean().default(false),
   whatsapp: z
     .string()
     .transform((v) => v.replace(/\D/g, ""))
@@ -184,7 +224,10 @@ export function createRedeCadastroService(deps: {
       // Slug repetido: tenta de novo com sufixo (mesmo jeito do cadastro normal).
       for (let tentativa = 0; tentativa < 3; tentativa++) {
         try {
-          return await repo.cadastrar({ ...dados, slug: tentativa === 0 ? base : `${base}-${sufixo()}` });
+          return await repo.cadastrar({
+            ...dados,
+            slug: tentativa === 0 ? base : `${base}-${sufixo()}`,
+          });
         } catch (err) {
           if (!(err instanceof AppError && err.code === "conflict") || tentativa === 2) throw err;
         }
@@ -198,7 +241,11 @@ export function createRedeCadastroService(deps: {
       const parsed = edicaoSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
       const { churchId, endereco, ...resto } = parsed.data;
-      await repo.editar(churchId, { ...resto, endereco, address: linhaDoEndereco(endereco) });
+      await repo.editar(churchId, {
+        ...resto,
+        endereco,
+        address: linhaDoEndereco(endereco),
+      });
     },
 
     async aguardando(actor: RedeCadastroActor, maeId: string): Promise<IgrejaAguardando[]> {
@@ -214,11 +261,20 @@ export function createRedeCadastroService(deps: {
     async convidar(
       actor: RedeCadastroActor,
       input: unknown,
-    ): Promise<{ link: string; expiraEm: string; nome: string; whatsapp: string | null }> {
+    ): Promise<{
+      link: string;
+      expiraEm: string;
+      nome: string;
+      whatsapp: string | null;
+    }> {
       exige(actor);
       const parsed = conviteSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
       const dados = parsed.data;
+      // Trocar quem já responde é só do Responsável de cima (o banco confere de novo).
+      if (dados.substituir && actor.role !== "owner") {
+        throw new AppError("forbidden", "Só o Responsável da igreja de cima troca o responsável de uma igreja abaixo.");
+      }
       const token = deps.tokens.make();
       const expiraEm = await repo.convidar({
         churchId: dados.churchId,
@@ -228,13 +284,103 @@ export function createRedeCadastroService(deps: {
         cargo: dados.cargo,
         whatsapp: dados.whatsapp,
         validadeHoras: VALIDADE_CONVITE_HORAS,
+        substituir: dados.substituir,
       });
-      return { link: `${base}/assumir/${token}`, expiraEm, nome: dados.nome, whatsapp: dados.whatsapp };
+      return {
+        link: `${base}/assumir/${token}`,
+        expiraEm,
+        nome: dados.nome,
+        whatsapp: dados.whatsapp,
+      };
     },
   };
 }
 
 export type RedeCadastroService = ReturnType<typeof createRedeCadastroService>;
+
+/**
+ * Troca do Responsável de uma igreja abaixo: só o RESPONSÁVEL de uma igreja
+ * acima (o banco confere de novo). Nunca mexe em senha: "esqueceu a senha" é
+ * o e-mail oficial de recuperação, para o e-mail da própria pessoa.
+ */
+export function createTrocaDeResponsavelService(deps: {
+  repo: RedeCadastroRepository;
+  avisos: AvisosDaTroca;
+  log?: { error(message: string, meta?: unknown): void };
+}) {
+  const { repo, avisos } = deps;
+  const log = deps.log ?? console;
+
+  function exige(actor: RedeCadastroActor) {
+    if (actor.role !== "owner") {
+      throw new AppError("forbidden", "Só o Responsável da igreja de cima troca o responsável de uma igreja abaixo.");
+    }
+  }
+
+  return {
+    async responsaveis(actor: RedeCadastroActor, maeId: string): Promise<ResponsavelDaRede[]> {
+      if (actor.role !== "owner" || !z.uuid().safeParse(maeId).success) return [];
+      return repo.responsaveis(maeId);
+    },
+
+    async remover(actor: RedeCadastroActor, memberId: unknown): Promise<{ ficouSemResponsavel: boolean }> {
+      exige(actor);
+      const id = z.uuid().safeParse(memberId);
+      if (!id.success) throw new AppError("not_found", "Responsável não encontrado.");
+      const r = await repo.remover(id.data);
+      // O aviso não desfaz a remoção.
+      if (r.email) {
+        await avisos
+          .avisar({
+            to: [r.email],
+            assunto: `Seu acesso a ${r.igreja} foi encerrado`,
+            linhas: [
+              `A igreja responsável pela rede encerrou o seu acesso como Responsável de ${r.igreja} no AssembleiaApp.`,
+              "Se você não esperava por isso, fale com o pastor da igreja de cima.",
+            ],
+          })
+          .catch((err) => log.error("[troca] falha ao avisar quem saiu", err));
+      }
+      return { ficouSemResponsavel: r.ficouSemResponsavel };
+    },
+
+    /** Esqueceu a senha: o e-mail oficial de recuperação vai para o e-mail da pessoa. */
+    async enviarRecuperacao(actor: RedeCadastroActor, maeId: string, memberId: unknown): Promise<string> {
+      exige(actor);
+      const alvo = (await repo.responsaveis(maeId)).find((r) => r.memberId === memberId);
+      if (!alvo) throw new AppError("not_found", "Responsável não encontrado.");
+      await avisos.enviarRecuperacao(alvo.email);
+      return alvo.email;
+    },
+
+    /** Depois que alguém assume uma troca: avisa quem saiu e a igreja de cima. */
+    async avisarTroca(churchId: string, r: { igreja: string; removidos: string[] }): Promise<void> {
+      if (r.removidos.length === 0) return;
+      try {
+        await avisos.avisar({
+          to: r.removidos,
+          assunto: `Seu acesso a ${r.igreja} foi encerrado`,
+          linhas: [
+            `Um novo Responsável assumiu ${r.igreja} no AssembleiaApp, e o seu acesso como Responsável foi encerrado.`,
+            "Se você não esperava por isso, fale com o pastor da igreja de cima.",
+          ],
+        });
+        const acima = await avisos.responsaveisAcima(churchId);
+        if (acima.length > 0) {
+          await avisos.avisar({
+            to: acima,
+            assunto: `Troca de responsável concluída em ${r.igreja}`,
+            linhas: [`O novo Responsável assumiu ${r.igreja}. Quem respondia antes perdeu o acesso.`],
+          });
+        }
+      } catch (err) {
+        log.error("[troca] falha ao avisar a troca", err);
+      }
+    },
+  };
+}
+
+export type TrocaDeResponsavelService = ReturnType<typeof createTrocaDeResponsavelService>;
 
 /** A página do link (sem login para abrir). */
 export function createAssumirService(deps: { repo: RedeCadastroRepository; contas: ContasDoServidor }) {
@@ -255,11 +401,14 @@ export function createAssumirService(deps: { repo: RedeCadastroRepository; conta
       if (!tokenSchema.safeParse(token).success) return null;
       const convite = await repo.consultarConvite(token as string);
       if (!convite) return null;
-      return { ...convite, contaExiste: convite.email ? await contas.contaExiste(convite.email) : false };
+      return {
+        ...convite,
+        contaExiste: convite.email ? await contas.contaExiste(convite.email) : false,
+      };
     },
 
     /** Já logado (com o e-mail do convite — o banco confere). */
-    async assumir(token: unknown): Promise<{ companyId: string; igreja: string }> {
+    async assumir(token: unknown): Promise<{ companyId: string; igreja: string; removidos: string[] }> {
       if (!tokenSchema.safeParse(token).success) throw new AppError("not_found", "Este link não vale.");
       return repo.aceitar(token as string);
     },
@@ -269,7 +418,10 @@ export function createAssumirService(deps: { repo: RedeCadastroRepository; conta
      * pessoa escolheu, entra e assume. Só quando o convite vale e o e-mail
      * ainda não tem conta — quem já tem precisa entrar com a própria senha.
      */
-    async criarContaEAssumir(token: unknown, input: { nome: unknown; senha: unknown }): Promise<{ companyId: string; igreja: string }> {
+    async criarContaEAssumir(
+      token: unknown,
+      input: { nome: unknown; senha: unknown },
+    ): Promise<{ companyId: string; igreja: string; removidos: string[] }> {
       const convite = await conviteValido(token);
       const nome = z.string().trim().min(2, "Informe o seu nome").max(120).safeParse(input.nome);
       if (!nome.success) throw toValidationError(nome.error.issues.map((i) => ({ ...i, path: ["nome"] })));
@@ -278,7 +430,11 @@ export function createAssumirService(deps: { repo: RedeCadastroRepository; conta
       if (await contas.contaExiste(convite.email)) {
         throw new AppError("conflict", "Este e-mail já tem conta. Entre com a sua senha para assumir.");
       }
-      await contas.criarConta({ email: convite.email, senha: senha.data, nome: nome.data });
+      await contas.criarConta({
+        email: convite.email,
+        senha: senha.data,
+        nome: nome.data,
+      });
       await contas.entrar(convite.email, senha.data);
       return repo.aceitar(token as string);
     },

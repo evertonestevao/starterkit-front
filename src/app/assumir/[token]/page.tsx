@@ -89,9 +89,9 @@ export default async function AssumirPage({ params }: { params: Promise<{ token:
         </CardDescription>
         <CardTitle className="text-xl">{convite.igreja}</CardTitle>
         <CardDescription>
-          {convite.mae ? `Cadastrada por ${convite.mae}. ` : ""}
-          Assumindo, você passa a ser o Responsável desta igreja no sistema: cuida da página, dos membros e de quem mais
-          pode acessar.
+          {convite.substituir
+            ? `${convite.mae ?? "A igreja de cima"} indicou você como o novo Responsável. Assumindo, quem responde hoje por esta igreja deixa de ter acesso e você passa a cuidar da página, dos membros e de quem mais pode acessar.`
+            : `${convite.mae ? `Cadastrada por ${convite.mae}. ` : ""}Assumindo, você passa a ser o Responsável desta igreja no sistema: cuida da página, dos membros e de quem mais pode acessar.`}
         </CardDescription>
       </CardHeader>
       <CardContent>{acao}</CardContent>

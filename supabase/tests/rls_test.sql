@@ -9629,11 +9629,8 @@ begin
     raise exception 'FALHA assumir: a de cima editou depois que o pastor assumiu';
   exception when sqlstate 'P0002' then null;
   end;
-  begin
-    perform public.convidar_responsavel(current_setting('rls.nova')::uuid, repeat('f', 64), 'outro@x.test', 'Outro', null, null, 168);
-    raise exception 'FALHA assumir: gerou convite para igreja que ja tem dono';
-  exception when sqlstate 'P0002' then null;
-  end;
+  -- Com dono, convidar é TROCA de pastor: o Responsável da sede pode (fase 3,
+  -- testado adiante); quem só tem a permissão de cadastrar, não.
   if public.is_company_member(current_setting('rls.nova_company')::uuid) then
     raise exception 'FALHA assumir: a sede virou membro da igreja de baixo';
   end if;
@@ -9657,6 +9654,170 @@ begin
   select count(*) into n from public.mensalidades_pendentes_base(current_setting('rls.nova_company')::uuid);
   if n <> 0 then raise exception 'FALHA mensalidade: igreja aguardando responsavel entrou na cobranca'; end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Troca de Responsável pela igreja de cima (migration 20261014100000).
+-- "AC Nova" (rls.nova) está abaixo de AC Sede (d1, de 001) e tem como
+-- Responsável o Pastor Novo. Um ADMINISTRADOR da sede (tem a permissão de
+-- cadastrar, mas não é Responsável) não troca nem remove.
+-- ---------------------------------------------------------------------------
+update public.churches set aguardando_responsavel = false where id = current_setting('rls.nova')::uuid;
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('adadadad-0000-4000-8000-000000000003', 'rls-pastor-dois@test.local', 'authenticated', 'authenticated',
+   '00000000-0000-0000-0000-000000000000', '{"full_name":"Pastor Dois"}');
+insert into public.company_members (company_id, user_id, role)
+values ('acacacac-0000-4000-8000-0000000000c1', 'adadadad-0000-4000-8000-000000000002', 'admin');
+
+set local role authenticated;
+do $$
+declare n int; v_member uuid;
+begin
+  -- O Responsável da sede vê quem responde pela igreja de baixo.
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+  select count(*) into n from public.responsaveis_da_rede('acacacac-0000-4000-8000-0000000000d1')
+  where church_id = current_setting('rls.nova')::uuid and email = 'rls-pastor-novo@test.local';
+  if n <> 1 then raise exception 'FALHA troca: Responsavel da sede nao viu o pastor da igreja de baixo'; end if;
+
+  -- Administrador da sede (não Responsável): não vê, não troca, não remove.
+  perform set_config('request.jwt.claims',
+    '{"sub":"adadadad-0000-4000-8000-000000000002","email":"rls-intruso@test.local","role":"authenticated"}', true);
+  select count(*) into n from public.responsaveis_da_rede('acacacac-0000-4000-8000-0000000000d1');
+  if n <> 0 then raise exception 'FALHA troca: administrador da sede viu os responsaveis'; end if;
+  begin
+    perform public.convidar_responsavel(current_setting('rls.nova')::uuid, repeat('a', 64),
+      'rls-intruso@test.local', 'Intruso', 'pastor', null, 168, true);
+    raise exception 'FALHA troca: administrador da sede iniciou troca de pastor';
+  exception when sqlstate 'P0002' then null;
+  end;
+  select cm.id into v_member from public.company_members cm
+  where cm.company_id = current_setting('rls.nova_company')::uuid and cm.role = 'owner' limit 1;
+  perform set_config('rls.membro_pastor_novo', coalesce(v_member::text, ''), true);
+end $$;
+reset role;
+
+-- (o id do membro precisa ser lido sem RLS)
+select set_config('rls.membro_pastor_novo', (
+  select id::text from public.company_members
+  where company_id = current_setting('rls.nova_company')::uuid and role = 'owner' and deleted_at is null limit 1
+), true);
+
+set local role authenticated;
+do $$
+declare v_quem text;
+begin
+  -- Ninguém que não seja Responsável ACIMA remove: o admin da sede, a
+  -- congregação irmã (d2) e a outra rede.
+  foreach v_quem in array array[
+    '{"sub":"adadadad-0000-4000-8000-000000000002","email":"rls-intruso@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    begin
+      perform public.remover_responsavel_abaixo(current_setting('rls.membro_pastor_novo')::uuid);
+      raise exception 'FALHA troca: % removeu o Responsavel de outra igreja', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+  end loop;
+
+  -- O próprio Responsável da igreja de baixo não usa isto para tirar outros (não está ACIMA).
+  perform set_config('request.jwt.claims',
+    '{"sub":"adadadad-0000-4000-8000-000000000001","email":"rls-pastor-novo@test.local","role":"authenticated"}', true);
+  begin
+    perform public.remover_responsavel_abaixo(current_setting('rls.membro_pastor_novo')::uuid);
+    raise exception 'FALHA troca: a propria igreja usou a remocao da rede';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- O Responsável da sede inicia a troca, substituindo os atuais.
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+  perform public.convidar_responsavel(current_setting('rls.nova')::uuid,
+    encode(sha256(convert_to('convite-troca', 'UTF8')), 'hex'),
+    'rls-pastor-dois@test.local', 'Pastor Dois', 'pastor', null, 168, true);
+end $$;
+
+do $$
+declare r record; n int;
+begin
+  -- O pastor novo assume: o antigo perde o acesso, o cadastro de membro dele fica.
+  perform set_config('request.jwt.claims',
+    '{"sub":"adadadad-0000-4000-8000-000000000003","email":"rls-pastor-dois@test.local","role":"authenticated"}', true);
+  select * into r from public.aceitar_responsavel('convite-troca');
+  if not ('rls-pastor-novo@test.local' = any (r.removidos)) then
+    raise exception 'FALHA troca: o pastor antigo nao saiu (%)', r.removidos;
+  end if;
+  if not public.is_company_owner(current_setting('rls.nova_company')::uuid) then
+    raise exception 'FALHA troca: pastor novo nao virou Responsavel';
+  end if;
+
+  perform set_config('request.jwt.claims',
+    '{"sub":"adadadad-0000-4000-8000-000000000001","email":"rls-pastor-novo@test.local","role":"authenticated"}', true);
+  if public.is_company_member(current_setting('rls.nova_company')::uuid) then
+    raise exception 'FALHA troca: o pastor antigo continuou com acesso';
+  end if;
+end $$;
+reset role;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.rol_membros
+  where church_id = current_setting('rls.nova')::uuid and user_id = 'adadadad-0000-4000-8000-000000000001' and deleted_at is null;
+  if n <> 1 then raise exception 'FALHA troca: o cadastro de membro do pastor antigo sumiu'; end if;
+  -- O cargo Pastor (uma pessoa só) passou para quem assumiu.
+  select count(*) into n from public.rol_membro_cargos mc
+  join public.cargos cg on cg.id = mc.cargo_id and cg.slug = 'pastor'
+  join public.rol_membros m on m.id = mc.membro_id
+  where mc.church_id = current_setting('rls.nova')::uuid and m.user_id = 'adadadad-0000-4000-8000-000000000003';
+  if n <> 1 then raise exception 'FALHA troca: o cargo Pastor nao passou para quem assumiu'; end if;
+  perform set_config('rls.membro_pastor_dois', (
+    select id::text from public.company_members
+    where company_id = current_setting('rls.nova_company')::uuid and user_id = 'adadadad-0000-4000-8000-000000000003'
+      and deleted_at is null), true);
+end $$;
+
+-- Remover já: a igreja fica sem ninguém e volta a aguardar responsável.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare r record;
+begin
+  select * into r from public.remover_responsavel_abaixo(current_setting('rls.membro_pastor_dois')::uuid);
+  if r.email <> 'rls-pastor-dois@test.local' or not r.ficou_sem_responsavel then
+    raise exception 'FALHA troca: remover nao devolveu quem saiu ou nao marcou a igreja sem responsavel';
+  end if;
+end $$;
+reset role;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.churches where id = current_setting('rls.nova')::uuid and aguardando_responsavel;
+  if n <> 1 then raise exception 'FALHA troca: igreja sem ninguem nao voltou a aguardar responsavel'; end if;
+  select count(*) into n from public.company_members
+  where company_id = current_setting('rls.nova_company')::uuid and deleted_at is null;
+  if n <> 0 then raise exception 'FALHA troca: sobrou acesso na igreja depois de remover o ultimo Responsavel'; end if;
+  select count(*) into n from public.mensalidades_pendentes_base(current_setting('rls.nova_company')::uuid);
+  if n <> 0 then raise exception 'FALHA troca: igreja sem responsavel continuou cobrada'; end if;
+  select count(*) into n from public.audit_logs
+  where company_id = 'acacacac-0000-4000-8000-0000000000c1'
+    and action in ('church.troca_de_responsavel_iniciada', 'church.responsavel_assumiu_abaixo', 'church.responsavel_removido_abaixo');
+  if n < 3 then raise exception 'FALHA troca: a sede nao ficou com o registro na auditoria (%)', n; end if;
+end $$;
+
+set local role anon;
+do $$
+begin
+  begin
+    perform public.emails_responsaveis_acima(current_setting('rls.nova')::uuid);
+    raise exception 'FALHA troca: anon leu os e-mails dos responsaveis';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Cobertura: toda tabela de `public` com church_id ou company_id tem RLS

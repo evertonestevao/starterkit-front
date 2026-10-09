@@ -2,10 +2,17 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { IgrejasCadastradas } from "@/features/rede/components/igrejas-cadastradas";
 import { PainelRede } from "@/features/rede/components/painel-rede";
+import { ResponsaveisDaRede } from "@/features/rede/components/responsaveis-da-rede";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { hojeISO } from "@/lib/acompanhamento";
 import { exigeMenu } from "@/server/menuPermissoes";
 import { getNomesNiveis } from "@/server/niveisRede";
-import { getIgrejaQueCadastra, getRedeCadastroActor, getRedeCadastroService } from "@/server/redeCadastro";
+import {
+  getIgrejaQueCadastra,
+  getRedeCadastroActor,
+  getRedeCadastroService,
+  getTrocaDeResponsavelService,
+} from "@/server/redeCadastro";
 import { getRedePainelService, getTemUnidadesAbaixo } from "@/server/redePainel";
 import { getActiveTenant } from "@/server/tenant";
 import { NomesNiveisProvider } from "@/providers/niveis-provider";
@@ -42,6 +49,14 @@ export default async function RedePage() {
           return [];
         })
       : [];
+  // Troca de responsável: só o Responsável desta igreja (o banco confere de novo).
+  const responsaveis =
+    igreja && actor && actor.role === "owner"
+      ? await (await getTrocaDeResponsavelService()).responsaveis(actor, igreja.id).catch((err: unknown) => {
+          console.error("[rede] falha ao carregar os responsaveis da rede", err);
+          return null;
+        })
+      : null;
   const nomes = await getNomesNiveis(igreja?.id);
 
   return (
@@ -63,6 +78,20 @@ export default async function RedePage() {
             aguardando={aguardando}
             nomes={nomes}
           />
+        ) : null}
+        {responsaveis ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Responsáveis das igrejas abaixo</CardTitle>
+              <CardDescription>
+                Quando um pastor muda de igreja, troque aqui quem responde por ela. Tudo fica registrado na auditoria
+                das duas igrejas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsaveisDaRede lista={responsaveis} nomes={nomes} />
+            </CardContent>
+          </Card>
         ) : null}
         {painel ? <PainelRede painel={painel} hoje={hojeISO()} /> : null}
       </div>

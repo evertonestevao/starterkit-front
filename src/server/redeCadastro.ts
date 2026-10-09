@@ -1,6 +1,11 @@
 import "server-only";
 import { cache } from "react";
+import { getEmailProvider } from "@/adapters/email";
 import { getServerEnv } from "@/config/env";
+import { AppError } from "@/lib/errors";
+import { createSupabaseAuthRepository } from "@/repositories/supabase/authRepository";
+import { createAuthService } from "@/services/authService";
+import { createEmailService } from "@/services/emailService";
 import {
   createSupabaseContasDoServidor,
   createSupabaseRedeCadastroRepository,
@@ -8,9 +13,11 @@ import {
 import {
   createAssumirService,
   createRedeCadastroService,
+  createTrocaDeResponsavelService,
   podeCadastrarNaRede,
   type RedeCadastroActor,
 } from "@/services/redeCadastroService";
+import { createRateLimiter } from "./rateLimit";
 import { getSupabaseAdminClient } from "./supabase-admin";
 import { getSupabaseServerClient } from "./supabase-server";
 import { getActiveTenant } from "./tenant";
@@ -25,6 +32,57 @@ export async function getRedeCadastroService() {
   });
 }
 
+/** Recuperação de senha pedida pela igreja de cima: poucas por e-mail (o authService aplica). */
+const recuperacaoPorEmail = createRateLimiter({
+  limit: 5,
+  windowMs: 60 * 60_000,
+});
+
+/**
+ * Troca do Responsável das igrejas abaixo. Lista e remoção com o client do
+ * usuário (o banco confere que ele é Responsável ACIMA); o service_role só lê
+ * os e-mails dos Responsáveis de cima para o aviso.
+ */
+export async function getTrocaDeResponsavelService() {
+  const client = await getSupabaseServerClient();
+  const email = createEmailService({
+    provider: getEmailProvider(),
+    appUrl: getServerEnv().APP_URL,
+  });
+  const auth = createAuthService({
+    repo: createSupabaseAuthRepository(client),
+    rateLimiter: recuperacaoPorEmail,
+    appUrl: getServerEnv().APP_URL,
+  });
+  return createTrocaDeResponsavelService({
+    repo: createSupabaseRedeCadastroRepository(client),
+    avisos: {
+      async responsaveisAcima(churchId) {
+        const { data, error } = await getSupabaseAdminClient().rpc("emails_responsaveis_acima", {
+          p_church_id: churchId,
+        });
+        if (error) throw new AppError("internal_error", "Falha ao carregar os responsáveis de cima", error);
+        return ((data ?? []) as Array<{ email: string }>).map((r) => r.email);
+      },
+      avisar: ({ to, assunto, linhas }) => email.sendAvisoDeResponsavel({ to, subject: assunto, lines: linhas }),
+      enviarRecuperacao: (destino) => auth.requestPasswordReset({ email: destino }),
+    },
+  });
+}
+
+/** A igreja (church) de uma conta, para os avisos depois que alguém assume. */
+export async function churchDaConta(companyId: string): Promise<string | null> {
+  const { data } = await getSupabaseAdminClient()
+    .from("churches")
+    .select("id")
+    .eq("company_id", companyId)
+    .is("deleted_at", null)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+  return data?.id ?? null;
+}
+
 /** Ator autorizado a cadastrar igrejas na rede, ou null. */
 export async function getRedeCadastroActor(): Promise<RedeCadastroActor | null> {
   const { active } = await getActiveTenant();
@@ -33,7 +91,12 @@ export async function getRedeCadastroActor(): Promise<RedeCadastroActor | null> 
   if (!podeCadastrarNaRede(active.role, liberado)) return null;
   const { data } = await (await getSupabaseServerClient()).auth.getUser();
   if (!data.user) return null;
-  return { companyId: active.id, role: active.role, liberado, userId: data.user.id };
+  return {
+    companyId: active.id,
+    role: active.role,
+    liberado,
+    userId: data.user.id,
+  };
 }
 
 /**
@@ -54,22 +117,39 @@ export async function getAssumirService() {
  * abaixo). Null nos outros casos. Uma consulta por request.
  */
 export const getIgrejaQueCadastra = cache(
-  async (): Promise<{ id: string; name: string; tipo: string; parentId: string | null } | null> => {
+  async (): Promise<{
+    id: string;
+    name: string;
+    tipo: string;
+    parentId: string | null;
+  } | null> => {
     const actor = await getRedeCadastroActor();
     if (!actor) return null;
-    const { data, error } = await (await getSupabaseServerClient())
+    const { data, error } = await (
+      await getSupabaseServerClient()
+    )
       .from("churches")
       .select("id, name, tipo, parent_id")
       .eq("company_id", actor.companyId)
       .is("deleted_at", null)
       .order("created_at")
       .limit(1)
-      .maybeSingle<{ id: string; name: string; tipo: string; parent_id: string | null }>();
+      .maybeSingle<{
+        id: string;
+        name: string;
+        tipo: string;
+        parent_id: string | null;
+      }>();
     if (error) {
       console.error("[rede] falha ao carregar a igreja que cadastra", error);
       return null;
     }
     if (!data || data.tipo === "congregacao") return null;
-    return { id: data.id, name: data.name, tipo: data.tipo, parentId: data.parent_id };
+    return {
+      id: data.id,
+      name: data.name,
+      tipo: data.tipo,
+      parentId: data.parent_id,
+    };
   },
 );
