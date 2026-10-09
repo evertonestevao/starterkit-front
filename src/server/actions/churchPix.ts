@@ -38,6 +38,7 @@ export async function saveChurchPixAction(_prev: ActionState | undefined, formDa
     );
 
     revalidatePath("/dashboard/settings/pix");
+    revalidatePath("/dashboard/tesouraria/pix");
     return {
       success: confirmacaoEnviada
         ? "Chave PIX salva. Enviamos um link ao e-mail do Responsável: a chave aparece na página assim que ele confirmar."
