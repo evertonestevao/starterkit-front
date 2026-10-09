@@ -3,6 +3,7 @@ import { RouteTabs, type RouteTab } from "@/components/route-tabs";
 import { exigeMenu } from "@/server/menuPermissoes";
 import { getTesourariaActorAutorizado } from "@/server/tesouraria";
 import { canEditPix } from "@/services/churchPixService";
+import { canConfigureReceiving } from "@/services/churchReceivingService";
 
 const BASE = "/dashboard/tesouraria";
 
@@ -21,6 +22,7 @@ export default async function TesourariaLayout({ children }: { children: React.R
   ];
   // A chave PIX é só do Responsável e do Administrador (o service e a RLS conferem de novo).
   if (canEditPix(actor.role)) tabs.push({ href: `${BASE}/pix`, label: "Chave PIX" });
+  if (canConfigureReceiving(actor.role)) tabs.push({ href: `${BASE}/cartao`, label: "Cartão" });
 
   return (
     <div className="flex flex-col gap-5">
