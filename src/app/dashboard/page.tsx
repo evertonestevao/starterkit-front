@@ -18,6 +18,7 @@ import {
   type PrimeirosPassosDados,
 } from "@/features/church/components/primeiros-passos";
 import { getChurchPixService } from "@/server/churchPix";
+import { nomeCompletoDaIgreja } from "@/server/nomeDaIgreja";
 import { getChurchProfileService } from "@/server/churchProfile";
 import { AniversariantesCard } from "@/features/acompanhamento/components/aniversariantes-card";
 import { getSaudacaoAtiva } from "@/server/saudacao";
@@ -328,7 +329,7 @@ export default async function DashboardPage() {
       {primeirosPassos && temPrimeirosPassos(primeirosPassos) ? <PrimeirosPassos dados={primeirosPassos} /> : null}
 
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight">{active.name}</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">{await nomeCompletoDaIgreja(active.id, active.name)}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {cargos.length > 0 ? cargos.join(", ") : PAPEL_LABEL[active.role]}
           {cargos.length > 0 && active.role !== "member" ? ` · ${PAPEL_LABEL[active.role]}` : ""}
