@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatarData, hojeISO } from "@/lib/acompanhamento";
 import { SITUACAO_VENDA, resumirPedidos, situacaoDaVenda, unidadesReservadas, type SituacaoVenda } from "@/lib/vendas";
+import { BuscarVoucher } from "@/features/vendas/components/buscar-voucher";
 import { getVendasActorAutorizado, getVendasService } from "@/server/vendas";
 import { formatCents } from "@/services/sponsorPricing";
 
@@ -36,9 +37,12 @@ export default async function VendasPage() {
             da igreja.
           </p>
         </div>
-        <Link href="/dashboard/vendas/nova" className={buttonVariants()}>
-          <Plus className="size-4" /> Nova venda
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {vendas.some((v) => v.geraVoucher) ? <BuscarVoucher /> : null}
+          <Link href="/dashboard/vendas/nova" className={buttonVariants()}>
+            <Plus className="size-4" /> Nova venda
+          </Link>
+        </div>
       </div>
 
       {vendas.length === 0 ? (

@@ -6824,7 +6824,7 @@ begin
       -- link de confirmação da chave Pix, enviado ao e-mail do Responsável
       'pix_confirmacao_por_token', 'pix_confirmar_por_token',
       -- vendas: lista das abertas (sem a chave) e o link de confirmação da chave de cada venda
-      'vendas_publicas', 'venda_pix_confirmacao_por_token', 'venda_pix_confirmar_por_token',
+      'vendas_publicas', 'venda_pix_confirmacao_por_token', 'venda_pix_confirmar_por_token', 'voucher_por_token',
       -- carteirinha de membro: link pessoal e verificação pelo QR Code
       'carteirinha_por_token', 'verificar_carteirinha',
       'rede_igrejas_publicas', 'resolve_church_by_domain', 'cancel_profile_change_by_token',
@@ -9349,6 +9349,95 @@ begin
   select jsonb_array_length(opcoes) into n from public.vendas_publicas('acacacac-0000-4000-8000-0000000000d2')
   where titulo = 'Pastel';
   if n is distinct from 1 then raise exception 'FALHA vendas opcoes: lista publica com % opcao(oes), esperado 1', n; end if;
+end $$;
+reset role;
+
+-- Voucher (migration 20261012130000): o link abre só o voucher (sem
+-- telefone); entregar é de quem cuida das vendas da igreja.
+update public.vendas set gera_voucher = true where id = current_setting('rls.venda_opcoes')::uuid;
+do $$
+declare v_pedido uuid; v_codigo text; v_sem uuid; v_codigo_sem text;
+begin
+  select pedido_id, voucher_codigo into v_pedido, v_codigo from public.criar_pedido_venda(
+    current_setting('rls.venda_opcoes')::uuid, 'Carla Mendes', '14977776666', 0, 'sem cebola',
+    jsonb_build_array(jsonb_build_object('opcao_id',
+      (select id from public.venda_opcoes where venda_id = current_setting('rls.venda_opcoes')::uuid and nome = 'Carne'),
+      'quantidade', 1)),
+    encode(sha256(convert_to('token-do-voucher', 'UTF8')), 'hex'));
+  if v_codigo !~ '^[A-Z0-9]{3}-[A-Z0-9]{3}$' then raise exception 'FALHA voucher: codigo curto invalido (%)', v_codigo; end if;
+  perform set_config('rls.pedido_voucher', v_pedido::text, true);
+
+  -- Hash fora do formato não entra.
+  begin
+    perform public.criar_pedido_venda(current_setting('rls.venda')::uuid, 'Ana', '14999998888', 1, null, '[]'::jsonb, 'nao-e-hash');
+    raise exception 'FALHA voucher: aceitou hash invalido';
+  exception when sqlstate 'P0001' then null;
+  end;
+end $$;
+
+set local role anon;
+do $$
+declare r record; n int;
+begin
+  select * into r from public.voucher_por_token('token-do-voucher');
+  if r.primeiro_nome is distinct from 'Carla' then raise exception 'FALHA voucher: link nao mostrou so o primeiro nome (%)', r.primeiro_nome; end if;
+  if r.itens is null or jsonb_array_length(r.itens) <> 1 then raise exception 'FALHA voucher: itens nao vieram'; end if;
+  select count(*) into n from public.voucher_por_token('token-inventado');
+  if n <> 0 then raise exception 'FALHA voucher: token inventado abriu um voucher'; end if;
+  begin
+    perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, true, null);
+    raise exception 'FALHA voucher: anon marcou entrega';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- Quem cuida entrega e desfaz; fica gravado quem foi.
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare r record; v text;
+begin
+  perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, true, 'falta 1');
+  select entregue_em, entregue_por, entrega_obs into r from public.venda_pedidos where id = current_setting('rls.pedido_voucher')::uuid;
+  if r.entregue_em is null or r.entregue_por is distinct from 'acacacac-0000-4000-8000-000000000002'::uuid or r.entrega_obs <> 'falta 1' then
+    raise exception 'FALHA voucher: entrega nao gravou quem, quando e a observacao';
+  end if;
+  select public.quem_entregou_venda(current_setting('rls.pedido_voucher')::uuid) into v;
+  if v is null then raise exception 'FALHA voucher: nao mostrou quem entregou'; end if;
+  perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, false, null);
+  select entregue_em, entregue_por into r from public.venda_pedidos where id = current_setting('rls.pedido_voucher')::uuid;
+  if r.entregue_em is not null or r.entregue_por is not null then raise exception 'FALHA voucher: desfazer nao limpou a entrega'; end if;
+
+  -- Pedido cancelado não é entregue.
+  perform public.marcar_pedido_venda(current_setting('rls.pedido_voucher')::uuid, 'cancelado');
+  begin
+    perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, true, null);
+    raise exception 'FALHA voucher: entregou pedido cancelado';
+  exception when sqlstate 'P0001' then null;
+  end;
+  perform public.marcar_pedido_venda(current_setting('rls.pedido_voucher')::uuid, 'pendente');
+end $$;
+
+-- Sem o módulo, a igreja de cima e a de outra rede: não entregam nem veem quem entregou.
+do $$
+declare v_quem text; v text;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000004","email":"rls-ac-secr@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    begin
+      perform public.marcar_entrega_venda(current_setting('rls.pedido_voucher')::uuid, true, null);
+      raise exception 'FALHA voucher: % marcou entrega de outra igreja', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+    select public.quem_entregou_venda(current_setting('rls.pedido_voucher')::uuid) into v;
+    if v is not null then raise exception 'FALHA voucher: % viu quem entregou', v_quem; end if;
+  end loop;
 end $$;
 reset role;
 

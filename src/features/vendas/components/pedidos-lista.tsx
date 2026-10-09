@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { linkWhatsapp } from "@/lib/acompanhamento";
 import { STATUS_PEDIDO, descreverItens } from "@/lib/vendas";
 import { marcarPedidoVendaAction } from "@/server/actions/vendas";
+import { EntregaControles } from "./entrega-controles";
 import { formatCents } from "@/services/sponsorPricing";
 import type { PedidoVenda, StatusPedido } from "@/types/vendas";
 
@@ -34,10 +35,13 @@ export function PedidosLista({
   pedidos,
   titulo,
   temOpcoes,
+  geraVoucher = false,
 }: {
   pedidos: PedidoVenda[];
   titulo: string;
   temOpcoes: boolean;
+  /** Com voucher: mostra o código e o botão de entrega em cada pedido. */
+  geraVoucher?: boolean;
 }) {
   const [pending, start] = useTransition();
 
@@ -81,6 +85,10 @@ export function PedidosLista({
               <p className="flex flex-wrap items-center gap-1.5 font-medium">
                 {p.nome}
                 <Badge variant={VARIANTE[p.status]}>{STATUS_PEDIDO[p.status]}</Badge>
+                {p.entregueEm ? <Badge variant="outline">Entregue</Badge> : null}
+                {p.voucherCodigo ? (
+                  <span className="font-mono text-xs text-muted-foreground">{p.voucherCodigo}</span>
+                ) : null}
               </p>
               {temOpcoes ? <p className="text-sm">{oQue}</p> : null}
               <p className="text-xs text-muted-foreground">
@@ -89,9 +97,13 @@ export function PedidosLista({
               {p.observacao ? (
                 <p className="mt-1 rounded-md bg-muted px-2 py-1 text-xs whitespace-pre-line">{p.observacao}</p>
               ) : null}
+              {p.entregaObs ? <p className="mt-1 text-xs text-muted-foreground">Entrega: {p.entregaObs}</p> : null}
             </div>
             <div className="flex flex-wrap items-center gap-1">
               <span className="mr-1 font-semibold tabular-nums">{formatCents(p.totalCents)}</span>
+              {geraVoucher && !p.entregueEm && p.status !== "cancelado" ? (
+                <EntregaControles pedido={p} compacto />
+              ) : null}
               {whats ? (
                 <a
                   href={whats}

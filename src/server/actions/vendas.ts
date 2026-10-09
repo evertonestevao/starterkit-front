@@ -75,6 +75,7 @@ export async function salvarVendaAction(_prev: ActionState | undefined, fd: Form
       estoque: inteiroOuNulo(texto(fd, "estoque"), "Estoque inválido."),
       maxPorPedido: inteiroOuNulo(texto(fd, "maxPorPedido"), "Máximo por pedido inválido."),
       temOpcoes: texto(fd, "temOpcoes") === "sim",
+      geraVoucher: texto(fd, "geraVoucher") === "on",
       opcoes: texto(fd, "temOpcoes") === "sim" ? lerOpcoes(texto(fd, "opcoes")) : [],
     });
     revalidatePath(BASE, "layout");
@@ -140,6 +141,24 @@ export async function marcarPedidoVendaAction(
     return {
       success: status === "pago" ? "Pedido marcado como pago." : status === "cancelado" ? "Pedido cancelado." : "Pedido voltou para aguardando.",
     };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+/**
+ * Retirada: marca (ou desfaz) a entrega. `tambemPago`: quem entrega conferiu
+ * o comprovante na hora e marca pago junto.
+ */
+export async function marcarEntregaVendaAction(
+  pedidoId: string,
+  input: { entregue: boolean; obs?: string | null; tambemPago?: boolean },
+): Promise<ActionState> {
+  try {
+    await (await getVendasService()).marcarEntrega(await ator(), pedidoId, input);
+    revalidatePath(BASE, "layout");
+    revalidatePath("/voucher/[token]", "page");
+    return { success: input.entregue ? "Entrega registrada." : "Entrega desfeita." };
   } catch (err) {
     return toActionError(err);
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   descreverItens,
   filtrarPedidos,
+  normalizarCodigoVoucher,
   maximoParaPedir,
   mensagemDoComprovante,
   pedidosParaCsv,
@@ -42,7 +43,7 @@ describe("pedidos", () => {
 
   it("cancelado não conta no estoque nem nos totais", () => {
     expect(unidadesReservadas(pedidos)).toBe(3);
-    expect(resumirPedidos(pedidos)).toEqual({ pedidos: 2, unidades: 3, pagoCents: 11000, pendenteCents: 5500 });
+    expect(resumirPedidos(pedidos)).toEqual({ pedidos: 2, unidades: 3, entregues: 0, pagoCents: 11000, pendenteCents: 5500 });
   });
 
   it("o máximo de um pedido é o menor limite", () => {
@@ -86,11 +87,14 @@ describe("opções", () => {
     observacao: "=sem cebola",
     status,
     createdAt: "2026-10-08T22:30:00Z",
+    voucherCodigo: null as string | null,
+    entregueEm: null as string | null,
+    entregaObs: null as string | null,
     itens: itens.map(([nome, quantidade, preco]) => ({ nome, quantidade, precoUnitarioCents: preco, totalCents: quantidade * preco })),
     ...extra,
   });
   const pedidos = [
-    pedido("pago", [["Carne", 2, 800], ["Queijo", 1, 800]]),
+    pedido("pago", [["Carne", 2, 800], ["Queijo", 1, 800]], { entregueEm: "2026-10-09T19:40:00Z" }),
     pedido("pendente", [["Queijo", 3, 800]]),
     pedido("cancelado", [["Carne", 10, 800]]),
     pedido("pago", [["Palmito", 1, 1000]]),
@@ -102,16 +106,16 @@ describe("opções", () => {
 
   it("total por opção na ordem da venda, sem cancelados e com as pagas à parte", () => {
     expect(totaisPorItem(pedidos, ["Queijo", "Carne"])).toEqual([
-      { nome: "Queijo", unidades: 4, pagas: 1, totalCents: 3200 },
-      { nome: "Carne", unidades: 2, pagas: 2, totalCents: 1600 },
+      { nome: "Queijo", unidades: 4, pagas: 1, entregues: 1, totalCents: 3200 },
+      { nome: "Carne", unidades: 2, pagas: 2, entregues: 2, totalCents: 1600 },
       // Opção que saiu da venda vai para o fim.
-      { nome: "Palmito", unidades: 1, pagas: 1, totalCents: 1000 },
+      { nome: "Palmito", unidades: 1, pagas: 1, entregues: 0, totalCents: 1000 },
     ]);
   });
 
   it("planilha: uma coluna por opção, total no fim e texto de terceiros neutralizado", () => {
     const csv = pedidosParaCsv(
-      { titulo: "Pastel", temOpcoes: true, opcoes: [{ id: "1", nome: "Carne", precoCents: null }, { id: "2", nome: "Queijo", precoCents: null }, { id: "3", nome: "Frango", precoCents: null }] },
+      { titulo: "Pastel", temOpcoes: true, geraVoucher: false, opcoes: [{ id: "1", nome: "Carne", precoCents: null }, { id: "2", nome: "Queijo", precoCents: null }, { id: "3", nome: "Frango", precoCents: null }] },
       pedidos,
     );
     const linhas = csv.replace("﻿", "").split("\r\n");
@@ -121,11 +125,30 @@ describe("opções", () => {
     expect(linhas[1]).toContain('"Ana; Souza"');
     expect(linhas[1]).toContain("'=sem cebola");
     expect(csv).toContain("Queijo;4;1;32,00");
+    // Com voucher: código, quando foi entregue e as colunas de entregues.
+    const comVoucher = pedidosParaCsv(
+      { titulo: "Pastel", temOpcoes: true, geraVoucher: true, opcoes: [{ id: "1", nome: "Carne", precoCents: null }] },
+      pedidos.map((p, i) => ({ ...p, voucherCodigo: i === 0 ? "K7P-4QX" : null })),
+    );
+    expect(comVoucher).toContain("Voucher;Entregue em;Obs. da entrega");
+    expect(comVoucher).toContain("K7P-4QX;09/10/2026 16:40;");
+    expect(comVoucher).toContain("Pedidos entregues;1");
+    expect(comVoucher).toContain("Queijo;4;1;1;32,00");
   });
 });
 
 describe("filtrarPedidos", () => {
-  const base = { vendaId: "v", quantidade: 1, totalCents: 800, observacao: null, createdAt: "2026-10-08T22:30:00Z", itens: [] };
+  const base = {
+    vendaId: "v",
+    quantidade: 1,
+    totalCents: 800,
+    observacao: null,
+    createdAt: "2026-10-08T22:30:00Z",
+    itens: [],
+    voucherCodigo: null,
+    entregueEm: null,
+    entregaObs: null,
+  };
   const lista = [
     { ...base, id: "1", nome: "José Antônio", telefone: "(14) 99999-8888", status: "pago" as const },
     { ...base, id: "2", nome: "Maria", telefone: "(14) 98888-7777", status: "pendente" as const },
@@ -134,5 +157,13 @@ describe("filtrarPedidos", () => {
     expect(filtrarPedidos(lista, { status: "pendente", busca: "" }).map((p) => p.id)).toEqual(["2"]);
     expect(filtrarPedidos(lista, { status: "todos", busca: "jose antonio" }).map((p) => p.id)).toEqual(["1"]);
     expect(filtrarPedidos(lista, { status: "todos", busca: "7777" }).map((p) => p.id)).toEqual(["2"]);
+  });
+});
+
+describe("voucher", () => {
+  it("normaliza o código digitado", () => {
+    expect(normalizarCodigoVoucher("k7p4qx")).toBe("K7P-4QX");
+    expect(normalizarCodigoVoucher(" K7P 4QX ")).toBe("K7P-4QX");
+    expect(normalizarCodigoVoucher("K7P-4Q")).toBeNull();
   });
 });

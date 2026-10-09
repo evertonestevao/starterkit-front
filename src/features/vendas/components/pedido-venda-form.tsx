@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, MessageCircle, Minus, Plus } from "lucide-react";
+import { Check, MessageCircle, Minus, Plus, Ticket } from "lucide-react";
 import { CamposAntiRobo } from "@/components/campos-anti-robo";
 import { TelefoneInput } from "@/components/telefone-input";
 import { CopyPix } from "@/features/church/components/copy-pix";
@@ -89,6 +89,7 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
               itens: state.pedido.itens,
               totalFormatado: formatCents(state.success.totalCents),
               observacao: state.pedido.observacao,
+              voucherUrl: state.success.voucher?.url ?? null,
             }),
           )
         : null;
@@ -106,6 +107,36 @@ export function PedidoVendaForm({ venda, whatsappHref }: { venda: VendaPublica; 
           copiaECola={state.success.pixCopiaECola}
           qrDataUrl={state.success.pixQrDataUrl}
         />
+        {state.success.voucher ? (
+          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[var(--pg-accent)] bg-[var(--pg-surface)] p-4 text-center">
+            <p className="flex items-center gap-2 font-semibold text-[var(--pg-text)]">
+              <Ticket className="size-4 text-[var(--pg-accent)]" aria-hidden />
+              Seu voucher para a retirada
+            </p>
+            <p className="text-sm text-[var(--pg-muted)]">
+              Guarde: apresente na hora de retirar. É diferente do QR Code do Pix acima.
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={state.success.voucher.qrDataUrl}
+              alt="QR Code do voucher de retirada"
+              width={512}
+              height={512}
+              className="size-40 rounded-lg bg-white p-2"
+            />
+            <p className="font-mono text-2xl font-bold tracking-widest text-[var(--pg-text)]">
+              {state.success.voucher.codigo}
+            </p>
+            <a
+              href={state.success.voucher.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--pg-border)] font-semibold text-[var(--pg-text)]"
+            >
+              Abrir meu voucher (para salvar)
+            </a>
+          </div>
+        ) : null}
         {comprovante ? (
           <div className="flex flex-col gap-2">
             <p className="text-sm leading-6 text-[var(--pg-text)]">

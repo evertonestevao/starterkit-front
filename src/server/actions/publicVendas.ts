@@ -28,6 +28,7 @@ export interface PedidoVendaState {
     pixCopiaECola: string;
     pixQrDataUrl: string;
     whatsappComprovante: string | null;
+    voucher: { url: string; codigo: string; qrDataUrl: string } | null;
   };
   /** O que foi pedido, para a mensagem pronta do comprovante. */
   pedido?: { nome: string; quantidade: number; observacao: string | null; itens: string | null };

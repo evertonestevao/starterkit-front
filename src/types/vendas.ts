@@ -33,6 +33,8 @@ export interface Venda {
   temOpcoes: boolean;
   /** As opções ativas, na ordem da tela. */
   opcoes: VendaOpcao[];
+  /** Cada pedido ganha um voucher (QR Code + código curto) para a retirada. */
+  geraVoucher: boolean;
 }
 
 /** Um item do pedido: a opção (ou a venda, sem opções), com nome e preço do momento. */
@@ -55,6 +57,10 @@ export interface PedidoVenda {
   status: StatusPedido;
   createdAt: string;
   itens: ItemPedido[];
+  /** "K7P-4QX"; null = a venda não gera voucher. */
+  voucherCodigo: string | null;
+  entregueEm: string | null;
+  entregaObs: string | null;
 }
 
 /** O que o formulário do painel envia (já convertido). */
@@ -69,6 +75,7 @@ export interface VendaInput {
   estoque: number | null;
   maxPorPedido: number | null;
   temOpcoes: boolean;
+  geraVoucher: boolean;
   /** `id` nulo = opção nova. */
   opcoes: Array<{ id: string | null; nome: string; precoCents: number | null }>;
 }
@@ -86,4 +93,17 @@ export interface VendaPublica {
   temOpcoes: boolean;
   /** Com o preço que vale (o próprio ou o da venda). */
   opcoes: Array<{ id: string; nome: string; precoCents: number }>;
+}
+
+/** O voucher aberto pelo link: o que qualquer pessoa com o link vê (sem telefone). */
+export interface VoucherPublico {
+  titulo: string;
+  churchName: string;
+  primeiroNome: string;
+  codigo: string | null;
+  itens: Array<{ nome: string; quantidade: number }>;
+  totalCents: number;
+  pago: boolean;
+  cancelado: boolean;
+  entregueEm: string | null;
 }

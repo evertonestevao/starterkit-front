@@ -178,6 +178,22 @@ export function VendaForm({ venda, hoje }: { venda?: Venda; hoje: string }) {
         </p>
       </fieldset>
 
+      <label className="flex cursor-pointer items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="geraVoucher"
+          defaultChecked={venda?.geraVoucher ?? false}
+          className="mt-0.5 size-4 accent-primary"
+        />
+        <span>
+          Gerar voucher para retirada
+          <span className="block text-xs text-muted-foreground">
+            Cada pedido ganha um QR Code e um código curto. Na entrega, aponte a câmera do celular para o QR Code (ou
+            digite o código em Vendas) para ver o pedido e marcar como entregue.
+          </span>
+        </span>
+      </label>
+
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? "Salvando..." : venda ? "Salvar alterações" : "Criar venda"}
       </Button>

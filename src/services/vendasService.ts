@@ -2,7 +2,16 @@ import { z } from "zod";
 import { AppError, toValidationError } from "@/lib/errors";
 import { buildPixPayload } from "@/lib/pixPayload";
 import type { RoleCode } from "@/types/database";
-import type { PedidoVenda, StatusPedido, StatusVenda, Venda, VendaInput, VendaPublica } from "@/types/vendas";
+import { normalizarCodigoVoucher } from "@/lib/vendas";
+import type {
+  PedidoVenda,
+  StatusPedido,
+  StatusVenda,
+  Venda,
+  VendaInput,
+  VendaPublica,
+  VoucherPublico,
+} from "@/types/vendas";
 import { detectPixKeyKind, maskPixKey, VALIDADE_CONFIRMACAO_HORAS } from "./churchPixService";
 
 /**
@@ -42,6 +51,14 @@ export interface VendasRepository {
   excluir(id: string): Promise<void>;
   pedidos(vendaIds: string[]): Promise<PedidoVenda[]>;
   marcarPedido(pedidoId: string, status: StatusPedido): Promise<void>;
+  /** Entregue (com observação) ou desfaz a entrega. */
+  marcarEntrega(pedidoId: string, entregue: boolean, obs: string | null): Promise<void>;
+  /** Pedidos da igreja com este código curto (pode haver o mesmo código em vendas diferentes). */
+  pedidosPorCodigo(churchId: string, codigo: string): Promise<Array<{ pedido: PedidoVenda; venda: Venda }>>;
+  /** O pedido do link do voucher, se for desta igreja (pela RLS). */
+  pedidoPorVoucherHash(hash: string): Promise<{ pedido: PedidoVenda; venda: Venda } | null>;
+  /** Nome de quem marcou a entrega. */
+  quemEntregou(pedidoId: string): Promise<string | null>;
   /** Grava o pedido de confirmação (só o hash) e devolve o e-mail do Responsável. Roda com service_role. */
   criarConfirmacao(input: {
     vendaId: string;
@@ -119,6 +136,7 @@ function vendaSchema(hoje: string) {
     estoque: inteiroOpcional(1, 100_000, "Estoque inválido"),
     maxPorPedido: inteiroOpcional(1, 1000, "Máximo por pedido inválido"),
     temOpcoes: z.boolean(),
+    geraVoucher: z.boolean(),
     opcoes: z
       .array(
         z.object({
@@ -310,6 +328,43 @@ export function createVendasService(deps: {
       }
       await repo.marcarPedido(pedidoId, status);
     },
+
+    /**
+     * Retirada. Pedido ainda não pago pode ser entregue (quem entrega conferiu
+     * o comprovante na hora): com `tambemPago`, marca pago e entregue juntos.
+     */
+    async marcarEntrega(
+      actor: VendasActor,
+      pedidoId: string,
+      input: { entregue: boolean; obs?: string | null; tambemPago?: boolean },
+    ): Promise<void> {
+      exige(actor);
+      if (!z.uuid().safeParse(pedidoId).success) throw new AppError("not_found", "Pedido não encontrado.");
+      const obs = (input.obs ?? "").trim();
+      if (obs.length > 300) throw new AppError("validation_error", "Observação da entrega longa demais.");
+      if (input.entregue && input.tambemPago) await repo.marcarPedido(pedidoId, "pago");
+      await repo.marcarEntrega(pedidoId, input.entregue, obs || null);
+    },
+
+    /** Busca pelo código curto do voucher ("K7P-4QX"), dentro da igreja de quem cuida. */
+    async buscarVoucher(actor: VendasActor, codigo: string) {
+      const church = await igreja(actor);
+      const normalizado = normalizarCodigoVoucher(codigo);
+      if (!normalizado) return [];
+      return repo.pedidosPorCodigo(church.id, normalizado);
+    },
+
+    /** O pedido do link do voucher. Null quando não é desta igreja ou o link não existe. */
+    async pedidoDoVoucher(actor: VendasActor, token: unknown) {
+      exige(actor);
+      if (!deps.tokens || !tokenSchema.safeParse(token).success) return null;
+      const achado = await repo.pedidoPorVoucherHash(deps.tokens.hash(token as string));
+      if (!achado) return null;
+      return {
+        ...achado,
+        entreguePor: achado.pedido.entregueEm ? await repo.quemEntregou(achado.pedido.id) : null,
+      };
+    },
   };
 }
 
@@ -329,6 +384,7 @@ export interface VendasPublicasRepository {
     quantidade: number;
     observacao: string | null;
     itens: Array<{ opcaoId: string; quantidade: number }>;
+    voucherHash: string | null;
   }): Promise<{
     pedidoId: string;
     totalCents: number;
@@ -337,12 +393,20 @@ export interface VendasPublicasRepository {
     churchName: string;
     churchAddress: string | null;
     whatsappComprovante: string | null;
+    /** Só quando a venda gera voucher. */
+    voucherCodigo: string | null;
   }>;
+  /** O voucher do link; null se o link não existe. */
+  voucher(token: string): Promise<VoucherPublico | null>;
 }
 
 export function createVendasPublicasService(deps: {
   repo: VendasPublicasRepository;
   qr: (texto: string) => Promise<string>;
+  /** Para o link do voucher: o servidor gera o token e o banco guarda só o hash. */
+  tokens?: { make(): string; hash(token: string): string };
+  /** Endereço do site, para o link do voucher que vai no QR Code. */
+  appUrl?: string;
 }) {
   return {
     listar(churchId: string): Promise<VendaPublica[]> {
@@ -358,10 +422,21 @@ export function createVendasPublicasService(deps: {
       pixCopiaECola: string;
       pixQrDataUrl: string;
       whatsappComprovante: string | null;
+      voucher: { url: string; codigo: string; qrDataUrl: string } | null;
     }> {
       const parsed = pedidoPublicoSchema.safeParse(input);
       if (!parsed.success) throw toValidationError(parsed.error.issues);
-      const pedido = await deps.repo.criarPedido(parsed.data);
+      // O token vai sempre; o banco só usa se a venda gera voucher.
+      const token = deps.tokens?.make() ?? null;
+      const pedido = await deps.repo.criarPedido({
+        ...parsed.data,
+        voucherHash: token && deps.tokens ? deps.tokens.hash(token) : null,
+      });
+      let voucher: { url: string; codigo: string; qrDataUrl: string } | null = null;
+      if (token && pedido.voucherCodigo && deps.appUrl) {
+        const url = `${deps.appUrl.replace(/\/+$/, "")}/voucher/${token}`;
+        voucher = { url, codigo: pedido.voucherCodigo, qrDataUrl: await deps.qr(url) };
+      }
       const pixCopiaECola = buildPixPayload({
         chave: pedido.pixChave,
         titular: pedido.pixTitular,
@@ -377,7 +452,14 @@ export function createVendasPublicasService(deps: {
         pixCopiaECola,
         pixQrDataUrl: await deps.qr(pixCopiaECola),
         whatsappComprovante: pedido.whatsappComprovante,
+        voucher,
       };
+    },
+
+    /** Voucher pelo link (sem login). Token malformado é tratado como inexistente. */
+    async voucher(token: unknown): Promise<VoucherPublico | null> {
+      if (!tokenSchema.safeParse(token).success) return null;
+      return deps.repo.voucher(token as string);
     },
   };
 }

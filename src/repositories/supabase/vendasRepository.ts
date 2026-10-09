@@ -10,7 +10,7 @@ import type {
 import type { PedidoVenda, StatusPedido, StatusVenda, Venda, VendaPublica } from "@/types/vendas";
 
 const COLS =
-  "id, titulo, descricao, preco_cents, pix_chave, pix_titular, whatsapp_comprovante, pix_confirmado_em, encerra_em, estoque, max_por_pedido, status, created_at, tem_opcoes, venda_opcoes(id, nome, preco_cents, ordem, ativo)";
+  "id, titulo, descricao, preco_cents, pix_chave, pix_titular, whatsapp_comprovante, pix_confirmado_em, encerra_em, estoque, max_por_pedido, status, created_at, tem_opcoes, gera_voucher, venda_opcoes(id, nome, preco_cents, ordem, ativo)";
 
 interface VendaRow {
   id: string;
@@ -27,6 +27,7 @@ interface VendaRow {
   status: StatusVenda;
   created_at: string;
   tem_opcoes: boolean;
+  gera_voucher: boolean;
   venda_opcoes: Array<{ id: string; nome: string; preco_cents: number | null; ordem: number; ativo: boolean }> | null;
 }
 
@@ -45,6 +46,7 @@ const toVenda = (r: VendaRow): Venda => ({
   status: r.status,
   createdAt: r.created_at,
   temOpcoes: r.tem_opcoes,
+  geraVoucher: r.gera_voucher,
   // Só as ativas, na ordem da tela; as desativadas continuam nos pedidos antigos.
   opcoes: (r.venda_opcoes ?? [])
     .filter((o) => o.ativo)
@@ -62,6 +64,9 @@ interface PedidoRow {
   observacao: string | null;
   status: StatusPedido;
   created_at: string;
+  voucher_codigo: string | null;
+  entregue_em: string | null;
+  entrega_obs: string | null;
   venda_pedido_itens: Array<{ nome: string; quantidade: number; preco_unitario_cents: number; total_cents: number }> | null;
 }
 
@@ -75,6 +80,9 @@ const toPedido = (r: PedidoRow): PedidoVenda => ({
   observacao: r.observacao,
   status: r.status,
   createdAt: r.created_at,
+  voucherCodigo: r.voucher_codigo,
+  entregueEm: r.entregue_em,
+  entregaObs: r.entrega_obs,
   itens: (r.venda_pedido_itens ?? []).map((i) => ({
     nome: i.nome,
     quantidade: i.quantidade,
@@ -82,6 +90,9 @@ const toPedido = (r: PedidoRow): PedidoVenda => ({
     totalCents: i.total_cents,
   })),
 });
+
+const COLS_PEDIDO =
+  "id, venda_id, nome, telefone, quantidade, total_cents, observacao, status, created_at, voucher_codigo, entregue_em, entrega_obs, venda_pedido_itens(nome, quantidade, preco_unitario_cents, total_cents)";
 
 /** Um teto alto para não ler sem fim; uma venda de igreja fica muito abaixo. */
 const TETO_PEDIDOS = 5000;
@@ -93,6 +104,22 @@ const TETO_PEDIDOS = 5000;
  * criar o pedido de confirmação da chave (o usuário não pode escolher o token).
  */
 export function createSupabaseVendasRepository(client: SupabaseClient, admin?: SupabaseClient): VendasRepository {
+  /** Junta cada pedido com a venda dele (venda excluída some, pela RLS e pelo filtro). */
+  async function comVendas(pedidos: PedidoVenda[]) {
+    if (pedidos.length === 0) return [];
+    const { data, error } = await client
+      .from("vendas")
+      .select(COLS)
+      .in("id", [...new Set(pedidos.map((p) => p.vendaId))])
+      .is("deleted_at", null);
+    if (error) throw new AppError("internal_error", "Falha ao carregar a venda", error);
+    const vendas = new Map(((data ?? []) as VendaRow[]).map((v) => [v.id, toVenda(v)]));
+    return pedidos.flatMap((pedido) => {
+      const venda = vendas.get(pedido.vendaId);
+      return venda ? [{ pedido, venda }] : [];
+    });
+  }
+
   return {
     async getChurch(companyId) {
       const { data, error } = await client
@@ -145,6 +172,7 @@ export function createSupabaseVendasRepository(client: SupabaseClient, admin?: S
           estoque: v.estoque === null ? "" : String(v.estoque),
           max_por_pedido: v.maxPorPedido === null ? "" : String(v.maxPorPedido),
           tem_opcoes: v.temOpcoes,
+          gera_voucher: v.geraVoucher,
           opcoes: v.temOpcoes
             ? v.opcoes.map((o) => ({ id: o.id ?? "", nome: o.nome, preco_cents: o.precoCents === null ? "" : String(o.precoCents) }))
             : [],
@@ -179,9 +207,7 @@ export function createSupabaseVendasRepository(client: SupabaseClient, admin?: S
     async pedidos(vendaIds) {
       const { data, error } = await client
         .from("venda_pedidos")
-        .select(
-          "id, venda_id, nome, telefone, quantidade, total_cents, observacao, status, created_at, venda_pedido_itens(nome, quantidade, preco_unitario_cents, total_cents)",
-        )
+        .select(COLS_PEDIDO)
         .in("venda_id", vendaIds)
         .order("created_at", { ascending: false })
         .limit(TETO_PEDIDOS);
@@ -195,6 +221,48 @@ export function createSupabaseVendasRepository(client: SupabaseClient, admin?: S
         if (error.code === "P0002") throw new AppError("not_found", "Pedido não encontrado.", error);
         throw new AppError("internal_error", "Falha ao atualizar o pedido", error);
       }
+    },
+
+    async marcarEntrega(pedidoId, entregue, obs) {
+      const { error } = await client.rpc("marcar_entrega_venda", {
+        p_pedido_id: pedidoId,
+        p_entregue: entregue,
+        p_obs: obs,
+      });
+      if (error) {
+        if (error.code === "P0001") throw new AppError("validation_error", error.message, error);
+        if (error.code === "P0002") throw new AppError("not_found", "Pedido não encontrado.", error);
+        throw new AppError("internal_error", "Falha ao registrar a entrega", error);
+      }
+    },
+
+    async pedidosPorCodigo(churchId, codigo) {
+      const { data, error } = await client
+        .from("venda_pedidos")
+        .select(COLS_PEDIDO)
+        .eq("church_id", churchId)
+        .eq("voucher_codigo", codigo)
+        .limit(20);
+      if (error) throw new AppError("internal_error", "Falha ao buscar o voucher", error);
+      const pedidos = ((data ?? []) as PedidoRow[]).map(toPedido);
+      return comVendas(pedidos);
+    },
+
+    async pedidoPorVoucherHash(hash) {
+      const { data, error } = await client
+        .from("venda_pedidos")
+        .select(COLS_PEDIDO)
+        .eq("voucher_hash", hash)
+        .maybeSingle<PedidoRow>();
+      if (error) throw new AppError("internal_error", "Falha ao buscar o voucher", error);
+      if (!data) return null;
+      return (await comVendas([toPedido(data)]))[0] ?? null;
+    },
+
+    async quemEntregou(pedidoId) {
+      const { data, error } = await client.rpc("quem_entregou_venda", { p_pedido_id: pedidoId });
+      if (error) return null;
+      return (data as string | null) ?? null;
     },
 
     async criarConfirmacao({ vendaId, tokenHash, solicitadoPor, validadeHoras }) {
@@ -251,7 +319,7 @@ export function createSupabaseVendasPublicasRepository(
       );
     },
 
-    async criarPedido({ vendaId, nome, telefone, quantidade, observacao, itens }) {
+    async criarPedido({ vendaId, nome, telefone, quantidade, observacao, itens, voucherHash }) {
       const { data, error } = await admin.rpc("criar_pedido_venda", {
         p_venda_id: vendaId,
         p_nome: nome,
@@ -259,6 +327,7 @@ export function createSupabaseVendasPublicasRepository(
         p_quantidade: quantidade,
         p_observacao: observacao,
         p_itens: itens.map((i) => ({ opcao_id: i.opcaoId, quantidade: i.quantidade })),
+        p_voucher_hash: voucherHash,
       });
       if (error) {
         // A função escreve as recusas para quem compra ler ("Esgotado", "Só restam 3").
@@ -275,6 +344,7 @@ export function createSupabaseVendasPublicasRepository(
           church_name: string;
           church_address: string | null;
           whatsapp_comprovante: string | null;
+          voucher_codigo: string | null;
         }>
       )[0];
       if (!row) throw new AppError("internal_error", "Não foi possível registrar o pedido.");
@@ -286,6 +356,37 @@ export function createSupabaseVendasPublicasRepository(
         churchName: row.church_name,
         churchAddress: row.church_address,
         whatsappComprovante: row.whatsapp_comprovante,
+        voucherCodigo: row.voucher_codigo,
+      };
+    },
+
+    async voucher(token) {
+      const { data, error } = await client.rpc("voucher_por_token", { p_token: token });
+      if (error) throw new AppError("internal_error", "Falha ao abrir o voucher", error);
+      const row = (
+        (data ?? []) as Array<{
+          titulo: string;
+          church_name: string;
+          primeiro_nome: string;
+          codigo: string | null;
+          itens: Array<{ nome: string; quantidade: number }> | null;
+          total_cents: number;
+          pago: boolean;
+          cancelado: boolean;
+          entregue_em: string | null;
+        }>
+      )[0];
+      if (!row) return null;
+      return {
+        titulo: row.titulo,
+        churchName: row.church_name,
+        primeiroNome: row.primeiro_nome,
+        codigo: row.codigo,
+        itens: row.itens ?? [],
+        totalCents: row.total_cents,
+        pago: row.pago,
+        cancelado: row.cancelado,
+        entregueEm: row.entregue_em,
       };
     },
   };

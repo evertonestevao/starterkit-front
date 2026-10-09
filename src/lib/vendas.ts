@@ -64,18 +64,21 @@ export function maximoParaPedir(
 export interface ResumoPedidos {
   pedidos: number;
   unidades: number;
+  /** Pedidos já retirados. */
+  entregues: number;
   pagoCents: number;
   pendenteCents: number;
 }
 
 /** Totais da venda (cancelados ficam de fora). */
 export function resumirPedidos(
-  pedidos: Pick<PedidoVenda, "quantidade" | "totalCents" | "status">[],
+  pedidos: Array<Pick<PedidoVenda, "quantidade" | "totalCents" | "status"> & { entregueEm?: string | null }>,
 ): ResumoPedidos {
   const validos = pedidos.filter((p) => p.status !== "cancelado");
   return {
     pedidos: validos.length,
     unidades: validos.reduce((s, p) => s + p.quantidade, 0),
+    entregues: validos.filter((p) => p.entregueEm).length,
     pagoCents: validos
       .filter((p) => p.status === "pago")
       .reduce((s, p) => s + p.totalCents, 0),
@@ -97,6 +100,8 @@ export function mensagemDoComprovante(pedido: {
   itens?: string | null;
   totalFormatado: string;
   observacao: string | null;
+  /** Link do voucher, quando a venda gera. */
+  voucherUrl?: string | null;
 }): string {
   return [
     `Olá! Segue o comprovante do Pix do meu pedido de ${pedido.titulo}.`,
@@ -106,6 +111,7 @@ export function mensagemDoComprovante(pedido: {
       : `Quantidade: ${pedido.quantidade}`,
     `Total: ${pedido.totalFormatado}`,
     ...(pedido.observacao ? [`Observação: ${pedido.observacao}`] : []),
+    ...(pedido.voucherUrl ? [`Voucher: ${pedido.voucherUrl}`] : []),
   ].join("\n");
 }
 
@@ -122,6 +128,8 @@ export interface TotalPorItem {
   unidades: number;
   /** Dessas, quantas já estão pagas. */
   pagas: number;
+  /** E quantas já foram retiradas. */
+  entregues: number;
   totalCents: number;
 }
 
@@ -142,10 +150,12 @@ export function totaisPorItem(
         nome: i.nome,
         unidades: 0,
         pagas: 0,
+        entregues: 0,
         totalCents: 0,
       };
       atual.unidades += i.quantidade;
       if (p.status === "pago") atual.pagas += i.quantidade;
+      if (p.entregueEm) atual.entregues += i.quantidade;
       atual.totalCents += i.totalCents;
       mapa.set(i.nome, atual);
     }
@@ -206,7 +216,7 @@ const dataHoraCsv = (iso: string) => {
  * na planilha. No fim, o total de cada opção (sem os cancelados).
  */
 export function pedidosParaCsv(
-  venda: Pick<Venda, "titulo" | "temOpcoes" | "opcoes">,
+  venda: Pick<Venda, "titulo" | "temOpcoes" | "opcoes" | "geraVoucher">,
   pedidos: PedidoVenda[],
 ): string {
   const totais = totaisPorItem(
@@ -230,6 +240,7 @@ export function pedidosParaCsv(
     ...(venda.temOpcoes ? colunasItens : ["Quantidade"]),
     "Total",
     "Observação",
+    ...(venda.geraVoucher ? ["Voucher", "Entregue em", "Obs. da entrega"] : []),
   ];
   const linhas = [cabecalho.map(celulaCsv).join(";")];
   for (const p of [...pedidos].sort((a, b) =>
@@ -247,6 +258,9 @@ export function pedidosParaCsv(
           : [String(p.quantidade)]),
         valorCsv(p.totalCents),
         celulaCsv(p.observacao),
+        ...(venda.geraVoucher
+          ? [p.voucherCodigo ?? "", p.entregueEm ? dataHoraCsv(p.entregueEm) : "", celulaCsv(p.entregaObs)]
+          : []),
       ].join(";"),
     );
   }
@@ -267,15 +281,17 @@ export function pedidosParaCsv(
   linhas.push(["Unidades", String(resumo.unidades)].join(";"));
   linhas.push(["Pago", valorCsv(resumo.pagoCents)].join(";"));
   linhas.push(["A confirmar", valorCsv(resumo.pendenteCents)].join(";"));
+  if (venda.geraVoucher) linhas.push(["Pedidos entregues", String(resumo.entregues)].join(";"));
   if (venda.temOpcoes) {
     linhas.push("");
-    linhas.push(["Opção", "Unidades", "Pagas", "Total"].join(";"));
+    linhas.push(["Opção", "Unidades", "Pagas", ...(venda.geraVoucher ? ["Entregues"] : []), "Total"].join(";"));
     for (const t of totais)
       linhas.push(
         [
           celulaCsv(t.nome),
           String(t.unidades),
           String(t.pagas),
+          ...(venda.geraVoucher ? [String(t.entregues)] : []),
           valorCsv(t.totalCents),
         ].join(";"),
       );
@@ -295,4 +311,10 @@ export function filtrarPedidos(pedidos: PedidoVenda[], filtro: { status: FiltroP
       (filtro.status === "todos" || p.status === filtro.status) &&
       (!termo || sem(p.nome).includes(termo) || (digitos.length >= 4 && p.telefone.replace(/\D/g, "").includes(digitos))),
   );
+}
+
+/** Código curto do voucher como a pessoa digita ("k7p4qx", "K7P 4QX") → "K7P-4QX"; null se não parece um. */
+export function normalizarCodigoVoucher(texto: string): string | null {
+  const limpo = texto.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return /^[A-Z0-9]{6}$/.test(limpo) ? `${limpo.slice(0, 3)}-${limpo.slice(3)}` : null;
 }

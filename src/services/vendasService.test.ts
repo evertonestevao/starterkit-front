@@ -37,6 +37,7 @@ const venda: Venda = {
   createdAt: "2026-10-01T10:00:00Z",
   temOpcoes: false,
   opcoes: [],
+  geraVoucher: false,
 };
 
 const entrada = {
@@ -50,6 +51,7 @@ const entrada = {
   estoque: 80,
   maxPorPedido: 10,
   temOpcoes: false,
+  geraVoucher: false,
   opcoes: [],
 };
 
@@ -64,6 +66,10 @@ function build(precisaConfirmar = true) {
     pedidos: vi.fn(async () => []),
     marcarPedido: vi.fn(async () => undefined),
     criarConfirmacao: vi.fn(async () => ["responsavel@igreja.org"]),
+    marcarEntrega: vi.fn(async () => undefined),
+    pedidosPorCodigo: vi.fn(async () => []),
+    pedidoPorVoucherHash: vi.fn(async () => null),
+    quemEntregou: vi.fn(async () => "Fulano"),
   };
   const notifier = { sendVendaPixConfirmation: vi.fn(async () => undefined) };
   const audit = { record: vi.fn(async () => undefined) };
@@ -205,8 +211,9 @@ describe("página pública", () => {
       churchName: "Igreja Betel",
       churchAddress: "Rua A, 10 - Centro, Lins/SP",
       whatsappComprovante: "14999998888",
+      voucherCodigo: null,
     }));
-    const service = createVendasPublicasService({ repo: { listar: vi.fn(), criarPedido }, qr: async () => "data:qr" });
+    const service = createVendasPublicasService({ repo: { listar: vi.fn(), criarPedido, voucher: vi.fn() }, qr: async () => "data:qr" });
 
     const r = await service.pedir({
       vendaId: VENDA_ID,
@@ -233,8 +240,9 @@ describe("página pública", () => {
       churchName: "Igreja Betel",
       churchAddress: null,
       whatsappComprovante: null,
+      voucherCodigo: null,
     }));
-    const service = createVendasPublicasService({ repo: { listar: vi.fn(), criarPedido }, qr: async () => "" });
+    const service = createVendasPublicasService({ repo: { listar: vi.fn(), criarPedido, voucher: vi.fn() }, qr: async () => "" });
     const itens = [{ opcaoId: "77777777-7777-4777-8777-777777777777", quantidade: 2 }];
     await service.pedir({ vendaId: VENDA_ID, nome: "Ana", telefone: "14999998888", quantidade: 0, observacao: null, itens });
     expect(criarPedido).toHaveBeenCalledWith(expect.objectContaining({ quantidade: 0, itens }));
@@ -242,7 +250,7 @@ describe("página pública", () => {
 
   it("recusa quantidade zero e telefone vazio sem chegar ao banco", async () => {
     const criarPedido = vi.fn();
-    const service = createVendasPublicasService({ repo: { listar: vi.fn(), criarPedido }, qr: async () => "" });
+    const service = createVendasPublicasService({ repo: { listar: vi.fn(), criarPedido, voucher: vi.fn() }, qr: async () => "" });
     for (const errado of [{ quantidade: 0, telefone: "14999998888" }, { quantidade: 1, telefone: "" }]) {
       const err = await erroDe(service.pedir({ vendaId: VENDA_ID, nome: "Ana", observacao: null, itens: [], ...errado }));
       expect(isAppError(err) && err.code).toBe("validation_error");
@@ -260,5 +268,79 @@ describe("link de confirmação", () => {
     expect(isAppError(err) && err.code).toBe("not_found");
     expect(repo.consultar).not.toHaveBeenCalled();
     expect(repo.confirmar).not.toHaveBeenCalled();
+  });
+});
+
+describe("voucher e entrega", () => {
+  const TOKEN = "a".repeat(43);
+
+  it("pedido de venda com voucher devolve o link, o código e o QR; o banco recebe só o hash", async () => {
+    const criarPedido = vi.fn(async () => ({
+      pedidoId: "66666666-6666-4666-8666-666666666666",
+      totalCents: 800,
+      pixChave: "tesouraria@igreja.org",
+      pixTitular: "Maria Souza",
+      churchName: "Igreja Betel",
+      churchAddress: null,
+      whatsappComprovante: null,
+      voucherCodigo: "K7P-4QX",
+    }));
+    const service = createVendasPublicasService({
+      repo: { listar: vi.fn(), criarPedido, voucher: vi.fn() },
+      qr: async (t) => `qr:${t}`,
+      tokens: { make: () => TOKEN, hash: (t) => `hash-de-${t}` },
+      appUrl: "https://www.assembleiaapp.com.br/",
+    });
+    const r = await service.pedir({ vendaId: VENDA_ID, nome: "Ana", telefone: "14999998888", quantidade: 1, observacao: null, itens: [] });
+    expect(criarPedido).toHaveBeenCalledWith(expect.objectContaining({ voucherHash: `hash-de-${TOKEN}` }));
+    expect(r.voucher).toEqual({
+      url: `https://www.assembleiaapp.com.br/voucher/${TOKEN}`,
+      codigo: "K7P-4QX",
+      qrDataUrl: `qr:https://www.assembleiaapp.com.br/voucher/${TOKEN}`,
+    });
+  });
+
+  it("venda sem voucher: nada de link", async () => {
+    const criarPedido = vi.fn(async () => ({
+      pedidoId: "66666666-6666-4666-8666-666666666666",
+      totalCents: 800,
+      pixChave: "tesouraria@igreja.org",
+      pixTitular: "Maria Souza",
+      churchName: "Igreja Betel",
+      churchAddress: null,
+      whatsappComprovante: null,
+      voucherCodigo: null,
+    }));
+    const service = createVendasPublicasService({
+      repo: { listar: vi.fn(), criarPedido, voucher: vi.fn() },
+      qr: async () => "",
+      tokens: { make: () => TOKEN, hash: () => "h" },
+      appUrl: "https://x.test",
+    });
+    const r = await service.pedir({ vendaId: VENDA_ID, nome: "Ana", telefone: "14999998888", quantidade: 1, observacao: null, itens: [] });
+    expect(r.voucher).toBeNull();
+  });
+
+  it("entregar pedido não pago com 'também pago' marca pago antes da entrega", async () => {
+    const { repo, service } = build();
+    await service.marcarEntrega(ADMIN, VENDA_ID, { entregue: true, obs: " falta 1 GG ", tambemPago: true });
+    expect(repo.marcarPedido).toHaveBeenCalledWith(VENDA_ID, "pago");
+    expect(repo.marcarEntrega).toHaveBeenCalledWith(VENDA_ID, true, "falta 1 GG");
+    expect(vi.mocked(repo.marcarPedido).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(repo.marcarEntrega).mock.invocationCallOrder[0],
+    );
+  });
+
+  it("sem o módulo não entrega; código e link inválidos não chegam ao banco", async () => {
+    const { repo, service } = build();
+    const err = await erroDe(service.marcarEntrega({ ...ADMIN, role: "member" }, VENDA_ID, { entregue: true }));
+    expect(isAppError(err) && err.code).toBe("forbidden");
+    expect(await service.buscarVoucher(ADMIN, "12")).toEqual([]);
+    expect(await service.pedidoDoVoucher(ADMIN, "curto")).toBeNull();
+    expect(repo.pedidosPorCodigo).not.toHaveBeenCalled();
+    expect(repo.pedidoPorVoucherHash).not.toHaveBeenCalled();
+
+    await service.buscarVoucher(ADMIN, "k7p 4qx");
+    expect(repo.pedidosPorCodigo).toHaveBeenCalledWith(IGREJA.id, "K7P-4QX");
   });
 });

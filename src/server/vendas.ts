@@ -57,6 +57,8 @@ export async function getVendasPublicasService() {
   return createVendasPublicasService({
     repo: createSupabaseVendasPublicasRepository(client, getSupabaseAdminClient()),
     qr: (texto) => qrPngDataUrl(texto, 512),
+    tokens: { make: makeUrlToken, hash: hashUrlToken },
+    appUrl: getServerEnv().APP_URL,
   });
 }
 

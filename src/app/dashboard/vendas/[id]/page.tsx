@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BuscarVoucher } from "@/features/vendas/components/buscar-voucher";
 import { PedidosLista } from "@/features/vendas/components/pedidos-lista";
 import { VendaAcoes } from "@/features/vendas/components/venda-acoes";
 import { VendaForm } from "@/features/vendas/components/venda-form";
@@ -115,7 +116,12 @@ export default async function VendaPage({
           icon={Package}
           label="Unidades pedidas"
           value={String(resumo.unidades)}
-          hint={venda.estoque !== null ? `de ${venda.estoque} no estoque` : `${resumo.pedidos} pedido(s)`}
+          hint={[
+            venda.estoque !== null ? `de ${venda.estoque} no estoque` : `${resumo.pedidos} pedido(s)`,
+            venda.geraVoucher ? `${resumo.entregues} entregue(s)` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         />
         <MetricCard icon={Wallet} label="Pago" value={formatCents(resumo.pagoCents)} />
         <MetricCard icon={Clock} label="A confirmar" value={formatCents(resumo.pendenteCents)} />
@@ -135,7 +141,11 @@ export default async function VendaPage({
                   <span className="flex items-center gap-3 tabular-nums">
                     <span>
                       <strong>{t.unidades}</strong> un.
-                      <span className="text-muted-foreground"> · {t.pagas} paga{t.pagas === 1 ? "" : "s"}</span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {t.pagas} paga{t.pagas === 1 ? "" : "s"}
+                        {venda.geraVoucher ? ` · ${t.entregues} entregue${t.entregues === 1 ? "" : "s"}` : ""}
+                      </span>
                     </span>
                     <span className="w-24 text-right">{formatCents(t.totalCents)}</span>
                   </span>
@@ -150,6 +160,7 @@ export default async function VendaPage({
       <section className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-medium">Pedidos</h3>
+          {venda.geraVoucher ? <BuscarVoucher /> : null}
           {pedidos.length > 0 ? (
             <a href={`${base}/exportar`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-2")}>
               <Download className="size-4" /> Baixar planilha (CSV)
@@ -202,7 +213,12 @@ export default async function VendaPage({
               Nenhum pedido com este filtro.
             </p>
           ) : (
-            <PedidosLista pedidos={filtrados} titulo={venda.titulo} temOpcoes={venda.temOpcoes} />
+            <PedidosLista
+              pedidos={filtrados}
+              titulo={venda.titulo}
+              temOpcoes={venda.temOpcoes}
+              geraVoucher={venda.geraVoucher}
+            />
           )
         )}
       </section>
