@@ -16,7 +16,7 @@ export async function convidarParaSistema(input: {
   companyId: string;
   email: string;
   role: "admin" | "member";
-}): Promise<void> {
+}): Promise<string> {
   const tenant = await getTenantService();
   const papel = await tenant.requireMembership(input.companyId);
   if (!permissionService.canManageMembers(papel)) {
@@ -26,11 +26,12 @@ export async function convidarParaSistema(input: {
   const { data } = await client.auth.getUser();
   if (!data.user) throw new AppError("unauthorized", "Sessão expirada");
 
-  await (await getInviteService()).invite({
+  const convite = await (await getInviteService()).invite({
     companyId: input.companyId,
     email: input.email,
     role: input.role,
     invitedBy: data.user.id,
   });
   await syncCompanySeats(input.companyId);
+  return convite.id;
 }
