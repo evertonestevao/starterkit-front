@@ -21,20 +21,22 @@ import { permissionService } from "@/services/permissionService";
  * por request. Null = a pessoa não entra na seção.
  */
 
-export const abasDaEbd = cache(async (): Promise<RouteTab[] | null> => {
+export const abasDaEbd = cache(async (contar = true): Promise<RouteTab[] | null> => {
   const actor = await getEbdActorAutorizado();
   if (!actor) return null;
   const base = "/dashboard/ebd";
   // Quantos em alerta, para o número na aba. Falhar aqui não derruba a página.
-  const emAlerta = await (
-    await getEbdService()
-  )
-    .alertas(actor)
-    .then((r) => r.alertas.filter((a) => a.situacao === "pendente").length)
-    .catch((err: unknown) => {
-      console.error("[ebd] falha ao contar os alertas", err);
-      return 0;
-    });
+  const emAlerta = contar
+    ? await (
+        await getEbdService()
+      )
+        .alertas(actor)
+        .then((r) => r.alertas.filter((a) => a.situacao === "pendente").length)
+        .catch((err: unknown) => {
+          console.error("[ebd] falha ao contar os alertas", err);
+          return 0;
+        })
+    : undefined;
   const tabs: RouteTab[] = [
     { href: base, label: "Resumo" },
     { href: `${base}/alunos`, label: "Alunos" },
@@ -55,14 +57,16 @@ export const abasDaEbd = cache(async (): Promise<RouteTab[] | null> => {
   return tabs;
 });
 
-export const abasDoAcompanhamento = cache(async (): Promise<RouteTab[] | null> => {
+export const abasDoAcompanhamento = cache(async (contar = true): Promise<RouteTab[] | null> => {
   const actor = await getAcompanhamentoActorAutorizado();
   if (!actor) return null;
   const base = "/dashboard/acompanhamento";
-  const resumo = await (await getAcompanhamentoService()).resumo(actor).catch((err: unknown) => {
-    console.error("[acompanhamento] falha ao montar o resumo das abas", err);
-    return null;
-  });
+  const resumo = contar
+    ? await (await getAcompanhamentoService()).resumo(actor).catch((err: unknown) => {
+        console.error("[acompanhamento] falha ao montar o resumo das abas", err);
+        return null;
+      })
+    : null;
   const tabs: RouteTab[] = [
     { href: base, label: "Resumo" },
     { href: `${base}/alertas`, label: "Em alerta", count: resumo?.emAlerta },
@@ -134,12 +138,18 @@ export const abasDasConfiguracoes = cache(async (): Promise<RouteTab[]> => {
   return tabs;
 });
 
-/** Subitens por endereço da seção, só das seções que a pessoa vê no menu. */
+/**
+ * Subitens por endereço da seção, só das seções que a pessoa vê no menu.
+ * SEM os números de alerta: esta lista roda em toda página do painel, e
+ * contar alertas custa caro (o resumo da presença varre as chamadas, e cresce
+ * com o uso). Os números aparecem quando a pessoa entra na seção — o layout
+ * dela monta as abas com contagem e o menu passa a usar essas.
+ */
 export async function getSubmenus(): Promise<Record<string, RouteTab[]>> {
   const menus = await getMenusVisiveis();
   const secoes: Array<[string, string, () => Promise<RouteTab[] | null>]> = [
-    ["acompanhamento", "/dashboard/acompanhamento", abasDoAcompanhamento],
-    ["ebd", "/dashboard/ebd", abasDaEbd],
+    ["acompanhamento", "/dashboard/acompanhamento", () => abasDoAcompanhamento(false)],
+    ["ebd", "/dashboard/ebd", () => abasDaEbd(false)],
     ["tesouraria", "/dashboard/tesouraria", abasDaTesouraria],
     ["settings", "/dashboard/settings", abasDasConfiguracoes],
   ];
