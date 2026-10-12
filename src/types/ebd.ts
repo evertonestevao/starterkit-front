@@ -43,6 +43,12 @@ export interface EbdAluno {
 export interface EbdAlunoDaIgreja extends EbdAluno {
   classeId: string;
   classeNome: string;
+  /** % de presença na classe, no período (presentes ÷ presentes + faltas); null = sem chamada. */
+  frequencia: number | null;
+  presentes: number;
+  faltas: number;
+  /** Também dá aula em alguma classe (professores revezam e ficam matriculados). */
+  professor: boolean;
 }
 
 export interface EbdVisitante {

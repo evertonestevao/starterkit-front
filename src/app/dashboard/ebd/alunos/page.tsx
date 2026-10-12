@@ -16,7 +16,7 @@ export default async function EbdAlunosPage() {
   if (!actor) notFound();
 
   const service = await getEbdService();
-  const { alunos, classes, gestao } = await service.alunosDaIgreja(actor);
+  const { alunos, classes, gestao, periodo } = await service.alunosDaIgreja(actor);
   // Os responsáveis são um complemento: se falharem, a lista segue sem eles.
   const responsaveis = await service.responsaveis(alunos.map((a) => a.membroId)).catch((err: unknown) => {
     console.error("[ebd] falha ao carregar os responsáveis", err);
@@ -40,6 +40,7 @@ export default async function EbdAlunosPage() {
         responsaveis={responsaveis}
         gestao={gestao}
         hoje={hojeISO()}
+        periodo={periodo}
       />
     </div>
   );

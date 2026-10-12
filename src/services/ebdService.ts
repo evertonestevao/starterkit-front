@@ -258,6 +258,9 @@ function validar<T>(schema: z.ZodType<T>, input: unknown): T {
   return parsed.data;
 }
 
+/** Janela da frequência na lista de alunos. */
+export const DIAS_DA_FREQUENCIA = 90;
+
 export function createEbdService(deps: { repo: EbdRepository; hoje?: () => string }) {
   const { repo } = deps;
   const hoje = deps.hoje ?? (() => hojeISO());
@@ -301,21 +304,43 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
      */
     async alunosDaIgreja(
       actor: EbdActor,
-    ): Promise<{ alunos: EbdAlunoDaIgreja[]; classes: EbdClasse[]; gestao: boolean }> {
+    ): Promise<{
+      alunos: EbdAlunoDaIgreja[];
+      classes: EbdClasse[];
+      gestao: boolean;
+      /** De quando a quando a frequência foi contada. */
+      periodo: { de: string; ate: string };
+    }> {
       const church = await igreja(actor);
       const classes = (await repo.listClasses(church.id)).filter((c) => c.ativa);
       const hojeData = hoje();
-      const porClasse = await Promise.all(
-        classes.map(async (c) =>
-          (await repo.alunos(c.id, hojeData)).map((a): EbdAlunoDaIgreja => ({
-            ...a,
-            classeId: c.id,
-            classeNome: c.nome,
-          })),
-        ),
-      );
-      const alunos = porClasse.flat().sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-      return { alunos, classes, gestao: canGerirEbd(actor.role, actor.podeGerirEbd) };
+      // Frequência nos últimos 90 dias: no começo de um trimestre, contar só
+      // ele daria 0%, 50% ou 100% com uma ou duas aulas.
+      const periodo = { de: somarDias(hojeData, -DIAS_DA_FREQUENCIA), ate: hojeData };
+      const [porClasse, frequencias] = await Promise.all([
+        Promise.all(classes.map(async (c) => ({ classe: c, alunos: await repo.alunos(c.id, hojeData) }))),
+        // Complemento: se falhar, a lista sai sem a frequência.
+        repo.frequenciaAlunos(church.id, null, periodo.de, periodo.ate).catch(() => []),
+      ]);
+      const frequenciaDe = new Map(frequencias.map((f) => [`${f.membroId}|${f.classeId}`, f]));
+      const professores = new Set(classes.flatMap((c) => c.professores.map((p) => p.membroId)));
+      const alunos = porClasse
+        .flatMap(({ classe, alunos: lista }) =>
+          lista.map((a): EbdAlunoDaIgreja => {
+            const f = frequenciaDe.get(`${a.membroId}|${classe.id}`);
+            return {
+              ...a,
+              classeId: classe.id,
+              classeNome: classe.nome,
+              frequencia: f?.percentual ?? null,
+              presentes: f?.presentes ?? 0,
+              faltas: f?.ausentes ?? 0,
+              professor: professores.has(a.membroId),
+            };
+          }),
+        )
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+      return { alunos, classes, gestao: canGerirEbd(actor.role, actor.podeGerirEbd), periodo };
     },
 
     async classe(actor: EbdActor, classeId: string) {

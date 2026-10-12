@@ -159,3 +159,13 @@ export function textoDaLicao(licao: Pick<EbdLicao, "numero" | "titulo">): string
 
 /** Parentescos sugeridos no cadastro de responsável. */
 export const PARENTESCOS = ["Mãe", "Pai", "Avó", "Avô", "Tia", "Tio", "Irmã", "Irmão", "Madrinha", "Padrinho", "Outro"];
+
+/** Faixa da frequência do aluno: acima de 70% é alta, de 40% a 70% média, abaixo de 40% baixa. */
+export type FaixaFrequencia = "alta" | "media" | "baixa" | "sem";
+
+export function faixaDeFrequencia(percentual: number | null | undefined): FaixaFrequencia {
+  if (percentual === null || percentual === undefined) return "sem";
+  if (percentual > 70) return "alta";
+  if (percentual >= 40) return "media";
+  return "baixa";
+}

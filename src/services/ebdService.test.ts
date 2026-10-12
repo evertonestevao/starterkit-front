@@ -48,6 +48,8 @@ function build(over: Partial<EbdRepository> = {}) {
     salvarAula: vi.fn(async () => "aula"),
     matricular: vi.fn(async () => undefined),
     matricularNovo: vi.fn(async () => "novo"),
+    listTrimestres: vi.fn(async () => []),
+    frequenciaAlunos: vi.fn(async () => []),
     ...over,
   } as unknown as EbdRepository;
   return { repo, svc: createEbdService({ repo, hoje: () => HOJE }) };
@@ -354,6 +356,48 @@ describe("alunosDaIgreja", () => {
     expect(r.gestao).toBe(true);
     // Classe encerrada nem é consultada.
     expect(repo.alunos).toHaveBeenCalledTimes(2);
+  });
+
+  it("traz a frequência de cada aluno na classe e marca quem também é professor", async () => {
+    const comProfessor: EbdClasse = { ...classe, professores: [{ membroId: "m2", nome: "Ana", temLogin: true }] };
+    const frequenciaAlunos = vi.fn(async () => [
+      {
+        membroId: ALUNO,
+        nome: "Zeca",
+        membroIgreja: true,
+        classeId: CLASSE,
+        classeNome: "Juniores",
+        matriculadoHoje: true,
+        presentes: 3,
+        ausentes: 1,
+        justificados: 0,
+        percentual: 75,
+      },
+    ]);
+    const { svc } = build({
+      listClasses: vi.fn(async () => [comProfessor]),
+      alunos: vi.fn(async () => [
+        { ...aluno, nome: "Zeca" },
+        { ...aluno, membroId: "m2", matriculaId: "mt2", nome: "Ana" },
+      ]),
+      frequenciaAlunos,
+    });
+    const r = await svc.alunosDaIgreja(secretaria);
+    expect(r.periodo).toEqual({ de: "2026-07-03", ate: HOJE });
+    expect(frequenciaAlunos).toHaveBeenCalledWith(IGREJA, null, "2026-07-03", HOJE);
+    const [ana, zeca] = r.alunos;
+    expect([ana.nome, ana.professor, ana.frequencia]).toEqual(["Ana", true, null]);
+    expect([zeca.nome, zeca.professor, zeca.frequencia, zeca.presentes, zeca.faltas]).toEqual(["Zeca", false, 75, 3, 1]);
+  });
+
+  it("se a frequência falhar, a lista sai sem ela", async () => {
+    const { svc } = build({
+      frequenciaAlunos: vi.fn(async () => {
+        throw new Error("fora do ar");
+      }),
+    });
+    const r = await svc.alunosDaIgreja(secretaria);
+    expect(r.alunos[0].frequencia).toBeNull();
   });
 
   it("quem não é da EBD não recebe a lista", async () => {
