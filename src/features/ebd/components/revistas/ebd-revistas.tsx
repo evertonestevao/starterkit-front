@@ -172,42 +172,6 @@ export function EbdRevistas({
         </p>
       ) : null}
 
-      {/* O que está à venda neste trimestre, sempre à vista: é daqui que saem as opções do pedido. */}
-      <div
-        className={cn(
-          "flex flex-col gap-2 rounded-lg border p-3 print:hidden",
-          revistas.length === 0 && "border-primary/50 bg-primary/5",
-        )}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <BookOpen className="size-4 text-primary" /> Revistas e preços deste trimestre
-          </p>
-          <Button
-            type="button"
-            size="sm"
-            variant={revistas.length === 0 ? "default" : "outline"}
-            onClick={() => setAba("revistas")}
-          >
-            <Pencil className="size-3.5" /> {revistas.length === 0 ? "Cadastrar revistas" : "Editar revistas e preços"}
-          </Button>
-        </div>
-        {revistas.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Comece por aqui: cadastre as revistas que a EBD vai oferecer neste trimestre e o preço de cada uma. Depois é
-            só registrar os pedidos.
-          </p>
-        ) : (
-          <ul className="flex flex-wrap gap-2">
-            {revistas.map((r) => (
-              <li key={r.id} className="rounded-full border bg-background px-3 py-1 text-sm">
-                {r.titulo} <strong className="tabular-nums">{formatarReais(r.precoCentavos)}</strong>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
       <div
         className="flex flex-wrap gap-2 border-b pb-2 print:hidden"
         role="tablist"
@@ -528,6 +492,45 @@ export function EbdRevistas({
           outrosTrimestres={trimestres.filter((t) => t.id !== trimestreId)}
         />
       ) : null}
+
+      {/* O que está à venda neste trimestre, no fim da tela: o foco aqui são os pedidos. */}
+      {aba === "revistas" ? null : (
+        <div
+          className={cn(
+            "flex flex-col gap-2 rounded-lg border p-3 print:hidden",
+            revistas.length === 0 && "border-primary/50 bg-primary/5",
+          )}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <BookOpen className="size-4 text-primary" /> Revistas e preços deste trimestre
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant={revistas.length === 0 ? "default" : "outline"}
+              onClick={() => setAba("revistas")}
+            >
+              <Pencil className="size-3.5" />{" "}
+              {revistas.length === 0 ? "Cadastrar revistas" : "Editar revistas e preços"}
+            </Button>
+          </div>
+          {revistas.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Comece por aqui: cadastre as revistas que a EBD vai oferecer neste trimestre e o preço de cada uma. Depois
+              é só registrar os pedidos.
+            </p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {revistas.map((r) => (
+                <li key={r.id} className="rounded-full border bg-background px-3 py-1 text-sm">
+                  {r.titulo} <strong className="tabular-nums">{formatarReais(r.precoCentavos)}</strong>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <Dialog open={pedindo !== null} onOpenChange={(aberto) => !aberto && setPedindo(null)}>
         <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
