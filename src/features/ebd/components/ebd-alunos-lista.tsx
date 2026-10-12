@@ -15,40 +15,12 @@ import { cn } from "@/lib/utils";
 import type { EbdAlunoDaIgreja, EbdResponsavel } from "@/types/ebd";
 import { NaoMembroBadge, TirarDaClasse } from "./ebd-classe-acoes";
 import { ResponsaveisBotao } from "./ebd-responsaveis";
+import { SeloFrequencia } from "./selo-frequencia";
 
 /** Alunos por página. */
 const POR_PAGINA = 20;
 
 type FiltroPapel = "todos" | "professores" | "alunos";
-
-/** Verde acima de 70%, amarelo de 40% a 70%, vermelho abaixo de 40%. */
-const COR_DA_FAIXA: Record<FaixaFrequencia, string> = {
-  alta: "border-emerald-600/30 bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-200",
-  media: "border-amber-600/30 bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200",
-  baixa: "border-red-600/30 bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-200",
-  sem: "border-border bg-muted text-muted-foreground",
-};
-
-/** Selo com a % de presença do aluno na classe, no período. */
-function FrequenciaBadge({ aluno }: { aluno: EbdAlunoDaIgreja }) {
-  const faixa = faixaDeFrequencia(aluno.frequencia);
-  const total = aluno.presentes + aluno.faltas;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums",
-        COR_DA_FAIXA[faixa],
-      )}
-      title={
-        faixa === "sem"
-          ? "Sem chamada no período"
-          : `${aluno.presentes} ${aluno.presentes === 1 ? "presença" : "presenças"} em ${total} ${total === 1 ? "aula" : "aulas"} (justificadas não contam)`
-      }
-    >
-      {aluno.frequencia === null ? "sem chamada" : `${Math.round(aluno.frequencia)}%`}
-    </span>
-  );
-}
 
 /**
  * Todos os alunos da EBD numa lista só, com busca pelo nome e filtro por
@@ -202,7 +174,10 @@ export function EbdAlunosLista({
               <li key={a.matriculaId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
                 <span className="min-w-0">
                   <span className="flex flex-wrap items-center gap-1.5 font-medium">
-                    {a.nome} <FrequenciaBadge aluno={a} />
+                    <Link href={`/dashboard/ebd/alunos/${a.membroId}`} className="hover:underline">
+                      {a.nome}
+                    </Link>{" "}
+                    <SeloFrequencia percentual={a.frequencia} presentes={a.presentes} faltas={a.faltas} />
                     {a.professor ? (
                       <span className="rounded-full border px-2 py-0.5 text-xs font-normal text-muted-foreground">
                         Professor(a)

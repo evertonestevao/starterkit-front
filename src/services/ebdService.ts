@@ -7,6 +7,7 @@ import type { RoleCode } from "@/types/database";
 import type {
   EbdAlerta,
   EbdProfessorDaIgreja,
+  EbdHistoricoDoAluno,
   EbdAluno,
   EbdAlunoDaIgreja,
   EbdAulaParaPreencher,
@@ -64,6 +65,9 @@ export interface EbdRepository {
   alunos(classeId: string, data: string): Promise<EbdAluno[]>;
   buscarPessoas(churchId: string, termo: string): Promise<EbdPessoaBusca[]>;
   professores(churchId: string): Promise<EbdProfessorDaIgreja[]>;
+  /** null = aluno não existe ou quem pede não enxerga nenhuma classe dele. */
+  historicoDoAluno(membroId: string): Promise<EbdHistoricoDoAluno | null>;
+  editarAluno(membroId: string, dados: { nome: string; telefone: string | null; nascimento: string | null }): Promise<void>;
   darCargoProfessor(membroId: string): Promise<void>;
   tirarCargoProfessor(membroId: string): Promise<void>;
   matricular(classeId: string, membroId: string): Promise<void>;
@@ -258,6 +262,21 @@ function validar<T>(schema: z.ZodType<T>, input: unknown): T {
   return parsed.data;
 }
 
+const editarAlunoSchema = z.object({
+  nome: z.string().trim().min(2, "Informe o nome").max(120, "Nome longo demais"),
+  telefone: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/\D/g, ""))
+    .refine((v) => v === "" || (v.length >= 10 && v.length <= 13), "Telefone com DDD, por favor")
+    .transform((v) => v || null),
+  nascimento: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v), "Data de nascimento inválida")
+    .transform((v) => v || null),
+});
+
 /** Janela da frequência na lista de alunos. */
 export const DIAS_DA_FREQUENCIA = 90;
 
@@ -387,6 +406,27 @@ export function createEbdService(deps: { repo: EbdRepository; hoje?: () => strin
       const church = await gestao(actor);
       await exigeClasse(church.id, classeId);
       await repo.removerProfessor(church.id, classeId, membroId);
+    },
+
+    /** Página do aluno: dados, resumo e chamadas. O banco decide o que quem pede enxerga. */
+    async historicoDoAluno(actor: EbdActor, membroId: unknown): Promise<EbdHistoricoDoAluno> {
+      await igreja(actor);
+      const id = z.uuid().safeParse(membroId);
+      const historico = id.success ? await repo.historicoDoAluno(id.data) : null;
+      if (!historico) throw new AppError("not_found", "Aluno não encontrado.");
+      return historico;
+    },
+
+    /**
+     * Edita nome, telefone e nascimento do aluno que a EBD cadastrou e que
+     * ainda não é membro (o banco confere; depois, os dados são de Membros).
+     */
+    async editarAluno(actor: EbdActor, membroId: unknown, input: unknown): Promise<void> {
+      await gestao(actor);
+      const id = z.uuid().safeParse(membroId);
+      if (!id.success) throw new AppError("not_found", "Aluno não encontrado.");
+      const dados = validar(editarAlunoSchema, input);
+      await repo.editarAluno(id.data, dados);
     },
 
     /** Professores: quem tem o cargo e quem dá aula, com as classes (só gestão). */

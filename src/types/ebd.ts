@@ -51,6 +51,20 @@ export interface EbdAlunoDaIgreja extends EbdAluno {
   professor: boolean;
 }
 
+/** Página do aluno: dados, matrículas e as chamadas (só das classes que quem pede enxerga). */
+export interface EbdHistoricoDoAluno {
+  membroId: string;
+  nome: string;
+  whatsapp: string | null;
+  nascimento: string | null;
+  membroIgreja: boolean;
+  /** A EBD cadastrou e a pessoa ainda não é membro: a gestão da EBD edita os dados. */
+  podeEditar: boolean;
+  matriculas: Array<{ classeId: string; classeNome: string; desde: string; ate: string | null }>;
+  /** Da mais recente para a mais antiga. */
+  aulas: Array<{ data: string; classeNome: string; estado: EstadoPresenca; licao: string | null }>;
+}
+
 export interface EbdVisitante {
   id?: string;
   nome: string;
