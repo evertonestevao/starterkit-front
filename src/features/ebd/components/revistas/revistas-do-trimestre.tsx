@@ -26,17 +26,19 @@ import type { EbdRevista } from "@/types/ebdRevistas";
 const emReais = (centavos: number) => (centavos / 100).toFixed(2).replace(".", ",");
 
 /**
- * As revistas do trimestre: título, preço e a classe que costuma usar (serve
- * para sugerir no pedido). Dá para trazer a lista de outro trimestre e só
- * acertar os preços.
+ * Revistas e preços do trimestre: o que a EBD oferece e quanto cada pessoa
+ * paga. É daqui que saem as opções do pedido. Dá para trazer a lista de outro
+ * trimestre e só acertar os preços.
  */
 export function RevistasDoTrimestre({
   trimestreId,
+  trimestreNome,
   revistas,
   classes,
   outrosTrimestres,
 }: {
   trimestreId: string;
+  trimestreNome: string;
   revistas: EbdRevista[];
   classes: Array<{ id: string; nome: string }>;
   outrosTrimestres: Array<{ id: string; nome: string }>;
@@ -53,94 +55,135 @@ export function RevistasDoTrimestre({
     });
   }
 
+  const copiar =
+    outrosTrimestres.length > 0 ? (
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs text-muted-foreground">Copiar as revistas e os preços de outro trimestre</span>
+          <select
+            className={cn(selectClasses, "min-w-56")}
+            value={copiarDe}
+            onChange={(e) => setCopiarDe(e.target.value)}
+            aria-label="Trimestre de onde copiar"
+          >
+            <option value="">Escolha o trimestre</option>
+            {outrosTrimestres.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={pending || !copiarDe}
+          onClick={() => rodar(() => copiarRevistasAction(copiarDe, trimestreId))}
+        >
+          <Copy className="size-4" /> Copiar
+        </Button>
+      </div>
+    ) : null;
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          O preço fica gravado em cada pedido: mudar aqui não altera os pedidos já feitos.
-        </p>
-        <Button type="button" size="sm" onClick={() => setEditando("nova")}>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="max-w-2xl">
+          <p className="font-medium">Revistas e preços do {trimestreNome}</p>
+          <p className="text-sm text-muted-foreground">
+            Cadastre aqui cada revista que a EBD vai oferecer neste trimestre e o preço que a pessoa paga. Ao registrar
+            um pedido, o secretário escolhe entre estas revistas.
+          </p>
+        </div>
+        <Button type="button" onClick={() => setEditando("nova")}>
           <Plus className="size-4" /> Nova revista
         </Button>
       </div>
 
       {revistas.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Nenhuma revista neste trimestre ainda. Cadastre as revistas (título e preço) para começar os pedidos.
-        </p>
-      ) : (
-        <ul className="flex flex-col divide-y rounded-lg border">
-          {revistas.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
-              <span className="min-w-0">
-                <span className="block truncate font-medium">{r.titulo}</span>
-                <span className="text-xs text-muted-foreground">
-                  {formatarReais(r.precoCentavos)}
-                  {r.classeNome ? ` · sugerida para ${r.classeNome}` : ""}
-                </span>
-              </span>
-              <span className="flex gap-1">
-                <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => setEditando(r)}>
-                  <Pencil className="size-3.5" /> Editar
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={pending}
-                  aria-label={`Remover ${r.titulo}`}
-                  onClick={async () => {
-                    const sim = await confirmar({
-                      titulo: `Remover "${r.titulo}" deste trimestre?`,
-                      descricao: "Só sai da lista se ninguém tiver pedido esta revista.",
-                      botao: "Remover",
-                      perigo: true,
-                    });
-                    if (sim) rodar(() => removerRevistaAction(r.id));
-                  }}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </span>
+        <div className="flex flex-col gap-4 rounded-lg border border-dashed p-5">
+          <ol className="flex flex-col gap-2 text-sm">
+            <li>
+              <strong>1. Cadastre as revistas.</strong> Uma linha para cada tipo: por exemplo “Adultos – aluno”,
+              “Adultos – professor”, “Juniores – aluno”.
             </li>
-          ))}
-        </ul>
-      )}
-
-      {outrosTrimestres.length > 0 ? (
-        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed p-3">
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="text-xs text-muted-foreground">Trazer as revistas de outro trimestre</span>
-            <select
-              className={cn(selectClasses, "min-w-56")}
-              value={copiarDe}
-              onChange={(e) => setCopiarDe(e.target.value)}
-              aria-label="Trimestre de onde copiar"
-            >
-              <option value="">Escolha o trimestre</option>
-              {outrosTrimestres.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nome}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending || !copiarDe}
-            onClick={() => rodar(() => copiarRevistasAction(copiarDe, trimestreId))}
-          >
-            <Copy className="size-4" /> Copiar
-          </Button>
+            <li>
+              <strong>2. Informe o preço de cada uma.</strong> É o valor que a pessoa paga à EBD.
+            </li>
+            <li>
+              <strong>3. Se quiser, ligue a revista a uma classe.</strong> Aí, no pedido de um aluno daquela classe, ela
+              já vem marcada.
+            </li>
+          </ol>
+          <div className="flex flex-wrap items-end gap-3">
+            <Button type="button" onClick={() => setEditando("nova")}>
+              <Plus className="size-4" /> Cadastrar a primeira revista
+            </Button>
+            {copiar}
+          </div>
         </div>
-      ) : null}
+      ) : (
+        <>
+          <div className="overflow-hidden rounded-lg border">
+            <div className="hidden grid-cols-[1fr_8rem_12rem_9rem] gap-3 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid">
+              <span>Revista</span>
+              <span className="text-right">Preço</span>
+              <span>Sugerida para a classe</span>
+              <span />
+            </div>
+            <ul className="flex flex-col divide-y">
+              {revistas.map((r) => (
+                <li
+                  key={r.id}
+                  className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm sm:grid-cols-[1fr_8rem_12rem_9rem]"
+                >
+                  <span className="min-w-0 truncate font-medium">{r.titulo}</span>
+                  <span className="text-right text-base font-semibold tabular-nums">
+                    {formatarReais(r.precoCentavos)}
+                  </span>
+                  <span className="text-xs text-muted-foreground sm:text-sm">
+                    <span className="sm:hidden">Sugerida para: </span>
+                    {r.classeNome ?? "nenhuma"}
+                  </span>
+                  <span className="flex justify-end gap-1">
+                    <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => setEditando(r)}>
+                      <Pencil className="size-3.5" /> Editar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={pending}
+                      aria-label={`Remover ${r.titulo}`}
+                      onClick={async () => {
+                        const sim = await confirmar({
+                          titulo: `Remover "${r.titulo}" deste trimestre?`,
+                          descricao: "Só sai da lista se ninguém tiver pedido esta revista.",
+                          botao: "Remover",
+                          perigo: true,
+                        });
+                        if (sim) rodar(() => removerRevistaAction(r.id));
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Mudar o preço vale para os pedidos novos: cada pedido já feito guarda o preço do dia em que foi registrado.
+          </p>
+          {copiar ? <div className="rounded-lg border border-dashed p-3">{copiar}</div> : null}
+        </>
+      )}
 
       <Dialog open={editando !== null} onOpenChange={(aberto) => !aberto && setEditando(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editando === "nova" ? "Nova revista" : "Editar revista"}</DialogTitle>
-            <DialogDescription>Ex.: “Adultos – aluno”, “Juniores – professor”.</DialogDescription>
+            <DialogDescription>{trimestreNome}</DialogDescription>
           </DialogHeader>
           {editando !== null ? (
             <RevistaForm
@@ -175,43 +218,50 @@ function RevistaForm({
   }, [state, onFechar]);
 
   return (
-    <Formulario action={action} estado={state} className="flex flex-col gap-3">
+    <Formulario action={action} estado={state} className="flex flex-col gap-4">
       <input type="hidden" name="id" value={revista?.id ?? ""} />
       <input type="hidden" name="trimestreId" value={trimestreId} />
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="revista-titulo">Título</Label>
+        <Label htmlFor="revista-titulo">Nome da revista</Label>
         <Input
           id="revista-titulo"
           name="titulo"
           required
           minLength={2}
           maxLength={80}
+          placeholder="Ex.: Adultos – aluno"
           defaultValue={revista?.titulo ?? ""}
         />
+        <p className="text-xs text-muted-foreground">É como ela aparece no pedido e no resumo da compra.</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="revista-preco">Preço (R$)</Label>
-          <Input
-            id="revista-preco"
-            name="preco"
-            inputMode="decimal"
-            required
-            placeholder="12,50"
-            defaultValue={revista ? emReais(revista.precoCentavos) : ""}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="revista-classe">Sugerir para a classe</Label>
-          <select id="revista-classe" name="classeId" className={selectClasses} defaultValue={revista?.classeId ?? ""}>
-            <option value="">Nenhuma</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="revista-preco">Preço para a pessoa (R$)</Label>
+        <Input
+          id="revista-preco"
+          name="preco"
+          inputMode="decimal"
+          required
+          placeholder="12,50"
+          defaultValue={revista ? emReais(revista.precoCentavos) : ""}
+          className="max-w-40"
+        />
+        <p className="text-xs text-muted-foreground">
+          Quanto cada pessoa paga à EBD por uma revista. Use 0 se for de graça.
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="revista-classe">Sugerir para a classe (opcional)</Label>
+        <select id="revista-classe" name="classeId" className={selectClasses} defaultValue={revista?.classeId ?? ""}>
+          <option value="">Nenhuma</option>
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nome}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          No pedido de um aluno desta classe, esta revista já vem marcada. O secretário pode trocar.
+        </p>
       </div>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onFechar} disabled={pending}>
