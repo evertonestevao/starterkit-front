@@ -53,7 +53,7 @@ test("classe com dois professores, chamada salva e relatório do domingo", async
   await novoMembro(page, "Paulo Professor");
 
   // 2. Classe.
-  await page.goto("/dashboard/ebd");
+  await page.goto("/dashboard/ebd/classes");
   await page.getByRole("button", { name: "Nova classe" }).click();
   const classeDialogo = page.getByRole("dialog");
   await classeDialogo.getByLabel("Nome", { exact: true }).fill("Juniores");
@@ -85,11 +85,12 @@ test("classe com dois professores, chamada salva e relatório do domingo", async
   // Reabrir a mesma data cai em edição, não em chamada nova.
   await expect(page.getByText("Já feita — editando")).toBeVisible();
 
-  // 6. O resumo do domingo reflete a chamada, com os dois professores na classe.
+  // 6. A aba Classes mostra os dois professores, e o resumo do domingo reflete a chamada.
+  await page.goto("/dashboard/ebd/classes");
+  await expect(page.getByText("Prof.: Marta Professora, Paulo Professor")).toBeVisible();
   await page.goto("/dashboard/ebd");
   await expect(page.getByText("1 de 1 classe(s) com chamada")).toBeVisible();
   await expect(page.getByText("de 2 matriculados")).toBeVisible();
-  await expect(page.getByText("Prof.: Marta Professora, Paulo Professor")).toBeVisible();
 
   // 7. Relatório do domingo: o botão entrega o arquivo PDF direto.
   const [download] = await Promise.all([

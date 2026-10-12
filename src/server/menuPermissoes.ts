@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { menusVisiveis } from "@/lib/menuPermissoes";
 import { menusComBloqueio } from "@/lib/mensalidadeAviso";
@@ -19,8 +20,9 @@ export async function getMenuPermissoesService(): Promise<MenuPermissoesService>
  * Menus que a pessoa logada vê na igreja ativa (papel + módulos liberados).
  * Igreja com o painel suspenso por mensalidade pendente: só a mensalidade —
  * e, como `exigeMenu` lê daqui, as outras telas respondem 404.
+ * Uma conta por renderização (layout, menu e cada tela pedem a mesma lista).
  */
-export async function getMenusVisiveis(): Promise<string[]> {
+export const getMenusVisiveis = cache(async (): Promise<string[]> => {
   const { active } = await getActiveTenant();
   if (!active) return [];
   const menus = menusVisiveis(active);
@@ -30,7 +32,7 @@ export async function getMenusVisiveis(): Promise<string[]> {
   // antes de ter alguma abaixo — o painel com os números fica só para quem administra.
   if (!comRede.includes(MENU_REDE) && (await getIgrejaQueCadastra())) comRede = [...comRede, MENU_REDE];
   return menusComBloqueio(comRede, await getMensalidadeBloqueada());
-}
+});
 
 /**
  * Guarda de tela: sem o menu, a tela responde 404 mesmo com a URL na mão.
