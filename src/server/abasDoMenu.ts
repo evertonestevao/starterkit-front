@@ -45,6 +45,8 @@ export const abasDaEbd = cache(async (): Promise<RouteTab[] | null> => {
   ];
   if (canGerirEbd(actor.role, actor.podeGerirEbd)) {
     tabs.splice(2, 0, { href: `${base}/professores`, label: "Professores" });
+    // Pedidos de revista (pagamento e entrega): só a gestão.
+    tabs.push({ href: `${base}/revistas`, label: "Revistas" });
     tabs.push({ href: `${base}/destaques`, label: "Destaques" });
     tabs.push({ href: `${base}/trimestres`, label: "Trimestres" });
     tabs.push({ href: `${base}/promocao`, label: "Promoção" });
