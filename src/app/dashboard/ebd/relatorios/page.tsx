@@ -80,7 +80,8 @@ export default async function EbdRelatoriosPage({
                 rotulo: formatarData(d.data).slice(0, 5),
                 valor: pct,
                 valorTexto: formatarPercentual(pct),
-                detalhe: `${d.presentes} presentes, ${d.ausentes} ausentes, ${d.justificados} justificados, ${d.visitantes} visitante(s)`,
+                // Matriculados = todos os que estavam na chamada daquele domingo.
+                detalhe: `${d.presentes + d.ausentes + d.justificados} matriculados, ${d.presentes} presentes, ${d.ausentes} ausentes, ${d.justificados} justificados, ${d.visitantes} visitante(s)`,
               };
             })}
             maximo={100}
