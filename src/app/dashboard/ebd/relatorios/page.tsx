@@ -5,7 +5,7 @@ import { MiniBarChart } from "@/components/mini-bar-chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatarData, formatarPercentual, hojeISO, percentualPresenca, somarDias } from "@/lib/acompanhamento";
-import { domingoSugerido, formatarReais, trimestreDe } from "@/lib/ebd";
+import { domingoSugerido, formatarReais, trimestreDe, valoresDoPeriodo } from "@/lib/ebd";
 import { FrequenciaTabela } from "@/features/acompanhamento/components/frequencia-tabela";
 import { EbdRelatorioFiltros } from "@/features/ebd/components/ebd-relatorio-filtros";
 import { isAppError } from "@/lib/errors";
@@ -26,7 +26,10 @@ export default async function EbdRelatoriosPage({
   const service = await getEbdService();
   const hoje = hojeISO();
 
-  const [trimestres, { classes: todasClasses }] = await Promise.all([service.trimestres(actor), service.classes(actor)]);
+  const [trimestres, { classes: todasClasses }] = await Promise.all([
+    service.trimestres(actor),
+    service.classes(actor),
+  ]);
   // Período: as datas da URL mandam (o seletor de trimestre só as preenche).
   // Link antigo com ?trimestre= ainda vale. Sem nada: o trimestre do último
   // domingo (no 1º dia do trimestre novo, o atual ainda está vazio) ou 13 semanas.
@@ -40,12 +43,10 @@ export default async function EbdRelatoriosPage({
 
   const classeFiltrada = todasClasses.find((c) => c.id === sp.classe)?.nome ?? null;
 
-  const resultado = await service
-    .relatorio(actor, { de, ate, classeId: sp.classe })
-    .catch((err: unknown) => {
-      if (isAppError(err) && err.code === "validation_error") return { erro: err.message };
-      throw err;
-    });
+  const resultado = await service.relatorio(actor, { de, ate, classeId: sp.classe }).catch((err: unknown) => {
+    if (isAppError(err) && err.code === "validation_error") return { erro: err.message };
+    throw err;
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -83,8 +84,16 @@ export default async function EbdRelatoriosPage({
               };
             })}
             maximo={100}
-              sufixo="%"
+            sufixo="%"
             vazio="Nenhuma chamada da EBD neste período."
+          />
+
+          <ValoresCard
+            valores={valoresDoPeriodo(
+              sp.classe ? resultado.classes.filter((k) => k.classeId === sp.classe) : resultado.classes,
+              resultado.domingos.length,
+            )}
+            periodo={`${formatarData(de)} a ${formatarData(ate)}${classeFiltrada ? ` · ${classeFiltrada}` : ""}`}
           />
 
           <Card>
@@ -126,13 +135,17 @@ export default async function EbdRelatoriosPage({
                               </TableCell>
                               <TableCell className="text-right tabular-nums">{c.aulas}</TableCell>
                               <TableCell className="text-right tabular-nums">
-                                {c.aulas ? (c.presentes / c.aulas).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "—"}
+                                {c.aulas
+                                  ? (c.presentes / c.aulas).toLocaleString("pt-BR", { maximumFractionDigits: 1 })
+                                  : "—"}
                               </TableCell>
                               <TableCell className="text-right tabular-nums">{formatarPercentual(pct)}</TableCell>
                               <TableCell className="text-right tabular-nums">{c.visitantes}</TableCell>
                               <TableCell className="text-right tabular-nums">{c.biblias}</TableCell>
                               <TableCell className="text-right tabular-nums">{c.revistas}</TableCell>
-                              <TableCell className="text-right tabular-nums">{formatarReais(c.ofertaCentavos)}</TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {formatarReais(c.ofertaCentavos)}
+                              </TableCell>
                             </TableRow>
                           );
                         })}
@@ -170,7 +183,11 @@ export default async function EbdRelatoriosPage({
                   key: `${a.membroId}-${a.classeId}`,
                   nome: a.nome,
                   href: `/dashboard/membros/${a.membroId}`,
-                  detalhe: [a.classeNome, !a.membroIgreja ? "não membro" : null, !a.matriculadoHoje ? "saiu da classe" : null]
+                  detalhe: [
+                    a.classeNome,
+                    !a.membroIgreja ? "não membro" : null,
+                    !a.matriculadoHoje ? "saiu da classe" : null,
+                  ]
                     .filter(Boolean)
                     .join(" · "),
                   presentes: a.presentes,
@@ -184,5 +201,62 @@ export default async function EbdRelatoriosPage({
         </>
       )}
     </div>
+  );
+}
+
+/** Ofertas do período: total, média por domingo e a parte de cada classe. */
+function ValoresCard({ valores, periodo }: { valores: ReturnType<typeof valoresDoPeriodo>; periodo: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Valores do período</CardTitle>
+        <CardDescription>
+          Ofertas registradas nas chamadas da EBD, de {periodo}. É o caixa da EBD: não entra na Tesouraria.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Oferta total</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{formatarReais(valores.totalCentavos)}</p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Média por domingo</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">
+              {valores.mediaPorDomingoCentavos === null ? "—" : formatarReais(valores.mediaPorDomingoCentavos)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {valores.domingos} {valores.domingos === 1 ? "domingo" : "domingos"} com chamada
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Bíblias</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{valores.biblias}</p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-xs text-muted-foreground">Revistas</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{valores.revistas}</p>
+          </div>
+        </div>
+        {valores.porClasse.length > 1 && valores.totalCentavos > 0 ? (
+          <ul className="flex flex-col gap-2">
+            {valores.porClasse.map((k) => (
+              <li key={k.classeId} className="flex flex-col gap-1 text-sm">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="truncate">{k.classeNome}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {formatarReais(k.centavos)}{" "}
+                    <span className="text-xs text-muted-foreground">({formatarPercentual(k.percentual)})</span>
+                  </span>
+                </span>
+                <span className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+                  <span className="block h-full rounded-full bg-primary" style={{ width: `${k.percentual}%` }} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

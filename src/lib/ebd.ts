@@ -169,3 +169,46 @@ export function faixaDeFrequencia(percentual: number | null | undefined): FaixaF
   if (percentual >= 40) return "media";
   return "baixa";
 }
+
+/** Ofertas do período no relatório da EBD: total, média por domingo e a parte de cada classe. */
+export interface ValoresDoPeriodo {
+  totalCentavos: number;
+  /** Total ÷ domingos com chamada; null sem nenhum domingo. */
+  mediaPorDomingoCentavos: number | null;
+  domingos: number;
+  biblias: number;
+  revistas: number;
+  /** Só as classes com aula no período, da maior oferta para a menor. */
+  porClasse: Array<{ classeId: string; classeNome: string; centavos: number; aulas: number; percentual: number }>;
+}
+
+export function valoresDoPeriodo(
+  classes: ReadonlyArray<{
+    classeId: string;
+    classeNome: string;
+    aulas: number;
+    ofertaCentavos: number;
+    biblias: number;
+    revistas: number;
+  }>,
+  domingosComChamada: number,
+): ValoresDoPeriodo {
+  const totalCentavos = classes.reduce((soma, c) => soma + c.ofertaCentavos, 0);
+  return {
+    totalCentavos,
+    mediaPorDomingoCentavos: domingosComChamada > 0 ? Math.round(totalCentavos / domingosComChamada) : null,
+    domingos: domingosComChamada,
+    biblias: classes.reduce((soma, c) => soma + c.biblias, 0),
+    revistas: classes.reduce((soma, c) => soma + c.revistas, 0),
+    porClasse: classes
+      .filter((c) => c.aulas > 0)
+      .map((c) => ({
+        classeId: c.classeId,
+        classeNome: c.classeNome,
+        centavos: c.ofertaCentavos,
+        aulas: c.aulas,
+        percentual: totalCentavos > 0 ? (100 * c.ofertaCentavos) / totalCentavos : 0,
+      }))
+      .sort((a, b) => b.centavos - a.centavos || a.classeNome.localeCompare(b.classeNome, "pt-BR")),
+  };
+}
