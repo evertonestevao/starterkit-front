@@ -79,6 +79,21 @@ export async function removerProfessorAction(classeId: string, membroId: string)
   }
 }
 
+/** Dados do aluno que a EBD cadastrou (enquanto não é membro). */
+export async function editarAlunoEbdAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+  try {
+    await (await getEbdService()).editarAluno(await ator(), texto(formData, "membroId"), {
+      nome: texto(formData, "nome"),
+      telefone: texto(formData, "telefone"),
+      nascimento: texto(formData, "nascimento"),
+    });
+    revalidar();
+    return { success: "Dados do aluno salvos." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
 export async function darCargoProfessorAction(membroId: string): Promise<ActionState> {
   try {
     await (await getEbdService()).darCargoProfessor(await ator(), membroId);

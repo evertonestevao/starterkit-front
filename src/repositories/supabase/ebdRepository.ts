@@ -176,6 +176,52 @@ export function createSupabaseEbdRepository(client: SupabaseClient): EbdReposito
       );
     },
 
+    async historicoDoAluno(membroId) {
+      const { data, error } = await client.rpc("ebd_historico_do_aluno", { p_membro_id: membroId });
+      if (error) falha("Falha ao carregar o histórico do aluno", error);
+      if (!data) return null;
+      const r = data as Record<string, unknown>;
+      return {
+        membroId: r.membro_id as string,
+        nome: r.nome as string,
+        whatsapp: (r.whatsapp as string | null) ?? null,
+        nascimento: (r.nascimento as string | null) ?? null,
+        membroIgreja: Boolean(r.membro_igreja),
+        podeEditar: Boolean(r.pode_editar),
+        matriculas: ((r.matriculas ?? []) as Array<Record<string, unknown>>).map((m) => ({
+          classeId: m.classe_id as string,
+          classeNome: m.classe_nome as string,
+          desde: m.desde as string,
+          ate: (m.ate as string | null) ?? null,
+        })),
+        aulas: ((r.aulas ?? []) as Array<Record<string, unknown>>).map((a) => ({
+          data: a.data as string,
+          classeNome: a.classe_nome as string,
+          estado: a.estado as EstadoPresenca,
+          licao: (a.licao as string | null) ?? null,
+        })),
+      };
+    },
+
+    async editarAluno(membroId, dados) {
+      const { error } = await client.rpc("ebd_editar_aluno", {
+        p_membro_id: membroId,
+        p_nome: dados.nome,
+        p_telefone: dados.telefone,
+        p_nascimento: dados.nascimento,
+      });
+      if (!error) return;
+      if (error.code === "P0002") {
+        throw new AppError(
+          "not_found",
+          "Este aluno já é membro (ou não foi cadastrado pela EBD): os dados são alterados em Membros.",
+          error,
+        );
+      }
+      if (error.code === "23514") throw new AppError("validation_error", "Confira o nome, o telefone e a data.", error);
+      falha("Falha ao salvar o aluno", error);
+    },
+
     async professores(churchId) {
       const { data, error } = await client.rpc("ebd_professores_da_igreja", { p_church_id: churchId });
       if (error) falha("Falha ao carregar os professores", error);

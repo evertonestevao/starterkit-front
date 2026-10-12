@@ -5526,6 +5526,97 @@ delete from public.cargo_acessos
 where church_id = 'acacacac-0000-4000-8000-0000000000d2' and cargo_id = (select id from public.cargos where slug = 'professor_ebd');
 
 -- ---------------------------------------------------------------------------
+-- EBD → página do aluno (migration 20261018100000). O histórico aparece só
+-- para quem enxerga a classe do aluno; só a gestão da EBD edita, e só o aluno
+-- que a EBD cadastrou e que ainda não é membro.
+-- ---------------------------------------------------------------------------
+set local role authenticated;
+do $$
+declare h jsonb; v_novo uuid; v_do_prof uuid; v_quem text;
+begin
+  -- Secretaria da EBD: vê o histórico de um aluno de qualquer classe.
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+  h := public.ebd_historico_do_aluno('ebdebdeb-0000-4000-8000-0000000000b2');
+  if h is null or jsonb_array_length(h->'matriculas') = 0 then
+    raise exception 'FALHA aluno: secretaria da EBD nao viu o historico do aluno';
+  end if;
+  -- Aluno que é membro: a EBD não edita (os dados são da secretaria da igreja).
+  if (h->>'pode_editar')::boolean then raise exception 'FALHA aluno: membro apareceu como editavel pela EBD'; end if;
+  begin
+    perform public.ebd_editar_aluno('ebdebdeb-0000-4000-8000-0000000000b2', 'Nome Trocado', null, null);
+    raise exception 'FALHA aluno: a EBD editou os dados de um membro';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Aluno cadastrado pela EBD: a secretaria da EBD edita.
+  v_novo := public.ebd_matricular_novo('ebdebdeb-0000-4000-8000-0000000000a2', 'Crianca Nova', null, null);
+  perform set_config('rls.aluno_novo', v_novo::text, true);
+  h := public.ebd_historico_do_aluno(v_novo);
+  if not (h->>'pode_editar')::boolean then raise exception 'FALHA aluno: aluno da EBD nao veio editavel'; end if;
+  perform public.ebd_editar_aluno(v_novo, '  Crianca Corrigida ', '14999990000', date '2018-05-10');
+  h := public.ebd_historico_do_aluno(v_novo);
+  if h->>'nome' <> 'Crianca Corrigida' or h->>'whatsapp' <> '14999990000' or h->>'nascimento' <> '2018-05-10' then
+    raise exception 'FALHA aluno: edicao nao gravou (%)', h;
+  end if;
+  begin
+    perform public.ebd_editar_aluno(v_novo, 'X', null, null);
+    raise exception 'FALHA aluno: aceitou nome de uma letra';
+  exception when sqlstate '23514' then null;
+  end;
+
+  -- Professor: vê o aluno da classe dele, não o de outra classe, e não edita.
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}', true);
+  select membro_id into v_do_prof from public.ebd_alunos_da_classe('ebdebdeb-0000-4000-8000-0000000000a1') limit 1;
+  if v_do_prof is not null and public.ebd_historico_do_aluno(v_do_prof) is null then
+    raise exception 'FALHA aluno: professor nao viu o historico do aluno da classe dele';
+  end if;
+  if public.ebd_historico_do_aluno(v_novo) is not null then
+    raise exception 'FALHA aluno: professor viu o historico de aluno de outra classe';
+  end if;
+  begin
+    perform public.ebd_editar_aluno(v_novo, 'Pelo Professor', null, null);
+    raise exception 'FALHA aluno: professor editou o aluno';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Sede (igreja de cima) e outra rede: nem veem nem editam.
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    if public.ebd_historico_do_aluno(v_novo) is not null then
+      raise exception 'FALHA aluno: % viu o historico do aluno', v_quem;
+    end if;
+    begin
+      perform public.ebd_editar_aluno(v_novo, 'De Fora', null, null);
+      raise exception 'FALHA aluno: % editou o aluno', v_quem;
+    exception when sqlstate 'P0002' then null;
+    end;
+  end loop;
+end $$;
+reset role;
+
+-- Virou membro: os dados passam a ser da secretaria da igreja.
+update public.rol_membros set membro_igreja = true where id = current_setting('rls.aluno_novo')::uuid;
+set local role authenticated;
+do $$
+begin
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+  begin
+    perform public.ebd_editar_aluno(current_setting('rls.aluno_novo')::uuid, 'Depois de Membro', null, null);
+    raise exception 'FALHA aluno: a EBD editou quem ja virou membro';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+reset role;
+update public.rol_membros set deleted_at = now() where id = current_setting('rls.aluno_novo')::uuid;
+delete from public.ebd_matriculas where membro_id = current_setting('rls.aluno_novo')::uuid;
+
+-- ---------------------------------------------------------------------------
 -- meus_cargos (migration 20261001200000): a pessoa vê só os próprios cargos.
 -- O member autorizado (04) da AC Cong ganha o cargo Diácono no rol.
 -- ---------------------------------------------------------------------------

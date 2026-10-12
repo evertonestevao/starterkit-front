@@ -434,3 +434,43 @@ describe("professores", () => {
     expect(darCargoProfessor).not.toHaveBeenCalled();
   });
 });
+
+describe("página do aluno", () => {
+  const historico = {
+    membroId: ALUNO,
+    nome: "Davi",
+    whatsapp: null,
+    nascimento: null,
+    membroIgreja: false,
+    podeEditar: true,
+    matriculas: [],
+    aulas: [],
+  };
+
+  it("quem é da EBD vê o histórico; aluno que o banco não devolve é 'não encontrado'", async () => {
+    const historicoDoAluno = vi.fn(async (id: string) => (id === ALUNO ? historico : null));
+    const { svc } = build({ historicoDoAluno });
+    expect((await svc.historicoDoAluno(professor, ALUNO)).nome).toBe("Davi");
+    await expect(svc.historicoDoAluno(secretaria, ESTRANHO)).rejects.toMatchObject({ code: "not_found" });
+    await expect(svc.historicoDoAluno(secretaria, "x' or 1=1")).rejects.toMatchObject({ code: "not_found" });
+    await expect(svc.historicoDoAluno(member, ALUNO)).rejects.toMatchObject({ code: "forbidden" });
+  });
+
+  it("só a gestão da EBD edita, com os dados conferidos", async () => {
+    const editarAluno = vi.fn(async () => undefined);
+    const { svc } = build({ editarAluno });
+    const dados = { nome: "  Davi Silva ", telefone: "(14) 99655-6043", nascimento: "2017-03-10" };
+    await expect(svc.editarAluno(professor, ALUNO, dados)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(svc.editarAluno(secretaria, ALUNO, { ...dados, nome: "D" })).rejects.toMatchObject({
+      code: "validation_error",
+    });
+    await expect(svc.editarAluno(secretaria, ALUNO, { ...dados, telefone: "9965" })).rejects.toMatchObject({
+      code: "validation_error",
+    });
+    expect(editarAluno).not.toHaveBeenCalled();
+    await svc.editarAluno(secretaria, ALUNO, dados);
+    expect(editarAluno).toHaveBeenCalledWith(ALUNO, { nome: "Davi Silva", telefone: "14996556043", nascimento: "2017-03-10" });
+    await svc.editarAluno(owner, ALUNO, { nome: "Davi", telefone: "", nascimento: "" });
+    expect(editarAluno).toHaveBeenLastCalledWith(ALUNO, { nome: "Davi", telefone: null, nascimento: null });
+  });
+});
