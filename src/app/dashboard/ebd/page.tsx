@@ -91,7 +91,7 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
             <>
               <LegendaPresenca
                 extras={[
-                  ["Matr.", "Matriculados"],
+                  ["M", "Matriculados"],
                   ["Visit.", "Visitantes"],
                 ]}
               />
@@ -100,7 +100,7 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
                   <TableHeader>
                     <TableRow>
                       <TableHead>Classe</TableHead>
-                      <TableHead className="text-right">Matr.</TableHead>
+                      <TableHead className="text-right">M</TableHead>
                       <TableHead className="text-right">P</TableHead>
                       <TableHead className="text-right">A</TableHead>
                       <TableHead className="text-right">J</TableHead>
@@ -179,7 +179,7 @@ export default async function EbdPage({ searchParams }: { searchParams: Promise<
                       <p className="truncate font-medium">{r.classeNome}</p>
                       <p className="text-xs text-muted-foreground tabular-nums">
                         {r.chamadaFeita
-                          ? `${r.presentes} P · ${r.ausentes} A · ${r.justificados} J · ${r.visitantes} visit. · ${formatarReais(r.ofertaCentavos)}`
+                          ? `${r.matriculados} M · ${r.presentes} P · ${r.ausentes} A · ${r.justificados} J · ${r.visitantes} visit. · ${formatarReais(r.ofertaCentavos)}`
                           : `${r.matriculados} matriculados · chamada pendente`}
                       </p>
                     </Link>
