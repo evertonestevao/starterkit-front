@@ -23,6 +23,8 @@ import type { ActionState } from "@/server/actions/action-state";
 import type { RolMembro } from "@/types/acompanhamento";
 import type { CargoResumo } from "@/types/cargos";
 import { selectClasses, textareaClasses } from "./campos";
+import { palavrasDoNome } from "@/lib/membrosParecidos";
+import { MembrosParecidos } from "./membros-parecidos";
 import { useTenant } from "@/providers/tenant-provider";
 import { permissionService } from "@/services/permissionService";
 
@@ -32,7 +34,7 @@ import { permissionService } from "@/services/permissionService";
  * libera "Convidar para acessar o sistema" — desmarcado por padrão.
  */
 export function MembroForm({
-  membro,
+  membro: membroParaEditar,
   cargos,
   podeConvidar = false,
 }: {
@@ -41,11 +43,20 @@ export function MembroForm({
   podeConvidar?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
+  // Cadastro novo: o que vai sendo digitado alimenta "Já existe alguém parecido?".
+  const [digitado, setDigitado] = useState({ nome: "", telefone: "" });
+  // "É esta pessoa": em vez de criar outro, o formulário completa o cadastro
+  // que já existe (ex.: aluno que a EBD cadastrou só com o primeiro nome).
+  const [existente, setExistente] = useState<RolMembro | null>(null);
+  // Com o que os campos nascem quando o formulário remonta (valor inicial não pode mudar a cada tecla).
+  const [inicial, setInicial] = useState<{ nome: string; whatsapp: string } | null>(null);
+  const novo = !membroParaEditar;
+  const membro = membroParaEditar ?? existente ?? undefined;
   const router = useRouter();
   // Cargo é acesso ao sistema: só Responsável/Administrador mexe.
   const { active } = useTenant();
   const podeDefinirCargos = permissionService.canManageMembers(active.role);
-  const [email, setEmail] = useState(membro?.email ?? "");
+  const [email, setEmail] = useState(membroParaEditar?.email ?? "");
   const [convidar, setConvidar] = useState(false);
   const [papel, setPapel] = useState<"member" | "admin">("member");
   const emailValido = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
@@ -55,6 +66,7 @@ export function MembroForm({
       if (result.success) {
         setAberto(false);
         setConvidar(false);
+        if (novo) recomecar();
       }
       // "Salvar e preencher a ficha": o cadastro já existe; segue para a ficha
       // completa dele (mesmo que o convite tenha falhado — o aviso aparece lá).
@@ -69,9 +81,33 @@ export function MembroForm({
   useActionToast(state);
   const id = membro?.id ?? "novo";
 
+  function recomecar() {
+    setExistente(null);
+    setInicial(null);
+    setDigitado({ nome: "", telefone: "" });
+    setEmail("");
+  }
+
+  function ehEstaPessoa(pessoa: RolMembro) {
+    setExistente(pessoa);
+    // Fica o nome mais completo: o digitado só substitui o que já existia se tiver mais palavras
+    // ("Douglas Silva" no lugar do "Douglas" da EBD, mas não "Ana" no lugar de "Ana Clara Lopes").
+    const maisCompleto = palavrasDoNome(digitado.nome).length > palavrasDoNome(pessoa.nome).length;
+    setInicial({
+      nome: maisCompleto ? digitado.nome.trim() : pessoa.nome,
+      whatsapp: digitado.telefone || (pessoa.whatsapp ?? ""),
+    });
+    if (pessoa.email) setEmail(pessoa.email);
+  }
+
+  function naoEhEstaPessoa() {
+    setExistente(null);
+    setInicial({ nome: digitado.nome, whatsapp: digitado.telefone });
+  }
+
   return (
     <>
-      {membro ? (
+      {!novo ? (
         <Button type="button" variant="outline" size="sm" onClick={() => setAberto(true)}>
           <Pencil className="size-3.5" /> Editar
         </Button>
@@ -80,21 +116,59 @@ export function MembroForm({
           <UserPlus className="size-4" /> Novo membro
         </Button>
       )}
-      <Dialog open={aberto} onOpenChange={setAberto}>
+      <Dialog
+        open={aberto}
+        onOpenChange={(abrir) => {
+          setAberto(abrir);
+          // Fechou sem salvar um cadastro novo: da próxima vez começa em branco.
+          if (!abrir && novo) recomecar();
+        }}
+      >
         {/* Formulário longo: rola dentro da janela em vez de passar da tela. */}
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{membro ? `Editar ${membro.nome}` : "Novo membro"}</DialogTitle>
+            <DialogTitle>
+              {existente
+                ? `Completar o cadastro de ${existente.nome}`
+                : membro
+                  ? `Editar ${membro.nome}`
+                  : "Novo membro"}
+            </DialogTitle>
             <DialogDescription>
               Só o nome é obrigatório. O WhatsApp ajuda a falar com a pessoa quando ela sumir.
-              {!membro ? " Endereço, família e vida na igreja ficam na ficha completa, no passo seguinte." : ""}
+              {novo ? " Endereço, família e vida na igreja ficam na ficha completa, no passo seguinte." : ""}
             </DialogDescription>
           </DialogHeader>
-          <Formulario action={formAction} estado={state} className="flex flex-col gap-3">
+          {/* A `key` remonta os campos quando o formulário passa a completar um cadastro que já existe. */}
+          <Formulario key={id} action={formAction} estado={state} className="flex flex-col gap-3">
             {membro ? <input type="hidden" name="id" value={membro.id} /> : null}
+            {existente ? (
+              <div className="flex flex-col items-start gap-1 rounded-md bg-muted/50 p-3 text-sm">
+                <p>
+                  Você está completando o cadastro que já existia. Não é criado outro: o histórico desta pessoa (EBD,
+                  presenças) continua o mesmo.
+                </p>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                  onClick={naoEhEstaPessoa}
+                >
+                  Não é esta pessoa: criar um cadastro novo
+                </button>
+              </div>
+            ) : null}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`nome-${id}`}>Nome</Label>
-              <Input id={`nome-${id}`} name="nome" defaultValue={membro?.nome} required minLength={2} maxLength={120} />
+              <Input
+                id={`nome-${id}`}
+                name="nome"
+                defaultValue={novo ? inicial?.nome : membro?.nome}
+                onChange={novo ? (e) => setDigitado((d) => ({ ...d, nome: e.target.value })) : undefined}
+                required
+                minLength={2}
+                maxLength={120}
+                autoComplete="off"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`whatsapp-${id}`}>WhatsApp / telefone</Label>
@@ -102,9 +176,22 @@ export function MembroForm({
                 id={`whatsapp-${id}`}
                 name="whatsapp"
                 autoComplete="off"
-                defaultValue={membro?.whatsapp}
+                defaultValue={novo ? inicial?.whatsapp : membro?.whatsapp}
+                onChange={novo ? (e) => setDigitado((d) => ({ ...d, telefone: e.target.value })) : undefined}
               />
             </div>
+            {novo && !existente && aberto ? (
+              <MembrosParecidos
+                nome={digitado.nome}
+                telefone={digitado.telefone}
+                onEhEstaPessoa={ehEstaPessoa}
+                onAbrirCadastro={(pessoa) => {
+                  setAberto(false);
+                  recomecar();
+                  router.push(`/dashboard/membros/${pessoa.id}`);
+                }}
+              />
+            ) : null}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`email-${id}`}>E-mail (opcional)</Label>
               <Input
@@ -182,8 +269,8 @@ export function MembroForm({
               </fieldset>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Cargos: {membro && membro.cargos.length > 0 ? membro.cargos.map((c) => c.nome).join(", ") : "nenhum"}. Só
-                quem administra a igreja altera os cargos, porque eles definem o acesso ao sistema.
+                Cargos: {membro && membro.cargos.length > 0 ? membro.cargos.map((c) => c.nome).join(", ") : "nenhum"}.
+                Só quem administra a igreja altera os cargos, porque eles definem o acesso ao sistema.
               </p>
             )}
             <input type="hidden" name="participaEnviado" value="1" />
@@ -191,7 +278,8 @@ export function MembroForm({
               <input
                 type="checkbox"
                 name="membroIgreja"
-                defaultChecked={membro?.membroIgreja ?? true}
+                // Completar o cadastro de um não membro é justamente recebê-lo como membro.
+                defaultChecked={existente ? true : (membro?.membroIgreja ?? true)}
                 className="mt-0.5 size-4"
               />
               <span>
@@ -224,7 +312,7 @@ export function MembroForm({
             <DialogFooter>
               <DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Cancelar</DialogClose>
               {/* Só no cadastro novo: quem já existe tem "Editar ficha" na própria página. */}
-              {!membro ? (
+              {novo ? (
                 <Button type="submit" name="depois" value="ficha" variant="outline" disabled={pending}>
                   <ClipboardList className="size-3.5" /> Salvar e preencher a ficha
                 </Button>

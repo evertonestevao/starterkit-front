@@ -6,7 +6,8 @@ import { getAcompanhamentoActor, getAcompanhamentoService } from "@/server/acomp
 import { getCarteirinhaActorAutorizado, getCarteirinhaService } from "@/server/carteirinha";
 import { recordAudit } from "@/server/audit";
 import type { AcompanhamentoActor } from "@/services/acompanhamentoService";
-import type { ConfigAcompanhamento, Visitante } from "@/types/acompanhamento";
+import type { ConfigAcompanhamento, MembroParecido, Visitante } from "@/types/acompanhamento";
+import { getEbdService } from "@/server/ebd";
 import { convidarParaSistema } from "@/server/conviteSistema";
 import { toActionError, type ActionState } from "./action-state";
 
@@ -26,6 +27,33 @@ function revalidar() {
   revalidatePath(BASE, "layout");
   revalidatePath("/dashboard/membros", "layout");
   revalidatePath("/dashboard");
+}
+
+/**
+ * "Já existe alguém parecido?" enquanto o secretário digita o cadastro novo.
+ * A classe da EBD é um complemento: se falhar, a pessoa aparece sem ela.
+ */
+export async function buscarParecidosAction(
+  nome: string,
+  telefone: string,
+): Promise<{ parecidos?: MembroParecido[]; error?: string }> {
+  try {
+    const achados = await (await getAcompanhamentoService()).parecidos(await ator(), { nome, telefone });
+    const ebd = await getEbdService();
+    const parecidos = await Promise.all(
+      achados.map(async ({ membro, mesmoTelefone }) => ({
+        membro,
+        mesmoTelefone,
+        classeEbd: await ebd
+          .resumoDoMembro(membro.id)
+          .then((r) => r?.classeAtual ?? null)
+          .catch(() => null),
+      })),
+    );
+    return { parecidos };
+  } catch (err) {
+    return { error: toActionError(err).error };
+  }
 }
 
 /** Atalho do cartão de acesso: só o WhatsApp, para mandar o convite por lá. */

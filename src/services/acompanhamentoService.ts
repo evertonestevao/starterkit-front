@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ordenarParecidos, termosDaBusca } from "@/lib/membrosParecidos";
 import { AppError, toValidationError } from "@/lib/errors";
 import {
   lerFiltroQuadro,
@@ -7,7 +8,16 @@ import {
   proximosAniversarios,
   type ProximoAniversario,
 } from "@/lib/rolMembros";
-import { ESTADOS_CIVIS, FORMAS_ENTRADA, SEXOS, SITUACOES, UFS, cpfValido, fichaVazia, temConjuge } from "@/lib/fichaMembro";
+import {
+  ESTADOS_CIVIS,
+  FORMAS_ENTRADA,
+  SEXOS,
+  SITUACOES,
+  UFS,
+  cpfValido,
+  fichaVazia,
+  temConjuge,
+} from "@/lib/fichaMembro";
 import {
   MOTIVOS,
   RESULTADOS,
@@ -120,6 +130,14 @@ export interface AcompanhamentoRepository {
       offset: number;
     },
   ): Promise<{ items: RolMembro[]; total: number }>;
+  /**
+   * Candidatos a "já existe alguém parecido": quem tem o primeiro nome (em
+   * qualquer palavra do nome) ou o fim do telefone. Termos já normalizados.
+   */
+  listParecidos(
+    churchId: string,
+    termos: { primeiroNome: string | null; fimDoTelefone: string | null },
+  ): Promise<RolMembro[]>;
   /** Fichas de todos os membros da igreja, por id (vazio para quem não tem o módulo Membros). */
   listFichas(churchId: string): Promise<Record<string, FichaMembro>>;
   /** RPC aniversariantes_do_mes: nascimento, batismo e (com acesso à ficha) casamento. */
@@ -246,7 +264,12 @@ const membroSchema = z.object({
       .max(20, "Telefone inválido")
       .refine((v) => v.replace(/\D/g, "").length >= 10, "Telefone com DDD, por favor"),
   ),
-  email: vazioVira(z.email("E-mail inválido").max(254, "E-mail longo demais").transform((v) => v.toLowerCase())),
+  email: vazioVira(
+    z
+      .email("E-mail inválido")
+      .max(254, "E-mail longo demais")
+      .transform((v) => v.toLowerCase()),
+  ),
   participaChamada: z.boolean().default(true),
   membroIgreja: z.boolean().default(true),
   nascimento: vazioVira(dataISO),
@@ -296,7 +319,10 @@ const chamadaSchema = z.object({
         membroId: uuid("Membro inválido"),
         estado: z.enum(["presente", "ausente", "justificado"]),
         justificativaId: z.uuid().nullable().default(null),
-        motivo: z.enum(MOTIVOS as [MotivoJustificativa, ...MotivoJustificativa[]]).nullable().default(null),
+        motivo: z
+          .enum(MOTIVOS as [MotivoJustificativa, ...MotivoJustificativa[]])
+          .nullable()
+          .default(null),
         motivoTexto: vazioVira(z.string().trim().max(300)),
       }),
     )
@@ -536,6 +562,24 @@ export function createAcompanhamentoService(deps: {
       return { igreja: church.name, itens: ordenarAniversarios(await repo.aniversariantes(church.id, mes)) };
     },
 
+    /**
+     * "Já existe alguém parecido?" no cadastro novo: quem da igreja tem o
+     * mesmo primeiro nome ou o mesmo telefone do que está sendo digitado.
+     * Só desta igreja; com menos de 3 letras e sem telefone, não procura.
+     */
+    async parecidos(actor: AcompanhamentoActor, digitado: { nome: unknown; telefone: unknown }) {
+      const church = await igreja(actor);
+      const nome = String(digitado.nome ?? "").slice(0, 120);
+      const telefone = String(digitado.telefone ?? "").slice(0, 40);
+      const termos = termosDaBusca(nome, telefone);
+      if (!termos.primeiroNome && !termos.fimDoTelefone) return [];
+      const candidatos = await repo.listParecidos(church.id, termos);
+      return ordenarParecidos(candidatos, { nome, telefone }).map((p) => ({
+        membro: p.candidato,
+        mesmoTelefone: p.mesmoTelefone,
+      }));
+    },
+
     async getMembro(actor: AcompanhamentoActor, membroId: string) {
       const church = await igreja(actor);
       validar(uuid("Membro inválido"), membroId);
@@ -634,7 +678,10 @@ export function createAcompanhamentoService(deps: {
           membroId ? ((await repo.getMembro(church.id, membroId))?.cargos.map((c) => c.id) ?? []) : [],
         );
         if (cargos.some((id) => !disponiveis.has(id) && !atuais.has(id))) {
-          throw new AppError("validation_error", "Um dos cargos não está disponível para esta igreja. Atualize a página.");
+          throw new AppError(
+            "validation_error",
+            "Um dos cargos não está disponível para esta igreja. Atualize a página.",
+          );
         }
       }
 
@@ -695,7 +742,10 @@ export function createAcompanhamentoService(deps: {
       const disponiveis = new Set((await repo.listCargosDisponiveis(church.id)).map((c) => c.id));
       const atuais = new Set(membro.cargos.map((c) => c.id));
       if (cargos.some((c) => !disponiveis.has(c) && !atuais.has(c))) {
-        throw new AppError("validation_error", "Um dos cargos não está disponível para esta igreja. Atualize a página.");
+        throw new AppError(
+          "validation_error",
+          "Um dos cargos não está disponível para esta igreja. Atualize a página.",
+        );
       }
       await repo.setCargosDoMembro(church.id, id, [...new Set(cargos)]);
     },
@@ -749,7 +799,8 @@ export function createAcompanhamentoService(deps: {
         [ficha.batismoEspiritoData, "batismo no Espírito Santo"],
         [ficha.situacaoEm, "situação"],
       ] as const) {
-        if (data && data > hojeData) throw new AppError("validation_error", `A data de ${nome} não pode ser no futuro.`);
+        if (data && data > hojeData)
+          throw new AppError("validation_error", `A data de ${nome} não pode ser no futuro.`);
       }
       const ativo = ficha.situacao === "ativo";
       await repo.salvarFicha(id, {
@@ -844,7 +895,8 @@ export function createAcompanhamentoService(deps: {
       const church = await igreja(actor);
       validar(uuid("Culto inválido"), cultoId);
       validar(dataISO, data);
-      if (data > somarDias(hoje(), 1)) throw new AppError("validation_error", "Não dá para fazer chamada de data futura.");
+      if (data > somarDias(hoje(), 1))
+        throw new AppError("validation_error", "Não dá para fazer chamada de data futura.");
 
       const culto = await repo.getCulto(church.id, cultoId);
       if (!culto) throw new AppError("not_found", "Culto não encontrado.");

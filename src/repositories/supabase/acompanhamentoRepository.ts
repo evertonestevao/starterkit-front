@@ -186,7 +186,14 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
     return membros.map((m) => {
       const r = reservados.get(m.id);
       return r
-        ? { ...m, email: r.email, nascimento: r.nascimento, batismo: r.batismo, observacoes: r.observacoes, cuidados: r.cuidados }
+        ? {
+            ...m,
+            email: r.email,
+            nascimento: r.nascimento,
+            batismo: r.batismo,
+            observacoes: r.observacoes,
+            cuidados: r.cuidados,
+          }
         : m;
     });
   }
@@ -245,13 +252,31 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       return { items: await comReservados((data ?? []).map(toMembro)), total: count ?? 0 };
     },
 
+    async listParecidos(churchId, { primeiroNome, fimDoTelefone }) {
+      // Os termos entram num filtro `or` em texto: só letras e dígitos passam.
+      const nome = primeiroNome?.replace(/[^a-z0-9]/g, "") ?? "";
+      const fone = fimDoTelefone?.replace(/[^0-9]/g, "") ?? "";
+      const filtros: string[] = [];
+      // Começo do nome ou de qualquer palavra dele ("João Douglas").
+      if (nome) filtros.push(`nome_busca.ilike."${nome}%"`, `nome_busca.ilike."% ${nome}%"`);
+      // O telefone pode estar gravado com ou sem traço: o curinga cobre os dois.
+      if (fone.length === 8) filtros.push(`whatsapp.ilike."%${fone.slice(0, 4)}%${fone.slice(4)}"`);
+      if (filtros.length === 0) return [];
+      const { data, error } = await client
+        .from("rol_membros")
+        .select(MEMBRO_COLS)
+        .eq("church_id", churchId)
+        .is("deleted_at", null)
+        .or(filtros.join(","))
+        .order("nome")
+        .limit(40);
+      if (error) falha("Falha ao procurar cadastros parecidos", error);
+      return comReservados((data ?? []).map(toMembro));
+    },
+
     async listAcessos(companyId) {
       const [membros, convites] = await Promise.all([
-        client
-          .from("company_members")
-          .select("id, user_id, role")
-          .eq("company_id", companyId)
-          .is("deleted_at", null),
+        client.from("company_members").select("id, user_id, role").eq("company_id", companyId).is("deleted_at", null),
         // Para quem não é admin a RLS devolve vazio — e está certo assim.
         client
           .from("company_invites")
@@ -265,11 +290,7 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       if (convites.error) falha("Falha ao carregar os convites", convites.error);
       return {
         acessos: (membros.data ?? []).map(
-          (r: {
-            id: string;
-            user_id: string;
-            role: AcessoMembro["role"];
-          }): AcessoMembro => ({
+          (r: { id: string; user_id: string; role: AcessoMembro["role"] }): AcessoMembro => ({
             companyMemberId: r.id,
             userId: r.user_id,
             role: r.role,
@@ -298,7 +319,11 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
     },
 
     async kpisMembros(churchId) {
-      const [r] = await rpc<Record<string, unknown>>("membros_kpis", { p_church_id: churchId }, "Falha ao calcular os indicadores");
+      const [r] = await rpc<Record<string, unknown>>(
+        "membros_kpis",
+        { p_church_id: churchId },
+        "Falha ao calcular os indicadores",
+      );
       return {
         ativos: n(r?.ativos),
         inativos: n(r?.inativos),
@@ -315,9 +340,7 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       const { data, error } = await client.rpc("cargos_visiveis", { p_church: churchId });
       if (error) falha("Falha ao carregar os cargos", error);
       return ordenarResumos(
-        ((data ?? []) as Array<{ deleted_at: string | null }>)
-          .filter((c) => c.deleted_at === null)
-          .map(toCargoResumo),
+        ((data ?? []) as Array<{ deleted_at: string | null }>).filter((c) => c.deleted_at === null).map(toCargoResumo),
       );
     },
 
@@ -655,7 +678,9 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
     async getChamada(churchId, cultoId, data) {
       const { data: chamada, error } = await client
         .from("chamadas")
-        .select("id, presencas:chamada_presencas(membro_id, estado, justificativa_id), visitantes:chamada_visitantes(nome, telefone)")
+        .select(
+          "id, presencas:chamada_presencas(membro_id, estado, justificativa_id), visitantes:chamada_visitantes(nome, telefone)",
+        )
         .eq("church_id", churchId)
         .eq("schedule_id", cultoId)
         .eq("data", data)
@@ -695,7 +720,11 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       if (error) {
         if (error.code === "P0002") throw new AppError("not_found", "Culto não encontrado.", error);
         if (error.code === "23514") {
-          throw new AppError("validation_error", "Este culto não aceita chamada nesta data. Confira na Programação.", error);
+          throw new AppError(
+            "validation_error",
+            "Este culto não aceita chamada nesta data. Confira na Programação.",
+            error,
+          );
         }
         falha("Falha ao salvar a chamada", error);
       }
@@ -704,11 +733,7 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
 
     // --------------------------------------------------- justificativas
     async listJustificativas(churchId, filtro) {
-      let q = client
-        .from("justificativas")
-        .select(JUST_COLS)
-        .eq("church_id", churchId)
-        .is("deleted_at", null);
+      let q = client.from("justificativas").select(JUST_COLS).eq("church_id", churchId).is("deleted_at", null);
       if (filtro.fimAPartirDe) q = q.gte("data_fim", filtro.fimAPartirDe);
       if (filtro.membroId) q = q.eq("membro_id", filtro.membroId);
       const { data, error } = await q.order("data_inicio", { ascending: !filtro.membroId }).limit(500);
@@ -792,20 +817,22 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
 
     // ----------------------------------------------------- cálculos SQL
     async alertas(churchId) {
-      const rows = await rpc<Record<string, unknown>>("acompanhamento_alertas", { p_church_id: churchId }, "Falha ao calcular os alertas");
-      return rows.map(
-        (r): AlertaFaltas => ({
-          membroId: r.membro_id as string,
-          nome: r.nome as string,
-          whatsapp: r.whatsapp as string | null,
-          faltasSeguidas: n(r.faltas_seguidas),
-          ultimaPresenca: r.ultima_presenca as string | null,
-          ultimaFalta: r.ultima_falta as string | null,
-          contatoData: r.contato_data as string | null,
-          contatoResultado: r.contato_resultado as AlertaFaltas["contatoResultado"],
-          situacao: r.situacao as AlertaFaltas["situacao"],
-        }),
+      const rows = await rpc<Record<string, unknown>>(
+        "acompanhamento_alertas",
+        { p_church_id: churchId },
+        "Falha ao calcular os alertas",
       );
+      return rows.map((r): AlertaFaltas => ({
+        membroId: r.membro_id as string,
+        nome: r.nome as string,
+        whatsapp: r.whatsapp as string | null,
+        faltasSeguidas: n(r.faltas_seguidas),
+        ultimaPresenca: r.ultima_presenca as string | null,
+        ultimaFalta: r.ultima_falta as string | null,
+        contatoData: r.contato_data as string | null,
+        contatoResultado: r.contato_resultado as AlertaFaltas["contatoResultado"],
+        situacao: r.situacao as AlertaFaltas["situacao"],
+      }));
     },
 
     async justificativasLongas(churchId) {
@@ -814,20 +841,18 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         { p_church_id: churchId },
         "Falha ao calcular as justificativas longas",
       );
-      return rows.map(
-        (r): JustificativaLonga => ({
-          membroId: r.membro_id as string,
-          nome: r.nome as string,
-          whatsapp: r.whatsapp as string | null,
-          cultosJustificados: n(r.cultos_justificados),
-          desde: r.desde as string,
-          dias: n(r.dias),
-          ultimaPresenca: r.ultima_presenca as string | null,
-          contatoData: r.contato_data as string | null,
-          contatoResultado: r.contato_resultado as JustificativaLonga["contatoResultado"],
-          situacao: r.situacao as JustificativaLonga["situacao"],
-        }),
-      );
+      return rows.map((r): JustificativaLonga => ({
+        membroId: r.membro_id as string,
+        nome: r.nome as string,
+        whatsapp: r.whatsapp as string | null,
+        cultosJustificados: n(r.cultos_justificados),
+        desde: r.desde as string,
+        dias: n(r.dias),
+        ultimaPresenca: r.ultima_presenca as string | null,
+        contatoData: r.contato_data as string | null,
+        contatoResultado: r.contato_resultado as JustificativaLonga["contatoResultado"],
+        situacao: r.situacao as JustificativaLonga["situacao"],
+      }));
     },
 
     async relatorioChamadas(churchId, de, ate) {
@@ -836,18 +861,16 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         { p_church_id: churchId, p_de: de, p_ate: ate },
         "Falha ao montar o relatório",
       );
-      return rows.map(
-        (r): RelatorioChamada => ({
-          chamadaId: r.chamada_id as string,
-          cultoId: r.schedule_id as string,
-          cultoNome: r.culto_nome as string,
-          data: r.data as string,
-          presentes: n(r.presentes),
-          justificados: n(r.justificados),
-          ausentes: n(r.ausentes),
-          visitantes: n(r.visitantes),
-        }),
-      );
+      return rows.map((r): RelatorioChamada => ({
+        chamadaId: r.chamada_id as string,
+        cultoId: r.schedule_id as string,
+        cultoNome: r.culto_nome as string,
+        data: r.data as string,
+        presentes: n(r.presentes),
+        justificados: n(r.justificados),
+        ausentes: n(r.ausentes),
+        visitantes: n(r.visitantes),
+      }));
     },
 
     async frequencia(churchId, de, ate) {
@@ -856,17 +879,15 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         { p_church_id: churchId, p_de: de, p_ate: ate },
         "Falha ao calcular a frequência",
       );
-      return rows.map(
-        (r): FrequenciaMembro => ({
-          membroId: r.membro_id as string,
-          nome: r.nome as string,
-          ativo: Boolean(r.ativo),
-          presentes: n(r.presentes),
-          justificados: n(r.justificados),
-          ausentes: n(r.ausentes),
-          percentual: r.percentual === null ? null : Number(r.percentual),
-        }),
-      );
+      return rows.map((r): FrequenciaMembro => ({
+        membroId: r.membro_id as string,
+        nome: r.nome as string,
+        ativo: Boolean(r.ativo),
+        presentes: n(r.presentes),
+        justificados: n(r.justificados),
+        ausentes: n(r.ausentes),
+        percentual: r.percentual === null ? null : Number(r.percentual),
+      }));
     },
 
     async historicoMembro(churchId, membroId) {
@@ -891,7 +912,11 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
     },
 
     async resumo(churchId) {
-      const [r] = await rpc<Record<string, unknown>>("acompanhamento_resumo", { p_church_id: churchId }, "Falha ao montar o resumo");
+      const [r] = await rpc<Record<string, unknown>>(
+        "acompanhamento_resumo",
+        { p_church_id: churchId },
+        "Falha ao montar o resumo",
+      );
       return {
         ultimaChamadaData: (r?.ultima_chamada_data as string | null) ?? null,
         ultimoCultoNome: (r?.ultimo_culto_nome as string | null) ?? null,
@@ -912,19 +937,17 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         { p_church_id: churchId },
         "Falha ao montar o resumo da rede",
       );
-      return rows.map(
-        (r): ResumoRedeIgreja => ({
-          churchId: r.church_id as string,
-          churchName: r.church_name as string,
-          tipo: r.tipo as string,
-          ultimaChamadaData: r.ultima_chamada_data as string | null,
-          presentes: n(r.presentes),
-          justificados: n(r.justificados),
-          ausentes: n(r.ausentes),
-          membrosAtivos: n(r.membros_ativos),
-          emAlerta: n(r.em_alerta),
-        }),
-      );
+      return rows.map((r): ResumoRedeIgreja => ({
+        churchId: r.church_id as string,
+        churchName: r.church_name as string,
+        tipo: r.tipo as string,
+        ultimaChamadaData: r.ultima_chamada_data as string | null,
+        presentes: n(r.presentes),
+        justificados: n(r.justificados),
+        ausentes: n(r.ausentes),
+        membrosAtivos: n(r.membros_ativos),
+        emAlerta: n(r.em_alerta),
+      }));
     },
 
     // ---------------------------------------------------- configuração
