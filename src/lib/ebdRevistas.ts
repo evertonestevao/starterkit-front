@@ -1,6 +1,6 @@
 import { formatarReais } from "@/lib/ebd";
 import { normalizeSearch } from "@/lib/search";
-import type { EbdRevistaPedido } from "@/types/ebdRevistas";
+import type { EbdRevista, EbdRevistaPedido, EbdRevistaQuantidade, EbdRevistasRede } from "@/types/ebdRevistas";
 
 /** EBD → Revistas: contas e filtros dos pedidos (tudo no navegador, sem I/O). */
 
@@ -128,5 +128,76 @@ export function textoDoResumoDaCompra(input: {
     ...input.linhas.map((l) => `${l.quantidade} x ${l.titulo}`),
     "",
     `Total: ${total} ${total === 1 ? "revista" : "revistas"} (${formatarReais(valor)})`,
+  ].join("\n");
+}
+
+/** Uma coluna da aba Rede: uma igreja do sistema ou uma congregação fora dele. */
+export interface ColunaDaRede {
+  chave: string;
+  nome: string;
+  /** Congregação fora do sistema (quantidades informadas pela igreja de cima). */
+  externo: boolean;
+  /** Pedidos registrados no sistema (só para as igrejas do sistema). */
+  pedidos: number | null;
+  /** Total de revistas desta coluna. */
+  total: number;
+}
+
+export interface TotalDaRede {
+  colunas: ColunaDaRede[];
+  /** Uma linha por revista (só as que alguém pediu), na ordem da lista do trimestre. */
+  linhas: Array<{ revistaId: string; titulo: string; total: number; quantidades: number[] }>;
+  total: number;
+}
+
+/**
+ * Aba Rede: o total de cada revista somando a igreja que compra, as
+ * congregações do sistema e as de fora; e quanto cada uma pediu.
+ */
+export function totalDaRede(
+  rede: EbdRevistasRede,
+  revistas: ReadonlyArray<Pick<EbdRevista, "id" | "titulo">>,
+): TotalDaRede {
+  const fontes = [
+    ...rede.igrejas.map((i) => ({
+      chave: i.churchId,
+      nome: i.nome,
+      externo: false,
+      pedidos: i.pedidos,
+      itens: i.itens,
+    })),
+    ...rede.externos.map((e) => ({ chave: e.id, nome: e.nome, externo: true, pedidos: null, itens: e.itens })),
+  ];
+  const quantidadeDe = (itens: EbdRevistaQuantidade[], revistaId: string) =>
+    itens.filter((i) => i.revistaId === revistaId).reduce((s, i) => s + i.quantidade, 0);
+  const linhas = revistas
+    .map((r) => {
+      const quantidades = fontes.map((f) => quantidadeDe(f.itens, r.id));
+      return { revistaId: r.id, titulo: r.titulo, quantidades, total: quantidades.reduce((s, q) => s + q, 0) };
+    })
+    .filter((l) => l.total > 0);
+  return {
+    colunas: fontes.map((f, i) => ({
+      chave: f.chave,
+      nome: f.nome,
+      externo: f.externo,
+      pedidos: f.pedidos,
+      total: linhas.reduce((s, l) => s + l.quantidades[i], 0),
+    })),
+    linhas,
+    total: linhas.reduce((s, l) => s + l.total, 0),
+  };
+}
+
+/** O pedido da rede em texto, para mandar ao fornecedor. */
+export function textoDoPedidoDaRede(input: { igreja: string; trimestre: string; rede: TotalDaRede }): string {
+  const { rede } = input;
+  return [
+    `Pedido de revistas da EBD - ${input.trimestre}`,
+    `${input.igreja} e congregações`,
+    "",
+    ...rede.linhas.map((l) => `${l.total} x ${l.titulo}`),
+    "",
+    `Total: ${rede.total} ${rede.total === 1 ? "revista" : "revistas"}`,
   ].join("\n");
 }

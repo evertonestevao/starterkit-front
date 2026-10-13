@@ -3,10 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EbdRevistas } from "@/features/ebd/components/revistas/ebd-revistas";
 import { hojeISO } from "@/lib/acompanhamento";
-import { trimestreDe } from "@/lib/ebd";
 import { isAppError } from "@/lib/errors";
 import { getEbdActorAutorizado, getEbdService } from "@/server/ebd";
-import { getEbdRevistasActor, getEbdRevistasService } from "@/server/ebdRevistas";
+import { getEbdRevistasActor, getEbdRevistasService, getIgrejaDosPedidos } from "@/server/ebdRevistas";
 import { nomeCompletoDaIgreja } from "@/server/nomeDaIgreja";
 import { getActiveTenant } from "@/server/tenant";
 
@@ -23,25 +22,36 @@ export default async function EbdRevistasPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const hoje = hojeISO();
 
+  const igrejaDosPedidos = await getIgrejaDosPedidos();
+  if (!igrejaDosPedidos) notFound();
   const ebd = await getEbdService();
-  const [trimestres, { classes }, { active }] = await Promise.all([
-    ebd.trimestres(ebdActor),
+  const revistasService = await getEbdRevistasService();
+  // A lista de revistas e os trimestres são da igreja de cima quando esta é
+  // congregação ligada a ela (a compra é feita lá, para todas).
+  const [lista, { classes }, { active }] = await Promise.all([
+    revistasService.listaDaIgreja(actor, igrejaDosPedidos.id),
     ebd.classes(ebdActor),
     getActiveTenant(),
   ]);
   // Do mais recente para o mais antigo.
-  const ordenados = [...trimestres].sort((a, b) => b.inicio.localeCompare(a.inicio));
+  const ordenados = [...lista.trimestres].sort((a, b) => b.inicio.localeCompare(a.inicio));
 
   if (ordenados.length === 0) {
     return (
       <div className="flex flex-col gap-3">
         <Cabecalho />
         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Os pedidos de revista são por trimestre. Cadastre o trimestre em{" "}
-          <Link href="/dashboard/ebd/trimestres" className="font-medium text-primary underline underline-offset-4">
-            EBD → Trimestres
-          </Link>{" "}
-          e volte aqui.
+          {lista.propria ? (
+            <>
+              Os pedidos de revista são por trimestre. Cadastre o trimestre em{" "}
+              <Link href="/dashboard/ebd/trimestres" className="font-medium text-primary underline underline-offset-4">
+                EBD → Trimestres
+              </Link>{" "}
+              e volte aqui.
+            </>
+          ) : (
+            `As revistas desta congregação são compradas por ${lista.donaNome}. Quando a secretaria da EBD de lá cadastrar o trimestre e as revistas, os pedidos aparecem aqui.`
+          )}
         </p>
       </div>
     );
@@ -51,12 +61,21 @@ export default async function EbdRevistasPage({ searchParams }: { searchParams: 
   // agora); se não houver, o de hoje; senão, o mais recente.
   const proximo = [...ordenados].reverse().find((t) => t.inicio > hoje);
   const escolhido =
-    ordenados.find((t) => t.id === sp.trimestre) ?? proximo ?? trimestreDe(ordenados, hoje) ?? ordenados[0];
+    ordenados.find((t) => t.id === sp.trimestre) ?? proximo ?? ordenados.find((t) => t.inicio <= hoje && hoje <= t.fim) ?? ordenados[0];
 
-  const dados = await (await getEbdRevistasService()).doTrimestre(actor, escolhido.id).catch((err: unknown) => {
+  const dados = await revistasService.doTrimestre(actor, escolhido.id, igrejaDosPedidos.id).catch((err: unknown) => {
     if (isAppError(err) && err.code === "not_found") notFound();
     throw err;
   });
+  // Aba Rede: a igreja que define a lista e compra para ela e as congregações
+  // (subsede e sede; congregação independente não tem rede).
+  const comRede = lista.propria && (lista.temCongregacoes || igrejaDosPedidos.tipo !== "congregacao");
+  const rede = comRede
+    ? await revistasService.rede(actor, escolhido.id).catch((err: unknown) => {
+        console.error("[revistas] falha ao carregar a rede", err);
+        return null;
+      })
+    : null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -67,6 +86,8 @@ export default async function EbdRevistasPage({ searchParams }: { searchParams: 
         trimestreId={escolhido.id}
         trimestres={ordenados.map((t) => ({ id: t.id, nome: t.nome }))}
         dados={dados}
+        lista={{ propria: lista.propria, donaNome: lista.donaNome }}
+        rede={rede}
         classes={classes.filter((c) => c.ativa).map((c) => ({ id: c.id, nome: c.nome }))}
         igreja={active ? await nomeCompletoDaIgreja(active.id, active.name) : ""}
         hoje={hoje}

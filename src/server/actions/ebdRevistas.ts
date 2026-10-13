@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { AppError } from "@/lib/errors";
-import { getEbdRevistasActor, getEbdRevistasService } from "@/server/ebdRevistas";
+import { getEbdRevistasActor, getEbdRevistasService, getIgrejaDosPedidos } from "@/server/ebdRevistas";
 import { toActionError, type ActionState } from "./action-state";
 
 /**
@@ -22,7 +22,9 @@ const texto = (fd: FormData, campo: string) => String(fd.get(campo) ?? "");
 
 export async function salvarRevistaAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
   try {
-    await (await getEbdRevistasService()).salvarRevista(await ator(), {
+    await (
+      await getEbdRevistasService()
+    ).salvarRevista(await ator(), {
       id: texto(fd, "id"),
       trimestreId: texto(fd, "trimestreId"),
       titulo: texto(fd, "titulo"),
@@ -68,15 +70,23 @@ export async function salvarPedidoRevistaAction(_prev: ActionState | undefined, 
       .filter(([campo, valor]) => campo.startsWith("revista_") && Number(valor) > 0)
       .map(([campo, valor]) => ({ revistaId: campo.slice("revista_".length), quantidade: String(valor) }));
     const id = texto(fd, "id");
-    await (await getEbdRevistasService()).salvarPedido(await ator(), {
-      id,
-      trimestreId: texto(fd, "trimestreId"),
-      membroId: texto(fd, "membroId"),
-      nome: texto(fd, "nome"),
-      telefone: texto(fd, "telefone"),
-      observacao: texto(fd, "observacao"),
-      itens,
-    });
+    const igreja = await getIgrejaDosPedidos();
+    if (!igreja) throw new AppError("forbidden", "Selecione uma igreja para continuar.");
+    await (
+      await getEbdRevistasService()
+    ).salvarPedido(
+      await ator(),
+      {
+        id,
+        trimestreId: texto(fd, "trimestreId"),
+        membroId: texto(fd, "membroId"),
+        nome: texto(fd, "nome"),
+        telefone: texto(fd, "telefone"),
+        observacao: texto(fd, "observacao"),
+        itens,
+      },
+      igreja.id,
+    );
     revalidatePath(PAGINA);
     return { success: id ? "Pedido alterado." : "Pedido registrado." };
   } catch (err) {
@@ -84,9 +94,46 @@ export async function salvarPedidoRevistaAction(_prev: ActionState | undefined, 
   }
 }
 
-export async function registrarPagamentoRevistaAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
+/** Pedido de uma congregação fora do sistema: só as quantidades (`revista_<id>` = quantidade). */
+export async function salvarPedidoExternoAction(_prev: ActionState | undefined, fd: FormData): Promise<ActionState> {
   try {
-    await (await getEbdRevistasService()).registrarPagamento(await ator(), {
+    const itens = [...fd.entries()]
+      .filter(([campo, valor]) => campo.startsWith("revista_") && Number(valor) > 0)
+      .map(([campo, valor]) => ({ revistaId: campo.slice("revista_".length), quantidade: String(valor) }));
+    const id = texto(fd, "id");
+    await (
+      await getEbdRevistasService()
+    ).salvarExterno(await ator(), {
+      id,
+      trimestreId: texto(fd, "trimestreId"),
+      nome: texto(fd, "nome"),
+      itens,
+    });
+    revalidatePath(PAGINA);
+    return { success: id ? "Pedido da congregação alterado." : "Pedido da congregação registrado." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export async function removerPedidoExternoAction(pedidoId: string): Promise<ActionState> {
+  try {
+    await (await getEbdRevistasService()).removerExterno(await ator(), pedidoId);
+    revalidatePath(PAGINA);
+    return { success: "Pedido da congregação removido." };
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export async function registrarPagamentoRevistaAction(
+  _prev: ActionState | undefined,
+  fd: FormData,
+): Promise<ActionState> {
+  try {
+    await (
+      await getEbdRevistasService()
+    ).registrarPagamento(await ator(), {
       pedidoId: texto(fd, "pedidoId"),
       valorCentavos: texto(fd, "valor"),
       data: texto(fd, "data"),

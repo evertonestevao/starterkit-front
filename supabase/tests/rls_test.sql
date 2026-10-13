@@ -5617,52 +5617,80 @@ update public.rol_membros set deleted_at = now() where id = current_setting('rls
 delete from public.ebd_matriculas where membro_id = current_setting('rls.aluno_novo')::uuid;
 
 -- ---------------------------------------------------------------------------
--- EBD → Revistas (migration 20261020100000). Pedidos de revista por trimestre
--- na AC Cong (d2): só a gestão da EBD dela (secretaria 0b) vê e mexe. O
--- professor (0a), a sede (01) e outra rede (05) não veem nem gravam.
+-- EBD → Revistas (migrations 20261020100000 e 20261021100000). A AC Sede (d1)
+-- define a lista de revistas e o trimestre; a AC Cong (d2, congregação ligada
+-- a ela) usa essa lista e registra os pedidos dos alunos dela. A sede vê na
+-- Rede só NÚMEROS (quantas de cada revista por igreja), nunca nomes nem
+-- pagamentos. Professor (0a) e outra rede (05) não veem nem gravam.
 -- ---------------------------------------------------------------------------
 insert into public.ebd_trimestres (id, church_id, nome, inicio, fim)
-values ('eb0eb0eb-0000-4000-8000-0000000000f1', 'acacacac-0000-4000-8000-0000000000d2', 'Trimestre das revistas',
+values ('eb0eb0eb-0000-4000-8000-0000000000f1', 'acacacac-0000-4000-8000-0000000000d1', 'Trimestre das revistas',
         current_date + 200, current_date + 290);
 
 set local role authenticated;
 do $$
-declare v_rev uuid; v_ped uuid; v_fora uuid; v_pag uuid; r jsonb; n int; v_quem text;
+declare v_rev uuid; v_ped uuid; v_fora uuid; v_pag uuid; v_ext uuid; r jsonb; n int; v_quem text;
 begin
+  -- A sede cadastra a lista de revistas do trimestre.
   perform set_config('request.jwt.claims',
-    '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
-
-  v_rev := public.ebd_salvar_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', 'Adultos - aluno', 1200,
-                                     'ebdebdeb-0000-4000-8000-0000000000a2');
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+  v_rev := public.ebd_salvar_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', 'Adultos - aluno', 1200, null);
   perform set_config('rls.revista', v_rev::text, true);
 
-  -- Pedido de alguém do cadastro (2 revistas = R$ 24,00) e de alguém de fora.
+  -- A congregação enxerga a lista da sede (é dela que sai o pedido) e não a edita.
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+  r := public.ebd_revistas_lista_da_igreja('acacacac-0000-4000-8000-0000000000d2');
+  if r->>'dona_id' <> 'acacacac-0000-4000-8000-0000000000d1' or (r->>'propria')::boolean then
+    raise exception 'FALHA revistas: a congregacao nao usa a lista da igreja de cima (%)', r;
+  end if;
+  begin
+    perform public.ebd_salvar_revista(v_rev, 'eb0eb0eb-0000-4000-8000-0000000000f1', 'Trocada pela congregacao', 1, null);
+    raise exception 'FALHA revistas: a congregacao editou a lista da igreja de cima';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Pedido de alguém do cadastro (2 revistas = R$ 24,00) e de alguém de fora, na congregação.
   v_ped := public.ebd_salvar_pedido_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1',
     'ebdebdeb-0000-4000-8000-0000000000b2', null, null, 'anotou no caderno',
-    jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 2)));
+    jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 2)), 'acacacac-0000-4000-8000-0000000000d2');
   perform set_config('rls.pedido', v_ped::text, true);
   v_fora := public.ebd_salvar_pedido_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1',
     null, 'Pessoa De Fora', '14999990000', null,
-    jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 1)));
+    jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 1)), 'acacacac-0000-4000-8000-0000000000d2');
 
+  -- Sem dizer a igreja, o pedido cairia na sede: a secretaria da congregação não é da gestão de lá.
+  begin
+    perform public.ebd_salvar_pedido_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', null, 'Na Sede', null, null,
+      jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 1)));
+    raise exception 'FALHA revistas: a congregacao registrou pedido na sede';
+  exception when sqlstate 'P0002' then null;
+  end;
   -- A mesma pessoa não ganha dois pedidos ativos no trimestre.
   begin
     perform public.ebd_salvar_pedido_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1',
       'ebdebdeb-0000-4000-8000-0000000000b2', null, null, null,
-      jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 1)));
+      jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 1)), 'acacacac-0000-4000-8000-0000000000d2');
     raise exception 'FALHA revistas: dois pedidos ativos da mesma pessoa no trimestre';
   exception when sqlstate '23505' then null;
   end;
-  -- Pedido sem revista, e pessoa de fora sem nome: recusados.
+  -- Pedido sem revista, pessoa de fora sem nome e quantidade zero: recusados.
   begin
-    perform public.ebd_salvar_pedido_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', null, 'Sem Item', null, null, '[]'::jsonb);
+    perform public.ebd_salvar_pedido_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', null, 'Sem Item', null, null,
+      '[]'::jsonb, 'acacacac-0000-4000-8000-0000000000d2');
     raise exception 'FALHA revistas: pedido sem revista';
   exception when sqlstate '23514' then null;
   end;
   begin
     perform public.ebd_salvar_pedido_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', null, null, null, null,
-      jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 1)));
+      jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 1)), 'acacacac-0000-4000-8000-0000000000d2');
     raise exception 'FALHA revistas: pedido sem nome';
+  exception when sqlstate '23514' then null;
+  end;
+  begin
+    perform public.ebd_salvar_pedido_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', null, 'Zero', null, null,
+      jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 0)), 'acacacac-0000-4000-8000-0000000000d2');
+    raise exception 'FALHA revistas: pedido com quantidade zero';
   exception when sqlstate '23514' then null;
   end;
 
@@ -5676,27 +5704,6 @@ begin
   perform public.ebd_registrar_pagamento_revista(v_ped, 1400, current_date, 'dinheiro');
   perform public.ebd_marcar_entrega_revista(v_ped, true);
 
-  -- Mudar o preço da revista não muda o pedido já feito.
-  perform public.ebd_salvar_revista(v_rev, 'eb0eb0eb-0000-4000-8000-0000000000f1', 'Adultos - aluno', 2000,
-                                    'ebdebdeb-0000-4000-8000-0000000000a2');
-  r := public.ebd_revistas_do_trimestre('eb0eb0eb-0000-4000-8000-0000000000f1');
-  if jsonb_array_length(r->'pedidos') <> 2 then raise exception 'FALHA revistas: pedidos nao vieram (%)', r->'pedidos'; end if;
-  select (p->'itens'->0->>'preco_centavos')::int into n from jsonb_array_elements(r->'pedidos') p where p->>'id' = v_ped::text;
-  if n <> 1200 then raise exception 'FALHA revistas: o preco do pedido mudou com a revista (%)', n; end if;
-  select jsonb_array_length(p->'pagamentos') into n from jsonb_array_elements(r->'pedidos') p where p->>'id' = v_ped::text;
-  if n <> 2 then raise exception 'FALHA revistas: pagamentos nao vieram (%)', n; end if;
-  -- Quem pediu não aparece em "sem pedido".
-  if exists (select 1 from jsonb_array_elements(r->'sem_pedido') s where s->>'membro_id' = 'ebdebdeb-0000-4000-8000-0000000000b2') then
-    raise exception 'FALHA revistas: quem ja pediu apareceu como sem pedido';
-  end if;
-
-  -- Revista com pedido ativo não sai da lista.
-  begin
-    perform public.ebd_remover_revista(v_rev);
-    raise exception 'FALHA revistas: removeu revista com pedido';
-  exception when sqlstate '23503' then null;
-  end;
-
   -- Escrita direta nas tabelas: não existe (só pelas funções).
   begin
     insert into public.ebd_revista_pagamentos (pedido_id, church_id, valor_centavos)
@@ -5705,11 +5712,74 @@ begin
   exception when sqlstate '42501' then null;
   end;
 
-  -- Estorno de pagamento lançado errado; cancelar com e sem pagamento.
+  r := public.ebd_revistas_do_trimestre('eb0eb0eb-0000-4000-8000-0000000000f1', 'acacacac-0000-4000-8000-0000000000d2');
+  if jsonb_array_length(r->'pedidos') <> 2 or jsonb_array_length(r->'revistas') <> 1 then
+    raise exception 'FALHA revistas: a congregacao nao viu os pedidos dela e a lista de cima (%)', r;
+  end if;
+  -- A congregação não lê a Rede (é da igreja de cima).
+  if public.ebd_revistas_rede('eb0eb0eb-0000-4000-8000-0000000000f1') is not null then
+    raise exception 'FALHA revistas: a congregacao viu o resumo da rede';
+  end if;
+
+  -- A sede: muda o preço (o pedido feito não muda), vê a Rede só com números e
+  -- registra o pedido de uma congregação fora do sistema.
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+  perform public.ebd_salvar_revista(v_rev, 'eb0eb0eb-0000-4000-8000-0000000000f1', 'Adultos - aluno', 2000, null);
+  v_ext := public.ebd_salvar_pedido_externo(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', 'Congregacao Sem Sistema',
+    jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 7)));
+  r := public.ebd_revistas_rede('eb0eb0eb-0000-4000-8000-0000000000f1');
+  select (i->'itens'->0->>'quantidade')::int into n from jsonb_array_elements(r->'igrejas') i
+  where i->>'church_id' = 'acacacac-0000-4000-8000-0000000000d2';
+  if n is distinct from 3 then raise exception 'FALHA revistas: a rede nao somou os 3 da congregacao (%)', r; end if;
+  if jsonb_array_length(r->'externos') <> 1 or (r->'externos'->0->'itens'->0->>'quantidade')::int <> 7 then
+    raise exception 'FALHA revistas: o pedido da congregacao fora do sistema nao entrou (%)', r->'externos';
+  end if;
+  if r::text ~* 'pessoa de fora|ebdebdeb-0000-4000-8000-0000000000b2|anotou|valor_centavos' then
+    raise exception 'FALHA revistas: a rede mostrou nome, pessoa ou pagamento da congregacao (%)', r;
+  end if;
+  -- A sede não lê os pedidos (nomes) da congregação, nem pelas funções nem pelas tabelas.
+  if public.ebd_revistas_do_trimestre('eb0eb0eb-0000-4000-8000-0000000000f1', 'acacacac-0000-4000-8000-0000000000d2') is not null then
+    raise exception 'FALHA revistas: a sede leu os pedidos da congregacao';
+  end if;
+  select count(*) into n from public.ebd_revista_pedidos where church_id = 'acacacac-0000-4000-8000-0000000000d2';
+  if n <> 0 then raise exception 'FALHA revistas: a sede leu a tabela de pedidos da congregacao (%)', n; end if;
+  begin
+    perform public.ebd_marcar_entrega_revista(v_ped, false);
+    raise exception 'FALHA revistas: a sede mexeu na entrega da congregacao';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- De volta à congregação: o preço do pedido feito ficou o de antes.
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
+  r := public.ebd_revistas_do_trimestre('eb0eb0eb-0000-4000-8000-0000000000f1', 'acacacac-0000-4000-8000-0000000000d2');
+  select (p->'itens'->0->>'preco_centavos')::int into n from jsonb_array_elements(r->'pedidos') p where p->>'id' = v_ped::text;
+  if n <> 1200 then raise exception 'FALHA revistas: o preco do pedido mudou com a revista (%)', n; end if;
+  begin
+    perform public.ebd_salvar_pedido_externo(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', 'Pela Congregacao',
+      jsonb_build_array(jsonb_build_object('revista_id', v_rev, 'quantidade', 1)));
+    raise exception 'FALHA revistas: a congregacao registrou pedido de congregacao na sede';
+  exception when sqlstate 'P0002' then null;
+  end;
+
+  -- Revista com pedido ativo não sai da lista (a sede tenta).
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+  begin
+    perform public.ebd_remover_revista(v_rev);
+    raise exception 'FALHA revistas: removeu revista com pedido';
+  exception when sqlstate '23503' then null;
+  end;
+  perform public.ebd_remover_pedido_externo(v_ext);
+
+  -- Estorno de pagamento lançado errado; cancelar com e sem pagamento (na congregação).
+  perform set_config('request.jwt.claims',
+    '{"sub":"acacacac-0000-4000-8000-00000000000b","email":"rls-ebd-secr@test.local","role":"authenticated"}', true);
   perform public.ebd_estornar_pagamento_revista(v_pag);
   perform public.ebd_cancelar_pedido_revista(v_ped);   -- tem pagamento: fica como cancelado
   perform public.ebd_cancelar_pedido_revista(v_fora);  -- sem pagamento: some
-  r := public.ebd_revistas_do_trimestre('eb0eb0eb-0000-4000-8000-0000000000f1');
+  r := public.ebd_revistas_do_trimestre('eb0eb0eb-0000-4000-8000-0000000000f1', 'acacacac-0000-4000-8000-0000000000d2');
   if jsonb_array_length(r->'pedidos') <> 1 or not (r->'pedidos'->0->>'cancelado')::boolean then
     raise exception 'FALHA revistas: cancelamento nao ficou como esperado (%)', r->'pedidos';
   end if;
@@ -5719,20 +5789,21 @@ begin
   exception when sqlstate 'P0002' then null;
   end;
 
-  -- Professor, sede (igreja de cima) e outra rede: nada.
+  -- Professor e outra rede: nada.
   foreach v_quem in array array[
     '{"sub":"acacacac-0000-4000-8000-00000000000a","email":"rls-ebd-prof@test.local","role":"authenticated"}',
-    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
     '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
   ] loop
     perform set_config('request.jwt.claims', v_quem, true);
-    if public.ebd_revistas_do_trimestre('eb0eb0eb-0000-4000-8000-0000000000f1') is not null then
-      raise exception 'FALHA revistas: % viu os pedidos de revista', v_quem;
+    if public.ebd_revistas_do_trimestre('eb0eb0eb-0000-4000-8000-0000000000f1', 'acacacac-0000-4000-8000-0000000000d2') is not null
+       or public.ebd_revistas_rede('eb0eb0eb-0000-4000-8000-0000000000f1') is not null
+       or public.ebd_revistas_lista_da_igreja('acacacac-0000-4000-8000-0000000000d2') is not null then
+      raise exception 'FALHA revistas: % viu os pedidos ou a rede', v_quem;
     end if;
     select count(*) into n from public.ebd_revista_pedidos;
     if n <> 0 then raise exception 'FALHA revistas: % leu a tabela de pedidos (%)', v_quem, n; end if;
-    select count(*) into n from public.ebd_revista_pagamentos;
-    if n <> 0 then raise exception 'FALHA revistas: % leu a tabela de pagamentos (%)', v_quem, n; end if;
+    select count(*) into n from public.ebd_revista_pedidos_externos;
+    if n <> 0 then raise exception 'FALHA revistas: % leu os pedidos de congregacao (%)', v_quem, n; end if;
     begin
       perform public.ebd_salvar_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', 'Intrusa', 100, null);
       raise exception 'FALHA revistas: % cadastrou revista', v_quem;
@@ -5740,13 +5811,15 @@ begin
     end;
     begin
       perform public.ebd_salvar_pedido_revista(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', null, 'Intruso', null, null,
-        jsonb_build_array(jsonb_build_object('revista_id', current_setting('rls.revista')::uuid, 'quantidade', 1)));
+        jsonb_build_array(jsonb_build_object('revista_id', current_setting('rls.revista')::uuid, 'quantidade', 1)),
+        'acacacac-0000-4000-8000-0000000000d2');
       raise exception 'FALHA revistas: % fez pedido', v_quem;
     exception when sqlstate 'P0002' then null;
     end;
     begin
-      perform public.ebd_marcar_entrega_revista(current_setting('rls.pedido')::uuid, true);
-      raise exception 'FALHA revistas: % marcou entrega', v_quem;
+      perform public.ebd_salvar_pedido_externo(null, 'eb0eb0eb-0000-4000-8000-0000000000f1', 'Intrusa',
+        jsonb_build_array(jsonb_build_object('revista_id', current_setting('rls.revista')::uuid, 'quantidade', 1)));
+      raise exception 'FALHA revistas: % registrou pedido de congregacao', v_quem;
     exception when sqlstate 'P0002' then null;
     end;
   end loop;

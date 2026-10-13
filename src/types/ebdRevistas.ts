@@ -56,3 +56,34 @@ export interface EbdRevistasDoTrimestre {
   pedidos: EbdRevistaPedido[];
   semPedido: EbdSemPedido[];
 }
+
+/** De quem é a lista de revistas desta igreja (ela mesma, ou a igreja de cima). */
+export interface EbdListaDaIgreja {
+  donaId: string;
+  donaNome: string;
+  /** A própria igreja define a lista (não é congregação ligada a outra). */
+  propria: boolean;
+  /** A dona da lista tem congregações ligadas direto a ela. */
+  temCongregacoes: boolean;
+  trimestres: Array<{ id: string; nome: string; inicio: string; fim: string }>;
+}
+
+/** Quantidade de uma revista. */
+export interface EbdRevistaQuantidade {
+  revistaId: string;
+  quantidade: number;
+}
+
+/** Aba Rede: quanto cada igreja pediu de cada revista (só números). */
+export interface EbdRevistasRede {
+  igrejas: Array<{
+    churchId: string;
+    nome: string;
+    /** A própria igreja que faz a compra. */
+    propria: boolean;
+    pedidos: number;
+    itens: EbdRevistaQuantidade[];
+  }>;
+  /** Congregações fora do sistema: a igreja de cima informa só as quantidades. */
+  externos: Array<{ id: string; nome: string; itens: EbdRevistaQuantidade[] }>;
+}
