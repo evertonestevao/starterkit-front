@@ -139,47 +139,6 @@ export function EbdRevistas({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-xs text-muted-foreground">Trimestre</span>
-          <select
-            className={cn(selectClasses, "min-w-56")}
-            value={trimestreId}
-            onChange={(e) => router.push(`/dashboard/ebd/revistas?trimestre=${e.target.value}`)}
-          >
-            {trimestres.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button type="button" disabled={revistas.length === 0} onClick={() => setPedindo({})}>
-          <Plus className="size-4" /> Novo pedido
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 print:hidden">
-        <Numero
-          rotulo="Revistas pedidas"
-          valor={String(resumo.revistas)}
-          detalhe={`em ${resumo.pedidos} ${resumo.pedidos === 1 ? "pedido" : "pedidos"}`}
-        />
-        <Numero rotulo="Total dos pedidos" valor={formatarReais(resumo.totalCentavos)} />
-        <Numero rotulo="Já recebido" valor={formatarReais(resumo.recebidoCentavos)} />
-        <Numero
-          rotulo="A receber"
-          valor={formatarReais(resumo.aReceberCentavos)}
-          detalhe={`${resumo.devendo} ${resumo.devendo === 1 ? "pessoa devendo" : "pessoas devendo"} · ${resumo.aEntregar} a entregar`}
-        />
-      </div>
-      {resumo.recebidoEmCanceladosCentavos > 0 ? (
-        <p className="text-xs text-muted-foreground print:hidden">
-          Há {formatarReais(resumo.recebidoEmCanceladosCentavos)} recebidos em pedidos cancelados (veja o filtro
-          “Cancelados”), para devolver ou acertar.
-        </p>
-      ) : null}
-
       <div
         className="-mb-px flex gap-1 overflow-x-auto border-b print:hidden"
         role="tablist"
@@ -204,8 +163,52 @@ export function EbdRevistas({
         ))}
       </div>
 
+      <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs text-muted-foreground">Trimestre</span>
+          <select
+            className={cn(selectClasses, "min-w-56")}
+            value={trimestreId}
+            onChange={(e) => router.push(`/dashboard/ebd/revistas?trimestre=${e.target.value}`)}
+          >
+            {trimestres.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       {aba === "pedidos" ? (
         <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">Os pedidos dos alunos desta igreja.</p>
+            <Button type="button" disabled={revistas.length === 0} onClick={() => setPedindo({})}>
+              <Plus className="size-4" /> Novo pedido
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 print:hidden">
+            <Numero
+              rotulo="Revistas pedidas"
+              valor={String(resumo.revistas)}
+              detalhe={`em ${resumo.pedidos} ${resumo.pedidos === 1 ? "pedido" : "pedidos"}`}
+            />
+            <Numero rotulo="Total dos pedidos" valor={formatarReais(resumo.totalCentavos)} />
+            <Numero rotulo="Já recebido" valor={formatarReais(resumo.recebidoCentavos)} />
+            <Numero
+              rotulo="A receber"
+              valor={formatarReais(resumo.aReceberCentavos)}
+              detalhe={`${resumo.devendo} ${resumo.devendo === 1 ? "pessoa devendo" : "pessoas devendo"} · ${resumo.aEntregar} a entregar`}
+            />
+          </div>
+          {resumo.recebidoEmCanceladosCentavos > 0 ? (
+            <p className="text-xs text-muted-foreground print:hidden">
+              Há {formatarReais(resumo.recebidoEmCanceladosCentavos)} recebidos em pedidos cancelados (veja o filtro
+              “Cancelados”), para devolver ou acertar.
+            </p>
+          ) : null}
+
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Filtrar por situação">
             {situacoes.map(([valor, rotulo]) => (
               <button
@@ -514,7 +517,7 @@ export function EbdRevistas({
       ) : null}
 
       {/* O que está à venda neste trimestre, no fim da tela: o foco aqui são os pedidos. */}
-      {aba === "revistas" ? null : (
+      {aba !== "pedidos" ? null : (
         <div
           className={cn(
             "flex flex-col gap-2 rounded-lg border p-3 print:hidden",
