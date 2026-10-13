@@ -124,8 +124,9 @@ export function EbdRevistas({
   const abas: Array<[Aba, string]> = [
     ["pedidos", `Pedidos (${resumo.pedidos})`],
     ["sem_pedido", `Quem não pediu (${semPedido.length})`],
-    ["compra", "Resumo da compra"],
-    ...(rede ? ([["rede", "Rede"]] as Array<[Aba, string]>) : []),
+    ...(rede
+      ? ([["rede", "Total da compra"]] as Array<[Aba, string]>)
+      : ([["compra", "Resumo da compra"]] as Array<[Aba, string]>)),
     ...(lista.propria ? ([["revistas", `Revistas e preços (${revistas.length})`]] as Array<[Aba, string]>) : []),
   ];
   const situacoes: Array<[FiltroDePedidos, string]> = [

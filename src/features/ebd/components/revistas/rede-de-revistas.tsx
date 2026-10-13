@@ -49,12 +49,19 @@ export function RedeDeRevistas({
   const total = totalDaRede(rede, revistas);
   const congregacoes = rede.igrejas.filter((i) => !i.propria);
   const semPedido = congregacoes.filter((i) => i.pedidos === 0);
+  const comPedido = rede.igrejas.filter((i) => i.pedidos > 0).length;
+  const resumoDasFontes = [
+    `${comPedido} ${comPedido === 1 ? "igreja" : "igrejas"} com pedido no sistema`,
+    ...(rede.externos.length > 0
+      ? [`${rede.externos.length} ${rede.externos.length === 1 ? "congregação" : "congregações"} fora do sistema`]
+      : []),
+  ].join(" e ");
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3 print:hidden">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          A compra única de {trimestreNome}: os pedidos desta igreja e das congregações ligadas a ela, somados conforme
+          O que comprar em {trimestreNome}: os pedidos desta igreja e das congregações ligadas a ela, somados conforme
           cada uma registra. Aqui aparecem só as quantidades; quem pediu e quem pagou ficam com cada congregação.
         </p>
         <div className="flex flex-wrap gap-2">
@@ -83,31 +90,43 @@ export function RedeDeRevistas({
         </div>
       </div>
 
-      <div className="rounded-lg border p-4">
-        <p className="font-semibold">Pedido de revistas da EBD · {trimestreNome}</p>
-        <p className="text-sm text-muted-foreground">{igreja} e congregações</p>
+      {/* O que importa aqui: quantas de cada revista comprar, somando todas as igrejas. */}
+      <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-wide text-primary uppercase">Total a comprar</p>
+            <p className="text-lg font-semibold">Pedido de revistas da EBD · {trimestreNome}</p>
+            <p className="text-sm text-muted-foreground">
+              {igreja} e congregações · somando {resumoDasFontes}
+            </p>
+          </div>
+          <p className="shrink-0 sm:text-right">
+            <span className="block text-4xl font-bold leading-none tabular-nums">{total.total}</span>
+            <span className="text-sm text-muted-foreground">{total.total === 1 ? "revista" : "revistas"}</span>
+          </p>
+        </div>
         {total.linhas.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">Nenhuma revista pedida ainda neste trimestre.</p>
+          <p className="mt-4 text-sm text-muted-foreground">Nenhuma revista pedida ainda neste trimestre.</p>
         ) : (
-          <table className="mt-3 w-full text-sm">
+          <table className="mt-4 w-full text-base">
             <thead>
-              <tr className="border-b text-left text-xs text-muted-foreground">
-                <th className="py-1.5 font-medium">Revista</th>
-                <th className="py-1.5 text-right font-medium">Total a comprar</th>
+              <tr className="border-b border-primary/20 text-left text-xs text-muted-foreground">
+                <th className="py-2 font-medium">Revista</th>
+                <th className="py-2 text-right font-medium">Quantidade</th>
               </tr>
             </thead>
             <tbody>
               {total.linhas.map((l) => (
-                <tr key={l.revistaId} className="border-b last:border-0">
-                  <td className="py-1.5">{l.titulo}</td>
-                  <td className="py-1.5 text-right text-base font-semibold tabular-nums">{l.total}</td>
+                <tr key={l.revistaId} className="border-b border-primary/10 last:border-0">
+                  <td className="py-2">{l.titulo}</td>
+                  <td className="py-2 text-right text-xl font-bold tabular-nums">{l.total}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t font-semibold">
-                <td className="py-1.5">Total</td>
-                <td className="py-1.5 text-right tabular-nums">{total.total}</td>
+              <tr className="border-t-2 border-primary/30">
+                <td className="py-2 font-semibold">Total</td>
+                <td className="py-2 text-right text-2xl font-bold tabular-nums">{total.total}</td>
               </tr>
             </tfoot>
           </table>
@@ -115,7 +134,7 @@ export function RedeDeRevistas({
       </div>
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">Por igreja</p>
+        <p className="text-sm font-medium">Quanto cada igreja pediu</p>
         {semPedido.length > 0 ? (
           <p className="text-xs text-muted-foreground print:hidden">
             Ainda sem pedido no sistema: {semPedido.map((i) => i.nome).join(", ")}.
