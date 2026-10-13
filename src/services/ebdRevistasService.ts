@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { AppError, toValidationError } from "@/lib/errors";
 import type { RoleCode } from "@/types/database";
-import type { EbdRevistasDoTrimestre, FormaDePagamentoDaRevista } from "@/types/ebdRevistas";
+import type {
+  EbdListaDaIgreja,
+  EbdRevistasDoTrimestre,
+  EbdRevistasRede,
+  FormaDePagamentoDaRevista,
+} from "@/types/ebdRevistas";
 import { canGerirEbd } from "./ebdService";
 
 /**
@@ -16,8 +21,19 @@ export interface EbdRevistasActor {
 }
 
 export interface EbdRevistasRepository {
-  /** null = trimestre não existe ou não é da gestão da EBD de quem pede. */
-  doTrimestre(trimestreId: string): Promise<EbdRevistasDoTrimestre | null>;
+  /** null = quem pede não é da gestão da EBD desta igreja. */
+  listaDaIgreja(churchId: string): Promise<EbdListaDaIgreja | null>;
+  /** Pedidos desta igreja no trimestre (da lista dela). null = sem acesso. */
+  doTrimestre(trimestreId: string, churchId: string): Promise<EbdRevistasDoTrimestre | null>;
+  /** Só a igreja dona da lista. null = sem acesso. */
+  rede(trimestreId: string): Promise<EbdRevistasRede | null>;
+  salvarExterno(input: {
+    id: string | null;
+    trimestreId: string;
+    nome: string;
+    itens: Array<{ revistaId: string; quantidade: number }>;
+  }): Promise<string>;
+  removerExterno(id: string): Promise<void>;
   salvarRevista(input: {
     id: string | null;
     trimestreId: string;
@@ -30,6 +46,8 @@ export interface EbdRevistasRepository {
   salvarPedido(input: {
     id: string | null;
     trimestreId: string;
+    /** A igreja dos pedidos (a congregação usa o trimestre da igreja de cima). */
+    churchId: string;
     membroId: string | null;
     nome: string | null;
     telefone: string | null;
@@ -104,6 +122,21 @@ const pedidoSchema = z
     path: ["itens"],
   });
 
+const pedidoExternoSchema = z.object({
+  id: z.string().trim().transform(vazioViraNull).pipe(id("Pedido inválido").nullable()),
+  trimestreId: id("Escolha o trimestre"),
+  nome: z.string().trim().min(2, "Informe o nome da congregação").max(120, "Nome longo demais"),
+  itens: z
+    .array(
+      z.object({
+        revistaId: id("Revista inválida"),
+        quantidade: z.coerce.number().int().min(1, "Quantidade mínima: 1").max(2000, "Quantidade alta demais"),
+      }),
+    )
+    .min(1, "Informe a quantidade de pelo menos uma revista")
+    .max(60, "Revistas demais"),
+});
+
 const pagamentoSchema = z.object({
   pedidoId: id("Pedido inválido"),
   valorCentavos: centavos("Informe o valor (ex.: 10,00)").pipe(
@@ -135,11 +168,46 @@ export function createEbdRevistasService(deps: { repo: EbdRevistasRepository }) 
   };
 
   return {
-    async doTrimestre(actor: EbdRevistasActor, trimestreId: unknown): Promise<EbdRevistasDoTrimestre> {
+    /** De quem é a lista de revistas desta igreja, e os trimestres dela. */
+    async listaDaIgreja(actor: EbdRevistasActor, churchId: string): Promise<EbdListaDaIgreja> {
       exige(actor);
-      const dados = await repo.doTrimestre(idValido(trimestreId, "Trimestre"));
+      const lista = await repo.listaDaIgreja(idValido(churchId, "Igreja"));
+      if (!lista) throw new AppError("not_found", "Igreja não encontrada.");
+      return lista;
+    },
+
+    async doTrimestre(
+      actor: EbdRevistasActor,
+      trimestreId: unknown,
+      churchId: string,
+    ): Promise<EbdRevistasDoTrimestre> {
+      exige(actor);
+      const dados = await repo.doTrimestre(idValido(trimestreId, "Trimestre"), idValido(churchId, "Igreja"));
       if (!dados) throw new AppError("not_found", "Trimestre não encontrado.");
       return dados;
+    },
+
+    /** Aba Rede: quanto cada igreja pediu de cada revista (só a igreja que faz a compra). */
+    async rede(actor: EbdRevistasActor, trimestreId: unknown): Promise<EbdRevistasRede> {
+      exige(actor);
+      const dados = await repo.rede(idValido(trimestreId, "Trimestre"));
+      if (!dados) throw new AppError("not_found", "Trimestre não encontrado.");
+      return dados;
+    },
+
+    /** Pedido de uma congregação fora do sistema: só as quantidades. */
+    async salvarExterno(actor: EbdRevistasActor, input: unknown): Promise<string> {
+      exige(actor);
+      const dados = validar(pedidoExternoSchema, input);
+      if (new Set(dados.itens.map((i) => i.revistaId)).size !== dados.itens.length) {
+        throw new AppError("validation_error", "A mesma revista apareceu duas vezes.");
+      }
+      return repo.salvarExterno(dados);
+    },
+
+    async removerExterno(actor: EbdRevistasActor, pedidoId: unknown): Promise<void> {
+      exige(actor);
+      await repo.removerExterno(idValido(pedidoId, "Pedido"));
     },
 
     async salvarRevista(actor: EbdRevistasActor, input: unknown): Promise<string> {
@@ -161,9 +229,10 @@ export function createEbdRevistasService(deps: { repo: EbdRevistasRepository }) 
       return repo.copiarRevistas(de, para);
     },
 
-    async salvarPedido(actor: EbdRevistasActor, input: unknown): Promise<string> {
+    /** `churchId`: a igreja de quem pede, vinda da sessão (nunca do formulário). */
+    async salvarPedido(actor: EbdRevistasActor, input: unknown, churchId: string): Promise<string> {
       exige(actor);
-      return repo.salvarPedido(validar(pedidoSchema, input));
+      return repo.salvarPedido({ ...validar(pedidoSchema, input), churchId: idValido(churchId, "Igreja") });
     },
 
     async registrarPagamento(actor: EbdRevistasActor, input: unknown): Promise<string> {

@@ -45,8 +45,8 @@ export function PedidoForm({
   /** Membros com pedido ativo no trimestre (não entram na busca). */
   jaPediram: Set<string>;
   onFechar: () => void;
-  /** Fecha o pedido e abre o cadastro das revistas e preços. */
-  onEditarRevistas: () => void;
+  /** Fecha o pedido e abre o cadastro das revistas e preços (só quem define a lista). */
+  onEditarRevistas?: () => void;
 }) {
   const [state, action, pending] = useActionState(salvarPedidoRevistaAction, undefined);
   useActionToast(state);
@@ -136,18 +136,18 @@ export function PedidoForm({
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 flex w-full flex-wrap items-center justify-between gap-2 text-sm font-medium">
           Quantas de cada revista
-          <button
-            type="button"
-            className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-            onClick={onEditarRevistas}
-          >
-            Editar revistas e preços
-          </button>
+          {onEditarRevistas ? (
+            <button
+              type="button"
+              className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+              onClick={onEditarRevistas}
+            >
+              Editar revistas e preços
+            </button>
+          ) : null}
         </legend>
         {revistas.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma revista cadastrada neste trimestre. Cadastre em “Revistas e preços”.
-          </p>
+          <p className="text-sm text-muted-foreground">Nenhuma revista cadastrada neste trimestre.</p>
         ) : (
           <ul className="flex flex-col divide-y rounded-lg border">
             {revistas.map((r) => {

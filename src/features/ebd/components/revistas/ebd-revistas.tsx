@@ -28,15 +28,16 @@ import { paginar } from "@/lib/paginacao";
 import { mascaraTelefone } from "@/lib/telefone";
 import { cn } from "@/lib/utils";
 import { cancelarPedidoRevistaAction, marcarEntregaRevistaAction } from "@/server/actions/ebdRevistas";
-import type { EbdRevistaPedido, EbdRevistasDoTrimestre } from "@/types/ebdRevistas";
+import type { EbdRevistaPedido, EbdRevistasDoTrimestre, EbdRevistasRede } from "@/types/ebdRevistas";
 import { PagamentoForm } from "./pagamento-form";
 import { PedidoForm, type PessoaDoPedido } from "./pedido-form";
+import { RedeDeRevistas } from "./rede-de-revistas";
 import { RevistasDoTrimestre } from "./revistas-do-trimestre";
 
 /** Pedidos por página. */
 const POR_PAGINA = 15;
 
-type Aba = "pedidos" | "compra" | "sem_pedido" | "revistas";
+type Aba = "pedidos" | "compra" | "sem_pedido" | "rede" | "revistas";
 
 const SELO = {
   verde: "border-emerald-600/30 bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-200",
@@ -62,6 +63,8 @@ export function EbdRevistas({
   trimestreId,
   trimestres,
   dados,
+  lista,
+  rede,
   classes,
   igreja,
   hoje,
@@ -69,6 +72,10 @@ export function EbdRevistas({
   trimestreId: string;
   trimestres: Array<{ id: string; nome: string }>;
   dados: EbdRevistasDoTrimestre;
+  /** De quem é a lista de revistas: desta igreja, ou da igreja de cima (congregação ligada). */
+  lista: { propria: boolean; donaNome: string };
+  /** Aba Rede (só a igreja que compra para ela e as congregações). */
+  rede: EbdRevistasRede | null;
   classes: Array<{ id: string; nome: string }>;
   /** Nome completo da igreja, para o resumo da compra. */
   igreja: string;
@@ -76,7 +83,7 @@ export function EbdRevistas({
   hoje: string;
 }) {
   const router = useRouter();
-  const [aba, setAba] = useState<Aba>(dados.revistas.length === 0 ? "revistas" : "pedidos");
+  const [aba, setAba] = useState<Aba>(dados.revistas.length === 0 && lista.propria ? "revistas" : "pedidos");
   const [situacao, setSituacao] = useState<FiltroDePedidos>("todos");
   const [revistaId, setRevistaId] = useState("");
   const [classe, setClasse] = useState("");
@@ -116,9 +123,10 @@ export function EbdRevistas({
 
   const abas: Array<[Aba, string]> = [
     ["pedidos", `Pedidos (${resumo.pedidos})`],
-    ["compra", "Resumo da compra"],
     ["sem_pedido", `Quem não pediu (${semPedido.length})`],
-    ["revistas", `Revistas e preços (${revistas.length})`],
+    ["compra", "Resumo da compra"],
+    ...(rede ? ([["rede", "Rede"]] as Array<[Aba, string]>) : []),
+    ...(lista.propria ? ([["revistas", `Revistas e preços (${revistas.length})`]] as Array<[Aba, string]>) : []),
   ];
   const situacoes: Array<[FiltroDePedidos, string]> = [
     ["todos", `Todos (${resumo.pedidos})`],
@@ -173,7 +181,7 @@ export function EbdRevistas({
       ) : null}
 
       <div
-        className="flex flex-wrap gap-2 border-b pb-2 print:hidden"
+        className="-mb-px flex gap-1 overflow-x-auto border-b print:hidden"
         role="tablist"
         aria-label="Partes dos pedidos de revista"
       >
@@ -185,8 +193,10 @@ export function EbdRevistas({
             aria-selected={aba === valor}
             onClick={() => setAba(valor)}
             className={cn(
-              "rounded-full border px-3 py-1 text-sm",
-              aba === valor ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted",
+              "shrink-0 border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors",
+              aba === valor
+                ? "border-primary font-medium text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
             {rotulo}
@@ -483,7 +493,17 @@ export function EbdRevistas({
         </div>
       ) : null}
 
-      {aba === "revistas" ? (
+      {aba === "rede" && rede ? (
+        <RedeDeRevistas
+          trimestreId={trimestreId}
+          trimestreNome={trimestre?.nome ?? ""}
+          igreja={igreja}
+          revistas={revistas}
+          rede={rede}
+        />
+      ) : null}
+
+      {aba === "revistas" && lista.propria ? (
         <RevistasDoTrimestre
           trimestreId={trimestreId}
           trimestreNome={trimestre?.nome ?? "trimestre"}
@@ -505,20 +525,25 @@ export function EbdRevistas({
             <p className="flex items-center gap-2 text-sm font-medium">
               <BookOpen className="size-4 text-primary" /> Revistas e preços deste trimestre
             </p>
-            <Button
-              type="button"
-              size="sm"
-              variant={revistas.length === 0 ? "default" : "outline"}
-              onClick={() => setAba("revistas")}
-            >
-              <Pencil className="size-3.5" />{" "}
-              {revistas.length === 0 ? "Cadastrar revistas" : "Editar revistas e preços"}
-            </Button>
+            {lista.propria ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={revistas.length === 0 ? "default" : "outline"}
+                onClick={() => setAba("revistas")}
+              >
+                <Pencil className="size-3.5" />{" "}
+                {revistas.length === 0 ? "Cadastrar revistas" : "Editar revistas e preços"}
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground">Definidos por {lista.donaNome}</span>
+            )}
           </div>
           {revistas.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Comece por aqui: cadastre as revistas que a EBD vai oferecer neste trimestre e o preço de cada uma. Depois
-              é só registrar os pedidos.
+              {lista.propria
+                ? "Comece por aqui: cadastre as revistas que a EBD vai oferecer neste trimestre e o preço de cada uma. Depois é só registrar os pedidos."
+                : `A lista de revistas deste trimestre ainda não foi cadastrada por ${lista.donaNome}.`}
             </p>
           ) : (
             <ul className="flex flex-wrap gap-2">
@@ -546,10 +571,14 @@ export function EbdRevistas({
               pessoaInicial={pedindo.pessoa}
               jaPediram={jaPediram}
               onFechar={() => setPedindo(null)}
-              onEditarRevistas={() => {
-                setPedindo(null);
-                setAba("revistas");
-              }}
+              onEditarRevistas={
+                lista.propria
+                  ? () => {
+                      setPedindo(null);
+                      setAba("revistas");
+                    }
+                  : undefined
+              }
             />
           ) : null}
         </DialogContent>
