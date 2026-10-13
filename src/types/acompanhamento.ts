@@ -44,6 +44,15 @@ export interface RolMembro {
   observacoes: string | null;
 }
 
+/** Cadastro que já existe e parece ser a pessoa que está sendo cadastrada. */
+export interface MembroParecido {
+  membro: RolMembro;
+  /** O telefone digitado é o dela: quase sempre é a mesma pessoa. */
+  mesmoTelefone: boolean;
+  /** Classe da EBD em que está matriculada, se estiver. */
+  classeEbd: string | null;
+}
+
 export type SexoMembro = "masculino" | "feminino";
 export type EstadoCivil = "solteiro" | "casado" | "uniao_estavel" | "divorciado" | "viuvo";
 export type FormaEntrada = "batismo" | "aclamacao" | "transferencia" | "outro";

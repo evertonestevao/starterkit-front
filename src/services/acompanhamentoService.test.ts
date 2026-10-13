@@ -333,11 +333,10 @@ describe("acompanhamentoService", () => {
     });
     await svc.salvarMembro(owner, null, { nome: "Ana", ativo: true, email: "Ana@Igreja.org" });
     await svc.salvarMembro(owner, null, { nome: "Bia", ativo: true, email: "" });
-    expect(pedidos).toMatchObject([
-      { email: "ana@igreja.org", participaChamada: true },
-      { email: null },
-    ]);
-    await expect(svc.salvarMembro(owner, null, { nome: "Cris", ativo: true, email: "sem-arroba" })).rejects.toMatchObject({
+    expect(pedidos).toMatchObject([{ email: "ana@igreja.org", participaChamada: true }, { email: null }]);
+    await expect(
+      svc.salvarMembro(owner, null, { nome: "Cris", ativo: true, email: "sem-arroba" }),
+    ).rejects.toMatchObject({
       code: "validation_error",
     });
   });
@@ -567,12 +566,26 @@ describe("importarMembros", () => {
   it("grava as linhas boas, já normalizadas", async () => {
     const { svc, gravados } = montar();
     const r = await svc.importarMembros(owner, [
-      { nome: "  Ana Lima ", whatsapp: "(11) 98888-7777", email: "ANA@Igreja.org", nascimento: "1980-12-25", batismo: "", observacoes: "" },
+      {
+        nome: "  Ana Lima ",
+        whatsapp: "(11) 98888-7777",
+        email: "ANA@Igreja.org",
+        nascimento: "1980-12-25",
+        batismo: "",
+        observacoes: "",
+      },
       { nome: "Beto" },
     ]);
     expect(r).toEqual({ importados: 2, ignorados: [] });
     expect(gravados).toMatchObject([
-      { nome: "Ana Lima", email: "ana@igreja.org", nascimento: "1980-12-25", batismo: null, ativo: true, participaChamada: true },
+      {
+        nome: "Ana Lima",
+        email: "ana@igreja.org",
+        nascimento: "1980-12-25",
+        batismo: null,
+        ativo: true,
+        participaChamada: true,
+      },
       { nome: "Beto", whatsapp: null, email: null },
     ]);
   });
@@ -613,7 +626,11 @@ describe("importarMembros", () => {
 
   it("valida de novo no servidor: linha ruim não entra, mesmo vinda do navegador", async () => {
     const { svc, gravados } = montar();
-    const r = await svc.importarMembros(owner, [{ nome: "A" }, { nome: "Dani", whatsapp: "9999" }, { nome: "Edu", nascimento: "25/12/1980" }]);
+    const r = await svc.importarMembros(owner, [
+      { nome: "A" },
+      { nome: "Dani", whatsapp: "9999" },
+      { nome: "Edu", nascimento: "25/12/1980" },
+    ]);
     expect(r.importados).toBe(0);
     expect(gravados).toEqual([]);
     expect(r.ignorados.map((i) => i.nome)).toEqual(["A", "Dani", "Edu"]);
@@ -730,5 +747,44 @@ describe("WhatsApp pelo cartão de acesso", () => {
     });
     await svc.definirWhatsapp(owner, MEMBRO, "(14) 99655-6043");
     expect(salvos).toEqual([[IGREJA, MEMBRO, "14996556043"]]);
+  });
+});
+
+describe("parecidos (já existe alguém parecido?)", () => {
+  const douglas = { ...membro, id: "d1", nome: "Douglas", whatsapp: null, membroIgreja: false };
+  const maria = { ...membro, id: "m1", nome: "Maria da Silva", whatsapp: "(14) 99655-6043" };
+
+  it("manda ao banco o primeiro nome e o fim do telefone, só da igreja do ator", async () => {
+    let recebido: unknown[] = [];
+    const { svc } = service({
+      listParecidos: async (...args) => {
+        recebido = args;
+        return [maria, douglas];
+      },
+    });
+    const r = await svc.parecidos(owner, { nome: "Douglas Sílva", telefone: "14 99655-6043" });
+    expect(recebido).toEqual([IGREJA, { primeiroNome: "douglas", fimDoTelefone: "96556043" }]);
+    // Mesmo telefone primeiro, mesmo com outro nome.
+    expect(r.map((p) => [p.membro.id, p.mesmoTelefone])).toEqual([
+      ["m1", true],
+      ["d1", false],
+    ]);
+  });
+
+  it("com menos de 3 letras e sem telefone, nem consulta", async () => {
+    let consultou = false;
+    const { svc } = service({
+      listParecidos: async () => {
+        consultou = true;
+        return [];
+      },
+    });
+    expect(await svc.parecidos(owner, { nome: "Do", telefone: "" })).toEqual([]);
+    expect(consultou).toBe(false);
+  });
+
+  it("quem não acompanha a igreja não procura", async () => {
+    const { svc } = service({ listParecidos: async () => [douglas] });
+    await expect(svc.parecidos(member, { nome: "Douglas", telefone: "" })).rejects.toMatchObject({ code: "forbidden" });
   });
 });
