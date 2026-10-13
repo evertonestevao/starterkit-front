@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Undo2 } from "lucide-react";
 import { Formulario } from "@/components/formulario";
@@ -42,6 +42,11 @@ export function PagamentoForm({
   const [desfazendo, startDesfazer] = useTransition();
 
   const falta = faltaDoPedido(pedido);
+  // O valor sugerido é o que faltava quando a janela abriu. Depois de um
+  // pagamento (ou de desfazer um), o pedido chega atualizado: o campo é
+  // remontado (key) com o novo valor, em vez de trocar o valor inicial de um
+  // campo já montado.
+  const [hojeInicial] = useState(hoje);
 
   return (
     <div className="flex flex-col gap-4">
@@ -98,11 +103,18 @@ export function PagamentoForm({
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="pag-valor">Valor (R$)</Label>
-              <Input id="pag-valor" name="valor" inputMode="decimal" required defaultValue={emReais(falta)} />
+              <Input
+                key={falta}
+                id="pag-valor"
+                name="valor"
+                inputMode="decimal"
+                required
+                defaultValue={emReais(falta)}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="pag-data">Data</Label>
-              <Input id="pag-data" name="data" type="date" required defaultValue={hoje} max={hoje} />
+              <Input id="pag-data" name="data" type="date" required defaultValue={hojeInicial} max={hojeInicial} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="pag-forma">Forma</Label>
