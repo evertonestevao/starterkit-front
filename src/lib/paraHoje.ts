@@ -31,8 +31,6 @@ export interface ChamadaFeita {
   data: string;
 }
 
-/** Até quantos dias atrás uma chamada esquecida ainda aparece. */
-export const DIAS_DA_CHAMADA_ESQUECIDA = 6;
 /** Até quantos dias depois do domingo a chamada da EBD pendente aparece. */
 export const DIAS_DA_EBD_PENDENTE = 2;
 
@@ -56,9 +54,9 @@ export function quandoFoi(data: string, hoje: string): string {
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 /**
- * Chamadas de culto: para cada culto com chamada, a última vez que ele já
- * começou (até alguns dias atrás) sem chamada feita é pendência; a de hoje é
- * urgente. Culto de hoje que ainda vai começar aparece como lembrete.
+ * Chamadas de culto, só as de HOJE: culto que já começou sem chamada é
+ * urgente; o que ainda vai começar aparece como lembrete. Chamada de culto
+ * de outro dia não entra (decisão de 14/10: o Painel é do dia).
  */
 export function tarefasDosCultos(
   cultos: readonly Culto[],
@@ -68,54 +66,37 @@ export function tarefasDosCultos(
 ): TarefaDoDia[] {
   const feita = new Set(feitas.map((f) => `${f.cultoId}|${f.data}`));
   const agora = minutos(horaAgora);
-  const tarefas: TarefaDoDia[] = [];
-  // Chave de ordenação (data e hora da ocorrência), fora do objeto que vai para a tela.
-  const ordem = new Map<string, string>();
+  const deHoje = cultos
+    .filter((c) => c.registraChamada && !c.removido && cultoAconteceEm(c, hoje) && !feita.has(`${c.id}|${hoje}`))
+    // O que já começou, do mais recente; depois os que vêm, na ordem do horário.
+    .sort((a, b) => {
+      const ja = (c: Culto) => minutos(c.hora) <= agora;
+      if (ja(a) !== ja(b)) return ja(a) ? -1 : 1;
+      return ja(a) ? minutos(b.hora) - minutos(a.hora) : minutos(a.hora) - minutos(b.hora);
+    });
 
-  for (const culto of cultos) {
-    if (!culto.registraChamada || culto.removido) continue;
-    const href = (data: string) => `/dashboard/acompanhamento/chamada/${culto.id}?data=${data}`;
-
-    // A última ocorrência que já começou.
-    let ultima: string | null = null;
-    for (let d = 0; d <= DIAS_DA_CHAMADA_ESQUECIDA; d++) {
-      const data = somarDias(hoje, -d);
-      if (!cultoAconteceEm(culto, data)) continue;
-      if (d === 0 && minutos(culto.hora) > agora) continue;
-      ultima = data;
-      break;
-    }
-    if (ultima && !feita.has(`${culto.id}|${ultima}`)) {
-      const ehHoje = ultima === hoje;
-      tarefas.push({
-        chave: `culto-${culto.id}-${ultima}`,
+  return deHoje.map((culto) => {
+    const href = `/dashboard/acompanhamento/chamada/${culto.id}?data=${hoje}`;
+    if (minutos(culto.hora) <= agora) {
+      return {
+        chave: `culto-${culto.id}-${hoje}`,
         icone: "chamada",
-        titulo: ehHoje
-          ? `Chamada do culto de hoje: ${culto.nome} (${horaCurta(culto.hora)})`
-          : `Chamada pendente: ${culto.nome}, ${quandoFoi(ultima, hoje)}`,
-        detalhe: ehHoje ? "O culto já começou: marque quem veio." : "Ainda dá para registrar quem veio.",
-        href: href(ultima),
+        titulo: `Chamada do culto de hoje: ${culto.nome} (${horaCurta(culto.hora)})`,
+        detalhe: "O culto já começou: marque quem veio.",
+        href,
         acao: "Fazer chamada",
-        urgente: ehHoje,
-      });
-      ordem.set(`culto-${culto.id}-${ultima}`, `${ultima} ${culto.hora}`);
+        urgente: true,
+      };
     }
-
-    // Culto de hoje que ainda vai começar: lembrete, sem pressa.
-    if (cultoAconteceEm(culto, hoje) && minutos(culto.hora) > agora && !feita.has(`${culto.id}|${hoje}`)) {
-      tarefas.push({
-        chave: `culto-${culto.id}-${hoje}-depois`,
-        icone: "chamada",
-        titulo: `Hoje às ${horaCurta(culto.hora)}: ${culto.nome}`,
-        detalhe: "A chamada fica aqui quando o culto começar.",
-        href: href(hoje),
-        acao: "Abrir chamada",
-      });
-      ordem.set(`culto-${culto.id}-${hoje}-depois`, `${hoje} ${culto.hora}`);
-    }
-  }
-  // Mais recente primeiro.
-  return tarefas.sort((a, b) => (ordem.get(b.chave) ?? "").localeCompare(ordem.get(a.chave) ?? ""));
+    return {
+      chave: `culto-${culto.id}-${hoje}-depois`,
+      icone: "chamada",
+      titulo: `Hoje às ${horaCurta(culto.hora)}: ${culto.nome}`,
+      detalhe: "A chamada fica aqui quando o culto começar.",
+      href,
+      acao: "Abrir chamada",
+    };
+  });
 }
 
 export interface ClasseDoDomingo {

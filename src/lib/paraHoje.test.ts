@@ -37,38 +37,27 @@ describe("chamadas de culto", () => {
     });
   });
 
-  it("culto de hoje que ainda vai começar: só lembrete (o da semana passada já saiu da janela)", () => {
+  it("culto de hoje que ainda vai começar: só lembrete", () => {
     const r = tarefasDosCultos([culto({})], [], HOJE, "10:00");
     expect(r.map((t) => [t.titulo, Boolean(t.urgente)])).toEqual([["Hoje às 19h30: Culto de Doutrina", false]]);
   });
 
-  it("chamada feita some da lista; culto sem chamada, removido ou fora da janela não aparece", () => {
+  it("chamada de culto de outro dia não aparece; feita, sem chamada ou removido também não", () => {
     const domingo = culto({ id: "c2", nome: "Culto da Família", diaSemana: 0, hora: "18:00" });
-    expect(
-      tarefasDosCultos(
-        [culto({}), domingo],
-        [
-          { cultoId: "c1", data: HOJE },
-          { cultoId: "c2", data: "2026-10-11" },
-        ],
-        HOJE,
-        "21:00",
-      ),
-    ).toEqual([]);
+    const sabado = culto({ id: "c4", nome: "Culto de Jovens", diaSemana: 6, hora: "19:00" });
+    expect(tarefasDosCultos([domingo, sabado], [], HOJE, "21:00")).toEqual([]);
+    expect(tarefasDosCultos([culto({})], [{ cultoId: "c1", data: HOJE }], HOJE, "21:00")).toEqual([]);
     expect(tarefasDosCultos([culto({ registraChamada: false }), culto({ removido: true })], [], HOJE, "21:00")).toEqual(
       [],
     );
-    const especialAntigo = culto({ id: "c3", tipo: "especial", diaSemana: null, data: "2026-09-01" });
-    expect(tarefasDosCultos([especialAntigo], [], HOJE, "21:00")).toEqual([]);
   });
 
-  it("chamada esquecida de dias atrás, do mais recente para o mais antigo", () => {
-    const domingo = culto({ id: "c2", nome: "Culto da Família", diaSemana: 0, hora: "18:00" });
-    const sabado = culto({ id: "c4", nome: "Culto de Jovens", diaSemana: 6, hora: "19:00" });
-    const r = tarefasDosCultos([domingo, sabado], [], HOJE, "08:00");
+  it("dois cultos hoje: o que já começou vem antes do que ainda vai começar", () => {
+    const manha = culto({ id: "c5", nome: "Culto da Manhã", hora: "09:00" });
+    const r = tarefasDosCultos([culto({}), manha], [], HOJE, "10:00");
     expect(r.map((t) => t.titulo)).toEqual([
-      "Chamada pendente: Culto da Família, domingo (11/10)",
-      "Chamada pendente: Culto de Jovens, sábado (10/10)",
+      "Chamada do culto de hoje: Culto da Manhã (9h)",
+      "Hoje às 19h30: Culto de Doutrina",
     ]);
   });
 });
