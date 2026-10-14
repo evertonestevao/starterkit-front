@@ -25,7 +25,10 @@ import { getSaudacaoAtiva } from "@/server/saudacao";
 import { MiniBarChart, type PontoGrafico } from "@/components/mini-bar-chart";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChurchLinkNotices } from "@/features/church/components/church-link-notices";
-import { formatarData, formatarPercentual, hojeISO, somarDias } from "@/lib/acompanhamento";
+import { formatarData, formatarPercentual, hojeISO, horaAgoraISO, somarDias } from "@/lib/acompanhamento";
+import { montarParaHoje } from "@/lib/paraHoje";
+import { ParaHoje } from "@/features/painel/components/para-hoje";
+import { revistasPendentes } from "@/server/paraHoje";
 import { domingoSugerido, totaisDoDia } from "@/lib/ebd";
 import { menusVisiveis, paginaInicial } from "@/lib/menuPermissoes";
 import { PAPEL_LABEL } from "@/lib/papeis";
@@ -93,7 +96,7 @@ export default async function DashboardPage() {
     meusCargos,
     presenca,
     membros,
-    ebd,
+    ebdClasses,
     oracao,
     visitas,
     eventos,
@@ -104,75 +107,106 @@ export default async function DashboardPage() {
     aniversarios,
     saudacao,
     primeirosPassos,
+    cultosDaIgreja,
+    ebdEmAlerta,
+    revistas,
   ] = await Promise.all([
-      // Respostas a convites de vínculo entre igrejas.
-      se(!!auth.user, "os avisos de vínculo", async () =>
-        (await getChurchLinkService()).listNotices({ companyId: active.id, role: active.role, userId: auth.user!.id }),
-      ),
-      se(true, "os cargos", async () =>
-        (await getCargosService()).meusCargos({ companyId: active.id, role: active.role }),
-      ),
-      se(tem("acompanhamento"), "o resumo da presença", async () =>
-        (await getAcompanhamentoService()).resumo(acompanhamentoActor),
-      ),
-      se(tem("membros"), "os números dos membros", async () =>
-        (await getAcompanhamentoService()).kpisMembros(acompanhamentoActor),
-      ),
-      se(tem("ebd"), "o resumo da EBD", async () => {
-        const actor = await getEbdActor();
-        return actor ? totaisDoDia(await (await getEbdService()).resumoDoDia(actor, domingo)) : null;
+    // Respostas a convites de vínculo entre igrejas.
+    se(!!auth.user, "os avisos de vínculo", async () =>
+      (await getChurchLinkService()).listNotices({ companyId: active.id, role: active.role, userId: auth.user!.id }),
+    ),
+    se(true, "os cargos", async () =>
+      (await getCargosService()).meusCargos({ companyId: active.id, role: active.role }),
+    ),
+    se(tem("acompanhamento"), "o resumo da presença", async () =>
+      (await getAcompanhamentoService()).resumo(acompanhamentoActor),
+    ),
+    se(tem("membros"), "os números dos membros", async () =>
+      (await getAcompanhamentoService()).kpisMembros(acompanhamentoActor),
+    ),
+    // Por classe: o "Para hoje" precisa saber quais estão sem chamada.
+    se(tem("ebd"), "o resumo da EBD", async () => {
+      const actor = await getEbdActor();
+      return actor ? (await getEbdService()).resumoDoDia(actor, domingo) : null;
+    }),
+    se(tem("prayers"), "os pedidos de oração", async () =>
+      (await getCommunityService()).getUnseenPrayerCount(active.id),
+    ),
+    se(tem("relationships"), "os pedidos de visita", async () => (await getCommunityService()).countVisitas(active.id)),
+    se(tem("events"), "os eventos", async () => (await (await getChurchEventsService()).getAgenda(active.id)).proximos),
+    se(
+      tem("campaigns"),
+      "as campanhas",
+      async () => (await (await getCampaignsService()).list(active.id)).filter((c) => c.status === "ativa").length,
+    ),
+    se(isAdmin, "os convites", () =>
+      createInviteService({
+        repo: createSupabaseInviteRepository(client),
+        rateLimiter: createMemoryRateLimiter({ limit: 1000, windowMs: 60_000 }),
+      }).listPending(active.id),
+    ),
+    // Gráficos: presença por culto (8 semanas) e EBD por domingo.
+    se(tem("acompanhamento"), "a presença por culto", async () =>
+      (await getAcompanhamentoService()).chamadasDoPeriodo(acompanhamentoActor, {
+        de: somarDias(hoje, -56),
+        ate: hoje,
       }),
-      se(tem("prayers"), "os pedidos de oração", async () =>
-        (await getCommunityService()).getUnseenPrayerCount(active.id),
-      ),
-      se(tem("relationships"), "os pedidos de visita", async () =>
-        (await getCommunityService()).countVisitas(active.id),
-      ),
-      se(tem("events"), "os eventos", async () => (await (await getChurchEventsService()).getAgenda(active.id)).proximos),
-      se(tem("campaigns"), "as campanhas", async () =>
-        (await (await getCampaignsService()).list(active.id)).filter((c) => c.status === "ativa").length,
-      ),
-      se(isAdmin, "os convites", () =>
-        createInviteService({
-          repo: createSupabaseInviteRepository(client),
-          rateLimiter: createMemoryRateLimiter({ limit: 1000, windowMs: 60_000 }),
-        }).listPending(active.id),
-      ),
-      // Gráficos: presença por culto (8 semanas) e EBD por domingo.
-      se(tem("acompanhamento"), "a presença por culto", async () =>
-        (await getAcompanhamentoService()).chamadasDoPeriodo(acompanhamentoActor, { de: somarDias(hoje, -56), ate: hoje }),
-      ),
-      se(tem("ebd"), "a EBD por domingo", async () => {
-        const actor = await getEbdActor();
-        if (!actor) return null;
-        const service = await getEbdService();
-        return Promise.all(domingos.map(async (d) => ({ data: d, ...totaisDoDia(await service.resumoDoDia(actor, d)) })));
-      }),
-      // Próximos aniversários: de quem tem o módulo Membros. O cartão filtra por tipo na tela,
-      // então vêm mais do que os 6 que ele mostra.
-      se(tem("membros"), "os aniversariantes", async () =>
-        (await getAcompanhamentoService()).proximosAniversarios(acompanhamentoActor, 60),
-      ),
-      getSaudacaoAtiva(),
-      // Primeiros passos de quem administra: página no ar e Pix (a primeira igreja da conta).
-      se(isAdmin, "os primeiros passos", async (): Promise<PrimeirosPassosDados | null> => {
-        const [perfis, pix] = await Promise.all([
-          (await getChurchProfileService()).list(active.id),
-          (await getChurchPixService()).listChurches(active.id),
-        ]);
-        const perfil = perfis[0];
-        if (!perfil) return null;
-        const doPix = pix.find((c) => c.id === perfil.id);
-        return {
-          churchId: perfil.id,
-          chavePublica: perfil.chavePublica,
-          temEndereco: Boolean(perfil.address),
-          paginaAtiva: perfil.paginaAtiva,
-          pix: doPix?.pixStatus ?? "sem_chave",
-          pixMotivoRecusa: doPix?.pixMotivoRecusa ?? null,
-        };
-      }),
-    ]);
+    ),
+    se(tem("ebd"), "a EBD por domingo", async () => {
+      const actor = await getEbdActor();
+      if (!actor) return null;
+      const service = await getEbdService();
+      return Promise.all(domingos.map(async (d) => ({ data: d, ...totaisDoDia(await service.resumoDoDia(actor, d)) })));
+    }),
+    // Próximos aniversários: de quem tem o módulo Membros. O cartão filtra por tipo na tela,
+    // então vêm mais do que os 6 que ele mostra.
+    se(tem("membros"), "os aniversariantes", async () =>
+      (await getAcompanhamentoService()).proximosAniversarios(acompanhamentoActor, 60),
+    ),
+    getSaudacaoAtiva(),
+    // Primeiros passos de quem administra: página no ar e Pix (a primeira igreja da conta).
+    se(isAdmin, "os primeiros passos", async (): Promise<PrimeirosPassosDados | null> => {
+      const [perfis, pix] = await Promise.all([
+        (await getChurchProfileService()).list(active.id),
+        (await getChurchPixService()).listChurches(active.id),
+      ]);
+      const perfil = perfis[0];
+      if (!perfil) return null;
+      const doPix = pix.find((c) => c.id === perfil.id);
+      return {
+        churchId: perfil.id,
+        chavePublica: perfil.chavePublica,
+        temEndereco: Boolean(perfil.address),
+        paginaAtiva: perfil.paginaAtiva,
+        pix: doPix?.pixStatus ?? "sem_chave",
+        pixMotivoRecusa: doPix?.pixMotivoRecusa ?? null,
+      };
+    }),
+    // "Para hoje": os cultos com chamada, os alunos em alerta na EBD e as revistas.
+    se(tem("acompanhamento"), "os cultos", async () =>
+      (await getAcompanhamentoService()).listCultos(acompanhamentoActor),
+    ),
+    se(tem("ebd"), "os alertas da EBD", async () => {
+      const actor = await getEbdActor();
+      return actor ? (await (await getEbdService()).alertas(actor)).alertas.length : null;
+    }),
+    se(tem("ebd"), "as revistas da EBD", () => revistasPendentes(hoje)),
+  ]);
+  const ebd = ebdClasses ? totaisDoDia(ebdClasses) : null;
+
+  const tarefas = montarParaHoje({
+    hoje,
+    horaAgora: horaAgoraISO(),
+    cultos: cultosDaIgreja && cultos ? { lista: cultosDaIgreja, feitas: cultos } : null,
+    ebd: ebdClasses ? { domingo, classes: ebdClasses } : null,
+    emAlerta: presenca?.emAlerta,
+    ebdEmAlerta,
+    visitasSemContato: visitas?.novos,
+    oracoesNovas: oracao,
+    revistas,
+    aniversarios: aniversarios ? { ...aniversarios, saudacao } : null,
+    eventos: eventos?.map((e) => ({ ...e, diaInicio: hojeISO(new Date(e.inicio)) })),
+  });
 
   const dia = (data: string) => formatarData(data).slice(0, 5);
   // Presença = presentes ÷ (presentes + ausentes); justificados ficam de fora.
@@ -335,6 +369,8 @@ export default async function DashboardPage() {
           {cargos.length > 0 && active.role !== "member" ? ` · ${PAPEL_LABEL[active.role]}` : ""}
         </p>
       </div>
+
+      {numeros.length > 0 ? <ParaHoje tarefas={tarefas} /> : null}
 
       {numeros.length > 0 ? (
         <section aria-label="Resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-4">

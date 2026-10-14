@@ -1,3 +1,4 @@
+import { trimestreDosPedidos } from "@/lib/ebdRevistas";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -57,11 +58,8 @@ export default async function EbdRevistasPage({ searchParams }: { searchParams: 
     );
   }
 
-  // Sem escolha na URL: o próximo trimestre (é para ele que se pede revista
-  // agora); se não houver, o de hoje; senão, o mais recente.
-  const proximo = [...ordenados].reverse().find((t) => t.inicio > hoje);
-  const escolhido =
-    ordenados.find((t) => t.id === sp.trimestre) ?? proximo ?? ordenados.find((t) => t.inicio <= hoje && hoje <= t.fim) ?? ordenados[0];
+  // Sem escolha na URL: o próximo trimestre (é para ele que se pede revista agora).
+  const escolhido = trimestreDosPedidos(ordenados, hoje, sp.trimestre) ?? ordenados[0];
 
   const dados = await revistasService.doTrimestre(actor, escolhido.id, igrejaDosPedidos.id).catch((err: unknown) => {
     if (isAppError(err) && err.code === "not_found") notFound();

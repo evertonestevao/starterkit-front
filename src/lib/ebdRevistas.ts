@@ -201,3 +201,23 @@ export function textoDoPedidoDaRede(input: { igreja: string; trimestre: string; 
     `Total: ${rede.total} ${rede.total === 1 ? "revista" : "revistas"}`,
   ].join("\n");
 }
+
+/**
+ * O trimestre dos pedidos quando ninguém escolheu: o próximo (é para ele que
+ * se pede revista agora); se não houver, o de hoje; senão, o mais recente.
+ */
+export function trimestreDosPedidos<T extends { id: string; inicio: string; fim: string }>(
+  trimestres: readonly T[],
+  hoje: string,
+  escolhidoId?: string,
+): T | null {
+  const ordenados = [...trimestres].sort((a, b) => b.inicio.localeCompare(a.inicio));
+  const proximo = [...ordenados].reverse().find((t) => t.inicio > hoje);
+  return (
+    ordenados.find((t) => t.id === escolhidoId) ??
+    proximo ??
+    ordenados.find((t) => t.inicio <= hoje && hoje <= t.fim) ??
+    ordenados[0] ??
+    null
+  );
+}
