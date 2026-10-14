@@ -4,6 +4,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* O menor texto do painel é 13px (o padrão de 12px some no celular e para quem enxerga menos). */
+@theme {
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: calc(1.125 / 0.8125);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -65,7 +71,8 @@
   --secondary: #eef2e8;
   --secondary-foreground: #36543d;
   --muted: #f0f3eb;
-  --muted-foreground: #718075;
+  /* Texto secundário (ajuda dos campos, legendas): 6.07:1 sobre card e 5.35:1 sobre secondary (WCAG AA). */
+  --muted-foreground: #586659;
   --accent: #f3ebd5;
   --accent-foreground: #79632c;
   --destructive: oklch(0.577 0.245 27.325);
@@ -265,5 +272,12 @@ select:not([multiple]):not([size]) {
   [data-sonner-toast].aviso-com-barra {
     animation: none;
     background-image: none;
+  }
+}
+
+/* Tela de toque: o <select> nativo acompanha a altura dos campos e botões. */
+@media (pointer: coarse) {
+  select:not([multiple]):not([size]) {
+    min-height: 2.5rem;
   }
 }
