@@ -44,16 +44,19 @@ export function MembrosParecidos({
 
   if (!buscando || parecidos.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5">
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5">
       <p className="text-sm font-medium">Já existe alguém parecido?</p>
       <p className="text-xs text-muted-foreground">
         Se for a mesma pessoa, use o cadastro que já existe em vez de criar outro.
       </p>
       <ul className="flex max-h-56 flex-col divide-y overflow-y-auto rounded-md border bg-background">
         {parecidos.map(({ membro, mesmoTelefone, classeEbd }) => (
-          <li key={membro.id} className="flex items-center justify-between gap-2 px-2.5 py-2 text-sm">
+          <li
+            key={membro.id}
+            className="flex flex-col gap-2 px-2.5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+          >
             <span className="min-w-0">
-              <span className="block truncate font-medium">{membro.nome}</span>
+              <span className="block font-medium break-words">{membro.nome}</span>
               <span className="block text-xs text-muted-foreground">
                 {membro.membroIgreja ? "Já é membro" : "Não membro"}
                 {classeEbd ? ` · EBD: ${classeEbd}` : ""}
@@ -78,13 +81,18 @@ export function MembrosParecidos({
                 type="button"
                 size="xs"
                 variant="outline"
-                className="shrink-0"
+                className="shrink-0 self-start sm:self-auto"
                 onClick={() => onAbrirCadastro(membro)}
               >
                 Abrir cadastro
               </Button>
             ) : (
-              <Button type="button" size="xs" className="shrink-0" onClick={() => onEhEstaPessoa(membro)}>
+              <Button
+                type="button"
+                size="xs"
+                className="shrink-0 self-start sm:self-auto"
+                onClick={() => onEhEstaPessoa(membro)}
+              >
                 É esta pessoa
               </Button>
             )}
