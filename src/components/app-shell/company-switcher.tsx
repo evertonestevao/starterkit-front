@@ -27,7 +27,7 @@ import { useTenant } from "@/providers/tenant-provider";
 import { switchCompanyAction } from "@/server/actions/tenant";
 
 /** Seletor de empresa ativa (header, desktop e mobile). */
-export function CompanySwitcher() {
+export function CompanySwitcher({ podeCriarIgreja = false }: { podeCriarIgreja?: boolean }) {
   const { companies, active } = useTenant();
   const [creating, setCreating] = useState(false);
   const [, startTransition] = useTransition();
@@ -86,11 +86,15 @@ export function CompanySwitcher() {
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setCreating(true)}>
-            <Plus className="size-4" />
-            Nova igreja
-          </DropdownMenuItem>
+          {podeCriarIgreja ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setCreating(true)}>
+                <Plus className="size-4" />
+                Nova igreja
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
 

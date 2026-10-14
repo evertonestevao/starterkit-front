@@ -37,6 +37,11 @@ interface AppShellProps extends UserMenuProps {
   unseenPrayerRequestsCount?: number;
   /** Subitens de cada seção (por endereço), montados no servidor: o menu mostra antes do clique. */
   submenus?: Record<string, RouteTab[]>;
+  /**
+   * Mostra "Nova igreja" no seletor. Com o cadastro fechado (só por convite),
+   * igreja nova nasce pela Rede ou pelo link do convite, não por aqui.
+   */
+  podeCriarIgreja?: boolean;
   children: React.ReactNode;
 }
 
@@ -51,6 +56,7 @@ export function AppShell({
   pendingInvitesCount = 0,
   unseenPrayerRequestsCount = 0,
   submenus = {},
+  podeCriarIgreja = false,
   children,
   ...user
 }: AppShellProps) {
@@ -137,7 +143,7 @@ export function AppShell({
             </div>
             <h1 className="truncate text-sm font-medium lg:hidden">{titleForPath(pathname)}</h1>
             <div className="ml-auto flex items-center gap-2">
-              <CompanySwitcher />
+              <CompanySwitcher podeCriarIgreja={podeCriarIgreja} />
               {/* Convites recebidos são da pessoa, não da igreja: o aviso fica no perfil. */}
               <UserMenu {...user} convitesPendentes={pendingInvitesCount} />
             </div>

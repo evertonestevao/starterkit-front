@@ -16,6 +16,7 @@ import { getCommunityService } from "@/server/community";
 import { createInviteService } from "@/services/inviteService";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getSponsorService } from "@/server/sponsor";
+import { cadastroAberto } from "@/server/cadastro";
 import { getActiveTenant } from "@/server/tenant";
 import { getMenusVisiveis } from "@/server/menuPermissoes";
 import { getSubmenus } from "@/server/abasDoMenu";
@@ -142,6 +143,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           pendingInvitesCount={myInvites.length}
           unseenPrayerRequestsCount={unseenPrayerRequestsCount}
           submenus={submenus}
+          podeCriarIgreja={await cadastroAberto()}
         >
           <RegistraServiceWorker />
           <AvisoInstalarApp />
