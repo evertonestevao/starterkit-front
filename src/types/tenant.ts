@@ -13,6 +13,11 @@ export interface CompanyWithRole extends Company {
   professor_ebd: boolean;
   /** Módulos desligáveis que a igreja mantém ativos (RPC modulos_ativos()). */
   modulosAtivos: string[];
+  /**
+   * O que distingue a igreja das irmãs de mesmo nome ("Vila Mariana - São
+   * Paulo"): o sobrenome da igreja da conta. Para o seletor de igrejas.
+   */
+  complemento?: string | null;
 }
 
 /** Convite pendente endereçado ao usuário logado (RPC my_pending_invites). */

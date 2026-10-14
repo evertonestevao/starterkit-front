@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CreateCompanyForm } from "@/features/companies/components/create-company-form";
+import { formatChurchName } from "@/lib/churchName";
 import { useTenant } from "@/providers/tenant-provider";
 import { switchCompanyAction } from "@/server/actions/tenant";
 
@@ -40,15 +41,17 @@ export function CompanySwitcher() {
             <Button
               variant="outline"
               size="sm"
-              className="max-w-44 gap-2 sm:max-w-56"
+              className="max-w-[46vw] gap-2 sm:max-w-64"
+              aria-label={`Igreja ativa: ${formatChurchName(active.name, active.complemento)}. Trocar de igreja`}
             />
           }
         >
           <Building2 className="size-4 shrink-0" />
-          <span className="truncate">{active.name}</span>
+          {/* Numa rede todas começam com o mesmo nome: quem distingue é o complemento. */}
+          <span className="truncate">{active.complemento ?? active.name}</span>
           <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-1.5rem)]">
           <DropdownMenuGroup>
             <DropdownMenuLabel>Suas igrejas</DropdownMenuLabel>
             {companies.map((company) => (
@@ -71,9 +74,14 @@ export function CompanySwitcher() {
                   })
                 }
               >
-                <span className="truncate">{company.name}</span>
+                <span className="min-w-0">
+                  <span className="block break-words">{company.name}</span>
+                  {company.complemento ? (
+                    <span className="block text-xs break-words text-muted-foreground">{company.complemento}</span>
+                  ) : null}
+                </span>
                 {company.id === active.id ? (
-                  <Check className="ml-auto size-4" />
+                  <Check className="ml-auto size-4 shrink-0" />
                 ) : null}
               </DropdownMenuItem>
             ))}

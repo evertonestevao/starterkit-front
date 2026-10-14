@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeSurname } from "@/lib/churchName";
 import { AppError } from "@/lib/errors";
 import { MODULOS_DESLIGAVEIS, acessosDaPessoa } from "@/lib/menuPermissoes";
 import type { TenantRepository } from "@/services/tenantService";
@@ -44,6 +45,23 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       for (const l of (ativos ?? []) as Array<{ company_id: string; modulo: string }>) {
         modulosAtivosPorEmpresa.set(l.company_id, [...(modulosAtivosPorEmpresa.get(l.company_id) ?? []), l.modulo]);
       }
+      // O sobrenome da igreja de cada conta (a primeira, se houver mais de uma),
+      // para o seletor distinguir igrejas de mesmo nome. Falhar aqui só tira o complemento.
+      const ids = (data ?? []).map((row) => (row.company as unknown as Company | null)?.id).filter(Boolean);
+      const complementoPorEmpresa = new Map<string, string | null>();
+      if (ids.length > 0) {
+        const { data: igrejas } = await client
+          .from("churches")
+          .select("company_id, sobrenome")
+          .in("company_id", ids as string[])
+          .is("deleted_at", null)
+          .order("created_at", { ascending: true });
+        for (const i of (igrejas ?? []) as Array<{ company_id: string; sobrenome: string | null }>) {
+          if (!complementoPorEmpresa.has(i.company_id)) {
+            complementoPorEmpresa.set(i.company_id, normalizeSurname(i.sobrenome));
+          }
+        }
+      }
       const companies = (data ?? [])
         .filter((row) => row.company && !(row.company as unknown as Company).deleted_at)
         .map((row) => {
@@ -57,6 +75,7 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
             professor_ebd: ensinaEm.has(company.id),
             acessos,
             modulosAtivos: modulosAtivosPorEmpresa.get(company.id) ?? [],
+            complemento: complementoPorEmpresa.get(company.id) ?? null,
           };
         });
       // Dedup defensivo por id: o índice único parcial de company_members já

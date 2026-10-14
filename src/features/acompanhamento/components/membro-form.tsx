@@ -3,7 +3,7 @@
 import { Formulario } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList, Pencil, UserPlus } from "lucide-react";
+import { ChevronDown, ClipboardList, Pencil, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -239,40 +239,6 @@ export function MembroForm({
                 ) : null}
               </div>
             ) : null}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`nascimento-${id}`}>Data de nascimento (opcional)</Label>
-              <Input id={`nascimento-${id}`} name="nascimento" type="date" defaultValue={membro?.nascimento ?? ""} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`batismo-${id}`}>Data de batismo (opcional)</Label>
-              <Input id={`batismo-${id}`} name="batismo" type="date" defaultValue={membro?.batismo ?? ""} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`obs-${id}`}>Observações (opcional)</Label>
-              <textarea
-                id={`obs-${id}`}
-                name="observacoes"
-                className={textareaClasses}
-                defaultValue={membro?.observacoes ?? ""}
-                maxLength={1000}
-              />
-            </div>
-            {podeDefinirCargos ? (
-              <fieldset className="flex flex-col gap-1.5">
-                <input type="hidden" name="cargosEnviados" value="1" />
-                <legend className="mb-1 text-sm font-medium">Cargos</legend>
-                <p className="text-xs text-muted-foreground">
-                  Os cargos definem o que a pessoa acessa no sistema (Configurações → Acessos). Com mais de um cargo,
-                  ela soma os acessos de todos.
-                </p>
-                <CargosCheckboxes membro={membro} cargos={cargos} />
-              </fieldset>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Cargos: {membro && membro.cargos.length > 0 ? membro.cargos.map((c) => c.nome).join(", ") : "nenhum"}.
-                Só quem administra a igreja altera os cargos, porque eles definem o acesso ao sistema.
-              </p>
-            )}
             <input type="hidden" name="participaEnviado" value="1" />
             <label className="flex items-start gap-2 text-sm">
               <input
@@ -289,26 +255,80 @@ export function MembroForm({
                 </span>
               </span>
             </label>
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                name="participaChamada"
-                defaultChecked={membro?.participaChamada ?? true}
-                className="mt-0.5 size-4"
-              />
-              <span>
-                Participa da chamada dos cultos
-                <span className="block text-xs text-muted-foreground">
-                  Marca presença e falta nos cultos (a chamada da EBD é separada, pela matrícula na classe). Desmarque
-                  para quem só administra o sistema (ex.: contador): não aparece na chamada dos cultos nem nos alertas
-                  de faltas.
+            {/* Cadastro novo: só o essencial à vista; o resto fica guardado (e segue no envio do formulário). */}
+            <details open={!novo || Boolean(existente)} className="group flex flex-col rounded-md border">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                <span>
+                  Mais opções
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    Nascimento, batismo, observações, cargos e chamada
+                  </span>
                 </span>
-              </span>
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="ativo" defaultChecked={membro?.ativo ?? true} className="size-4" />
-              Ativo (inativo não aparece na chamada nem gera alerta)
-            </label>
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="flex flex-col gap-3 border-t p-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`nascimento-${id}`}>Data de nascimento (opcional)</Label>
+                  <Input
+                    id={`nascimento-${id}`}
+                    name="nascimento"
+                    type="date"
+                    defaultValue={membro?.nascimento ?? ""}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`batismo-${id}`}>Data de batismo (opcional)</Label>
+                  <Input id={`batismo-${id}`} name="batismo" type="date" defaultValue={membro?.batismo ?? ""} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`obs-${id}`}>Observações (opcional)</Label>
+                  <textarea
+                    id={`obs-${id}`}
+                    name="observacoes"
+                    className={textareaClasses}
+                    defaultValue={membro?.observacoes ?? ""}
+                    maxLength={1000}
+                  />
+                </div>
+                {podeDefinirCargos ? (
+                  <fieldset className="flex flex-col gap-1.5">
+                    <input type="hidden" name="cargosEnviados" value="1" />
+                    <legend className="mb-1 text-sm font-medium">Cargos</legend>
+                    <p className="text-xs text-muted-foreground">
+                      Os cargos definem o que a pessoa acessa no sistema (Configurações → Acessos). Com mais de um
+                      cargo, ela soma os acessos de todos.
+                    </p>
+                    <CargosCheckboxes membro={membro} cargos={cargos} />
+                  </fieldset>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Cargos:{" "}
+                    {membro && membro.cargos.length > 0 ? membro.cargos.map((c) => c.nome).join(", ") : "nenhum"}. Só
+                    quem administra a igreja altera os cargos, porque eles definem o acesso ao sistema.
+                  </p>
+                )}
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="participaChamada"
+                    defaultChecked={membro?.participaChamada ?? true}
+                    className="mt-0.5 size-4"
+                  />
+                  <span>
+                    Participa da chamada dos cultos
+                    <span className="block text-xs text-muted-foreground">
+                      Marca presença e falta nos cultos (a chamada da EBD é separada, pela matrícula na classe).
+                      Desmarque para quem só administra o sistema (ex.: contador): não aparece na chamada dos cultos nem
+                      nos alertas de faltas.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="ativo" defaultChecked={membro?.ativo ?? true} className="size-4" />
+                  Ativo (inativo não aparece na chamada nem gera alerta)
+                </label>
+              </div>
+            </details>
             <DialogFooter>
               <DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Cancelar</DialogClose>
               {/* Só no cadastro novo: quem já existe tem "Editar ficha" na própria página. */}
