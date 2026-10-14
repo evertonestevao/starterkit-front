@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Cake, FileSignature, FileUp } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -62,7 +63,8 @@ export default async function RolMembrosPage({
     <div className="flex flex-col gap-4">
       <MembrosKpisFaixa kpis={kpis} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
+        {/* No celular a dica some: o espaço é da busca e da lista. */}
+        <p className="hidden text-sm text-muted-foreground sm:block">
           Para tirar alguém da chamada sem perder o histórico, edite e desmarque &ldquo;Ativo&rdquo;. Cadastro feito por
           engano pode ser excluído na ficha do membro.
         </p>
@@ -70,14 +72,21 @@ export default async function RolMembrosPage({
           <Link href="/dashboard/membros/sem-termo" className={buttonVariants({ variant: "outline" })}>
             <FileSignature className="size-4" /> Sem termo
           </Link>
-          <Link href="/dashboard/membros/aniversariantes" className={buttonVariants({ variant: "outline" })}>
+          {/* No celular o cartão "Aniversariantes" acima já leva à lista. */}
+          <Link
+            href="/dashboard/membros/aniversariantes"
+            className={cn(buttonVariants({ variant: "outline" }), "hidden sm:inline-flex")}
+          >
             <Cake className="size-4" /> Aniversariantes
           </Link>
           <ExportarMembros cargos={cargos} situacao={situacao} cargoId={sp.cargo ?? ""} />
           <Link href="/dashboard/membros/importar" className={buttonVariants({ variant: "outline" })}>
             <FileUp className="size-4" /> Importar planilha
           </Link>
-          <MembroForm cargos={cargos} podeConvidar={gerenciaAcesso} />
+          {/* No celular, "Novo membro" vem primeiro: é o que mais se usa. */}
+          <div className="order-first sm:order-none">
+            <MembroForm cargos={cargos} podeConvidar={gerenciaAcesso} />
+          </div>
         </div>
       </div>
       <MembrosFiltros opcoesPorPagina={MEMBROS_POR_PAGINA} padrao={MEMBROS_POR_PAGINA_PADRAO} cargos={cargos} />

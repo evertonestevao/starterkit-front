@@ -6,12 +6,19 @@ import type { MembrosKpis } from "@/types/acompanhamento";
 /**
  * Faixa de indicadores no topo de Membros. Reaproveita o MetricCard do
  * dashboard; "Em alerta" leva direto à lista de quem precisa de contato.
+ *
+ * No celular é uma fileira só, que rola para o lado: seis cartões empilhados
+ * empurravam a lista de membros para longe do topo.
  */
 export function MembrosKpisFaixa({ kpis }: { kpis: MembrosKpis }) {
   const percentualCargo = kpis.ativos > 0 ? Math.round((kpis.comCargo / kpis.ativos) * 100) : 0;
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+    <div
+      className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 *:w-[46%] *:min-w-40 *:shrink-0 *:snap-start md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0 md:*:w-auto md:*:min-w-0"
+      role="group"
+      aria-label="Números dos membros"
+    >
       <MetricCard
         icon={Users}
         label="Membros ativos"
