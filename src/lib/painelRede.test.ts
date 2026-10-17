@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   agruparPorRamo,
   buscarUnidades,
+  descendentesDe,
   domingoDaSemana,
   filtrarGrupos,
   fraseDaRede,
@@ -13,6 +14,7 @@ import {
   saudeDaUnidade,
   serieMensal,
   serieSemanal,
+  temUnidadeAbaixo,
   tendenciaDaPresenca,
   totaisDaRede,
   type MesDaRede,
@@ -344,5 +346,40 @@ describe("filtrarGrupos e ordenarGrupos", () => {
       ["sul", ["centro"]],
       ["norte", ["vila", "aurora"]],
     ]);
+  });
+});
+
+describe("descendentesDe / temUnidadeAbaixo", () => {
+  // sede -> subsede -> congregacao-a, congregacao-b; sede -> outra-subsede (sem filhas)
+  const arvore = [
+    unidade({ churchId: "subsede", parentId: "sede", nivel: 1 }),
+    unidade({ churchId: "outra-subsede", parentId: "sede", nivel: 1 }),
+    unidade({ churchId: "congregacao-a", parentId: "subsede", nivel: 2 }),
+    unidade({ churchId: "congregacao-b", parentId: "subsede", nivel: 2 }),
+  ];
+
+  it("a partir da sede, traz subsede + as duas congregações (recursivo)", () => {
+    const ids = descendentesDe("sede", arvore)
+      .map((u) => u.churchId)
+      .sort();
+    expect(ids).toEqual(["congregacao-a", "congregacao-b", "outra-subsede", "subsede"]);
+  });
+
+  it("a partir da subsede, traz só as congregações dela, não a outra-subsede", () => {
+    const ids = descendentesDe("subsede", arvore)
+      .map((u) => u.churchId)
+      .sort();
+    expect(ids).toEqual(["congregacao-a", "congregacao-b"]);
+  });
+
+  it("congregação (folha) não tem ninguém abaixo", () => {
+    expect(descendentesDe("congregacao-a", arvore)).toEqual([]);
+    expect(temUnidadeAbaixo("congregacao-a", arvore)).toBe(false);
+  });
+
+  it("temUnidadeAbaixo é true pra quem tem ao menos um filho direto", () => {
+    expect(temUnidadeAbaixo("sede", arvore)).toBe(true);
+    expect(temUnidadeAbaixo("subsede", arvore)).toBe(true);
+    expect(temUnidadeAbaixo("outra-subsede", arvore)).toBe(false);
   });
 });

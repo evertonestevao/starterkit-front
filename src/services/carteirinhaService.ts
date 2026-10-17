@@ -49,7 +49,11 @@ export function canCarteirinha(role: RoleCode, liberado: boolean): boolean {
 export interface CarteirinhaRepository {
   getChurch(companyId: string): Promise<{ id: string; name: string } | null>;
   /** Consentimento do membro e o caminho da foto; null sem termo (ou sem acesso). */
-  consentimento(membroId: string): Promise<(Consentimento & { fotoPath: string | null; companyId: string }) | null>;
+  consentimento(
+    membroId: string,
+  ): Promise<(Consentimento & { fotoPath: string | null; companyId: string; churchId: string }) | null>;
+  /** A empresa ativa administra (owner/admin) uma igreja acima de `churchId` na rede. */
+  ehAdminDaRede(churchId: string): Promise<boolean>;
   /** Devolve o caminho da foto a apagar, quando o consentimento da foto saiu. */
   salvarConsentimento(membroId: string, input: ConsentimentoInput): Promise<string | null>;
   /** Liga (ou tira, com null) a foto; devolve o caminho anterior. */
@@ -180,11 +184,25 @@ export function createCarteirinhaService(deps: {
   /**
    * O termo do membro, só se ele for da igreja ATIVA de quem pede. A RLS já
    * esconde o de outra rede; isto cobre quem tem acesso a mais de uma igreja e
-   * está com outra selecionada.
+   * está com outra selecionada. Vale para ESCRITA (enviar/remover foto,
+   * registrar consentimento) — a sede nunca edita o termo de quem está abaixo.
    */
   async function termoDe(actor: CarteirinhaActor, membroId: string) {
     const c = await repo.consentimento(membroId);
     return c && c.companyId === actor.companyId ? c : null;
+  }
+
+  /**
+   * Mesma coisa, só para LEITURA (consentimento, foto): além da própria
+   * igreja, também vale para quem administra uma igreja acima dela na rede
+   * (migration 20261022100000) — a RLS já faz essa parte; aqui só evita
+   * bloquear antes de perguntar ao banco.
+   */
+  async function termoDeLeitura(actor: CarteirinhaActor, membroId: string) {
+    const c = await repo.consentimento(membroId);
+    if (!c) return null;
+    if (c.companyId === actor.companyId) return c;
+    return (await repo.ehAdminDaRede(c.churchId)) ? c : null;
   }
 
   /** Apagar o arquivo antigo não pode derrubar a ação: o vínculo já saiu do banco. */
@@ -198,7 +216,7 @@ export function createCarteirinhaService(deps: {
     async consentimento(actor: CarteirinhaActor, membroId: string): Promise<Consentimento | null> {
       exige(actor);
       uuid(membroId);
-      const c = await termoDe(actor, membroId);
+      const c = await termoDeLeitura(actor, membroId);
       if (!c) return null;
       return {
         cadastro: c.cadastro,
@@ -277,11 +295,15 @@ export function createCarteirinhaService(deps: {
       await apagarArquivo(await repo.definirFoto(membroId, null));
     },
 
-    /** A foto, para a ficha. A leitura do consentimento passa pela RLS: membro de outra igreja não vem. */
+    /**
+     * A foto, para a ficha. A leitura do consentimento passa pela RLS: membro
+     * de outra igreja (ou de outra rede) não vem; quem administra a igreja
+     * acima também lê, desde que o membro tenha consentido o cadastro.
+     */
     async foto(actor: CarteirinhaActor, membroId: string): Promise<FotoMembro | null> {
       exige(actor);
       uuid(membroId);
-      const c = await termoDe(actor, membroId);
+      const c = await termoDeLeitura(actor, membroId);
       if (!c?.fotoPath) return null;
       return lerFoto(c.fotoPath);
     },

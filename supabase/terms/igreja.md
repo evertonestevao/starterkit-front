@@ -1,6 +1,6 @@
 # Termos de Uso — Igrejas
 
-**Versão 3 — vigente desde 7 de outubro de 2026**
+**Versão 4 — vigente desde 17 de outubro de 2026**
 
 Estes Termos regulam o uso da plataforma Conecta Igreja pelas igrejas e por
 quem as administra. Ao criar uma conta e marcar o aceite, a Igreja concorda
@@ -156,7 +156,8 @@ e o registro de dízimos revelam a convicção religiosa da pessoa.
 6.4. Cabe à Plataforma:
 
 - manter os dados isolados entre igrejas diferentes — nenhuma igreja acessa
-  dados de outra;
+  dados de outra, exceto a visibilidade prevista na cláusula 6.6 para igrejas
+  da mesma rede;
 - aplicar medidas técnicas de segurança compatíveis com a natureza dos dados;
 - avisar a Igreja sem demora em caso de incidente de segurança que possa
   afetar esses dados;
@@ -166,6 +167,26 @@ e o registro de dízimos revelam a convicção religiosa da pessoa.
 quem eventualmente pague a mensalidade em nome da Igreja. Ninguém de fora
 recebe lista, contato, nome nem estatística individual de quem interage com a
 Igreja.
+
+6.6. **Igrejas organizadas em rede.** Quando a Igreja faz parte de uma rede
+(uma sede com subsedes e/ou congregações vinculadas a ela), quem administra
+(proprietário ou administrador) uma igreja **acima** na rede pode acessar o
+cadastro completo — nome, contato, endereço, data de nascimento, situação,
+ficha e cargo/função na igreja — dos membros das igrejas **abaixo**, para fins
+de governança da rede.
+Essa visibilidade:
+
+- só alcança quem já é membro de fato da igreja de baixo — não alcança
+  congregados, crianças nem alunos da Escola Bíblica Dominical que a igreja
+  ainda não recebeu como membros;
+- só alcança quem assinou o termo de consentimento específico para esta
+  finalidade; a Igreja de cima vê, para as demais pessoas, apenas o total de
+  membros e quantos ainda não assinaram, sem nome nem qualquer outro dado
+  individual;
+- **não** alcança presença nos cultos, justificativa de falta, anotação de
+  acompanhamento pastoral nem dado de saúde — isso continua só da igreja onde
+  a pessoa está cadastrada, nunca da igreja de cima;
+- vale só dentro da mesma rede — uma igreja nunca vê dados de outra rede.
 
 ## 7. Domínio próprio
 

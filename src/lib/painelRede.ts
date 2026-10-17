@@ -435,3 +435,32 @@ export function porUrgencia(unidades: UnidadeDaRede[], hoje: string): UnidadeDaR
     .sort((a, b) => a.ordem - b.ordem || a.i - b.i)
     .map((x) => x.u);
 }
+
+/**
+ * Todas as unidades abaixo de `churchId`, recursivo (filhas, netas...), a
+ * partir da lista plana que já veio do banco (`parentId` de cada uma). Usado
+ * pela tela de Membros para "ver X + tudo abaixo dela", em qualquer nível da
+ * árvore — não só a partir da própria igreja.
+ */
+export function descendentesDe(churchId: string, unidades: UnidadeDaRede[]): UnidadeDaRede[] {
+  const filhasDe = new Map<string, UnidadeDaRede[]>();
+  for (const u of unidades) {
+    if (!u.parentId) continue;
+    const lista = filhasDe.get(u.parentId);
+    if (lista) lista.push(u);
+    else filhasDe.set(u.parentId, [u]);
+  }
+  const resultado: UnidadeDaRede[] = [];
+  const pilha = [...(filhasDe.get(churchId) ?? [])];
+  while (pilha.length > 0) {
+    const atual = pilha.pop() as UnidadeDaRede;
+    resultado.push(atual);
+    pilha.push(...(filhasDe.get(atual.churchId) ?? []));
+  }
+  return resultado;
+}
+
+/** `churchId` tem alguma unidade logo abaixo dela? (pergunta mais barata que `descendentesDe`.) */
+export function temUnidadeAbaixo(churchId: string, unidades: UnidadeDaRede[]): boolean {
+  return unidades.some((u) => u.parentId === churchId);
+}

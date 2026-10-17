@@ -275,6 +275,73 @@ describe("acompanhamentoService", () => {
     await expect(svc.listMembrosPaginado(member, {})).rejects.toMatchObject({ code: "forbidden" });
   });
 
+  describe("rede (migration 20261022100000)", () => {
+    const UNIDADE = "66666666-6666-4666-8666-666666666666";
+
+    it("lista da rede: só owner/admin, membroIgreja fixo, sem filtro de cargo/situação", async () => {
+      const pedidos: unknown[] = [];
+      const { svc } = service({
+        listMembrosPagina: async (churchId, filtro) => {
+          pedidos.push({ churchId, filtro });
+          return { items: [membro], total: 1 };
+        },
+      });
+      const r = await svc.listMembrosRedePaginado(owner, UNIDADE, { busca: "  Maria " });
+      expect(pedidos[0]).toEqual({
+        churchId: UNIDADE,
+        filtro: { busca: "maria", situacao: "ativo", cargoId: null, membroIgreja: true, limit: 20, offset: 0 },
+      });
+      expect(r).toMatchObject({ total: 1, page: 1 });
+
+      await svc.listMembrosRedePaginado(owner, UNIDADE, { situacao: "todas" });
+      expect(pedidos[1]).toEqual({
+        churchId: UNIDADE,
+        filtro: { busca: null, situacao: null, cargoId: null, membroIgreja: true, limit: 20, offset: 0 },
+      });
+
+      await expect(svc.listMembrosRedePaginado(member, UNIDADE, {})).rejects.toMatchObject({ code: "forbidden" });
+      await expect(svc.listMembrosRedePaginado(owner, "não-é-uuid", {})).rejects.toMatchObject({ code: "not_found" });
+    });
+
+    it("kpis da rede: só owner/admin; igreja inválida devolve null sem ir ao banco", async () => {
+      const { svc } = service({ kpisMembrosRede: async () => ({ total: 4, semConsentimento: 1 }) });
+      expect(await svc.kpisMembrosRede(owner, UNIDADE)).toEqual({ total: 4, semConsentimento: 1 });
+      expect(await svc.kpisMembrosRede(owner, "não-é-uuid")).toBeNull();
+      await expect(svc.kpisMembrosRede(member, UNIDADE)).rejects.toMatchObject({ code: "forbidden" });
+    });
+
+    it("kpis da árvore da rede (unidade + abaixo dela): mesma regra de permissão", async () => {
+      const { svc } = service({ kpisMembrosRedeArvore: async () => ({ total: 20, semConsentimento: 5 }) });
+      expect(await svc.kpisMembrosRedeArvore(owner, UNIDADE)).toEqual({ total: 20, semConsentimento: 5 });
+      expect(await svc.kpisMembrosRedeArvore(owner, "não-é-uuid")).toBeNull();
+      await expect(svc.kpisMembrosRedeArvore(member, UNIDADE)).rejects.toMatchObject({ code: "forbidden" });
+    });
+
+    it("ver todas: lista a própria igreja + as de baixo, filtra uuid inválido da lista", async () => {
+      const OUTRA_UNIDADE = "55555555-5555-4555-8555-555555555666";
+      const pedidos: unknown[] = [];
+      const { svc } = service({
+        listMembrosPaginaRedeToda: async (churchIds, filtro) => {
+          pedidos.push({ churchIds, filtro });
+          return { items: [membro], total: 1 };
+        },
+      });
+      const r = await svc.listMembrosTodaRedePaginado(owner, [IGREJA, "não-é-uuid", OUTRA_UNIDADE], {
+        busca: " Maria ",
+      });
+      expect(pedidos[0]).toEqual({
+        churchIds: [IGREJA, OUTRA_UNIDADE],
+        filtro: { busca: "maria", situacao: "ativo", cargoId: null, limit: 20, offset: 0 },
+      });
+      expect(r).toMatchObject({ total: 1 });
+
+      await expect(svc.listMembrosTodaRedePaginado(member, [IGREJA], {})).rejects.toMatchObject({ code: "forbidden" });
+      await expect(svc.listMembrosTodaRedePaginado(owner, ["não-é-uuid"], {})).rejects.toMatchObject({
+        code: "not_found",
+      });
+    });
+  });
+
   describe("cargos do membro", () => {
     const DIACONO = "77777777-7777-4777-8777-777777777777";
     const VELHO = "88888888-8888-4888-8888-888888888888";

@@ -99,11 +99,12 @@ export function createSupabaseCarteirinhaRepository(
     async consentimento(membroId) {
       const { data, error } = await client
         .from("rol_membro_consentimentos")
-        .select("company_id, cadastro, foto, carteirinha, assinado_em, responsavel_nome, foto_path")
+        .select("company_id, church_id, cadastro, foto, carteirinha, assinado_em, responsavel_nome, foto_path")
         .eq("membro_id", membroId)
         .is("deleted_at", null)
         .maybeSingle<{
           company_id: string;
+          church_id: string;
           cadastro: boolean;
           foto: boolean;
           carteirinha: boolean;
@@ -115,6 +116,7 @@ export function createSupabaseCarteirinhaRepository(
       if (!data) return null;
       return {
         companyId: data.company_id,
+        churchId: data.church_id,
         cadastro: data.cadastro,
         foto: data.foto,
         carteirinha: data.carteirinha,
@@ -123,6 +125,12 @@ export function createSupabaseCarteirinhaRepository(
         temFoto: data.foto_path !== null,
         fotoPath: data.foto_path,
       };
+    },
+
+    async ehAdminDaRede(churchId) {
+      const { data, error } = await client.rpc("can_admin_view_church", { p_church_id: churchId });
+      if (error) throw new AppError("internal_error", "Falha ao conferir o acesso pela rede", error);
+      return data === true;
     },
 
     async salvarConsentimento(membroId, input) {
