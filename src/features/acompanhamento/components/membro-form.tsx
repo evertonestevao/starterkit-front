@@ -37,10 +37,13 @@ export function MembroForm({
   membro: membroParaEditar,
   cargos,
   podeConvidar = false,
+  iconOnly = false,
 }: {
   membro?: RolMembro;
   cargos: CargoResumo[];
   podeConvidar?: boolean;
+  /** Só o lápis, sem o texto "Editar" — para a linha do cartão no celular. */
+  iconOnly?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   // Cadastro novo: o que vai sendo digitado alimenta "Já existe alguém parecido?".
@@ -108,9 +111,21 @@ export function MembroForm({
   return (
     <>
       {!novo ? (
-        <Button type="button" variant="outline" size="sm" onClick={() => setAberto(true)}>
-          <Pencil className="size-3.5" /> Editar
-        </Button>
+        iconOnly ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            onClick={() => setAberto(true)}
+            aria-label={`Editar ${membro?.nome ?? "membro"}`}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" size="sm" onClick={() => setAberto(true)}>
+            <Pencil className="size-3.5" /> Editar
+          </Button>
+        )
       ) : (
         <Button type="button" onClick={() => setAberto(true)}>
           <UserPlus className="size-4" /> Novo membro
