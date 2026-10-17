@@ -252,6 +252,38 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
       return { items: await comReservados((data ?? []).map(toMembro)), total: count ?? 0 };
     },
 
+    /**
+     * "Ver todas": a própria igreja + as de baixo na rede, numa lista só. Sem
+     * filtro de membro_igreja — a RLS já decide sozinha: a própria igreja
+     * mostra todo mundo (can_acompanhar), as de baixo só quem tem termo
+     * assinado (pode_rede_ver_cadastro). Não existe "convidar" nem editar
+     * aqui: quem chama decide isso pelo church_id de cada linha.
+     */
+    async listMembrosPaginaRedeToda(churchIds, { busca, situacao, cargoId, limit, offset }) {
+      let comCargo: string[] | null = null;
+      if (cargoId) {
+        const { data: rc, error: rcError } = await client
+          .from("rol_membro_cargos")
+          .select("membro_id")
+          .in("church_id", churchIds)
+          .eq("cargo_id", cargoId);
+        if (rcError) falha("Falha ao filtrar por cargo", rcError);
+        comCargo = (rc ?? []).map((r: { membro_id: string }) => r.membro_id);
+        if (comCargo.length === 0) return { items: [], total: 0 };
+      }
+      let q = client
+        .from("rol_membros")
+        .select(MEMBRO_COLS, { count: "exact" })
+        .in("church_id", churchIds)
+        .is("deleted_at", null);
+      if (situacao) q = q.eq("situacao", situacao);
+      if (comCargo) q = q.in("id", comCargo);
+      if (busca) q = q.ilike("nome_busca", `%${busca.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      const { data, error, count } = await q.order("nome").range(offset, offset + limit - 1);
+      if (error) falha("Falha ao carregar os membros", error);
+      return { items: await comReservados((data ?? []).map(toMembro)), total: count ?? 0 };
+    },
+
     async listParecidos(churchId, { primeiroNome, fimDoTelefone }) {
       // Os termos entram num filtro `or` em texto: só letras e dígitos passam.
       const nome = primeiroNome?.replace(/[^a-z0-9]/g, "") ?? "";
@@ -334,6 +366,25 @@ export function createSupabaseAcompanhamentoRepository(client: SupabaseClient): 
         presencaMedia: r?.presenca_media === null || r?.presenca_media === undefined ? null : Number(r.presenca_media),
         emAlerta: n(r?.em_alerta),
       } satisfies MembrosKpis;
+    },
+
+    async kpisMembrosRede(churchId) {
+      // Sem permissão pela rede: a função nem devolve linha (nunca zeros disfarçando "sem acesso").
+      const [r] = await rpc<{ membros_total: number; membros_sem_consentimento: number }>(
+        "rede_membros_kpis",
+        { p_church_id: churchId },
+        "Falha ao calcular os números da rede",
+      );
+      return r ? { total: n(r.membros_total), semConsentimento: n(r.membros_sem_consentimento) } : null;
+    },
+
+    async kpisMembrosRedeArvore(churchId) {
+      const [r] = await rpc<{ membros_total: number; membros_sem_consentimento: number }>(
+        "rede_membros_kpis_arvore",
+        { p_church_id: churchId },
+        "Falha ao calcular os números da árvore da rede",
+      );
+      return r ? { total: n(r.membros_total), semConsentimento: n(r.membros_sem_consentimento) } : null;
     },
 
     async listCargosDisponiveis(churchId) {

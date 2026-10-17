@@ -8343,9 +8343,13 @@ begin
   if n <> 1 then raise exception 'FALHA carteirinha: a secretaria nao leu a carteirinha emitida'; end if;
 end $$;
 
--- A igreja de CIMA e a de outra rede: nada.
+-- Outra rede: nada. A igreja de CIMA: desde a migration 20261022100000, lê o
+-- cadastro (consentimento/carteirinha) de quem é membro de fato e assinou o
+-- termo — que é exatamente o caso de a1 aqui — mas continua sem poder
+-- ESCREVER nada (as checagens abaixo de salvar/emitir/revogar/tirar
+-- continuam batendo em can_acompanhar, não tocado por aquela migration).
 do $$
-declare v_quem text; n int;
+declare v_quem text; n int; v_sede boolean;
   c_membro constant uuid := 'cacacaca-0000-4000-8000-0000000000a1';
 begin
   foreach v_quem in array array[
@@ -8353,10 +8357,13 @@ begin
     '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
   ] loop
     perform set_config('request.jwt.claims', v_quem, true);
+    v_sede := v_quem like '%acacacac-0000-4000-8000-000000000001%';
     select count(*) into n from public.rol_membro_consentimentos;
-    if n <> 0 then raise exception 'FALHA consentimento: % leu consentimentos da congregacao', v_quem; end if;
+    if v_sede and n <> 1 then raise exception 'FALHA consentimento: sede deveria ler o consentimento de a1 (membro+termo)'; end if;
+    if not v_sede and n <> 0 then raise exception 'FALHA consentimento: % leu consentimentos da congregacao', v_quem; end if;
     select count(*) into n from public.rol_membro_carteirinhas where membro_id = c_membro;
-    if n <> 0 then raise exception 'FALHA carteirinha: % leu a carteirinha da congregacao', v_quem; end if;
+    if v_sede and n <> 1 then raise exception 'FALHA carteirinha: sede deveria ler a carteirinha de a1 (membro+termo)'; end if;
+    if not v_sede and n <> 0 then raise exception 'FALHA carteirinha: % leu a carteirinha da congregacao', v_quem; end if;
     select count(*) into n from public.carteirinha_do_membro(c_membro);
     if n <> 0 then raise exception 'FALHA carteirinha: % leu a carteirinha pela funcao', v_quem; end if;
     select count(*) into n from public.membros_sem_consentimento('acacacac-0000-4000-8000-0000000000d2');
@@ -9329,6 +9336,181 @@ begin
     where church_id = 'acacacac-0000-4000-8000-0000000000d2' and cpf is not null;
     if n <> 0 then raise exception 'FALHA ficha: % leu CPF de membro', v_quem; end if;
   end loop;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Sede vê cadastro de membros da rede (migration 20261022100000). Na AC Cong
+-- (d2): A é membro com termo assinado (deve aparecer para a sede), B é membro
+-- SEM termo, C e D são congregado/aluno EBD (membro_igreja = false), C com
+-- termo assinado mesmo assim. Só A deve aparecer para quem administra a
+-- igreja de cima. 006 é member comum da AC Sede (c1); 007 administra uma
+-- igreja IRMÃ (c4/d4, mesmo pai d1, não ancestral de d2).
+-- ---------------------------------------------------------------------------
+insert into auth.users (id, email, aud, role, instance_id, raw_user_meta_data) values
+  ('acacacac-0000-4000-8000-000000000006', 'rls-ac-sede-memb@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{}'),
+  ('acacacac-0000-4000-8000-000000000007', 'rls-ac-irma@test.local',      'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000', '{}');
+
+insert into public.companies (id, name, slug, created_by) values
+  ('acacacac-0000-4000-8000-0000000000c4', 'AC Irma', 'rls-ac-irma', 'acacacac-0000-4000-8000-000000000007');
+
+insert into public.company_members (company_id, user_id, role) values
+  ('acacacac-0000-4000-8000-0000000000c1', 'acacacac-0000-4000-8000-000000000006', 'member'),
+  ('acacacac-0000-4000-8000-0000000000c4', 'acacacac-0000-4000-8000-000000000007', 'owner');
+
+insert into public.churches (id, company_id, name, slug, public_code, tipo, parent_id) values
+  ('acacacac-0000-4000-8000-0000000000d4', 'acacacac-0000-4000-8000-0000000000c4', 'AC Irma', 'rls-ac-irma', 'rls-ac-irma', 'congregacao', 'acacacac-0000-4000-8000-0000000000d1');
+
+insert into public.rol_membros (id, church_id, nome, membro_igreja, cuidados) values
+  ('acacacac-0000-4000-8000-00000000f1a1', 'acacacac-0000-4000-8000-0000000000d2', 'Rede A Com Termo',       true,  'Alergia a amendoim'),
+  ('acacacac-0000-4000-8000-00000000f1b1', 'acacacac-0000-4000-8000-0000000000d2', 'Rede B Sem Termo',       true,  null),
+  ('acacacac-0000-4000-8000-00000000f1c1', 'acacacac-0000-4000-8000-0000000000d2', 'Rede C Congregado',      false, null),
+  ('acacacac-0000-4000-8000-00000000f1d1', 'acacacac-0000-4000-8000-0000000000d2', 'Rede D Congregado',      false, null);
+
+insert into public.rol_membro_consentimentos (membro_id, church_id, company_id, cadastro, assinado_em) values
+  ('acacacac-0000-4000-8000-00000000f1a1', 'acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2', true, current_date),
+  ('acacacac-0000-4000-8000-00000000f1c1', 'acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2', true, current_date);
+
+insert into public.rol_membro_historico (membro_id, church_id, company_id, tipo, titulo, data) values
+  ('acacacac-0000-4000-8000-00000000f1a1', 'acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2', 'anotacao', 'Nota de teste A', current_date),
+  ('acacacac-0000-4000-8000-00000000f1b1', 'acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2', 'anotacao', 'Nota de teste B', current_date);
+
+insert into public.rol_membro_carteirinhas (membro_id, church_id, company_id, codigo, validade) values
+  ('acacacac-0000-4000-8000-00000000f1a1', 'acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2', 'FACADE00FACADE01', current_date + 365),
+  ('acacacac-0000-4000-8000-00000000f1b1', 'acacacac-0000-4000-8000-0000000000d2', 'acacacac-0000-4000-8000-0000000000c2', 'FACADE00FACADE02', current_date + 365);
+
+-- Cargo (migration 20261022120000): mesma régua de consentimento, decisão do
+-- Everton ao testar — reverte a nota de "cargo é só da própria igreja".
+insert into public.rol_membro_cargos (membro_id, cargo_id, church_id) values
+  ('acacacac-0000-4000-8000-00000000f1a1', (select id from public.cargos where slug = 'diacono'),
+   'acacacac-0000-4000-8000-0000000000d2');
+
+set local role authenticated;
+
+-- Dono da própria igreja (002): continua vendo todo mundo (A, B, C, D), e
+-- cuidados continua aparecendo pela própria igreja.
+select set_config('request.jwt.claims', '{"sub":"acacacac-0000-4000-8000-000000000002","email":"rls-ac-cong@test.local","role":"authenticated"}', true);
+do $$
+declare n int; v_cuidados text;
+begin
+  select count(*) into n from public.rol_membros where church_id = 'acacacac-0000-4000-8000-0000000000d2'
+    and id in ('acacacac-0000-4000-8000-00000000f1a1', 'acacacac-0000-4000-8000-00000000f1b1',
+               'acacacac-0000-4000-8000-00000000f1c1', 'acacacac-0000-4000-8000-00000000f1d1');
+  if n <> 4 then raise exception 'FALHA rede-membros: a propria igreja deveria ver os 4 membros de teste (viu %)', n; end if;
+
+  select cuidados into v_cuidados from public.rol_membros_reservado where id = 'acacacac-0000-4000-8000-00000000f1a1';
+  if v_cuidados is distinct from 'Alergia a amendoim' then
+    raise exception 'FALHA rede-membros: a propria igreja deveria ler cuidados (leu %)', v_cuidados;
+  end if;
+
+  perform public.salvar_ficha_membro('acacacac-0000-4000-8000-00000000f1a1', '{"situacao":"ativo"}'::jsonb);
+end $$;
+
+-- Sede OWNER (001), sede ADMIN não-owner (003, já promovido no bloco do
+-- painel da rede acima), irmã (007) e outra rede (005): só 001 e 003 veem A,
+-- e nenhum deles vê cuidados, B, C ou D.
+do $$
+declare v_quem text; v_pode_ver boolean; n int; v_cuidados text;
+begin
+  foreach v_quem in array array[
+    '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000003","email":"rls-ac-memb@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000006","email":"rls-ac-sede-memb@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000007","email":"rls-ac-irma@test.local","role":"authenticated"}',
+    '{"sub":"acacacac-0000-4000-8000-000000000005","email":"rls-ac-outra@test.local","role":"authenticated"}'
+  ] loop
+    perform set_config('request.jwt.claims', v_quem, true);
+    v_pode_ver := v_quem like '%acacacac-0000-4000-8000-000000000001%'
+               or v_quem like '%acacacac-0000-4000-8000-000000000003%';
+
+    select count(*) into n from public.rol_membros where id = 'acacacac-0000-4000-8000-00000000f1a1';
+    if v_pode_ver and n <> 1 then raise exception 'FALHA rede-membros: % deveria ver o membro A', v_quem; end if;
+    if not v_pode_ver and n <> 0 then raise exception 'FALHA rede-membros: % nao deveria ver o membro A', v_quem; end if;
+
+    select count(*) into n from public.rol_membros
+    where church_id = 'acacacac-0000-4000-8000-0000000000d2'
+      and id in ('acacacac-0000-4000-8000-00000000f1b1', 'acacacac-0000-4000-8000-00000000f1c1',
+                 'acacacac-0000-4000-8000-00000000f1d1');
+    if n <> 0 then raise exception 'FALHA rede-membros: % leu B/C/D (sem termo ou nao-membro)', v_quem; end if;
+
+    select count(*) into n from public.rol_membro_fichas where membro_id = 'acacacac-0000-4000-8000-00000000f1a1';
+    if v_pode_ver and n <> 1 then raise exception 'FALHA rede-membros: % deveria ver a ficha de A', v_quem; end if;
+    if not v_pode_ver and n <> 0 then raise exception 'FALHA rede-membros: % nao deveria ver a ficha de A', v_quem; end if;
+
+    select count(*) into n from public.rol_membro_historico where membro_id = 'acacacac-0000-4000-8000-00000000f1a1';
+    if v_pode_ver and n < 1 then raise exception 'FALHA rede-membros: % deveria ver o historico de A', v_quem; end if;
+    if not v_pode_ver and n <> 0 then raise exception 'FALHA rede-membros: % nao deveria ver historico de A', v_quem; end if;
+
+    select count(*) into n from public.rol_membro_historico where membro_id = 'acacacac-0000-4000-8000-00000000f1b1';
+    if n <> 0 then raise exception 'FALHA rede-membros: % leu historico de B (sem termo)', v_quem; end if;
+
+    select count(*) into n from public.rol_membro_consentimentos where membro_id = 'acacacac-0000-4000-8000-00000000f1a1';
+    if v_pode_ver and n <> 1 then raise exception 'FALHA rede-membros: % deveria ver o consentimento de A', v_quem; end if;
+    if not v_pode_ver and n <> 0 then raise exception 'FALHA rede-membros: % nao deveria ver consentimento de A', v_quem; end if;
+
+    select count(*) into n from public.rol_membro_carteirinhas where membro_id = 'acacacac-0000-4000-8000-00000000f1a1';
+    if v_pode_ver and n <> 1 then raise exception 'FALHA rede-membros: % deveria ver a carteirinha de A', v_quem; end if;
+    if not v_pode_ver and n <> 0 then raise exception 'FALHA rede-membros: % nao deveria ver carteirinha de A', v_quem; end if;
+
+    select count(*) into n from public.rol_membro_cargos where membro_id = 'acacacac-0000-4000-8000-00000000f1a1';
+    if v_pode_ver and n <> 1 then raise exception 'FALHA rede-membros: % deveria ver o cargo de A', v_quem; end if;
+    if not v_pode_ver and n <> 0 then raise exception 'FALHA rede-membros: % nao deveria ver o cargo de A', v_quem; end if;
+
+    -- Catálogo (não é dado de pessoa): 003 também o vê, mas por ser membro
+    -- direto da própria congregação — o teste não distingue os dois caminhos.
+    select count(*) into n from public.cargos_visiveis('acacacac-0000-4000-8000-0000000000d2') where slug = 'diacono';
+    if v_pode_ver and n <> 1 then raise exception 'FALHA rede-membros: % deveria ver o catalogo de cargos', v_quem; end if;
+    if not v_pode_ver and n <> 0 then raise exception 'FALHA rede-membros: % nao deveria ver o catalogo de cargos', v_quem; end if;
+
+    -- cuidados NUNCA sai da própria igreja, nem para quem administra a de cima.
+    select cuidados into v_cuidados from public.rol_membros_reservado where id = 'acacacac-0000-4000-8000-00000000f1a1';
+    if v_cuidados is not null then
+      raise exception 'FALHA rede-membros: % leu cuidados do membro A pela rede (%)', v_quem, v_cuidados;
+    end if;
+  end loop;
+end $$;
+
+-- Números agregados (rede_membros_kpis): numero, nao pessoa, nao exige termo.
+-- A e B contam (membro_igreja), C e D nao contam; so B falta aceitar.
+select set_config('request.jwt.claims', '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare r record;
+begin
+  select * into r from public.rede_membros_kpis('acacacac-0000-4000-8000-0000000000d2');
+  if r.membros_total < 2 or r.membros_sem_consentimento < 1 then
+    raise exception 'FALHA rede-membros: kpis incoerentes (total %, sem consentimento %)', r.membros_total, r.membros_sem_consentimento;
+  end if;
+end $$;
+-- Quem não administra a de cima não recebe número nenhum (função já exige can_admin_view_church).
+select set_config('request.jwt.claims', '{"sub":"acacacac-0000-4000-8000-000000000007","email":"rls-ac-irma@test.local","role":"authenticated"}', true);
+do $$
+declare r record;
+begin
+  select * into r from public.rede_membros_kpis('acacacac-0000-4000-8000-0000000000d2');
+  if r.membros_total is not null then
+    raise exception 'FALHA rede-membros: irma recebeu kpis da congregacao (%)', r.membros_total;
+  end if;
+  select * into r from public.rede_membros_kpis_arvore('acacacac-0000-4000-8000-0000000000d2');
+  if r.membros_total is not null then
+    raise exception 'FALHA rede-membros: irma recebeu kpis da arvore da congregacao (%)', r.membros_total;
+  end if;
+end $$;
+
+-- rede_membros_kpis_arvore (migration 20261022130000): AC Cong (d2) não tem
+-- unidade abaixo dela, então a árvore (ela + abaixo) tem que bater exatamente
+-- com o número da unidade sozinha.
+select set_config('request.jwt.claims', '{"sub":"acacacac-0000-4000-8000-000000000001","email":"rls-ac-sede@test.local","role":"authenticated"}', true);
+do $$
+declare r_unidade record; r_arvore record;
+begin
+  select * into r_unidade from public.rede_membros_kpis('acacacac-0000-4000-8000-0000000000d2');
+  select * into r_arvore from public.rede_membros_kpis_arvore('acacacac-0000-4000-8000-0000000000d2');
+  if r_arvore.membros_total <> r_unidade.membros_total
+     or r_arvore.membros_sem_consentimento <> r_unidade.membros_sem_consentimento then
+    raise exception 'FALHA rede-membros: arvore (%,%) deveria bater com a unidade sozinha (%,%) — sem filhos',
+      r_arvore.membros_total, r_arvore.membros_sem_consentimento,
+      r_unidade.membros_total, r_unidade.membros_sem_consentimento;
+  end if;
 end $$;
 reset role;
 

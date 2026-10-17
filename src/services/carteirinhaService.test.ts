@@ -26,6 +26,7 @@ const SVG = new TextEncoder().encode("<svg xmlns='http://www.w3.org/2000/svg'><s
 type Termo = NonNullable<Awaited<ReturnType<CarteirinhaRepository["consentimento"]>>>;
 const termo = (over: Partial<Termo> = {}): Termo => ({
   companyId: EMPRESA,
+  churchId: "igreja-ativa",
   cadastro: true,
   foto: true,
   carteirinha: true,
@@ -40,6 +41,7 @@ function build(over: Partial<CarteirinhaRepository> = {}, consent: Termo | null 
   const repo = {
     getChurch: vi.fn(async () => ({ id: "igreja", name: "Igreja" })),
     consentimento: vi.fn(async () => consent),
+    ehAdminDaRede: vi.fn(async () => false),
     salvarConsentimento: vi.fn(async () => null),
     definirFoto: vi.fn(async () => null),
     semTermo: vi.fn(async () => []),
@@ -178,6 +180,19 @@ describe("foto", () => {
     expect(await svc.foto(secretario, MEMBRO)).toBeNull();
     expect(storage.upload).not.toHaveBeenCalled();
     expect(storage.download).not.toHaveBeenCalled();
+  });
+
+  it("quem administra a igreja de cima lê foto e consentimento, mas não escreve", async () => {
+    const { svc, repo, storage } = build(
+      { ehAdminDaRede: vi.fn(async () => true) },
+      termo({ companyId: OUTRA, churchId: "igreja-de-baixo", fotoPath: "x/y/z.jpg" }),
+    );
+    expect(await svc.consentimento(secretario, MEMBRO)).toMatchObject({ cadastro: true });
+    expect(await svc.foto(secretario, MEMBRO)).not.toBeNull();
+    expect(repo.ehAdminDaRede).toHaveBeenCalledWith("igreja-de-baixo");
+    // Escrita continua restrita à própria igreja, mesmo administrando a de cima.
+    await expect(svc.enviarFoto(secretario, MEMBRO, JPEG)).rejects.toMatchObject({ code: "validation_error" });
+    expect(storage.upload).not.toHaveBeenCalled();
   });
 
   it("trocar a foto apaga a anterior", async () => {

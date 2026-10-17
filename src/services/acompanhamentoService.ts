@@ -41,6 +41,7 @@ import type {
   Justificativa,
   JustificativaLonga,
   MembrosKpis,
+  MembrosKpisRede,
   MotivoContato,
   MotivoJustificativa,
   Presenca,
@@ -73,8 +74,11 @@ import { normalizePageParams, type Paginated } from "./tenantService";
  * client são sempre conferidos contra essa igreja no repositório (e de novo
  * pela RLS, que só abre a própria igreja).
  *
- * LGPD: a igreja de cima não lê nada daqui; recebe só números pelo
- * `resumoRede`.
+ * LGPD: a igreja de cima não lê chamada, presença, justificativa nem
+ * acompanhamento pastoral daqui — recebe só números pelo `resumoRede`. O
+ * CADASTRO é a única exceção (migration 20261022100000): quem administra a
+ * igreja de cima lê `listMembrosRedePaginado`/`kpisMembrosRede` de uma
+ * unidade abaixo, e só de quem é membro de fato e assinou o termo.
  */
 
 export interface IgrejaDoAcompanhamento {
@@ -130,6 +134,11 @@ export interface AcompanhamentoRepository {
       offset: number;
     },
   ): Promise<{ items: RolMembro[]; total: number }>;
+  /** "Ver todas": a própria igreja + as de baixo, numa lista só (sem filtro de membro_igreja — a RLS decide). */
+  listMembrosPaginaRedeToda(
+    churchIds: string[],
+    filtro: { busca: string | null; situacao: SituacaoMembro | null; cargoId: string | null; limit: number; offset: number },
+  ): Promise<{ items: RolMembro[]; total: number }>;
   /**
    * Candidatos a "já existe alguém parecido": quem tem o primeiro nome (em
    * qualquer palavra do nome) ou o fim do telefone. Termos já normalizados.
@@ -143,6 +152,10 @@ export interface AcompanhamentoRepository {
   /** RPC aniversariantes_do_mes: nascimento, batismo e (com acesso à ficha) casamento. */
   aniversariantes(churchId: string, mes: number): Promise<Aniversario[]>;
   kpisMembros(churchId: string): Promise<MembrosKpis>;
+  /** RPC rede_membros_kpis: total de membros e quantos faltam aceitar o termo. Null sem acesso pela rede. */
+  kpisMembrosRede(churchId: string): Promise<MembrosKpisRede | null>;
+  /** RPC rede_membros_kpis_arvore: o mesmo, somando a unidade + tudo abaixo dela. */
+  kpisMembrosRedeArvore(churchId: string): Promise<MembrosKpisRede | null>;
   /** Quem tem login na empresa e os convites pendentes (RLS: convites só para admin). */
   listAcessos(companyId: string): Promise<{ acessos: AcessoMembro[]; convites: ConvitePendente[] }>;
   /** E-mails de todos os membros da igreja (minúsculos). */
@@ -648,10 +661,110 @@ export function createAcompanhamentoService(deps: {
       return repo.kpisMembros(church.id);
     },
 
+    /** Números agregados de uma unidade ABAIXO na rede: nunca pessoa, só total (migration 20261022100000). */
+    async kpisMembrosRede(actor: AcompanhamentoActor, churchIdAlvo: string): Promise<MembrosKpisRede | null> {
+      if (!canVerResumoRede(actor.role)) {
+        throw new AppError("forbidden", "Os números da rede são de quem administra a igreja.");
+      }
+      if (!z.uuid().safeParse(churchIdAlvo).success) return null;
+      return repo.kpisMembrosRede(churchIdAlvo);
+    },
+
+    /** Mesma coisa, somando a unidade vista + tudo abaixo dela (subsede + congregações). */
+    async kpisMembrosRedeArvore(actor: AcompanhamentoActor, churchIdAlvo: string): Promise<MembrosKpisRede | null> {
+      if (!canVerResumoRede(actor.role)) {
+        throw new AppError("forbidden", "Os números da rede são de quem administra a igreja.");
+      }
+      if (!z.uuid().safeParse(churchIdAlvo).success) return null;
+      return repo.kpisMembrosRedeArvore(churchIdAlvo);
+    },
+
+    /**
+     * Cadastro completo de uma unidade ABAIXO na rede: só quem é membro de
+     * fato e assinou o termo de consentimento do cadastro aparece — a RLS
+     * (pode_rede_ver_cadastro) decide linha a linha; quem falta entra só no
+     * total de kpisMembrosRede, nunca aqui.
+     */
+    async listMembrosRedePaginado(
+      actor: AcompanhamentoActor,
+      churchIdAlvo: string,
+      params: {
+        page?: number;
+        pageSize?: number;
+        busca?: string;
+        inativos?: boolean;
+        situacao?: string;
+        cargoId?: string;
+      },
+    ): Promise<Paginated<RolMembro>> {
+      if (!canVerResumoRede(actor.role)) {
+        throw new AppError("forbidden", "Ver o cadastro da rede é de quem administra a igreja.");
+      }
+      if (!z.uuid().safeParse(churchIdAlvo).success) {
+        throw new AppError("not_found", "Igreja não encontrada.");
+      }
+      const tamanho = MEMBROS_POR_PAGINA.includes(params.pageSize as (typeof MEMBROS_POR_PAGINA)[number])
+        ? (params.pageSize as number)
+        : MEMBROS_POR_PAGINA_PADRAO;
+      const { page, pageSize, offset } = normalizePageParams({ page: params.page, pageSize: tamanho }, tamanho);
+      const busca = normalizeSearch(params.busca ?? "").slice(0, 100) || null;
+      const cargoId = params.cargoId && z.uuid().safeParse(params.cargoId).success ? params.cargoId : null;
+      const { items, total } = await repo.listMembrosPagina(churchIdAlvo, {
+        busca,
+        situacao: situacaoDoFiltro(params.inativos && !params.situacao ? "todas" : params.situacao),
+        cargoId,
+        membroIgreja: true,
+        limit: pageSize,
+        offset,
+      });
+      return { items, total, page, pageSize };
+    },
+
+    /**
+     * "Ver todas": a própria igreja + tudo abaixo dela, numa lista só.
+     * `churchIds` vem de quem chama (a própria + `rede_unidades_abaixo`); aqui
+     * só valida o formato — a RLS decide o que cada linha mostra (própria
+     * igreja: tudo; de baixo: só quem tem termo assinado).
+     */
+    async listMembrosTodaRedePaginado(
+      actor: AcompanhamentoActor,
+      churchIds: string[],
+      params: { page?: number; pageSize?: number; busca?: string; situacao?: string; cargoId?: string },
+    ): Promise<Paginated<RolMembro>> {
+      if (!canVerResumoRede(actor.role)) {
+        throw new AppError("forbidden", "Ver o cadastro da rede é de quem administra a igreja.");
+      }
+      const ids = churchIds.filter((id) => z.uuid().safeParse(id).success);
+      if (ids.length === 0) throw new AppError("not_found", "Nenhuma igreja encontrada.");
+      const tamanho = MEMBROS_POR_PAGINA.includes(params.pageSize as (typeof MEMBROS_POR_PAGINA)[number])
+        ? (params.pageSize as number)
+        : MEMBROS_POR_PAGINA_PADRAO;
+      const { page, pageSize, offset } = normalizePageParams({ page: params.page, pageSize: tamanho }, tamanho);
+      const busca = normalizeSearch(params.busca ?? "").slice(0, 100) || null;
+      const cargoId = params.cargoId && z.uuid().safeParse(params.cargoId).success ? params.cargoId : null;
+      const { items, total } = await repo.listMembrosPaginaRedeToda(ids, {
+        busca,
+        situacao: situacaoDoFiltro(params.situacao),
+        cargoId,
+        limit: pageSize,
+        offset,
+      });
+      return { items, total, page, pageSize };
+    },
+
     /** Cargos para o formulário de membro (só os que ainda podem ser dados). */
     async cargosDisponiveis(actor: AcompanhamentoActor): Promise<CargoResumo[]> {
       const church = await igreja(actor);
       return repo.listCargosDisponiveis(church.id);
+    },
+
+    /** Cargos para o filtro da lista, de uma unidade ABAIXO na rede. */
+    async cargosDisponiveisRede(actor: AcompanhamentoActor, churchIdAlvo: string): Promise<CargoResumo[]> {
+      if (!canVerResumoRede(actor.role)) {
+        throw new AppError("forbidden", "Ver o cadastro da rede é de quem administra a igreja.");
+      }
+      if (!z.uuid().safeParse(churchIdAlvo).success) return [];
+      return repo.listCargosDisponiveis(churchIdAlvo);
     },
 
     /**

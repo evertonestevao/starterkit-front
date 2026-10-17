@@ -44,6 +44,12 @@ export interface RolMembro {
   observacoes: string | null;
 }
 
+/** Números da rede para a unidade de baixo: nunca pessoa, só total (migration 20261022100000). */
+export interface MembrosKpisRede {
+  total: number;
+  semConsentimento: number;
+}
+
 /** Cadastro que já existe e parece ser a pessoa que está sendo cadastrada. */
 export interface MembroParecido {
   membro: RolMembro;
