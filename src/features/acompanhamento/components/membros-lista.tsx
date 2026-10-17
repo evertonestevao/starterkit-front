@@ -148,48 +148,52 @@ export function MembrosLista({
         </Table>
       </div>
 
-      <ul className="flex flex-col gap-2 md:hidden">
+      <ul className="flex flex-col gap-1.5 md:hidden">
         {membros.map((m) => {
           const ro = readOnlyDe(m);
-          const Conteudo = (
-            <>
-              <p className="flex flex-wrap items-center gap-1.5 font-medium">
-                <span className="truncate">{m.nome}</span>
-                {!ro ? <AcessoBadge acesso={acessoDe(m)} convite={conviteDe(m)} /> : null}
-                {!m.membroIgreja ? (
-                  <Badge variant="outline" className="text-muted-foreground">
-                    Não membro
-                  </Badge>
-                ) : null}
-                {nomesIgrejas ? (
-                  <span className="text-xs font-normal text-muted-foreground">· {nomesIgrejas[m.churchId] ?? "—"}</span>
-                ) : null}
-              </p>
-              {/* No cartão, sem cargo não mostra nada (o "—" fica só na tabela). */}
-              {(ro || !gerenciaAcesso) && m.cargos.length > 0 ? <CargosDoMembro membro={m} /> : null}
-              <p className="text-xs text-muted-foreground">
-                {ro
-                  ? (contato(m) ?? "Sem contato")
-                  : `${mascaraTelefone(m.whatsapp) || "Sem telefone"}${m.ativo ? "" : ` · ${SITUACAO_LABEL[m.situacao]}`}`}
-              </p>
-            </>
+          const Nome = (
+            <p className="flex flex-wrap items-center gap-1.5 font-medium">
+              <span className="truncate">{m.nome}</span>
+              {!ro ? <AcessoBadge acesso={acessoDe(m)} convite={conviteDe(m)} /> : null}
+              {!m.membroIgreja ? (
+                <Badge variant="outline" className="text-muted-foreground">
+                  Não membro
+                </Badge>
+              ) : null}
+              {nomesIgrejas ? (
+                <span className="text-xs font-normal text-muted-foreground">· {nomesIgrejas[m.churchId] ?? "—"}</span>
+              ) : null}
+            </p>
           );
           return (
-            <li key={m.id} className="flex flex-col gap-2 rounded-lg border p-3">
-              {ro ? (
-                <div className="min-w-0">{Conteudo}</div>
-              ) : (
-                <Link href={`/dashboard/membros/${m.id}`} className="min-w-0">
-                  {Conteudo}
-                </Link>
-              )}
-              {/* Fora do link: o atalho de cargo é um botão. */}
-              {!ro && gerenciaAcesso ? (
-                <div>
+            <li key={m.id} className="flex flex-col gap-1 rounded-lg border p-2.5">
+              <div className="flex items-start justify-between gap-2">
+                {ro ? (
+                  <div className="min-w-0 flex-1">{Nome}</div>
+                ) : (
+                  <Link href={`/dashboard/membros/${m.id}`} className="min-w-0 flex-1">
+                    {Nome}
+                  </Link>
+                )}
+                {!ro ? (
+                  <span className="flex shrink-0 items-center gap-1">
+                    {convidavel(m) && m.email ? <ConvidarDialog membro={m} /> : null}
+                    <MembroForm membro={m} cargos={cargos} podeConvidar={convidavel(m)} iconOnly />
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span>
+                  {ro
+                    ? (contato(m) ?? "Sem contato")
+                    : `${mascaraTelefone(m.whatsapp) || "Sem telefone"}${m.ativo ? "" : ` · ${SITUACAO_LABEL[m.situacao]}`}`}
+                </span>
+                {!ro && gerenciaAcesso ? (
                   <CargosRapido membro={m} cargos={cargos} />
-                </div>
-              ) : null}
-              <Acoes m={m} />
+                ) : m.cargos.length > 0 ? (
+                  <CargosDoMembro membro={m} />
+                ) : null}
+              </div>
             </li>
           );
         })}
