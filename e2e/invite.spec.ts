@@ -1,14 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { PASSWORD, signupAndOnboard, uniqueEmail } from "./helpers";
 
-/**
- * Fluxo crítico 2: criar igreja → convidar membro para o sistema.
- *
- * O convite é feito no cadastro do membro (Membros → Novo membro, com e-mail
- * e "Convidar para acessar o sistema"); a página do membro mostra o convite
- * pendente e deixa cancelar.
- */
-test("responsável convida um membro e cancela o convite pendente", async ({ page }) => {
+/** Fluxo crítico 2: criar empresa → convidar membro (plano §12). */
+test("owner convida membro e vê o convite pendente", async ({ page }) => {
   await signupAndOnboard(page, {
     email: uniqueEmail("owner"),
     password: PASSWORD,
@@ -16,23 +10,19 @@ test("responsável convida um membro e cancela o convite pendente", async ({ pag
     company: "Empresa Convites E2E",
   });
 
-  await page.getByRole("link", { name: "Membros", exact: true }).first().click();
-  await expect(page).toHaveURL(/\/dashboard\/membros/);
+  await page.getByRole("link", { name: "Membros" }).click();
+  await expect(page).toHaveURL(/\/dashboard\/members/);
 
-  const convidado = uniqueEmail("convidado");
-  await page.getByRole("button", { name: "Novo membro" }).click();
-  const dialogo = page.getByRole("dialog");
-  await dialogo.getByLabel("Nome", { exact: true }).fill("Convidado E2E");
-  await dialogo.getByLabel("E-mail (opcional)").fill(convidado);
-  await dialogo.getByRole("checkbox", { name: /Convidar para acessar o sistema/ }).check();
-  await dialogo.getByRole("button", { name: "Salvar", exact: true }).click();
-  await expect(page.getByText(new RegExp(`convite enviado para ${convidado}`))).toBeVisible();
+  const invitedEmail = uniqueEmail("convidado");
+  await page.getByLabel("Email").fill(invitedEmail);
+  await page.getByLabel("Papel").selectOption("member");
+  await page.getByRole("button", { name: "Enviar convite" }).click();
 
-  // Na página do membro, o convite aparece pendente e pode ser cancelado.
-  await page.getByRole("link", { name: "Ver a ficha de Convidado E2E" }).first().click();
-  await expect(page).toHaveURL(/\/dashboard\/membros\/[0-9a-f-]{36}/);
-  await expect(page.getByText("Convite enviado").first()).toBeVisible();
-  await page.getByRole("button", { name: "Cancelar convite" }).click();
-  await expect(page.getByText("Convite cancelado.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Cancelar convite" })).toBeHidden();
+  await expect(page.getByText("Convite enviado")).toBeVisible();
+  await expect(page.getByText(invitedEmail)).toBeVisible();
+
+  // revogação
+  await page.getByRole("button", { name: `Revogar convite de ${invitedEmail}` }).click();
+  await expect(page.getByText("Convite revogado")).toBeVisible();
+  await expect(page.getByText(invitedEmail)).toBeHidden();
 });

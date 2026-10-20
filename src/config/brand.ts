@@ -4,9 +4,9 @@
  */
 export const brand = {
   /** Nome exibido na LP, título das páginas e sidebar. */
-  name: "AssembleiaApp",
+  name: "StarterKit",
   /** Descrição curta usada em metadata e na LP. */
-  tagline: "Página da igreja, membros, presença nos cultos, Escola Dominical, tesouraria e visitas em um só lugar",
+  tagline: "Base multi-tenant pronta para lançar seu próximo SaaS",
   /** Domínio público (links de email usam APP_URL do servidor). */
-  url: "https://assembleiaapp.com.br",
+  url: "https://example.com",
 } as const;

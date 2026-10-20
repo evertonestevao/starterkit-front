@@ -47,9 +47,6 @@ function makeRepo(overrides: Partial<TenantRepository> = {}): TenantRepository {
     async updateMemberRole() {},
     async removeMember() {},
     async leaveCompany() {},
-    async definirResponsavel() {
-      return [{ email: "pastor@igreja.org", afetado: true }];
-    },
     ...overrides,
   };
 }
@@ -58,7 +55,7 @@ describe("slugify", () => {
   it("converte nome com acentos e espaços em slug válido", () => {
     expect(slugify("Minha Empresa Ltda")).toBe("minha-empresa-ltda");
     expect(slugify("Ação & Cia!")).toBe("acao-cia");
-    expect(slugify("---")).toBe("igreja");
+    expect(slugify("---")).toBe("empresa");
   });
 });
 
@@ -87,71 +84,6 @@ describe("tenantService.createCompany", () => {
     expect(slugs[0]).toBe("minha-empresa");
     expect(slugs[1]).toMatch(/^minha-empresa-[a-z0-9]{4}$/);
     expect(company.slug).toBe(slugs[1]);
-  });
-
-  function repoQueGuarda(received: unknown[]) {
-    return makeRepo({
-      async createCompany(name, slug, church) {
-        received.push(church);
-        return { id: COMPANY_ID, name, slug, role: "owner" } as CompanyWithRole;
-      },
-    });
-  }
-
-  it("sem os campos novos, a igreja nasce sem complemento e fora de rede", async () => {
-    const received: unknown[] = [];
-    await createTenantService(repoQueGuarda(received)).createCompany({ name: "Igreja Esperança" });
-    expect(received[0]).toEqual({ sobrenome: null, fazParteDeRede: false, redeNome: null, modulosInativos: [] });
-  });
-
-  it("guarda só os módulos desligáveis conhecidos que vieram desmarcados", async () => {
-    const received: unknown[] = [];
-    await createTenantService(repoQueGuarda(received)).createCompany({
-      name: "Igreja Esperança",
-      modulosInativos: ["ebd", "acompanhamento", "membros", "billing", "dashboard"],
-    });
-    // "membros", "billing" e "dashboard" não são desligáveis: descartados.
-    expect(received[0]).toMatchObject({ modulosInativos: ["ebd", "acompanhamento"] });
-  });
-
-  it("limpa o complemento (espaços) e trata vazio como ausente", async () => {
-    const received: unknown[] = [];
-    const service = createTenantService(repoQueGuarda(received));
-    await service.createCompany({ name: "Igreja Esperança", sobrenome: "  Vila Mariana   -  São Paulo " });
-    await service.createCompany({ name: "Igreja Esperança", sobrenome: "   " });
-    expect(received[0]).toMatchObject({ sobrenome: "Vila Mariana - São Paulo" });
-    expect(received[1]).toMatchObject({ sobrenome: null });
-  });
-
-  it("grava o nome da rede só quando a igreja diz que faz parte de uma", async () => {
-    const received: unknown[] = [];
-    const service = createTenantService(repoQueGuarda(received));
-    await service.createCompany({ name: "Igreja Esperança", fazParteDeRede: true, redeNome: " Ministério do Belém " });
-    await service.createCompany({ name: "Igreja Esperança", fazParteDeRede: false, redeNome: "Ministério do Belém" });
-    await service.createCompany({ name: "Igreja Esperança", fazParteDeRede: true, redeNome: "" });
-    expect(received[0]).toMatchObject({ fazParteDeRede: true, redeNome: "Ministério do Belém" });
-    expect(received[1]).toMatchObject({ fazParteDeRede: false, redeNome: null });
-    expect(received[2]).toMatchObject({ fazParteDeRede: true, redeNome: null });
-  });
-
-  it("só aceita `true` de verdade como faz parte de rede (texto não vale)", async () => {
-    const received: unknown[] = [];
-    await createTenantService(repoQueGuarda(received)).createCompany({
-      name: "Igreja Esperança",
-      fazParteDeRede: "true",
-      redeNome: "Ministério do Belém",
-    });
-    expect(received[0]).toMatchObject({ fazParteDeRede: false, redeNome: null });
-  });
-
-  it("rejeita complemento e nome de rede longos demais", async () => {
-    const service = createTenantService(makeRepo());
-    await expect(
-      service.createCompany({ name: "Igreja Esperança", sobrenome: "x".repeat(121) }),
-    ).rejects.toMatchObject({ code: "validation_error" });
-    await expect(
-      service.createCompany({ name: "Igreja Esperança", fazParteDeRede: true, redeNome: "x".repeat(121) }),
-    ).rejects.toMatchObject({ code: "validation_error" });
   });
 });
 
@@ -241,82 +173,6 @@ describe("tenantService autorização", () => {
     );
     await expect(service.removeMember(COMPANY_ID, "m1")).rejects.toMatchObject({
       code: "forbidden",
-    });
-  });
-
-  describe("definirResponsavel", () => {
-    it("um Responsável promove outro membro e recebe quem avisar", async () => {
-      const chamadas: Array<[string, boolean]> = [];
-      const service = createTenantService(
-        makeRepo({
-          async getMember() {
-            return makeMember({ role: "admin" });
-          },
-          async definirResponsavel(memberId, tornar) {
-            chamadas.push([memberId, tornar]);
-            return [{ email: "novo@igreja.org", afetado: true }];
-          },
-        }),
-      );
-      const r = await service.definirResponsavel(COMPANY_ID, "m1", true);
-      expect(chamadas).toEqual([["m1", true]]);
-      expect(r.avisar).toEqual([{ email: "novo@igreja.org", afetado: true }]);
-    });
-
-    it("administrador não define Responsável, nem a si mesmo", async () => {
-      let chamou = false;
-      const service = createTenantService(
-        makeRepo({
-          async getMyRole() {
-            return "admin";
-          },
-          async getMember() {
-            return makeMember({ role: "admin" });
-          },
-          async definirResponsavel() {
-            chamou = true;
-            return [];
-          },
-        }),
-      );
-      await expect(service.definirResponsavel(COMPANY_ID, "m1", true)).rejects.toMatchObject({ code: "forbidden" });
-      expect(chamou).toBe(false);
-    });
-
-    it("membro de outra igreja vira not_found", async () => {
-      const service = createTenantService(
-        makeRepo({
-          async getMember() {
-            return null;
-          },
-        }),
-      );
-      await expect(service.definirResponsavel(COMPANY_ID, "de-fora", true)).rejects.toMatchObject({
-        code: "not_found",
-      });
-    });
-
-    it("não promove quem já é, nem tira de quem não é", async () => {
-      const dono = createTenantService(
-        makeRepo({
-          async getMember() {
-            return makeMember({ role: "owner" });
-          },
-        }),
-      );
-      await expect(dono.definirResponsavel(COMPANY_ID, "m1", true)).rejects.toMatchObject({
-        code: "validation_error",
-      });
-      const comum = createTenantService(
-        makeRepo({
-          async getMember() {
-            return makeMember({ role: "member" });
-          },
-        }),
-      );
-      await expect(comum.definirResponsavel(COMPANY_ID, "m1", false)).rejects.toMatchObject({
-        code: "validation_error",
-      });
     });
   });
 });

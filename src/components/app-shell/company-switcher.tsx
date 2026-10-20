@@ -22,12 +22,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CreateCompanyForm } from "@/features/companies/components/create-company-form";
-import { formatChurchName } from "@/lib/churchName";
 import { useTenant } from "@/providers/tenant-provider";
 import { switchCompanyAction } from "@/server/actions/tenant";
 
 /** Seletor de empresa ativa (header, desktop e mobile). */
-export function CompanySwitcher({ podeCriarIgreja = false }: { podeCriarIgreja?: boolean }) {
+export function CompanySwitcher() {
   const { companies, active } = useTenant();
   const [creating, setCreating] = useState(false);
   const [, startTransition] = useTransition();
@@ -38,22 +37,16 @@ export function CompanySwitcher({ podeCriarIgreja = false }: { podeCriarIgreja?:
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button
-              variant="outline"
-              size="sm"
-              className="max-w-[46vw] gap-2 sm:max-w-64"
-              aria-label={`Igreja ativa: ${formatChurchName(active.name, active.complemento)}. Trocar de igreja`}
-            />
+            <Button variant="outline" size="sm" className="max-w-44 gap-2 sm:max-w-56" />
           }
         >
           <Building2 className="size-4 shrink-0" />
-          {/* Numa rede todas começam com o mesmo nome: quem distingue é o complemento. */}
-          <span className="truncate">{active.complemento ?? active.name}</span>
+          <span className="truncate">{active.name}</span>
           <ChevronsUpDown className="size-3.5 shrink-0 opacity-60" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-1.5rem)]">
+        <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuGroup>
-            <DropdownMenuLabel>Suas igrejas</DropdownMenuLabel>
+            <DropdownMenuLabel>Suas empresas</DropdownMenuLabel>
             {companies.map((company) => (
               <DropdownMenuItem
                 key={company.id}
@@ -67,44 +60,29 @@ export function CompanySwitcher({ podeCriarIgreja = false }: { podeCriarIgreja?:
                         router.push("/dashboard"); // navegação no client (sem redirect na action)
                       }
                     } catch {
-                      toast.error(
-                        "Não foi possível trocar de igreja. Tente novamente.",
-                      );
+                      toast.error("Não foi possível trocar de empresa. Tente novamente.");
                     }
                   })
                 }
               >
-                <span className="min-w-0">
-                  <span className="block break-words">{company.name}</span>
-                  {company.complemento ? (
-                    <span className="block text-xs break-words text-muted-foreground">{company.complemento}</span>
-                  ) : null}
-                </span>
-                {company.id === active.id ? (
-                  <Check className="ml-auto size-4 shrink-0" />
-                ) : null}
+                <span className="truncate">{company.name}</span>
+                {company.id === active.id ? <Check className="ml-auto size-4" /> : null}
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
-          {podeCriarIgreja ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setCreating(true)}>
-                <Plus className="size-4" />
-                Nova igreja
-              </DropdownMenuItem>
-            </>
-          ) : null}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setCreating(true)}>
+            <Plus className="size-4" />
+            Nova empresa
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Nova igreja</DialogTitle>
-            <DialogDescription>
-              Você será o responsável dessa igreja.
-            </DialogDescription>
+            <DialogTitle>Nova empresa</DialogTitle>
+            <DialogDescription>Você será o owner da nova empresa.</DialogDescription>
           </DialogHeader>
           <CreateCompanyForm />
         </DialogContent>

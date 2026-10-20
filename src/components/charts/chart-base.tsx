@@ -25,33 +25,6 @@ export interface ChartSeries {
 /** Formatação serializável (usável a partir de Server Components). */
 export type ValueFormat = Intl.NumberFormatOptions & { locale?: string };
 
-/**
- * Largura do eixo Y para caber o maior rótulo formatado (ex.: "R$ 6.000").
- *
- * Mede o maior DADO, mas soma um caractere de folga: o eixo arredonda as
- * marcas para cima (um máximo de R$ 9.800 vira a marca R$ 12.000), e sem a
- * folga o primeiro caractere da maior marca é cortado — foi o que aconteceu
- * no gráfico de barras, que usava 48px fixos e mostrava "$ 6.000".
- * ~7,5px por caractere em fonte 12px.
- */
-export function yAxisWidthFor(
-  data: Array<Record<string, unknown>>,
-  series: ChartSeries[],
-  formatter: (value: number) => string,
-): number {
-  const maisLongo = data.reduce((longest, row) => {
-    for (const s of series) {
-      const value = row[s.key];
-      if (typeof value === "number") {
-        const label = formatter(value);
-        if (label.length > longest) longest = label.length;
-      }
-    }
-    return longest;
-  }, 1);
-  return Math.min(120, Math.max(40, 14 + (maisLongo + 1) * 7.5));
-}
-
 export function resolveFormatter(
   valueFormatter: ((value: number) => string) | undefined,
   valueFormat: ValueFormat | undefined,

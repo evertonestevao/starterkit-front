@@ -14,34 +14,18 @@ test("onboarding exige aceite dos termos; sem marcar, não avança", async ({ pa
   await expect(checkbox).toBeVisible();
 
   // tenta criar SEM aceitar: a validação nativa (required) segura o submit
-  await page.getByLabel("Nome da igreja").fill("Empresa Sem Termos");
-  await page.getByRole("button", { name: "Criar igreja" }).click();
+  await page.getByLabel("Nome da empresa").fill("Empresa Sem Termos");
+  await page.getByRole("button", { name: "Criar empresa" }).click();
   await expect(page).toHaveURL(/\/onboarding/); // não navegou
 
   // o consentimento de email é OPCIONAL: aceita só os termos e avança
   await checkbox.check();
-  await page.getByRole("button", { name: "Criar igreja" }).click();
+  await page.getByRole("button", { name: "Criar empresa" }).click();
   await expect(page).toHaveURL(/\/dashboard/);
 });
 
-test("cada público abre o seu contrato, e um leva ao outro", async ({ page }) => {
-  // O endereço antigo continua valendo: há aceites registrados apontando para
-  // ele e emails já enviados com esse link.
+test("link dos termos abre a versão vigente com aviso de placeholder", async ({ page }) => {
   await page.goto("/terms");
-  await expect(page).toHaveURL(/\/terms\/igreja/);
-  await expect(page.getByRole("heading", { name: "Termos de Uso — Igrejas" })).toBeVisible();
-
-  // A igreja paga mensalidade: se esta frase sumir, o contrato mudou de sentido.
-  await expect(page.getByText(/O uso da Plataforma é pago por mensalidade/i)).toBeVisible();
-
-  await page.getByRole("link", { name: /Veja os termos do patrocínio/i }).click();
-  await expect(page).toHaveURL(/\/terms\/patrocinador/);
-  await expect(
-    page.getByRole("heading", { name: "Termos de Uso — Patrocinadores" }),
-  ).toBeVisible();
-
-  // A cláusula que sustenta o produto inteiro: o dinheiro não é da igreja.
-  await expect(page.getByText(/não é doação, dízimo, oferta nem repasse/i)).toBeVisible();
-  // E a tabela de preços precisa renderizar como tabela, não como texto cru.
-  await expect(page.getByRole("cell", { name: "R$ 39,90" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Termos de Uso" })).toBeVisible();
+  await expect(page.getByText("TEXTO DE EXEMPLO")).toBeVisible();
 });

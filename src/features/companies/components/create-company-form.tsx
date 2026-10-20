@@ -1,136 +1,33 @@
 "use client";
 
-import { Formulario } from "@/components/formulario";
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TermsCheckboxes } from "@/features/terms/components/terms-checkboxes";
-import { useActionToast } from "@/hooks/useActionToast";
-import {
-  CHURCH_NETWORK_NAME_MAX_LENGTH,
-  CHURCH_SURNAME_MAX_LENGTH,
-} from "@/lib/churchName";
-import { MODULOS_DESLIGAVEIS, MODULO_INFO } from "@/lib/menuPermissoes";
 import { createCompanyAction } from "@/server/actions/tenant";
 
-export function CreateCompanyForm({
-  requireTerms = false,
-  next,
-  convite,
-  igrejaNova,
-}: {
-  requireTerms?: boolean;
-  /** Convite de igreja nova gerado pela plataforma (o banco confere e marca como usado). */
-  igrejaNova?: string;
-  /** Para onde voltar depois de criar a igreja (só um link de vínculo; o servidor confere). */
-  next?: string;
-  /** Chegou por convite: o nome da igreja que convidou vem sugerido, e a rede marcada. */
-  convite?: { nome: string; igreja: string };
-}) {
-  const [state, formAction, pending] = useActionState(
-    createCompanyAction,
-    undefined,
-  );
-  useActionToast(state);
-  const [inNetwork, setInNetwork] = useState(Boolean(convite));
+export function CreateCompanyForm({ requireTerms = false }: { requireTerms?: boolean }) {
+  const [state, formAction, pending] = useActionState(createCompanyAction, undefined);
 
   return (
-    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
-      {next ? <input type="hidden" name="next" value={next} /> : null}
-      {igrejaNova ? <input type="hidden" name="igreja_nova" value={igrejaNova} /> : null}
-      {convite ? (
-        <p className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
-          Você foi convidado por <strong>{convite.igreja}</strong>. Ao criar a igreja, o pedido para entrar na rede
-          dela já vai junto: é só esperar a aprovação.
-        </p>
+    <form action={formAction} className="flex flex-col gap-4">
+      {state?.error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{state.error}</AlertDescription>
+        </Alert>
       ) : null}
       <div className="flex flex-col gap-2">
-        <Label htmlFor="name">Nome da igreja</Label>
-        <Input
-          id="name"
-          name="name"
-          placeholder="Assembleia de Deus Ministério no Ipiranga"
-          defaultValue={convite?.nome}
-          minLength={2}
-          required
-        />
-        {convite ? (
-          <p className="text-xs text-muted-foreground">
-            Sugerimos o nome da igreja que convidou. Use o complemento abaixo para separar a sua (ex.: o bairro).
-          </p>
-        ) : null}
+        <Label htmlFor="name">Nome da empresa</Label>
+        <Input id="name" name="name" placeholder="Minha Empresa" minLength={2} required />
       </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="sobrenome">Complemento do nome (opcional)</Label>
-        <Input
-          id="sobrenome"
-          name="sobrenome"
-          placeholder="Zona Sul - São Paulo"
-          maxLength={CHURCH_SURNAME_MAX_LENGTH}
-          aria-describedby="sobrenome-help"
-        />
-        <p id="sobrenome-help" className="text-xs text-muted-foreground">
-          Separa a sua igreja das de mesmo nome. Aparece junto do nome.
-        </p>
-      </div>
-      <div className="flex flex-col gap-3">
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="faz_parte_de_rede"
-            checked={inNetwork}
-            onChange={(event) => setInNetwork(event.target.checked)}
-            className="mt-0.5 size-4 accent-primary"
-          />
-          <span>Minha igreja faz parte de uma rede de igrejas</span>
-        </label>
-        {inNetwork ? (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="rede_nome">
-              Nome da rede ou ministério (opcional)
-            </Label>
-            <Input
-              id="rede_nome"
-              name="rede_nome"
-              placeholder="Ministério do Belém"
-              defaultValue={convite?.igreja}
-              maxLength={CHURCH_NETWORK_NAME_MAX_LENGTH}
-              aria-describedby="rede-help"
-            />
-            <p id="rede-help" className="text-xs text-muted-foreground">
-              Ajuda a encontrar as outras igrejas da sua rede. Não aparece na
-              página pública.
-            </p>
-          </div>
-        ) : null}
-      </div>
-      <fieldset className="flex flex-col gap-3">
-        <legend className="text-sm font-medium">Quais módulos sua igreja vai usar?</legend>
-        <p className="text-xs text-muted-foreground">
-          Todos começam marcados. Desmarque o que sua igreja não usa — dá pra mudar depois em Configurações →
-          Acessos.
-        </p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {MODULOS_DESLIGAVEIS.map((modulo) => (
-            <label key={modulo} className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                name={`modulo_${modulo}`}
-                defaultChecked
-                className="mt-0.5 size-4 accent-primary"
-              />
-              <span>{MODULO_INFO[modulo].titulo}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
       {/* Onboarding (1º acesso): aceite dos termos vigentes antes de criar.
           O required do checkbox é UX; a validação real é na server action. */}
       {requireTerms ? <TermsCheckboxes /> : null}
       <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Criando..." : "Criar igreja"}
+        {pending ? "Criando..." : "Criar empresa"}
       </Button>
-    </Formulario>
+    </form>
   );
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import { Formulario } from "@/components/formulario";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -9,7 +8,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useActionToast } from "@/hooks/useActionToast";
 import { useTenant } from "@/providers/tenant-provider";
 import { updateCompanyAction, leaveCompanyAction } from "@/server/actions/tenant";
 import { updateAvatarAction, updateProfileAction } from "@/server/actions/user";
@@ -18,28 +16,46 @@ import { AVATAR_ALLOWED_TYPES, AVATAR_MAX_BYTES } from "@/services/userService";
 export function CompanyNameForm() {
   const { active } = useTenant();
   const [state, formAction, pending] = useActionState(updateCompanyAction, undefined);
-  useActionToast(state);
 
   return (
-    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-4">
+      {state?.error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{state.error}</AlertDescription>
+        </Alert>
+      ) : null}
+      {state?.success ? (
+        <Alert>
+          <AlertDescription>{state.success}</AlertDescription>
+        </Alert>
+      ) : null}
       <input type="hidden" name="companyId" value={active.id} />
       <div className="flex flex-col gap-2">
-        <Label htmlFor="company-name">Nome no menu</Label>
+        <Label htmlFor="company-name">Nome da empresa</Label>
         <Input id="company-name" name="name" defaultValue={active.name} minLength={2} required />
       </div>
       <Button type="submit" disabled={pending} className="w-fit">
         {pending ? "Salvando..." : "Salvar"}
       </Button>
-    </Formulario>
+    </form>
   );
 }
 
 export function ProfileForm({ initialName }: { initialName: string }) {
   const [state, formAction, pending] = useActionState(updateProfileAction, undefined);
-  useActionToast(state);
 
   return (
-    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-4">
+      {state?.error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{state.error}</AlertDescription>
+        </Alert>
+      ) : null}
+      {state?.success ? (
+        <Alert>
+          <AlertDescription>{state.success}</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="flex flex-col gap-2">
         <Label htmlFor="profile-name">Seu nome</Label>
         <Input id="profile-name" name="fullName" defaultValue={initialName} minLength={2} required />
@@ -47,7 +63,7 @@ export function ProfileForm({ initialName }: { initialName: string }) {
       <Button type="submit" disabled={pending} className="w-fit">
         {pending ? "Salvando..." : "Salvar"}
       </Button>
-    </Formulario>
+    </form>
   );
 }
 
@@ -59,7 +75,6 @@ export function AvatarForm({
   userName: string;
 }) {
   const [state, formAction, pending] = useActionState(updateAvatarAction, undefined);
-  useActionToast(state);
   const [clientError, setClientError] = useState<string>();
   const initials = userName
     .split(/\s+/)
@@ -80,11 +95,18 @@ export function AvatarForm({
     }
   }
 
+  const error = clientError ?? state?.error;
+
   return (
-    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
-      {clientError ? (
+    <form action={formAction} className="flex flex-col gap-4">
+      {error ? (
         <Alert variant="destructive">
-          <AlertDescription>{clientError}</AlertDescription>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+      {state?.success && !clientError ? (
+        <Alert>
+          <AlertDescription>{state.success}</AlertDescription>
         </Alert>
       ) : null}
       <div className="flex items-center gap-4">
@@ -107,7 +129,7 @@ export function AvatarForm({
       <Button type="submit" disabled={pending || Boolean(clientError)} className="w-fit">
         {pending ? "Enviando..." : "Salvar foto"}
       </Button>
-    </Formulario>
+    </form>
   );
 }
 
@@ -126,7 +148,7 @@ export function LeaveCompanyButton() {
           router.push("/onboarding"); // navegação no client (sem redirect na action)
         }
       } catch {
-        toast.error("Não foi possível sair da igreja. Tente novamente.");
+        toast.error("Não foi possível sair da empresa. Tente novamente.");
       }
     });
   }

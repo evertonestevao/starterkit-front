@@ -6,9 +6,6 @@ import { createSupabaseAuthRepository } from "@/repositories/supabase/authReposi
 import { createRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { createAuthService } from "@/services/authService";
-import { comAviso } from "@/lib/avisos";
-import { AppError } from "@/lib/errors";
-import { cadastroAberto } from "@/server/cadastro";
 import { toActionError, type ActionState } from "./action-state";
 
 /**
@@ -29,35 +26,34 @@ async function getAuthService() {
   });
 }
 
-export async function signUpAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+export async function signUpAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
   const next = formData.get("next");
   try {
-    // Cadastro só por convite: conta nova só vindo de um link (a igreja é
-    // travada no banco; aqui é para não juntar contas soltas).
-    if (!(typeof next === "string" && next.startsWith("/") && !next.startsWith("//")) && !(await cadastroAberto())) {
-      throw new AppError("forbidden", "No momento o cadastro é só por convite. Abra o link que você recebeu.");
-    }
     const auth = await getAuthService();
-    // Quem veio de um link (ex.: convite de vínculo) volta a ele depois de
-    // confirmar o e-mail — sem isso, o convite se perdia na confirmação.
-    await auth.signUp(
-      {
-        fullName: formData.get("fullName"),
-        email: formData.get("email"),
-        password: formData.get("password"),
-      },
-      typeof next === "string" ? next : undefined,
-    );
+    await auth.signUp({
+      fullName: formData.get("fullName"),
+      email: formData.get("email"),
+      password: formData.get("password"),
+    });
   } catch (err) {
     return toActionError(err);
   }
   // Preserva o destino (ex.: convidado voltando para /invites/accept).
   // Só caminho relativo interno — nunca URL absoluta (open redirect).
-  const safeNext = typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : "/onboarding";
+  const safeNext =
+    typeof next === "string" && next.startsWith("/") && !next.startsWith("//")
+      ? next
+      : "/onboarding";
   redirect(safeNext);
 }
 
-export async function signInAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+export async function signInAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
   const next = formData.get("next");
   try {
     const auth = await getAuthService();
@@ -69,7 +65,10 @@ export async function signInAction(_prev: ActionState | undefined, formData: For
     return toActionError(err);
   }
   // Só aceita caminho relativo interno — nunca URL absoluta (open redirect).
-  const safeNext = typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+  const safeNext =
+    typeof next === "string" && next.startsWith("/") && !next.startsWith("//")
+      ? next
+      : "/dashboard";
   redirect(safeNext);
 }
 
@@ -79,7 +78,10 @@ export async function signOutAction(): Promise<void> {
   redirect("/login");
 }
 
-export async function forgotPasswordAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+export async function forgotPasswordAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
   try {
     const auth = await getAuthService();
     await auth.requestPasswordReset({ email: formData.get("email") });
@@ -90,28 +92,15 @@ export async function forgotPasswordAction(_prev: ActionState | undefined, formD
   return { success: "Se o email existir, você receberá um link de recuperação." };
 }
 
-/** Trocar a senha dentro do painel (pede a senha atual). */
-export async function alterarSenhaAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
-  try {
-    const auth = await getAuthService();
-    await auth.alterarSenha({
-      senhaAtual: formData.get("senhaAtual"),
-      novaSenha: formData.get("novaSenha"),
-      confirmacao: formData.get("confirmacao"),
-    });
-    return { success: "Senha trocada. Use a nova no próximo acesso." };
-  } catch (err) {
-    return toActionError(err);
-  }
-}
-
-export async function resetPasswordAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+export async function resetPasswordAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
   try {
     const auth = await getAuthService();
     await auth.resetPassword({ password: formData.get("password") });
   } catch (err) {
     return toActionError(err);
   }
-  // O painel mostra o aviso "senha trocada" (o redirect não deixa a tela daqui mostrar).
-  redirect(comAviso("/dashboard", "senha-trocada"));
+  redirect("/dashboard");
 }

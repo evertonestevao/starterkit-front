@@ -1,7 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { normalizeSurname } from "@/lib/churchName";
 import { AppError } from "@/lib/errors";
-import { MODULOS_DESLIGAVEIS, acessosDaPessoa } from "@/lib/menuPermissoes";
 import type { TenantRepository } from "@/services/tenantService";
 import type { Company, CompanyMember, RoleCode } from "@/types/database";
 import type { MemberWithProfile } from "@/types/tenant";
@@ -13,71 +11,21 @@ import type { MemberWithProfile } from "@/types/tenant";
 export function createSupabaseTenantRepository(client: SupabaseClient): TenantRepository {
   return {
     async listMyCompanies() {
-      const { data: auth, error: authError } = await client.auth.getUser();
-      if (authError || !auth.user) return [];
       // Membership do usuário + empresa embutida (FK company_id -> companies).
-      // O filtro por user_id é obrigatório: a RLS de company_members deixa
-      // qualquer membro ler a equipe inteira, e sem ele o papel exibido podia
-      // ser o de outra pessoa da mesma empresa (o owner, que vem primeiro).
       const { data, error } = await client
         .from("company_members")
         .select("role, company:companies(*)")
-        .eq("user_id", auth.user.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: true });
       if (error) {
-        throw new AppError("internal_error", "Falha ao listar igrejas", error);
-      }
-      // Onde a pessoa ensina na EBD (para o menu). Falhar aqui não derruba o painel.
-      const { data: professor } = await client.rpc("minhas_empresas_professor_ebd");
-      const ensinaEm = new Set(((professor ?? []) as unknown as string[]).map(String));
-      // Módulos liberados pelos cargos da pessoa, por empresa. Falhar aqui
-      // deixa só o acesso do papel — nunca libera a mais.
-      const { data: liberados } = await client.rpc("meus_acessos");
-      const porCargo = new Map<string, string[]>();
-      for (const l of (liberados ?? []) as Array<{ company_id: string; modulo: string }>) {
-        porCargo.set(l.company_id, [...(porCargo.get(l.company_id) ?? []), l.modulo]);
-      }
-      // Módulos que a igreja mantém ligados (liga/desliga acima do cargo).
-      // Falhar aqui esconde o menu em vez de liberar a mais.
-      const { data: ativos } = await client.rpc("modulos_ativos");
-      const modulosAtivosPorEmpresa = new Map<string, string[]>();
-      for (const l of (ativos ?? []) as Array<{ company_id: string; modulo: string }>) {
-        modulosAtivosPorEmpresa.set(l.company_id, [...(modulosAtivosPorEmpresa.get(l.company_id) ?? []), l.modulo]);
-      }
-      // O sobrenome da igreja de cada conta (a primeira, se houver mais de uma),
-      // para o seletor distinguir igrejas de mesmo nome. Falhar aqui só tira o complemento.
-      const ids = (data ?? []).map((row) => (row.company as unknown as Company | null)?.id).filter(Boolean);
-      const complementoPorEmpresa = new Map<string, string | null>();
-      if (ids.length > 0) {
-        const { data: igrejas } = await client
-          .from("churches")
-          .select("company_id, sobrenome")
-          .in("company_id", ids as string[])
-          .is("deleted_at", null)
-          .order("created_at", { ascending: true });
-        for (const i of (igrejas ?? []) as Array<{ company_id: string; sobrenome: string | null }>) {
-          if (!complementoPorEmpresa.has(i.company_id)) {
-            complementoPorEmpresa.set(i.company_id, normalizeSurname(i.sobrenome));
-          }
-        }
+        throw new AppError("internal_error", "Falha ao listar empresas", error);
       }
       const companies = (data ?? [])
         .filter((row) => row.company && !(row.company as unknown as Company).deleted_at)
-        .map((row) => {
-          const company = row.company as unknown as Company;
-          const acessos = acessosDaPessoa(porCargo.get(company.id) ?? []);
-          return {
-            ...company,
-            role: row.role as RoleCode,
-            pode_acompanhar: acessos.includes("acompanhamento") || acessos.includes("membros"),
-            pode_gerir_ebd: acessos.includes("ebd"),
-            professor_ebd: ensinaEm.has(company.id),
-            acessos,
-            modulosAtivos: modulosAtivosPorEmpresa.get(company.id) ?? [],
-            complemento: complementoPorEmpresa.get(company.id) ?? null,
-          };
-        });
+        .map((row) => ({
+          ...(row.company as unknown as Company),
+          role: row.role as RoleCode,
+        }));
       // Dedup defensivo por id: o índice único parcial de company_members já
       // impede membership dupla, mas a UI usa company.id como React key —
       // um duplicado aqui quebraria o switcher inteiro.
@@ -85,43 +33,17 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       return companies.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
     },
 
-    async createCompany(name, slug, church, convite) {
-      // create_company_with_church: empresa + owner + IGREJA numa transação
-      // só. Empresa sem igreja não tem página pública, QR Code, domínio nem
-      // link de patrocínio — e não há tela que conserte isso depois.
+    async createCompany(name, slug) {
       const { data, error } = await client
-        .rpc("create_company_with_church", {
-          p_name: name,
-          p_slug: slug,
-          p_sobrenome: church.sobrenome,
-          p_faz_parte_de_rede: church.fazParteDeRede,
-          p_rede_nome: church.redeNome,
-          p_modulos_inativos: church.modulosInativos,
-          p_convite: convite,
-        })
+        .rpc("create_company", { p_name: name, p_slug: slug })
         .single<Company>();
       if (error || !data) {
         if (error?.code === "23505") {
-          throw new AppError("conflict", "Já existe uma igreja com esse identificador");
+          throw new AppError("conflict", "Já existe uma empresa com esse identificador");
         }
-        if (error?.code === "42501") {
-          throw new AppError(
-            "forbidden",
-            "No momento o cadastro de igrejas é só por convite. Use o link que você recebeu.",
-            error,
-          );
-        }
-        throw new AppError("internal_error", "Falha ao criar igreja", error);
+        throw new AppError("internal_error", "Falha ao criar empresa", error);
       }
-      return {
-        ...data,
-        role: "owner" as const,
-        pode_acompanhar: false,
-        pode_gerir_ebd: false,
-        professor_ebd: false,
-        acessos: [],
-        modulosAtivos: MODULOS_DESLIGAVEIS.filter((m) => !church.modulosInativos.includes(m)),
-      };
+      return { ...data, role: "owner" as const };
     },
 
     async updateCompany(companyId, { name }) {
@@ -132,10 +54,10 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         .is("deleted_at", null)
         .select("id");
       if (error) {
-        throw new AppError("internal_error", "Falha ao atualizar igreja", error);
+        throw new AppError("internal_error", "Falha ao atualizar empresa", error);
       }
       if (!data || data.length === 0) {
-        throw new AppError("not_found", "Igreja não encontrada");
+        throw new AppError("not_found", "Empresa não encontrada");
       }
     },
 
@@ -222,28 +144,10 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
       }
     },
 
-    async definirResponsavel(memberId, tornar) {
-      const { data, error } = await client.rpc("definir_responsavel", {
-        p_member_id: memberId,
-        p_responsavel: tornar,
-      });
-      if (error) {
-        if (error.code === "P0002") throw new AppError("not_found", "Membro não encontrado");
-        if (error.code === "23514") {
-          throw new AppError(
-            "validation_error",
-            "A igreja precisa de pelo menos um Responsável. Defina outro antes de tirar este.",
-          );
-        }
-        throw new AppError("internal_error", "Falha ao definir o Responsável", error);
-      }
-      return (data ?? []) as Array<{ email: string; afetado: boolean }>;
-    },
-
     async leaveCompany(companyId) {
       const { error } = await client.rpc("leave_company", { p_company_id: companyId });
       if (error) {
-        throw new AppError("internal_error", "Falha ao sair da igreja", error);
+        throw new AppError("internal_error", "Falha ao sair da empresa", error);
       }
     },
   };

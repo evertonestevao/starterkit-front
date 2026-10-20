@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import Link from "next/link";
+import { useTransition } from "react";
 import { useTheme } from "next-themes";
-import { CreditCard, Download, KeyRound, LogOut, Moon, Sun, UserRound } from "lucide-react";
+import { LogOut, Moon, Sun } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,32 +14,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { InstrucoesIos } from "@/components/pwa/instalar-app";
-import { useInstalarApp } from "@/hooks/useInstalarApp";
-import { MENUS, ROTA_MINHA_CONTA } from "@/lib/menuPermissoes";
-import { useTenant } from "@/providers/tenant-provider";
-
-const ROTA_MENSALIDADE = MENUS.find((m) => m.key === "mensalidade")?.href ?? "/dashboard/mensalidade";
 import { signOutAction } from "@/server/actions/auth";
 
 export interface UserMenuProps {
   userName: string;
   userEmail: string;
   avatarUrl?: string | null;
-  /** Convites de outras igrejas esperando a pessoa aceitar (ficam em Minha conta). */
-  convitesPendentes?: number;
 }
 
-export function UserMenu({ userName, userEmail, avatarUrl, convitesPendentes = 0 }: UserMenuProps) {
+export function UserMenu({ userName, userEmail, avatarUrl }: UserMenuProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const [, startTransition] = useTransition();
-  // "Instalar o app" só aparece onde o navegador instala e o app ainda não está instalado.
-  const { modo, abrirJanela } = useInstalarApp();
-  const [instrucoesIos, setInstrucoesIos] = useState(false);
-  // Mensalidade saiu da barra lateral: abre por aqui, para quem tem acesso (quem administra).
-  const { menus } = useTenant();
-  const verMensalidade = menus.includes("mensalidade");
-  const podeInstalar = modo === "botao" || modo === "instrucoes_ios" || modo === "abrir_no_safari";
   const initials = userName
     .split(/\s+/)
     .map((part) => part[0])
@@ -49,82 +33,38 @@ export function UserMenu({ userName, userEmail, avatarUrl, convitesPendentes = 0
     .toUpperCase();
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative"
-              aria-label={
-                convitesPendentes > 0
-                  ? `Menu do usuário, ${convitesPendentes} convite(s) pendente(s)`
-                  : "Menu do usuário"
-              }
-            />
-          }
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<Button variant="ghost" size="icon" aria-label="Menu do usuário" />}
+      >
+        <Avatar className="size-7">
+          {avatarUrl ? <AvatarImage src={avatarUrl} alt={userName} /> : null}
+          <AvatarFallback className="text-xs">{initials || "?"}</AvatarFallback>
+        </Avatar>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="flex flex-col">
+            <span className="truncate">{userName}</span>
+            <span className="truncate text-xs font-normal text-muted-foreground">{userEmail}</span>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
         >
-          <Avatar className="size-7">
-            {avatarUrl ? <AvatarImage src={avatarUrl} alt={userName} /> : null}
-            <AvatarFallback className="text-xs">{initials || "?"}</AvatarFallback>
-          </Avatar>
-          {convitesPendentes > 0 ? (
-            <span
-              className="absolute top-0.5 right-0.5 size-2.5 rounded-full bg-destructive ring-2 ring-background"
-              aria-hidden
-            />
-          ) : null}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel className="flex flex-col">
-              <span className="truncate">{userName}</span>
-              <span className="truncate text-xs font-normal text-muted-foreground">{userEmail}</span>
-            </DropdownMenuLabel>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem render={<Link href={ROTA_MINHA_CONTA} />}>
-            <UserRound className="size-4" />
-            Minha conta
-            {convitesPendentes > 0 ? (
-              <span className="ml-auto rounded-full bg-destructive px-1.5 text-xs font-medium text-white">
-                {convitesPendentes}
-              </span>
-            ) : null}
-          </DropdownMenuItem>
-          {verMensalidade ? (
-            <DropdownMenuItem render={<Link href={ROTA_MENSALIDADE} />}>
-              <CreditCard className="size-4" />
-              Mensalidade
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem render={<Link href={`${ROTA_MINHA_CONTA}#senha`} />}>
-            <KeyRound className="size-4" />
-            Trocar senha
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
-            {resolvedTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-            Alternar tema
-          </DropdownMenuItem>
-          {podeInstalar ? (
-            <DropdownMenuItem onClick={() => (modo === "botao" ? void abrirJanela() : setInstrucoesIos(true))}>
-              <Download className="size-4" />
-              Instalar o app
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => startTransition(() => signOutAction())}>
-            <LogOut className="size-4" />
-            Sair
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <InstrucoesIos
-        aberto={instrucoesIos}
-        aoFechar={() => setInstrucoesIos(false)}
-        foraDoSafari={modo === "abrir_no_safari"}
-      />
-    </>
+          {resolvedTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          Alternar tema
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          variant="destructive"
+          onClick={() => startTransition(() => signOutAction())}
+        >
+          <LogOut className="size-4" />
+          Sair
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

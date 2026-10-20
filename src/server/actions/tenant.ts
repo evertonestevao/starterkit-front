@@ -1,29 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { nomeCompletoDaIgreja } from "@/server/nomeDaIgreja";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { safeChurchLinkPath, tokenDoCaminho } from "@/lib/churchLinks";
-import { getChurchLinkService } from "@/server/churchLinks";
+import { getServerEnv } from "@/config/env";
+import { getEmailProvider } from "@/adapters/email";
 import { AppError } from "@/lib/errors";
-import { MODULOS_DESLIGAVEIS } from "@/lib/menuPermissoes";
 import { recordAudit } from "@/server/audit";
 import { syncCompanySeats } from "@/server/billing";
 import { getRequestEvidence, getTermsService } from "@/server/terms";
-import { getInviteService } from "@/server/invites";
+import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
+import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
+import { createRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { ACTIVE_COMPANY_COOKIE, getTenantService } from "@/server/tenant";
-import { getEmailProvider } from "@/adapters/email";
-import { getServerEnv } from "@/config/env";
+import { createAuditService } from "@/services/auditService";
 import { createEmailService } from "@/services/emailService";
-import { linkDeAceite } from "@/services/inviteService";
+import { createInviteService } from "@/services/inviteService";
 import { permissionService } from "@/services/permissionService";
 import type { RoleCode } from "@/types/database";
-import { convidarParaSistema } from "@/server/conviteSistema";
 import { toActionError, type ActionState } from "./action-state";
 
 /** Server actions de empresas, membros e convites. */
+
+const inviteLimiter = createRateLimiter({ limit: 20, windowMs: 60 * 60_000 });
 
 async function setActiveCompanyCookie(companyId: string) {
   const cookieStore = await cookies();
@@ -35,67 +35,39 @@ async function setActiveCompanyCookie(companyId: string) {
   });
 }
 
-export async function createCompanyAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+export async function createCompanyAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
   let companyId: string;
   try {
     // Gate de termos no onboarding: sem aceite da versão vigente, a empresa
     // não é criada (o checkbox required do form é só UX; a verdade é aqui).
     const terms = await getTermsService();
-    if (!(await terms.hasAcceptedCurrent("igreja"))) {
+    if (!(await terms.hasAcceptedCurrent())) {
       if (formData.get("accept_terms") !== "on") {
-        throw new AppError("validation_error", "Você precisa aceitar os termos de uso para continuar");
+        throw new AppError(
+          "validation_error",
+          "Você precisa aceitar os termos de uso para continuar",
+        );
       }
       const evidence = await getRequestEvidence();
-      await terms.acceptCurrentTerms("igreja", evidence);
-      await terms.setConsent("email_communications", formData.get("email_consent") === "on", evidence);
+      await terms.acceptCurrentTerms(evidence);
+      await terms.setConsent(
+        "email_communications",
+        formData.get("email_consent") === "on",
+        evidence,
+      );
     }
 
     const tenant = await getTenantService();
-    // Checkbox marcado = módulo continua ativo; o que NÃO veio marcado é o
-    // que entra como desligado (o form já manda todos marcados por padrão).
-    const modulosInativos = MODULOS_DESLIGAVEIS.filter((m) => formData.get(`modulo_${m}`) !== "on");
-    const company = await tenant.createCompany({
-      name: formData.get("name"),
-      sobrenome: formData.get("sobrenome"),
-      fazParteDeRede: formData.get("faz_parte_de_rede") === "on",
-      redeNome: formData.get("rede_nome"),
-      modulosInativos,
-      // Convite da plataforma, ou o token do link de vínculo de onde a pessoa veio.
-      convite:
-        String(formData.get("igreja_nova") ?? "") ||
-        tokenDoCaminho(safeChurchLinkPath(formData.get("next")) ?? "") ||
-        null,
-    });
+    const company = await tenant.createCompany({ name: formData.get("name") });
     companyId = company.id;
     await setActiveCompanyCookie(companyId);
   } catch (err) {
     return toActionError(err);
   }
-  // Quem chegou por um link de vínculo volta a ele (só esse caminho é aceito),
-  // já com o pedido feito.
-  const voltar = safeChurchLinkPath(formData.get("next"));
-  if (voltar) await pedirVinculoDoConvite(companyId, voltar);
-  redirect(voltar ?? "/dashboard");
-}
-
-/**
- * Igreja criada a partir de um link de vínculo: o pedido sai sozinho, sem
- * outro clique. Falhar aqui não desfaz a igreja — a página do link mostra o
- * botão de pedir, como antes.
- */
-async function pedirVinculoDoConvite(companyId: string, caminho: string): Promise<void> {
-  const token = tokenDoCaminho(caminho);
-  if (!token) return;
-  try {
-    const { data } = await (await getSupabaseServerClient()).auth.getUser();
-    if (!data.user) return;
-    const actor = { companyId, role: "owner" as RoleCode, userId: data.user.id };
-    const links = await getChurchLinkService();
-    const [igreja] = await links.listChurches(actor);
-    if (igreja) await links.requestLink(actor, { token, churchId: igreja.id });
-  } catch (err) {
-    console.error("[onboarding] não foi possível pedir o vínculo sozinho", err);
-  }
+  redirect("/dashboard");
 }
 
 // Nota: actions chamadas imperativamente (fora de <form action>) NÃO usam
@@ -113,7 +85,10 @@ export async function switchCompanyAction(companyId: string): Promise<ActionStat
   }
 }
 
-export async function updateCompanyAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+export async function updateCompanyAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
   try {
     const companyId = String(formData.get("companyId") ?? "");
     const tenant = await getTenantService();
@@ -126,56 +101,62 @@ export async function updateCompanyAction(_prev: ActionState | undefined, formDa
       metadata: { name: String(formData.get("name") ?? "") },
     });
     revalidatePath("/dashboard", "layout");
-    return { success: "Igreja atualizada" };
+    return { success: "Empresa atualizada" };
   } catch (err) {
     return toActionError(err);
   }
 }
 
-export async function inviteMemberAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+async function getInviteService() {
+  const client = await getSupabaseServerClient();
+  return createInviteService({
+    repo: createSupabaseInviteRepository(client),
+    rateLimiter: inviteLimiter,
+    notifier: createEmailService({
+      provider: getEmailProvider(),
+      appUrl: getServerEnv().APP_URL,
+    }),
+    audit: createAuditService(createSupabaseAuditRepository(client)),
+  });
+}
+
+export async function inviteMemberAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
   try {
     const companyId = String(formData.get("companyId") ?? "");
-    await convidarParaSistema({
+    const tenant = await getTenantService();
+    const role = await tenant.requireMembership(companyId);
+    if (!permissionService.canManageMembers(role)) {
+      throw new AppError("forbidden", "Sem permissão para convidar membros");
+    }
+    const client = await getSupabaseServerClient();
+    const { data } = await client.auth.getUser();
+    if (!data.user) {
+      throw new AppError("unauthorized", "Sessão expirada");
+    }
+    const invites = await getInviteService();
+    await invites.invite({
       companyId,
       email: String(formData.get("email") ?? ""),
       role: formData.get("role") === "admin" ? "admin" : "member",
+      invitedBy: data.user.id,
     });
-    revalidatePath("/dashboard/membros", "layout");
-    revalidatePath("/dashboard/settings/quem-acessa");
+    // Billing por seat: exceder o plano não bloqueia o convite — recalcula
+    // os extras e ajusta a cobrança no gateway.
+    await syncCompanySeats(companyId);
+    revalidatePath("/dashboard/members");
     return { success: "Convite enviado" };
   } catch (err) {
     return toActionError(err);
   }
 }
 
-/**
- * Convida e já devolve o link de aceite, para mandar pelo WhatsApp num clique.
- * O link continua valendo só para o e-mail convidado (o banco confere ao aceitar).
- */
-export async function convidarComLinkAction(
+export async function revokeInviteAction(
+  inviteId: string,
   companyId: string,
-  email: string,
-  role: "admin" | "member",
-): Promise<ActionState & { url?: string; email?: string; igreja?: string; expiraEm?: string }> {
-  try {
-    const conviteId = await convidarParaSistema({ companyId, email, role: role === "admin" ? "admin" : "member" });
-    revalidatePath("/dashboard/membros", "layout");
-    revalidatePath("/dashboard/settings/quem-acessa");
-    await exigeGestaoDeConvites(companyId);
-    const { token, email: destino, expiraEm } = await (await getInviteService()).tokenDoConvite(conviteId, companyId);
-    return {
-      success: "Convite criado",
-      url: linkDeAceite(getServerEnv().APP_URL, token),
-      email: destino,
-      expiraEm,
-      igreja: await nomeCompletoDaIgreja(companyId, ""),
-    };
-  } catch (err) {
-    return toActionError(err);
-  }
-}
-
-export async function revokeInviteAction(inviteId: string, companyId: string): Promise<ActionState | void> {
+): Promise<ActionState | void> {
   try {
     const tenant = await getTenantService();
     const role = await tenant.requireMembership(companyId);
@@ -187,57 +168,10 @@ export async function revokeInviteAction(inviteId: string, companyId: string): P
     const invites = await getInviteService();
     await invites.revoke(inviteId, companyId, data.user?.id ?? "");
     await syncCompanySeats(companyId);
-    revalidatePath("/dashboard/membros", "layout");
-    revalidatePath("/dashboard/settings/quem-acessa");
+    revalidatePath("/dashboard/members");
   } catch (err) {
     // Erro (incl. falha de auditoria, que desfaz a action) vira mensagem
     // segura para o client exibir — nunca falha silenciosa.
-    return toActionError(err);
-  }
-}
-
-/** Quem administra a igreja e está logado; devolve o id de quem age. */
-async function exigeGestaoDeConvites(companyId: string): Promise<string> {
-  const tenant = await getTenantService();
-  const role = await tenant.requireMembership(companyId);
-  if (!permissionService.canManageMembers(role)) {
-    throw new AppError("forbidden", "Só quem administra a igreja gerencia os convites.");
-  }
-  const client = await getSupabaseServerClient();
-  const { data } = await client.auth.getUser();
-  if (!data.user) throw new AppError("unauthorized", "Sessão expirada");
-  return data.user.id;
-}
-
-/** Manda de novo o e-mail de um convite pendente. */
-export async function reenviarConviteAction(inviteId: string, companyId: string): Promise<ActionState> {
-  try {
-    const quem = await exigeGestaoDeConvites(companyId);
-    const convite = await (await getInviteService()).resend(inviteId, companyId, quem);
-    return { success: `E-mail reenviado para ${convite.email}.` };
-  } catch (err) {
-    return toActionError(err);
-  }
-}
-
-/**
- * Link de aceite de um convite pendente, para mandar por outro canal
- * (WhatsApp) quando o e-mail não chega. Só quem administra a igreja.
- */
-export async function linkDoConviteAction(
-  inviteId: string,
-  companyId: string,
-): Promise<ActionState & { url?: string; email?: string; igreja?: string; expiraEm?: string }> {
-  try {
-    await exigeGestaoDeConvites(companyId);
-    const { token, email, expiraEm } = await (await getInviteService()).tokenDoConvite(inviteId, companyId);
-    return {
-      url: linkDeAceite(getServerEnv().APP_URL, token),
-      email,
-      expiraEm,
-      igreja: await nomeCompletoDaIgreja(companyId, ""),
-    };
-  } catch (err) {
     return toActionError(err);
   }
 }
@@ -268,52 +202,16 @@ export async function changeMemberRoleAction(
       entityId: memberId,
       metadata: { previous_role: previousRole, new_role: newRole },
     });
-    revalidatePath("/dashboard/membros", "layout");
-    revalidatePath("/dashboard/settings/quem-acessa");
+    revalidatePath("/dashboard/members");
   } catch (err) {
     return toActionError(err);
   }
 }
 
-/**
- * Dá ou tira o papel de Responsável. A auditoria é gravada pelo banco, junto
- * com a mudança; aqui só o aviso por e-mail, que não desfaz nada se falhar.
- */
-export async function definirResponsavelAction(
+export async function removeMemberAction(
   companyId: string,
   memberId: string,
-  tornar: boolean,
-  nomeDaPessoa: string,
 ): Promise<ActionState | void> {
-  try {
-    const supabase = await getSupabaseServerClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) throw new AppError("unauthorized", "Faça login para continuar.");
-
-    const tenant = await getTenantService();
-    const { avisar } = await tenant.definirResponsavel(companyId, memberId, tornar);
-
-    const igreja = (await tenant.listMyCompanies()).find((c) => c.id === companyId);
-    await createEmailService({ provider: getEmailProvider(), appUrl: getServerEnv().APP_URL })
-      .sendResponsavelChanged({
-        to: [...new Set(avisar.map((a) => a.email))],
-        churchName: igreja?.name ?? "sua igreja",
-        pessoa:
-          String(nomeDaPessoa ?? "")
-            .trim()
-            .slice(0, 120) || "Uma pessoa",
-        tornou: tornar,
-        alteradoPor: auth.user.email ?? "um Responsável",
-      })
-      .catch((err) => console.error("[responsavel] falha ao avisar por e-mail", err));
-
-    revalidatePath("/dashboard", "layout");
-  } catch (err) {
-    return toActionError(err);
-  }
-}
-
-export async function removeMemberAction(companyId: string, memberId: string): Promise<ActionState | void> {
   try {
     const tenant = await getTenantService();
     const { removedRole } = await tenant.removeMember(companyId, memberId);
@@ -325,8 +223,7 @@ export async function removeMemberAction(companyId: string, memberId: string): P
       metadata: { removed_role: removedRole },
     });
     await syncCompanySeats(companyId);
-    revalidatePath("/dashboard/membros", "layout");
-    revalidatePath("/dashboard/settings/quem-acessa");
+    revalidatePath("/dashboard/members");
   } catch (err) {
     return toActionError(err);
   }

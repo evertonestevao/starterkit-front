@@ -16,7 +16,6 @@ export type AppErrorCode =
   | "rate_limited"
   | "payment_error"
   | "email_error"
-  | "domain_error"
   | "internal_error";
 
 const HTTP_STATUS: Record<AppErrorCode, number> = {
@@ -28,7 +27,6 @@ const HTTP_STATUS: Record<AppErrorCode, number> = {
   rate_limited: 429,
   payment_error: 502,
   email_error: 502,
-  domain_error: 502,
   internal_error: 500,
 };
 
@@ -37,19 +35,13 @@ export class AppError extends Error {
   readonly status: number;
   /** Detalhes internos para log de servidor. Nunca serializar para o client. */
   readonly internal?: unknown;
-  /**
-   * Campo do formulário que causou o erro (nome do campo, nada interno): a
-   * tela mostra a mensagem embaixo dele em vez de só um aviso solto.
-   */
-  readonly field?: string;
 
-  constructor(code: AppErrorCode, message: string, internal?: unknown, field?: string) {
+  constructor(code: AppErrorCode, message: string, internal?: unknown) {
     super(message);
     this.name = "AppError";
     this.code = code;
     this.status = HTTP_STATUS[code];
     this.internal = internal;
-    this.field = field;
   }
 }
 
@@ -72,19 +64,4 @@ export function toPublicError(err: unknown): PublicError {
 
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
-}
-
-/**
- * Primeira mensagem de um erro de validação do Zod, no formato público. O
- * usuário lê uma frase por vez; a lista inteira só serve para o log.
- */
-export function toValidationError(issues: { message: string; path?: PropertyKey[] }[]): AppError {
-  const primeiro = issues[0];
-  const campo = primeiro?.path?.[0];
-  return new AppError(
-    "validation_error",
-    primeiro?.message ?? "Dados inválidos",
-    undefined,
-    typeof campo === "string" ? campo : undefined,
-  );
 }

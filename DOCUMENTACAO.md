@@ -327,13 +327,6 @@ Ficam em `.env.local` (ignorado pelo git; `.env.example` é o modelo commitado).
 | `NOTIFICATION_PROVIDER` | não | `console` (único implementado; imprime no terminal) |
 | `RATE_LIMIT_STORE` | não | `memory` (default) ou `redis` (Upstash, para 2+ instâncias/serverless) |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | não | só exigidas se `RATE_LIMIT_STORE=redis` (Console Upstash > REST API) |
-| `DOMAIN_PROVIDER` | não | `fake` (default, sem rede) ou `vercel` — domínio próprio das igrejas |
-| `VERCEL_API_TOKEN` / `VERCEL_PROJECT_ID` / `VERCEL_TEAM_ID` | não | só exigidas se `DOMAIN_PROVIDER=vercel` (`TEAM_ID` apenas em projeto de time) |
-| `VERCEL_DNS_A_RECORD` / `VERCEL_DNS_CNAME` | não | sobrescrevem os valores de DNS anunciados às igrejas; defaults no adapter |
-| `CRON_SECRET` | não | segredo do Vercel Cron; sem ele `/api/cron/domains` e `/api/cron/sponsor-billing` respondem 404 e os jobs não rodam |
-| `SPONSOR_BILLING_PROVIDER` | não | `fake` (default, cobra na hora sem rede) ou `asaas` — vale para contas NOVAS de patrocinador; as existentes seguem no provedor gravado nelas |
-| `ASAAS_API_KEY` / `ASAAS_API_URL` | não | exigidas se `SPONSOR_BILLING_PROVIDER=asaas`; URL default é o sandbox |
-| `ASAAS_WEBHOOK_TOKEN` | não | token que o Asaas envia em `asaas-access-token`; sem ele o webhook `/api/webhooks/sponsor-billing/asaas` recusa tudo |
 
 **Estado atual do `.env.local` desta máquina:** aponta para o Supabase **local** (as chaves são as demo keys públicas do CLI, não são segredo). As chaves do projeto remoto (`fuxihgdjrhrwwqnymlau.supabase.co`) estão comentadas no fim do arquivo. **O projeto remoto ainda NÃO tem as migrations aplicadas** — não funciona até rodar `npx supabase db push`.
 

@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthForm } from "@/features/auth/components/auth-form";
 import { signInAction } from "@/server/actions/auth";
-import { cadastroAberto } from "@/server/cadastro";
 
 export const metadata: Metadata = { title: "Entrar" };
 
@@ -15,8 +14,6 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   const { next, error } = await searchParams;
-  // Cadastro só por convite: "Criar conta" aparece para quem veio de um link.
-  const podeCriarConta = !!next || (await cadastroAberto());
 
   return (
     <Card>
@@ -25,7 +22,9 @@ export default async function LoginPage({
         <CardDescription>Acesse sua conta para continuar</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {error === "link-invalido" ? <p className="text-sm text-destructive">Link inválido ou expirado.</p> : null}
+        {error === "link-invalido" ? (
+          <p className="text-sm text-destructive">Link inválido ou expirado.</p>
+        ) : null}
         <AuthForm action={signInAction} submitLabel="Entrar">
           {next ? <input type="hidden" name="next" value={next} /> : null}
           <div className="flex flex-col gap-2">
@@ -35,25 +34,32 @@ export default async function LoginPage({
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Senha</Label>
-              <Link href="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground">
+              <Link
+                href="/forgot-password"
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
                 Esqueceu a senha?
               </Link>
             </div>
-            <Input id="password" name="password" type="password" autoComplete="current-password" required />
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
           </div>
         </AuthForm>
-        {podeCriarConta ? (
-          <p className="text-center text-sm text-muted-foreground">
-            Não tem conta?{" "}
-            <Link
-              // preserva o destino (ex.: link de convite) através do cadastro
-              href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}
-              className="text-foreground underline underline-offset-4"
-            >
-              Criar conta
-            </Link>
-          </p>
-        ) : null}
+        <p className="text-center text-sm text-muted-foreground">
+          Não tem conta?{" "}
+          <Link
+            // preserva o destino (ex.: link de convite) através do cadastro
+            href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}
+            className="text-foreground underline underline-offset-4"
+          >
+            Criar conta
+          </Link>
+        </p>
       </CardContent>
     </Card>
   );

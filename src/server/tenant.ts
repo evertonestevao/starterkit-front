@@ -1,5 +1,4 @@
 import "server-only";
-import { cache } from "react";
 import { cookies } from "next/headers";
 import { createSupabaseTenantRepository } from "@/repositories/supabase/tenantRepository";
 import { createTenantService, type TenantService } from "@/services/tenantService";
@@ -24,16 +23,8 @@ export interface ActiveTenant {
   active: CompanyWithRole | null;
 }
 
-/**
- * Empresas do usuário + a ativa (cookie válido, senão a primeira).
- *
- * Uma leitura por renderização: layout, página e cada "ator" pedem a empresa
- * ativa, e sem o `cache` cada pedido refazia as consultas (membership,
- * acessos, módulos) — eram mais de dez idas ao banco por tela. O `cache` do
- * React vale só dentro de uma renderização no servidor; numa server action
- * cada chamada lê de novo, então quem acabou de mudar algo vê o dado novo.
- */
-export const getActiveTenant = cache(async (): Promise<ActiveTenant> => {
+/** Empresas do usuário + a ativa (cookie válido, senão a primeira). */
+export async function getActiveTenant(): Promise<ActiveTenant> {
   const tenant = await getTenantService();
   const companies = await tenant.listMyCompanies();
   if (companies.length === 0) {
@@ -44,4 +35,4 @@ export const getActiveTenant = cache(async (): Promise<ActiveTenant> => {
   const preferred = cookieStore.get(ACTIVE_COMPANY_COOKIE)?.value;
   const active = companies.find((c) => c.id === preferred) ?? companies[0];
   return { companies, active };
-});
+}

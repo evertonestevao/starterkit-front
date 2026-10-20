@@ -1,80 +1,45 @@
 import {
-  BookOpen,
-  CalendarClock,
-  CalendarDays,
-  ClipboardCheck,
-  Contact,
   CreditCard,
-  HandCoins,
-  HandHeart,
-  HeartHandshake,
-  Landmark,
   LayoutDashboard,
-  type LucideIcon,
-  Network,
   ScrollText,
   Settings,
-  ShoppingBag,
-  Wallet,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
-import { MENUS, ROTA_MINHA_CONTA, type MenuDef } from "@/lib/menuPermissoes";
+import type { RoleCode } from "@/types/database";
 
-/**
- * Navegação da sidebar. O catálogo (título, rota, quem pode abrir) mora em
- * src/lib/menuPermissoes.ts — é lá que se adiciona um módulo; aqui só entra
- * o ícone dele.
- */
+/** Navegação da sidebar — editar aqui ao adicionar módulos do seu produto. */
 
-export interface NavItem extends MenuDef {
+export interface NavItem {
+  title: string;
+  href: string;
   icon: LucideIcon;
+  /** Papéis que veem o item (autorização real fica no server/RLS). */
+  roles: RoleCode[];
 }
 
-const ICONES: Record<string, LucideIcon> = {
-  dashboard: LayoutDashboard,
-  rede: Network,
-  acompanhamento: ClipboardCheck,
-  membros: Contact,
-  ebd: BookOpen,
-  prayers: HandHeart,
-  programacao: CalendarClock,
-  events: CalendarDays,
-  campaigns: HandCoins,
-  tesouraria: Wallet,
-  vendas: ShoppingBag,
-  sponsors: Landmark,
-  relationships: HeartHandshake,
-  mensalidade: CreditCard,
-  audit: ScrollText,
-  settings: Settings,
-};
-
-export const navItems: NavItem[] = MENUS.map((menu) => ({ ...menu, icon: ICONES[menu.key] ?? LayoutDashboard }));
-
-/**
- * Itens que a pessoa vê: as chaves vêm do servidor (papel + autorizações +
- * o que a igreja configurou em Configurações → Acessos).
- */
-/**
- * Menus que existem (permissão, título da página), mas abrem pelo menu do
- * perfil: a barra lateral é só para as funções do dia a dia da igreja.
- */
-export const MENUS_NO_PERFIL = new Set(["mensalidade"]);
-
-/** Menus que abrem como aba de outra seção (a Auditoria fica em Configurações). */
-const MENUS_EM_OUTRA_SECAO = new Set(["audit"]);
-
-export function visibleNavItems(menus: string[]): NavItem[] {
-  return navItems.filter(
-    (item) => menus.includes(item.key) && !MENUS_NO_PERFIL.has(item.key) && !MENUS_EM_OUTRA_SECAO.has(item.key),
-  );
-}
+export const navItems: NavItem[] = [
+  {
+    title: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    roles: ["owner", "admin", "member"],
+  },
+  { title: "Membros", href: "/dashboard/members", icon: Users, roles: ["owner", "admin"] },
+  { title: "Billing", href: "/dashboard/billing", icon: CreditCard, roles: ["owner"] },
+  { title: "Auditoria", href: "/dashboard/audit", icon: ScrollText, roles: ["owner", "admin"] },
+  {
+    title: "Configurações",
+    href: "/dashboard/settings",
+    icon: Settings,
+    roles: ["owner", "admin", "member"],
+  },
+];
 
 /** Título da página atual a partir do pathname (breadcrumb/header mobile). */
 export function titleForPath(pathname: string): string {
-  // Fora da sidebar: abre pelo menu do perfil.
-  if (pathname === ROTA_MINHA_CONTA || pathname.startsWith(`${ROTA_MINHA_CONTA}/`)) return "Minha conta";
   const match = [...navItems]
     .sort((a, b) => b.href.length - a.href.length)
     .find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
-  return match?.title ?? "Painel";
+  return match?.title ?? "Dashboard";
 }

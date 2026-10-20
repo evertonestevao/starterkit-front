@@ -46,16 +46,16 @@ function makeRepo(state: {
 describe("termsService.hasAcceptedCurrent", () => {
   it("sem versão publicada não bloqueia o sistema", async () => {
     const service = createTermsService(makeRepo({ current: null }));
-    expect(await service.hasAcceptedCurrent("igreja")).toBe(true);
+    expect(await service.hasAcceptedCurrent()).toBe(true);
   });
 
   it("false quando nunca aceitou; true depois de aceitar", async () => {
     const state = { current: makeVersion({}), acceptances: [] as string[] };
     const service = createTermsService(makeRepo(state));
-    expect(await service.hasAcceptedCurrent("igreja")).toBe(false);
+    expect(await service.hasAcceptedCurrent()).toBe(false);
 
-    await service.acceptCurrentTerms("igreja", { ipAddress: "1.2.3.4", userAgent: "test" });
-    expect(await service.hasAcceptedCurrent("igreja")).toBe(true);
+    await service.acceptCurrentTerms({ ipAddress: "1.2.3.4", userAgent: "test" });
+    expect(await service.hasAcceptedCurrent()).toBe(true);
   });
 
   it("cenário do spec: versão nova publicada força reaceite de quem aceitou a antiga", async () => {
@@ -65,14 +65,14 @@ describe("termsService.hasAcceptedCurrent", () => {
       acceptances: ["v1-id"],
     };
     const service = createTermsService(makeRepo(state));
-    expect(await service.hasAcceptedCurrent("igreja")).toBe(true);
+    expect(await service.hasAcceptedCurrent()).toBe(true);
 
     // ...v2 vira a vigente: acesso volta a ser bloqueado até reaceitar
     state.current = makeVersion({ id: "v2-id", version: 2 });
-    expect(await service.hasAcceptedCurrent("igreja")).toBe(false);
+    expect(await service.hasAcceptedCurrent()).toBe(false);
 
-    await service.acceptCurrentTerms("igreja", { ipAddress: null, userAgent: null });
-    expect(await service.hasAcceptedCurrent("igreja")).toBe(true);
+    await service.acceptCurrentTerms({ ipAddress: null, userAgent: null });
+    expect(await service.hasAcceptedCurrent()).toBe(true);
     expect(state.acceptances).toEqual(["v1-id", "v2-id"]); // trilha preservada
   });
 });
@@ -81,13 +81,13 @@ describe("termsService.acceptCurrentTerms", () => {
   it("falha sem versão publicada e é idempotente para a mesma versão", async () => {
     const noVersion = createTermsService(makeRepo({ current: null }));
     await expect(
-      noVersion.acceptCurrentTerms("igreja", { ipAddress: null, userAgent: null }),
+      noVersion.acceptCurrentTerms({ ipAddress: null, userAgent: null }),
     ).rejects.toMatchObject({ code: "not_found" });
 
     const state = { current: makeVersion({}), acceptances: [] as string[] };
     const service = createTermsService(makeRepo(state));
-    await service.acceptCurrentTerms("igreja", { ipAddress: null, userAgent: null });
-    await service.acceptCurrentTerms("igreja", { ipAddress: null, userAgent: null });
+    await service.acceptCurrentTerms({ ipAddress: null, userAgent: null });
+    await service.acceptCurrentTerms({ ipAddress: null, userAgent: null });
     expect(state.acceptances).toEqual(["v1-id"]); // não duplica
   });
 });
@@ -97,7 +97,7 @@ describe("termsService consentimentos (separados por finalidade)", () => {
     const state = { current: makeVersion({}), acceptances: [] as string[], consents: [] };
     const service = createTermsService(makeRepo(state));
 
-    await service.acceptCurrentTerms("igreja", { ipAddress: null, userAgent: null });
+    await service.acceptCurrentTerms({ ipAddress: null, userAgent: null });
     // aceitou os termos mas NÃO consentiu email
     expect(await service.hasConsent("email_communications")).toBe(false);
   });

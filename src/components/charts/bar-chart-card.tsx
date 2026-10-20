@@ -16,7 +16,6 @@ import {
   normalizeSeriesList,
   resolveFormatter,
   SERIES_TOKENS,
-  yAxisWidthFor,
   type ChartSeries,
   type ValueFormat,
 } from "./chart-base";
@@ -48,7 +47,6 @@ export function BarChartCard(props: BarChartCardProps) {
     "BarChartCard",
   );
   const chartId = useId();
-  const yAxisWidth = yAxisWidthFor(data, series, valueFormatter);
 
   return (
     <Card>
@@ -75,7 +73,7 @@ export function BarChartCard(props: BarChartCardProps) {
                 tickMargin={8}
               />
               <YAxis
-                width={yAxisWidth}
+                width={48}
                 tickLine={false}
                 axisLine={false}
                 tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
