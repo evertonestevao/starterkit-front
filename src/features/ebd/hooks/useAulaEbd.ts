@@ -134,6 +134,10 @@ export function useAulaEbd(aula: EbdAulaParaPreencher) {
       setVisitantesBruto((atual) => atual.filter((_, j) => j !== i));
       setAlterado(true);
     },
+    editarVisitante: (i: number, dados: EbdVisitante) => {
+      setVisitantesBruto((atual) => atual.map((v, j) => (j === i ? dados : v)));
+      setAlterado(true);
+    },
     licao,
     setLicao,
     biblias,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCheck, Search, UserPlus, X } from "lucide-react";
+import { Check, CheckCheck, Pencil, Search, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -177,29 +177,99 @@ function Numero({ id, label, valor, onChange }: { id: string; label: string; val
 function Visitantes({ c }: { c: ReturnType<typeof useAulaEbd> }) {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
+  const [editando, setEditando] = useState<number | null>(null);
+  const [edicaoNome, setEdicaoNome] = useState("");
+  const [edicaoTelefone, setEdicaoTelefone] = useState("");
+
   function adicionar() {
     if (nome.trim().length < 2) return;
     c.adicionarVisitante({ nome: nome.trim(), telefone: telefone.trim() || null, membroId: null });
     setNome("");
     setTelefone("");
   }
+
+  function iniciarEdicao(i: number) {
+    const v = c.visitantes[i];
+    setEditando(i);
+    setEdicaoNome(v.nome);
+    setEdicaoTelefone(v.telefone ?? "");
+  }
+
+  function salvarEdicao() {
+    if (editando === null || edicaoNome.trim().length < 2) return;
+    const v = c.visitantes[editando];
+    c.editarVisitante(editando, { ...v, nome: edicaoNome.trim(), telefone: edicaoTelefone.trim() || null });
+    setEditando(null);
+  }
+
   return (
     <section className="flex flex-col gap-2 rounded-lg border p-3">
       <h3 className="text-sm font-medium">Visitantes</h3>
       {c.visitantes.length > 0 ? (
         <ul className="flex flex-col gap-1">
-          {c.visitantes.map((v, i) => (
-            <li key={`${v.nome}-${i}`} className="flex items-center justify-between gap-2 text-sm">
-              <span className="min-w-0 truncate">
-                {v.nome}
-                {v.telefone ? <span className="text-muted-foreground"> · {v.telefone}</span> : null}
-                {v.membroId ? <span className="text-muted-foreground"> · matriculado</span> : null}
-              </span>
-              <Button type="button" variant="ghost" size="icon-sm" onClick={() => c.removerVisitante(i)} aria-label={`Tirar ${v.nome}`}>
-                <X className="size-4" />
-              </Button>
-            </li>
-          ))}
+          {c.visitantes.map((v, i) =>
+            editando === i ? (
+              <li key={`${v.nome}-${i}`} className="grid gap-2 py-1 sm:grid-cols-[1fr_1fr_auto_auto]">
+                <Input
+                  autoFocus
+                  value={edicaoNome}
+                  onChange={(e) => setEdicaoNome(e.target.value)}
+                  maxLength={120}
+                  aria-label="Editar nome do visitante"
+                />
+                <TelefoneInput
+                  placeholder="Telefone (opcional)"
+                  autoComplete="off"
+                  value={edicaoTelefone}
+                  onChange={(e) => setEdicaoTelefone(e.target.value)}
+                  aria-label="Editar telefone do visitante"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={salvarEdicao}
+                  disabled={edicaoNome.trim().length < 2}
+                  aria-label="Salvar nome do visitante"
+                >
+                  <Check className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setEditando(null)}
+                  aria-label="Cancelar edição"
+                >
+                  <X className="size-4" />
+                </Button>
+              </li>
+            ) : (
+              <li key={`${v.nome}-${i}`} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 truncate">
+                  {v.nome}
+                  {v.telefone ? <span className="text-muted-foreground"> · {v.telefone}</span> : null}
+                  {v.membroId ? <span className="text-muted-foreground"> · matriculado</span> : null}
+                </span>
+                <div className="flex shrink-0">
+                  {!v.membroId ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => iniciarEdicao(i)}
+                      aria-label={`Editar ${v.nome}`}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                  ) : null}
+                  <Button type="button" variant="ghost" size="icon-sm" onClick={() => c.removerVisitante(i)} aria-label={`Tirar ${v.nome}`}>
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              </li>
+            ),
+          )}
         </ul>
       ) : null}
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">

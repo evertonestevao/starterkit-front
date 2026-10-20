@@ -87,6 +87,11 @@ export function useChamada(chamada: ChamadaParaPreencher) {
     setAlterado(true);
   }
 
+  function editarVisitante(indice: number, dados: Visitante) {
+    setVisitantes((atual) => atual.map((v, i) => (i === indice ? dados : v)));
+    setAlterado(true);
+  }
+
   const rascunho = useMemo<RascunhoChamada>(() => ({ estados, motivos, visitantes }), [estados, motivos, visitantes]);
 
   const envio = useEnvioComRascunho<RascunhoChamada>({
@@ -148,6 +153,7 @@ export function useChamada(chamada: ChamadaParaPreencher) {
     definirMotivo,
     adicionarVisitante,
     removerVisitante,
+    editarVisitante,
     salvar,
   };
 }
