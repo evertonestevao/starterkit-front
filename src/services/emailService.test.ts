@@ -36,14 +36,30 @@ describe("emailService.sendInviteEmail", () => {
       provider: makeProvider(sent),
       appUrl: "https://app.example.com/",
     });
-    await service.sendInviteEmail(invite);
+    await service.sendInviteEmail(invite, { churchName: "Igreja Esperança" });
 
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe("novo@test.com");
     // barra final da appUrl não pode duplicar no link
     expect(sent[0].html).toContain(`https://app.example.com/invites/accept?token=${TOKEN}`);
     expect(sent[0].text).toContain(`token=${TOKEN}`);
-    expect(sent[0].html).toContain("admin");
+    // Diz qual igreja convidou e o acesso em português, não o código do papel.
+    expect(sent[0].subject).toBe("Convite para acessar o sistema da Igreja Esperança");
+    expect(sent[0].html).toContain("Igreja Esperança");
+    expect(sent[0].html).toContain("Administrador");
+    expect(sent[0].html).not.toContain("admin<");
+    expect(sent[0].text).toContain("novo@test.com");
+  });
+
+  it("sem o nome da igreja o e-mail ainda sai, e o nome vindo do usuário é escapado no HTML", async () => {
+    const sent: EmailMessage[] = [];
+    const service = createEmailService({ provider: makeProvider(sent), appUrl: "https://app.example.com" });
+    await service.sendInviteEmail(invite);
+    await service.sendInviteEmail(invite, { churchName: 'Igreja <script>alert("x")</script>' });
+    expect(sent[0].subject).toBe("Convite para acessar o sistema da igreja");
+    expect(sent[0].text).toContain("Uma igreja convidou você");
+    expect(sent[1].html).not.toContain("<script>");
+    expect(sent[1].html).toContain("&lt;script&gt;");
   });
 
   it("propaga falha do provider como AppError", async () => {
@@ -59,5 +75,20 @@ describe("emailService.sendInviteEmail", () => {
     await expect(service.sendInviteEmail(invite)).rejects.toMatchObject({
       code: "email_error",
     });
+  });
+});
+
+describe("emailService: moldura", () => {
+  it("todo e-mail sai com a moldura do produto; o texto puro continua sem HTML", async () => {
+    const sent: EmailMessage[] = [];
+    const service = createEmailService({ provider: makeProvider(sent), appUrl: "https://app.example.com/" });
+    await service.sendInviteEmail(invite, { churchName: "Igreja Esperança" });
+    const [m] = sent;
+    expect(m.html.startsWith("<!doctype html>")).toBe(true);
+    expect(m.html).toContain("Mensagem automática do");
+    // O link de aceite virou o botão principal.
+    expect(m.html).toContain('role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0"');
+    expect(m.html).toContain(`/invites/accept?token=${TOKEN}`);
+    expect(m.text).not.toContain("<");
   });
 });

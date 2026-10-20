@@ -11,16 +11,24 @@ export function PaginationControls({
   pageSize,
   total,
   basePath,
+  params,
 }: {
   page: number;
   pageSize: number;
   total: number;
   basePath: string;
+  /** Outros filtros da URL (ex.: ?evento=), preservados ao trocar de página. */
+  params?: Record<string, string | undefined>;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (totalPages <= 1) return null;
 
-  const href = (target: number) => `${basePath}?page=${target}`;
+  const href = (target: number) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params ?? {})) if (v) qs.set(k, v);
+    qs.set("page", String(target));
+    return `${basePath}?${qs.toString()}`;
+  };
 
   return (
     <nav className="flex items-center justify-between gap-2" aria-label="Paginação">

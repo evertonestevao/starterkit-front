@@ -28,14 +28,69 @@ const serverEnvSchema = z.object({
   EMAIL_PROVIDER: z.enum(["resend", "console"]).default("console"),
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.email().optional(),
+  /** Nome que aparece como remetente ("AssembleiaApp <no-reply@...>"). Padrão: o nome do produto. */
+  EMAIL_FROM_NAME: z.string().min(1).max(60).optional(),
+  /** Para onde vão as respostas (ex.: suporte@...). Sem ele, respondem ao remetente. */
+  EMAIL_REPLY_TO: z.email().optional(),
   /** URL pública da app, usada em links de emails transacionais. */
   APP_URL: z.url().default("http://localhost:3000"),
   /** Notificações externas (WhatsApp/SMS/push). Só "console" implementado. */
   NOTIFICATION_PROVIDER: z.enum(["console"]).default("console"),
+  /**
+   * SÓ PARA TESTE AUTOMÁTICO (e2e): "true" tira o tempo mínimo e afrouxa o
+   * limite de envios dos formulários públicos, porque o robô de teste
+   * preenche em milissegundos, sempre do mesmo endereço. Nunca em produção
+   * de verdade — o boot avisa se estiver ligado.
+   */
+  PUBLIC_FORMS_RELAXED: z.enum(["true", "false"]).default("false"),
   /** Store do rate limiter: memory (single-node/dev) ou redis (Upstash). */
   RATE_LIMIT_STORE: z.enum(["memory", "redis"]).default("memory"),
   UPSTASH_REDIS_REST_URL: z.url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
+  /** Provedor de domínio próprio das igrejas. "fake" não toca a rede. */
+  DOMAIN_PROVIDER: z.enum(["vercel", "fake"]).default("fake"),
+  VERCEL_API_TOKEN: z.string().min(1).optional(),
+  VERCEL_PROJECT_ID: z.string().min(1).optional(),
+  /** Só quando o projeto pertence a um time da Vercel. */
+  VERCEL_TEAM_ID: z.string().min(1).optional(),
+  /**
+   * Valores de DNS anunciados para as igrejas. Configuráveis porque são da
+   * Vercel e já mudaram antes — hardcoded viraria domínio de cliente quebrado.
+   */
+  VERCEL_DNS_A_RECORD: z.string().min(1).optional(),
+  VERCEL_DNS_CNAME: z.string().min(1).optional(),
+  /** Segredo do Vercel Cron; sem ele os endpoints de job ficam fechados. */
+  CRON_SECRET: z.string().min(1).optional(),
+  /**
+   * Provedor que atende as NOVAS assinaturas de patrocínio. Contas existentes
+   * seguem no provedor gravado nelas. "fake" não toca a rede.
+   */
+  SPONSOR_BILLING_PROVIDER: z.enum(["asaas", "fake"]).default("fake"),
+  ASAAS_API_KEY: z.string().min(1).optional(),
+  /** Sandbox por padrão; produção: https://api.asaas.com/v3 */
+  ASAAS_API_URL: z.url().default("https://api-sandbox.asaas.com/v3"),
+  /** Token que o Asaas envia no header asaas-access-token do webhook. */
+  ASAAS_WEBHOOK_TOKEN: z.string().min(16).optional(),
+  /**
+   * Provedor das SUBCONTAS das igrejas (doação por cartão). Separado do
+   * patrocínio de propósito: dá para rodar o patrocínio em produção e as
+   * subcontas ainda em "fake" enquanto o cadastro é validado no sandbox.
+   */
+  RECEIVING_PROVIDER: z.enum(["asaas", "fake"]).default("fake"),
+  /**
+   * Chave da conta-MÃE que abre as subcontas das igrejas. Só existe porque o
+   * Asaas exige conta pessoa jurídica (CNPJ) para criar subconta — e a conta
+   * sandbox já usada em ASAAS_API_KEY (patrocínio) pode ser pessoa física.
+   * Em produção, se a conta da plataforma já for CNPJ, pode apontar as duas
+   * para a mesma chave; sem esta variável, cai em ASAAS_API_KEY.
+   */
+  ASAAS_RECEIVING_API_KEY: z.string().min(1).optional(),
+  /**
+   * Chave de 32 bytes (64 hex ou 44 base64) que cifra a chave de API de cada
+   * subconta. Perder esta chave é perder o acesso às subcontas; trocá-la
+   * exige recifrar todas.
+   */
+  RECEIVING_KEY_SECRET: z.string().min(32).optional(),
 });
 
 export function getClientEnv() {

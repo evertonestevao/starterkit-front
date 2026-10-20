@@ -4,6 +4,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* O menor texto do painel é 13px (o padrão de 12px some no celular e para quem enxerga menos). */
+@theme {
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: calc(1.125 / 0.8125);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -54,74 +60,97 @@
  * em :root e .dark (e --sidebar-primary, que segue a primária).
  */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.511 0.204 273.9);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: #f8f7f2;
+  --foreground: #243128;
+  --card: #ffffff;
+  --card-foreground: #35463a;
+  --popover: #ffffff;
+  --popover-foreground: #35463a;
+  --primary: #41694b;
+  --primary-foreground: #ffffff;
+  --secondary: #eef2e8;
+  --secondary-foreground: #36543d;
+  --muted: #f0f3eb;
+  /* Texto secundário (ajuda dos campos, legendas): 6.07:1 sobre card e 5.35:1 sobre secondary (WCAG AA). */
+  --muted-foreground: #586659;
+  --accent: #f3ebd5;
+  --accent-foreground: #79632c;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.511 0.204 273.9 / 55%);
-  --chart-1: oklch(0.511 0.204 273.9);
-  --chart-2: oklch(0.62 0.17 250);
-  --chart-3: oklch(0.7 0.14 200);
-  --chart-4: oklch(0.55 0.18 300);
-  --chart-5: oklch(0.65 0.15 160);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.511 0.204 273.9);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --border: #dfe5d8;
+  --input: #e5ebe1;
+  --ring: #41694b;
+  /* Paleta categórica validada pelo validate_palette.js do dataviz (claro,
+     superfície #fff): contraste >= 3:1, croma >= 0,10, ΔE >= 14 para
+     daltonismo entre vizinhas. A ORDEM é parte da validação — verde, azul,
+     âmbar, ameixa, terracota põe cada tom quente entre dois frios; trocar a
+     ordem já reprovou em teste (âmbar colado na terracota). Os mesmos
+     matizes no escuro: a cor segue a série, não o tema. */
+  --chart-1: #2e7d4f;
+  --chart-2: #3b6ea5;
+  --chart-3: #c08a1e;
+  --chart-4: #8a5fb0;
+  --chart-5: #b5533c;
+  --radius: 0.875rem;
+  --sidebar: #f0f3eb;
+  --sidebar-foreground: #35463a;
+  --sidebar-primary: #41694b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e4eadc;
+  --sidebar-accent-foreground: #36543d;
+  --sidebar-border: #d8e1d3;
+  --sidebar-ring: #719371;
 }
 
+/*
+ * Dark: contraparte quente do tema claro. O claro é verde + creme; o escuro
+ * inverte a relação — fundos marrom-escuros (não cinza neutro) e a primária
+ * no dourado/areia que no claro é só accent. Verde como primária aqui ficaria
+ * turvo: para contrastar com o fundo escuro precisaria clarear tanto que
+ * perderia a identidade. O areia contrasta sozinho e mantém o tom acolhedor.
+ *
+ * Contrastes conferidos (WCAG AA, texto normal >= 4.5:1): o menor par é
+ * muted-foreground sobre card, em 6.99:1.
+ */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.673 0.182 276.7);
-  --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: #1a1815;
+  --foreground: #f4efe4;
+  --card: #221f1a;
+  --card-foreground: #f4efe4;
+  --popover: #221f1a;
+  --popover-foreground: #f4efe4;
+  --primary: #e3c68b;
+  --primary-foreground: #241f15;
+  --secondary: #2b2721;
+  --secondary-foreground: #f0e9dc;
+  --muted: #272420;
+  --muted-foreground: #b3a894;
+  --accent: #322c22;
+  --accent-foreground: #e8d3a3;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.673 0.182 276.7 / 55%);
+  /* Bordas puxadas do creme, não do branco puro: branco sobre fundo quente
+     cria uma franja azulada perceptível nas divisórias. */
+  --border: rgb(244 239 228 / 12%);
+  --input: rgb(244 239 228 / 16%);
+  --ring: rgb(227 198 139 / 55%);
   /* Paleta categórica dark validada (scripts do skill dataviz):
      banda L 0.48-0.67, CVD e contraste >= 3:1 sobre a superfície dark. */
-  --chart-1: oklch(0.64 0.182 276.7);
-  --chart-2: oklch(0.63 0.14 225);
-  --chart-3: oklch(0.66 0.12 195);
-  --chart-4: oklch(0.55 0.16 310);
-  --chart-5: oklch(0.63 0.13 160);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Mesmos matizes do claro, com luminosidade na faixa do escuro (OKLCH L
+     0,48–0,67) e validados contra o card escuro #221f1a: ΔE 18,2 entre
+     vizinhas para daltonismo. Antes era violeta/azul/ciano — resto do tema
+     antigo que o bege substituiu no resto da interface. */
+  --chart-1: #258343;
+  --chart-2: #448bcb;
+  --chart-3: #b7810f;
+  --chart-4: #9d66b5;
+  --chart-5: #c45e3d;
+  --sidebar: #201d18;
+  --sidebar-foreground: #f4efe4;
+  --sidebar-primary: #e3c68b;
+  --sidebar-primary-foreground: #241f15;
+  --sidebar-accent: #2b2721;
+  --sidebar-accent-foreground: #f0e9dc;
+  --sidebar-border: rgb(244 239 228 / 10%);
+  --sidebar-ring: #c9a96a;
 }
 
 @layer base {
@@ -133,5 +162,122 @@
   }
   html {
     @apply font-sans;
+  }
+  /*
+   * "Mãozinha" em tudo que é clicável. O Tailwind 4 deixa <button> com a seta
+   * comum; para quem não tem prática, a mãozinha é o que diz "isto clica".
+   * Vale para botões, seletores, caixas de marcar e rótulos ligados a um
+   * campo. Desabilitado mostra "proibido". Uma classe cursor-* no elemento
+   * continua vencendo (ex.: colunas do gráfico, que só mostram valor).
+   */
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  [role="radio"],
+  [role="checkbox"],
+  [role="switch"],
+  summary,
+  select,
+  label[for],
+  label:has(input, select, textarea),
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="file"],
+  input[type="date"],
+  input[type="color"] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  select:disabled,
+  input:disabled,
+  label:has(input:disabled) {
+    cursor: not-allowed;
+  }
+  /*
+   * A lista aberta de um <select> nativo é desenhada pelo navegador: o campo
+   * herda o texto do tema, mas o fundo da lista vem do esquema de cores do
+   * sistema. No escuro isso dava texto claro sobre fundo claro (ilegível).
+   * Cor e fundo explícitos nas opções, dos mesmos tokens do resto da
+   * interface, fazem todo select seguir o tema sem mexer em cada formulário.
+   */
+  select {
+    color-scheme: light;
+  }
+  .dark select {
+    color-scheme: dark;
+  }
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+}
+
+/*
+ * Seta do <select> nativo. No Windows, o navegador desenha a seta dentro de
+ * uma caixinha clara que ignora o tema — no modo escuro ficava um bloco
+ * branco na lateral do campo. Aqui a seta do navegador sai (appearance) e
+ * entra uma seta nossa, na cor do texto secundário de cada tema.
+ *
+ * Fora de @layer de propósito: o espaço da seta (padding-right) precisa
+ * vencer as classes px-* dos campos, senão o texto passaria por baixo dela.
+ */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23718075' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1rem;
+  padding-right: 2rem;
+}
+.dark select:not([multiple]):not([size]) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b3a894' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+/*
+ * Aviso (toast) com barra de tempo: uma faixa clara embaixo vai enchendo nos
+ * 5 segundos em que o aviso fica na tela (DURACAO_DO_AVISO_MS, em
+ * src/components/ui/sonner.tsx). Feita com o fundo do próprio aviso, e não
+ * com ::before/::after, que a biblioteca já usa.
+ *
+ * Com o mouse sobre os avisos a biblioteca pausa o tempo, e aqui a barra
+ * pausa junto. Quem prefere menos movimento não vê a animação.
+ */
+@keyframes aviso-barra-enchendo {
+  from {
+    background-size: 0% 4px;
+  }
+  to {
+    background-size: 100% 4px;
+  }
+}
+
+[data-sonner-toast].aviso-com-barra {
+  background-image: linear-gradient(rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.55));
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 0% 4px;
+  animation: aviso-barra-enchendo 5s linear forwards;
+}
+
+[data-sonner-toaster]:hover [data-sonner-toast].aviso-com-barra {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toast].aviso-com-barra {
+    animation: none;
+    background-image: none;
+  }
+}
+
+/* Tela de toque: o <select> nativo acompanha a altura dos campos e botões. */
+@media (pointer: coarse) {
+  select:not([multiple]):not([size]) {
+    min-height: 2.5rem;
   }
 }

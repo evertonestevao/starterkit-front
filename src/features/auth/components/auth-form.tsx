@@ -1,14 +1,12 @@
 "use client";
 
+import { Formulario } from "@/components/formulario";
+import { useActionToast } from "@/hooks/useActionToast";
 import { useActionState } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { ActionState } from "@/server/actions/action-state";
 
-type AuthAction = (
-  prev: ActionState | undefined,
-  formData: FormData,
-) => Promise<ActionState>;
+type AuthAction = (prev: ActionState | undefined, formData: FormData) => Promise<ActionState>;
 
 interface AuthFormProps {
   action: AuthAction;
@@ -22,23 +20,14 @@ interface AuthFormProps {
  */
 export function AuthForm({ action, submitLabel, children }: AuthFormProps) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  useActionToast(state);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
-      {state?.error ? (
-        <Alert variant="destructive">
-          <AlertDescription>{state.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {state?.success ? (
-        <Alert>
-          <AlertDescription>{state.success}</AlertDescription>
-        </Alert>
-      ) : null}
+    <Formulario action={formAction} estado={state} className="flex flex-col gap-4">
       {children}
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Aguarde..." : submitLabel}
       </Button>
-    </form>
+    </Formulario>
   );
 }

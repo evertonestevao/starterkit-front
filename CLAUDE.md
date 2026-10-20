@@ -64,7 +64,12 @@ Ao criar um arquivo novo, pergunte: "isso é lógica de negócio (service), esta
 - Erros retornados ao usuário nunca incluem stack trace ou detalhes internos; log detalhado fica só no servidor
 - Nunca logar senha, token, payload de pagamento cru ou dados de cartão
 - Rate limit obrigatório em: login, recuperação de senha, envio de convite
-- Ao implementar gateway de pagamento, sempre atrás da interface `PaymentGateway` (`src/adapters/payment`) — nunca chamar SDK do provedor direto de um service ou componente
+- Pagamento sempre atrás das interfaces de `src/adapters/payment` — `PaymentGateway` (assinatura SaaS da empresa, plano fixo) ou `RecurringBillingProvider` (patrocínio, valor variável). A escolha do provedor acontece SÓ em `src/adapters/payment/index.ts`; nunca chamar SDK/API de provedor (Stripe, Asaas...) direto de um service ou componente. O provedor de cada conta de patrocinador fica gravado nela, para que trocar o padrão não quebre assinaturas em andamento
+- No Supabase, tabela nova em `public` nasce com ALL para `anon`/`authenticated` (default privileges da plataforma) e função nasce executável por todos. Segurança por coluna ou por operação exige `REVOKE ALL` antes dos `GRANT`s explícitos, na mesma migration — "não conceder" não basta
+- Conteúdo que aparece em página pública de igreja (hoje: nome e logo do patrocinador) nunca é escrito direto pelo dono da conta. A coluna não tem GRANT de update; a alteração vira pedido em `sponsor_profile_changes` e só a moderação aplica. Ao criar um campo novo desse tipo, siga o mesmo caminho — uma conta invadida não pode publicar nada sozinha
+- Moderação da plataforma (`platform_staff`) é um eixo separado dos papéis de empresa e atravessa o isolamento entre tenants por definição. Ela nunca ganha SELECT nas tabelas dos clientes: só `execute` em RPCs `security definer` estreitas, e toda decisão é registrada em `platform_staff_actions` (não em `audit_logs`, que exige `company_id`). Entrada só por `scripts/add-platform-staff.mjs`, com `service_role`
+- Termos de Uso são um documento POR PÚBLICO (`igreja`, `patrocinador`), com numeração e versão vigente próprias. O texto vive em `supabase/terms/*.md`; toda consulta a `terms_versions` filtra por `audience` — sem o filtro, com dois documentos vigentes, a consulta devolve duas linhas ou grava o aceite do contrato errado. Publicar versão nova: `scripts/publish-terms.sh <publico> <arquivo>` ou migration
+- Upload de arquivo: o tipo vem dos bytes (`src/lib/imageValidation.ts`), nunca do `Content-Type` ou da extensão, que são escolhidos por quem envia. SVG não entra em bucket público — é executável se aberto direto na origem. Arquivo esperando moderação fica em pasta separada, onde o client escreve; a pasta publicada só aceita `service_role`
 
 ## Padrões de código
 
@@ -102,5 +107,5 @@ npx supabase migration up   # aplicar migrations locais
 
 - Não adicionar dependência nova sem justificar por que é necessária
 - Não criar tabela sem `company_id` e sem policy de RLS na mesma migration
-- Não implementar integração de pagamento fora da interface `PaymentGateway`
+- Não implementar integração de pagamento fora das interfaces de `src/adapters/payment`
 - Não remover ou enfraquecer uma policy de RLS existente para "resolver" um bug de acesso — investigar a causa raiz primeiro

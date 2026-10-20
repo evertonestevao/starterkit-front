@@ -31,6 +31,11 @@ export interface InviteNotifier {
   sendInviteEmail(invite: CompanyInvite): Promise<void>;
 }
 
+/** Link de aceite de um convite (o mesmo que vai no e-mail). */
+export function linkDeAceite(appUrl: string, token: string): string {
+  return `${appUrl.replace(/\/+$/, "")}/invites/accept?token=${token}`;
+}
+
 const createInviteSchema = z.object({
   companyId: z.uuid(),
   email: z.email(),
@@ -69,7 +74,7 @@ export function createInviteService({ repo, rateLimiter, notifier, audit }: Invi
       invitedBy,
     });
 
-    await notifier?.sendInviteEmail(created);
+    // Auditoria antes do e-mail: o convite já existe, saia o e-mail ou não.
     await audit?.record({
       companyId,
       userId: invitedBy,
@@ -78,8 +83,62 @@ export function createInviteService({ repo, rateLimiter, notifier, audit }: Invi
       entityId: created.id,
       metadata: { role },
     });
+    await enviarEmail(created);
 
     return created;
+  }
+
+  /**
+   * O convite vale mesmo sem o e-mail: quem convidou pode reenviar ou mandar
+   * o link pelo WhatsApp. Por isso a falha do provedor vira uma mensagem que
+   * diz o que fazer, em vez de um erro genérico.
+   */
+  async function enviarEmail(convite: CompanyInvite): Promise<void> {
+    try {
+      await notifier?.sendInviteEmail(convite);
+    } catch (err) {
+      throw new AppError(
+        "email_error",
+        'O convite foi criado, mas o e-mail não saiu. Na ficha do membro, use "Reenviar e-mail" ou "Copiar link" para mandar pelo WhatsApp.',
+        err,
+      );
+    }
+  }
+
+  async function pendente(inviteId: string, companyId: string): Promise<CompanyInvite> {
+    if (!z.uuid().safeParse(inviteId).success) throw new AppError("validation_error", "Convite inválido");
+    const convite = (await repo.listPending(companyId)).find((c) => c.id === inviteId);
+    if (!convite)
+      throw new AppError("not_found", "Convite pendente não encontrado. Ele pode ter sido aceito ou cancelado.");
+    return convite;
+  }
+
+  /** Manda de novo o e-mail de um convite pendente (mesmo limite de quem convida). */
+  async function resend(inviteId: string, companyId: string, resentBy: string): Promise<CompanyInvite> {
+    const convite = await pendente(inviteId, companyId);
+    await rateLimiter.consume(`invite:${companyId}:${resentBy}`);
+    await audit?.record({
+      companyId,
+      userId: resentBy,
+      action: "invite.resent",
+      entityType: "company_invite",
+      entityId: convite.id,
+    });
+    await enviarEmail(convite);
+    return convite;
+  }
+
+  /**
+   * O token de um convite pendente, para montar o link e mandar por outro
+   * canal (WhatsApp). Só chega aqui quem a RLS deixa ler os convites da
+   * empresa — quem administra, que poderia convidar a mesma pessoa de novo.
+   */
+  async function tokenDoConvite(
+    inviteId: string,
+    companyId: string,
+  ): Promise<{ token: string; email: string; expiraEm: string }> {
+    const convite = await pendente(inviteId, companyId);
+    return { token: convite.token, email: convite.email, expiraEm: convite.expires_at };
   }
 
   async function revoke(inviteId: string, companyId: string, revokedBy: string): Promise<void> {
@@ -110,7 +169,7 @@ export function createInviteService({ repo, rateLimiter, notifier, audit }: Invi
     return repo.listMyPending();
   }
 
-  return { invite, revoke, accept, listPending, listMyPending };
+  return { invite, revoke, resend, tokenDoConvite, accept, listPending, listMyPending };
 }
 
 export type InviteService = ReturnType<typeof createInviteService>;

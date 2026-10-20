@@ -17,11 +17,12 @@ export function createSupabaseTermsRepository(client: SupabaseClient): TermsRepo
   }
 
   return {
-    async getCurrentVersion() {
+    async getCurrentVersion(audience) {
       const { data, error } = await client
         .from("terms_versions")
         .select("*")
         .eq("is_current", true)
+        .eq("audience", audience)
         .maybeSingle<TermsVersion>();
       if (error) {
         throw new AppError("internal_error", "Falha ao carregar os termos", error);

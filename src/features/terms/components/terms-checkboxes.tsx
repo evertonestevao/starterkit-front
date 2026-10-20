@@ -1,13 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import type { TermsAudience } from "@/services/termsService";
 
 /**
  * Checkboxes de aceite (obrigatório) e consentimento de email (opcional,
  * separado — LGPD). Nativos: funcionam sem JS e postam "on" no FormData.
  * Reutilizados no onboarding e na página de reaceite.
+ *
+ * O `audience` decide QUAL documento o link abre. Mandar um patrocinador
+ * aceitar os termos das igrejas — ou o contrário — invalidaria o aceite: a
+ * pessoa teria concordado com um contrato que não é o dela.
  */
-export function TermsCheckboxes() {
+export function TermsCheckboxes({ audience = "igreja" }: { audience?: TermsAudience }) {
   return (
     <div className="flex flex-col gap-3 text-sm">
       <label className="flex items-start gap-2">
@@ -15,7 +20,7 @@ export function TermsCheckboxes() {
         <span>
           Li e aceito os{" "}
           <Link
-            href="/terms"
+            href={`/terms/${audience}`}
             target="_blank"
             className="text-foreground underline underline-offset-4"
           >

@@ -4,21 +4,42 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthForm } from "@/features/auth/components/auth-form";
+import { CampoSenhaNova } from "@/features/auth/components/campo-senha-nova";
 import { signUpAction } from "@/server/actions/auth";
+import { cadastroAberto } from "@/server/cadastro";
 
 export const metadata: Metadata = { title: "Criar conta" };
 
-export default async function SignUpPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ next?: string }>;
-}) {
+export default async function SignUpPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;
+  // Cadastro só por convite: sem um link de origem (convite, vínculo, igreja
+  // nova), explica. A criação da igreja é travada no banco de qualquer jeito.
+  if (!next && !(await cadastroAberto())) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Cadastro por convite</CardTitle>
+          <CardDescription>
+            No momento, o cadastro é só por convite. Abra o link que você recebeu (por e-mail ou WhatsApp) para criar
+            sua conta.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-sm text-muted-foreground">
+            Já tem conta?{" "}
+            <Link href="/login" className="text-foreground underline underline-offset-4">
+              Entrar
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHeader>
         <CardTitle>Criar conta</CardTitle>
-        <CardDescription>Comece grátis — crie sua empresa em seguida</CardDescription>
+        <CardDescription>Primeiro vamos fazer seu cadastro, depois cadastramos a igreja</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <AuthForm action={signUpAction} submitLabel="Criar conta">
@@ -31,17 +52,7 @@ export default async function SignUpPage({
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" autoComplete="email" required />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Senha</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              required
-            />
-          </div>
+          <CampoSenhaNova rotulo="Senha" />
         </AuthForm>
         <p className="text-center text-sm text-muted-foreground">
           Já tem conta?{" "}
