@@ -50,7 +50,15 @@ export default async function SignUpPage({
             target="_blank"
             className="text-foreground underline underline-offset-4"
           >
-            Termos de Uso e Política de Privacidade
+            Termos de Uso
+          </Link>{" "}
+          e com a{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            className="text-foreground underline underline-offset-4"
+          >
+            Política de Privacidade
           </Link>
           .
         </p>
