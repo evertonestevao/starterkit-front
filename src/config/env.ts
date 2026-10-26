@@ -36,6 +36,11 @@ const serverEnvSchema = z.object({
   RATE_LIMIT_STORE: z.enum(["memory", "redis"]).default("memory"),
   UPSTASH_REDIS_REST_URL: z.url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
+  /** Monitoramento de erros: console (só log) ou sentry (exige SENTRY_DSN). */
+  ERROR_REPORTER: z.enum(["console", "sentry"]).default("console"),
+  SENTRY_DSN: z.url().optional(),
+  /** Nome do ambiente nos relatórios de erro (production, staging...). */
+  APP_ENV: z.string().min(1).default("development"),
 });
 
 export function getClientEnv() {

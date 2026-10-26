@@ -1,3 +1,4 @@
+import { reportError } from "@/adapters/errorReporting";
 import { getPaymentGateway } from "@/adapters/payment";
 import { toPublicError, isAppError } from "@/lib/errors";
 import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
@@ -40,11 +41,8 @@ export async function POST(request: Request) {
     return Response.json({ received: true });
   } catch (err) {
     // Log detalhado só no servidor; nunca o payload cru (regra do CLAUDE.md).
-    if (isAppError(err)) {
-      console.error("[webhook/payment]", err.message, "internal:", err.internal);
-    } else {
-      console.error("[webhook/payment]", err);
-    }
+    // O reporter recebe só o erro, nunca o payload.
+    await reportError(err, { source: "route:/api/webhooks/payment" });
     const publicError = toPublicError(err);
     return Response.json({ error: publicError }, { status: isAppError(err) ? err.status : 500 });
   }
