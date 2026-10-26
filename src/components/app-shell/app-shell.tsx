@@ -118,7 +118,7 @@ export function AppShell({
             <UserMenu {...user} />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 p-4 lg:p-8">{children}</main>
+        <main id="conteudo" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 p-4 outline-none lg:p-8">{children}</main>
       </div>
     </div>
   );
