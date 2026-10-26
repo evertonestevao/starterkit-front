@@ -18,13 +18,25 @@ const clientEnvSchema = z.object({
  */
 const serverEnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
-  PAYMENT_GATEWAY: z.enum(["stripe", "fake"]).default("fake"),
-  STRIPE_SECRET_KEY: z.string().min(1).optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
-  /** Price IDs criados no painel/CLI do Stripe (modo test ou live). */
+  PAYMENT_GATEWAY: z.enum(["fake", "stripe", "asaas"]).default("fake"),
+  /**
+   * Ids de preço no catálogo do gateway, por plano (só para gateways com
+   * catálogo, como o Stripe: price_xxx). Gateways que cobram por valor
+   * (Asaas) usam o price_cents do plano e ignoram estas vars.
+   * STRIPE_PRICE_* continuam aceitas como nome antigo.
+   */
+  PAYMENT_PRICE_PRO: z.string().min(1).optional(),
+  PAYMENT_PRICE_ENTERPRISE: z.string().min(1).optional(),
+  PAYMENT_PRICE_EXTRA_SEAT: z.string().min(1).optional(),
   STRIPE_PRICE_PRO: z.string().min(1).optional(),
   STRIPE_PRICE_ENTERPRISE: z.string().min(1).optional(),
   STRIPE_PRICE_EXTRA_SEAT: z.string().min(1).optional(),
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  /** Asaas: chave da API ($aact_...), token do webhook (definido no painel) e ambiente. */
+  ASAAS_API_KEY: z.string().min(1).optional(),
+  ASAAS_WEBHOOK_TOKEN: z.string().min(1).optional(),
+  ASAAS_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
   EMAIL_PROVIDER: z.enum(["resend", "console"]).default("console"),
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.email().optional(),

@@ -15,12 +15,11 @@ import { createBillingService } from "@/services/billingService";
  */
 export async function POST(request: Request) {
   const payload = await request.text();
-  const signature =
-    request.headers.get("stripe-signature") ?? request.headers.get("x-webhook-signature") ?? "";
 
   try {
     const gateway = getPaymentGateway();
-    const event = await gateway.handleWebhook(payload, signature);
+    // Cada adapter lê o próprio header de autenticação (Stripe-Signature, asaas-access-token...).
+    const event = await gateway.handleWebhook({ payload, headers: request.headers });
 
     const admin = getSupabaseAdminClient();
     const billing = createBillingService(createSupabaseBillingRepository(admin));

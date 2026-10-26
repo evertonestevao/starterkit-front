@@ -158,11 +158,22 @@ Os valores vêm das migrations `seed_plans` e `plans_extra_seat_price`. A landin
 | Função | Quem | Como funciona |
 |---|---|---|
 | **Ver plano e uso de seats** (`/dashboard/billing`) | Owner | — |
-| **Assinar / trocar plano** | Owner | Checkout no gateway (Stripe). Com `PAYMENT_GATEWAY=fake`, ativa o plano direto, para desenvolvimento. |
-| **Cancelar assinatura** | Owner | — |
-| **Cobrança por seat** | Automático | Ao convidar, revogar ou remover membros, a quantidade de extras é sincronizada com o gateway. |
-| **Webhook de pagamento** (`POST /api/webhooks/payment`) | Gateway | Assinatura verificada. Os eventos atualizam `subscriptions` de forma idempotente e entram na auditoria. |
+| **Assinar / trocar plano** | Owner | Página de pagamento hospedada pelo gateway. No Asaas, o cliente escolhe PIX, boleto ou cartão. Com `PAYMENT_GATEWAY=fake`, ativa o plano direto, para desenvolvimento. |
+| **Cancelar assinatura** | Owner | Cancela no gateway. O acesso segue até o fim do período pago. |
+| **Cobrança por seat** | Automático | Ao convidar, revogar ou remover membros, os extras são sincronizados com o gateway: item com quantidade (Stripe) ou novo valor total da assinatura (Asaas). |
+| **Webhook de pagamento** (`POST /api/webhooks/payment`) | Gateway | Autenticidade verificada por cada provedor (HMAC no Stripe, token no Asaas). Os eventos atualizam `subscriptions` de forma idempotente e entram na auditoria. |
 | **Limites por plano** | Código | `canAccessFeature()` e `getFeatureLimit()` são o ponto único de checagem. |
+
+**Gateways disponíveis** (`PAYMENT_GATEWAY`):
+
+| Gateway | Como cobra | Formas de pagamento | Portal do cliente |
+|---|---|---|---|
+| `asaas` | Pelo valor do plano no banco | PIX, boleto, cartão | Não |
+| `stripe` | Pelo catálogo de preços (`PAYMENT_PRICE_*`) | Cartão | Sim |
+| `fake` | Simulação local | — | Não |
+
+Para adicionar outro provedor, basta um arquivo em `src/adapters/payment/` (passo a passo no
+topo de `PaymentGateway.ts`).
 
 Código: `src/services/billingService.ts`, `src/server/actions/billing.ts`, `src/adapters/payment/`.
 
@@ -240,7 +251,7 @@ significa escrever um adapter novo, sem mexer em regra de negócio.
 
 | Interface | Implementações | Variável |
 |---|---|---|
-| `PaymentGateway` | Stripe, fake | `PAYMENT_GATEWAY` |
+| `PaymentGateway` | Asaas, Stripe, fake | `PAYMENT_GATEWAY` |
 | `EmailProvider` | Resend, console | `EMAIL_PROVIDER` |
 | `StorageProvider` | Supabase Storage | — |
 | `NotificationProvider` | console | `NOTIFICATION_PROVIDER` |

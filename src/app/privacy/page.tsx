@@ -21,7 +21,7 @@ const sections: LegalSection[] = [
   },
   {
     title: "4. Compartilhamento e suboperadores",
-    body: "Supabase (banco de dados, autenticação e arquivos), Stripe (pagamentos) e Resend (envio de emails). Esses serviços podem processar dados fora do Brasil, com as salvaguardas do art. 33 da LGPD.",
+    body: "Supabase (banco de dados, autenticação e arquivos), o processador de pagamentos (Asaas ou Stripe, conforme a contratação) e Resend (envio de emails). Alguns desses serviços podem processar dados fora do Brasil, com as salvaguardas do art. 33 da LGPD.",
   },
   {
     title: "5. Cookies",

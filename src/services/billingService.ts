@@ -158,10 +158,13 @@ export function createBillingService(repo: BillingRepository) {
   async function syncSeatsWithGateway(
     companyId: string,
     gateway: PaymentGateway,
-    extraSeatPriceId: string,
+    extraSeatExternalPriceId: string | null,
   ): Promise<SeatUsage> {
     const usage = await getSeatUsage(companyId);
-    const subscription = await repo.getActiveSubscription(companyId);
+    const [subscription, plan] = await Promise.all([
+      repo.getActiveSubscription(companyId),
+      getEffectivePlan(companyId),
+    ]);
     if (
       subscription &&
       ACCESS_STATUSES.has(subscription.status) &&
@@ -169,8 +172,10 @@ export function createBillingService(repo: BillingRepository) {
     ) {
       await gateway.syncExtraSeats({
         externalSubscriptionId: subscription.external_subscription_id,
-        extraSeatPriceId,
         quantity: usage.extraSeats,
+        unitPriceCents: plan?.extra_seat_price_cents ?? 0,
+        basePriceCents: plan?.price_cents ?? 0,
+        externalPriceId: extraSeatExternalPriceId,
       });
     }
     return usage;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { NormalizedPaymentEvent } from "@/types/billing";
+import type { ExtraSeatsUpdate, NormalizedPaymentEvent } from "@/types/billing";
 import type { Plan, Subscription } from "@/types/database";
 import {
   createBillingService,
@@ -171,7 +171,7 @@ describe("getSeatUsage / syncSeatsWithGateway (billing por seat)", () => {
   });
 
   function makeGatewaySpy() {
-    const calls: Array<{ externalSubscriptionId: string; extraSeatPriceId: string; quantity: number }> = [];
+    const calls: ExtraSeatsUpdate[] = [];
     return {
       calls,
       gateway: {
@@ -181,7 +181,7 @@ describe("getSeatUsage / syncSeatsWithGateway (billing por seat)", () => {
         },
         async cancelSubscription() {},
         async getPortalUrl() {
-          return "";
+          return null;
         },
         async handleWebhook() {
           throw new Error("não usado");
@@ -254,7 +254,13 @@ describe("getSeatUsage / syncSeatsWithGateway (billing por seat)", () => {
     const usage = await service.syncSeatsWithGateway("company-1", gateway, "price_seat");
     expect(usage.extraSeats).toBe(2);
     expect(calls).toEqual([
-      { externalSubscriptionId: "ext-sub", extraSeatPriceId: "price_seat", quantity: 2 },
+      {
+        externalSubscriptionId: "ext-sub",
+        quantity: 2,
+        unitPriceCents: 1990,
+        basePriceCents: threeSeatPlan.price_cents,
+        externalPriceId: "price_seat",
+      },
     ]);
   });
 

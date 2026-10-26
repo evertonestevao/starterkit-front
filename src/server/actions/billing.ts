@@ -6,13 +6,15 @@ import { getPaymentGateway } from "@/adapters/payment";
 import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
 import { createSupabaseBillingRepository } from "@/repositories/supabase/billingRepository";
+import { createSupabaseUserRepository } from "@/repositories/supabase/userRepository";
 import { recordAudit } from "@/server/audit";
-import { getGatewayPriceIdForPlan } from "@/server/billing";
+import { getExternalPriceId } from "@/server/billing";
 import { getSupabaseAdminClient } from "@/server/supabase-admin";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getTenantService } from "@/server/tenant";
 import { createBillingService } from "@/services/billingService";
 import { permissionService } from "@/services/permissionService";
+import { createUserService } from "@/services/userService";
 import { toActionError, type ActionState } from "./action-state";
 
 /** Server actions de billing — toda ação revalida que o ator é owner. */
@@ -37,9 +39,10 @@ export async function checkoutAction(
 
     const client = await getSupabaseServerClient();
     const repo = createSupabaseBillingRepository(client);
-    const [{ data: userData }, plan] = await Promise.all([
+    const [{ data: userData }, plan, profile] = await Promise.all([
       client.auth.getUser(),
       repo.getPlanById(planId),
+      createUserService(createSupabaseUserRepository(client)).getMyProfile(),
     ]);
     if (!userData.user?.email) {
       throw new AppError("unauthorized", "Sessão expirada");
@@ -52,10 +55,17 @@ export async function checkoutAction(
     const gateway = getPaymentGateway();
     const session = await gateway.createCheckout({
       companyId,
-      planId,
-      // Mapeado por env (STRIPE_PRICE_PRO etc.) — ver src/server/billing.ts.
-      gatewayPriceId: getGatewayPriceIdForPlan(plan.code),
-      customerEmail: userData.user.email,
+      plan: {
+        id: plan.id,
+        code: plan.code,
+        name: plan.name,
+        priceCents: plan.price_cents,
+        currency: plan.currency,
+        billingInterval: plan.billing_interval,
+        // Só gateways com catálogo usam (PAYMENT_PRICE_<CODE>) — ver src/server/billing.ts.
+        externalPriceId: getExternalPriceId(plan.code),
+      },
+      customer: { email: userData.user.email, name: profile?.full_name ?? null },
       successUrl: `${appUrl}/dashboard/billing?status=success`,
       cancelUrl: `${appUrl}/dashboard/billing?status=canceled`,
     });

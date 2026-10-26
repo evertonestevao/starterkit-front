@@ -4,6 +4,7 @@ import type {
   CreateCheckoutParams,
   NormalizedPaymentEvent,
   PaymentEventType,
+  WebhookRequest,
 } from "@/types/billing";
 import type { PaymentGateway } from "./PaymentGateway";
 
@@ -50,18 +51,26 @@ export function createStripeGateway(config: StripeGatewayConfig): PaymentGateway
     name: "stripe",
 
     async createCheckout(params: CreateCheckoutParams): Promise<CheckoutSession> {
+      // Stripe cobra por preço do catálogo: sem price id configurado não há checkout.
+      if (!params.plan.externalPriceId) {
+        throw new AppError(
+          "payment_error",
+          "Plano sem preço configurado no gateway",
+          `PAYMENT_PRICE_${params.plan.code.toUpperCase()} ausente`,
+        );
+      }
       const session = await stripeRequest("/checkout/sessions", {
         mode: "subscription",
-        "line_items[0][price]": params.gatewayPriceId,
+        "line_items[0][price]": params.plan.externalPriceId,
         "line_items[0][quantity]": "1",
-        customer_email: params.customerEmail,
+        customer_email: params.customer.email,
         success_url: params.successUrl,
         cancel_url: params.cancelUrl,
         client_reference_id: params.companyId,
         // Metadata na assinatura: volta em todo webhook de subscription,
         // permitindo mapear evento -> empresa/plano sem tabela de-para.
         "subscription_data[metadata][company_id]": params.companyId,
-        "subscription_data[metadata][plan_id]": params.planId,
+        "subscription_data[metadata][plan_id]": params.plan.id,
       });
       return { id: String(session.id), url: String(session.url) };
     },
@@ -80,7 +89,8 @@ export function createStripeGateway(config: StripeGatewayConfig): PaymentGateway
       return String(session.url);
     },
 
-    async handleWebhook(payload: string, signature: string): Promise<NormalizedPaymentEvent> {
+    async handleWebhook({ payload, headers }: WebhookRequest): Promise<NormalizedPaymentEvent> {
+      const signature = headers.get("stripe-signature") ?? "";
       const valid = await verifyStripeSignature(payload, signature, config.webhookSecret);
       if (!valid) {
         throw new AppError("payment_error", "Assinatura de webhook inválida");
@@ -88,7 +98,15 @@ export function createStripeGateway(config: StripeGatewayConfig): PaymentGateway
       return normalizeStripeEvent(JSON.parse(payload));
     },
 
-    async syncExtraSeats({ externalSubscriptionId, extraSeatPriceId, quantity }): Promise<void> {
+    async syncExtraSeats({ externalSubscriptionId, externalPriceId, quantity }): Promise<void> {
+      if (!externalPriceId) {
+        throw new AppError(
+          "payment_error",
+          "Preço do seat extra não configurado no gateway",
+          "PAYMENT_PRICE_EXTRA_SEAT ausente",
+        );
+      }
+      const extraSeatPriceId = externalPriceId;
       // Modelo de 2 itens na assinatura: item do plano base + item do preço
       // por seat extra. Localiza o item do seat pelo price id e ajusta.
       const subscription = await stripeRequest(

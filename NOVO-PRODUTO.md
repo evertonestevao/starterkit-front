@@ -80,7 +80,8 @@ Para cada módulo: entidade, campos principais, quem pode ver/criar/editar/apaga
 | [Enterprise] | [R$ 599] | [50] | [R$ 29,90] | [tudo + API] |
 
 ## Integrações
-- Pagamento: [Stripe (já pronto) | outro: Mercado Pago, Asaas → novo adapter de PaymentGateway]
+- Pagamento: [Asaas (já pronto: PIX, boleto, cartão) | Stripe (já pronto) | outro: Mercado Pago,
+  Pagar.me → novo adapter de PaymentGateway, seguindo PaymentGateway.ts]
 - Email: [Resend (já pronto) | outro]
 - [Opcional: WhatsApp/SMS → implementar NotificationProvider com o provedor X]
 - [Opcional: outra API externa e para que serve]
