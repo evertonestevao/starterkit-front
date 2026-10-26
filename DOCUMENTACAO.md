@@ -8,7 +8,7 @@
 
 ## ⚠️ ANTES DE IR PARA PRODUÇÃO — leia isto primeiro
 
-Três **placeholders deliberados** precisam ser trocados antes de qualquer cliente real:
+Quatro **placeholders deliberados** precisam ser trocados antes de qualquer cliente real:
 
 - [ ] **Texto dos Termos de Uso** — a versão em `terms_versions` é EXEMPLO SEM VALOR JURÍDICO
       (o próprio texto avisa). Contrate revisão jurídica e publique a versão final via migration
@@ -20,8 +20,12 @@ Três **placeholders deliberados** precisam ser trocados antes de qualquer clien
 - [ ] **Cor de marca e nome** — o indigo e o nome "StarterKit" são identidade neutra do template.
       Troque em `src/config/brand.ts` (nome/tagline) e `src/app/globals.css` (`--primary` e
       `--chart-*`; ao mudar os `--chart-*`, revalide com o validador de paleta — daltonismo/contraste).
+- [ ] **Dados legais e políticas** — `brand.legal` (razão social, CNPJ, endereço, emails de suporte e
+      do encarregado) em `src/config/brand.ts`, e os textos de `/privacy` e `/refund` (esqueletos sem
+      valor jurídico, com aviso na própria página).
 
-E ainda: `RATE_LIMIT_STORE=redis` (Upstash) em produção multi-instância, SMTP/Resend para os
+E ainda: `ERROR_REPORTER=sentry` + `SENTRY_DSN` + `APP_ENV=production` para monitorar erros,
+`/api/health` no monitor de uptime, `RATE_LIMIT_STORE=redis` (Upstash) em produção multi-instância, SMTP/Resend para os
 emails, allow-list de redirect no painel do Supabase e as demais pendências da seção 7.
 
 ---
@@ -485,6 +489,11 @@ Publicar força reaceite automático de todos os usuários.
 - [ ] Convidar acima da franquia → item "Usuário Extra" aparece na assinatura no painel do Stripe
 - [ ] 11 logins errados seguidos → "Muitas tentativas" (prova que o Upstash está ativo)
 - [ ] Cancelar assinatura e conferir no painel do Stripe (fluxo **nunca testado** — primeira vez será aqui)
+- [ ] `GET /api/health` responde 200 com `{"status":"ok"}`
+- [ ] Forçar um erro (ex.: action com env quebrada em staging) → evento aparece no Sentry, sem senha/token
+- [ ] Configurações → "Baixar meus dados" → JSON com perfil, empresas, aceites e consentimentos
+- [ ] Transferir a propriedade de uma empresa → novo owner vê o papel; o antigo vira admin
+- [ ] Excluir uma conta de teste → login com ela falha; empresas com outros membros continuam intactas
 
 ### 6.2 Criando um NOVO SaaS a partir deste kit
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { BellRing } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AccountDataSection } from "@/features/account/components/account-data-section";
 import { AcceptInviteButton } from "@/features/companies/components/accept-invite-button";
 import {
   AvatarForm,
@@ -11,6 +12,7 @@ import {
 } from "@/features/companies/components/settings-forms";
 import { createSupabaseInviteRepository } from "@/repositories/supabase/inviteRepository";
 import { createSupabaseUserRepository } from "@/repositories/supabase/userRepository";
+import { getAccountService } from "@/server/account";
 import { createMemoryRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant } from "@/server/tenant";
@@ -25,12 +27,14 @@ export default async function SettingsPage() {
   if (!active) return null;
 
   const client = await getSupabaseServerClient();
-  const [profile, myInvites] = await Promise.all([
+  const account = await getAccountService();
+  const [profile, myInvites, deletionPlan] = await Promise.all([
     createUserService(createSupabaseUserRepository(client)).getMyProfile(),
     createInviteService({
       repo: createSupabaseInviteRepository(client),
       rateLimiter: createMemoryRateLimiter({ limit: 1000, windowMs: 60_000 }),
     }).listMyPending(),
+    account.getDeletionPlan(),
   ]);
 
   const canEditCompany = permissionService.canEditCompany(active.role);
@@ -117,6 +121,19 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Seus dados</CardTitle>
+          <CardDescription>Exportação e exclusão da sua conta (LGPD)</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AccountDataSection
+            blockers={deletionPlan.blockers}
+            companiesToClose={deletionPlan.companiesToClose.map((c) => c.companyName)}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -315,6 +315,61 @@ end $$;
 
 reset role;
 
+
+-- ---------------------------------------------------------------------------
+-- transfer_company_ownership: só o owner, só para membro da própria empresa.
+-- ---------------------------------------------------------------------------
+select set_config('rls.bob_member_id',
+  (select id::text from public.company_members
+   where user_id = 'b2b2b2b2-0000-4000-8000-000000000002'), true);
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  -- empresa do outro tenant: alice não é owner dela
+  begin
+    perform public.transfer_company_ownership(
+      'c2c2c2c2-0000-4000-8000-000000000002',
+      current_setting('rls.bob_member_id')::uuid);
+    raise exception 'FALHA ownership: alice transferiu a empresa do bob';
+  exception when sqlstate '42501' then null;
+  end;
+
+  -- membro de outro tenant como alvo: não encontrado na empresa da alice
+  begin
+    perform public.transfer_company_ownership(
+      'c1c1c1c1-0000-4000-8000-000000000001',
+      current_setting('rls.bob_member_id')::uuid);
+    raise exception 'FALHA ownership: alice promoveu membro de outra empresa';
+  exception when sqlstate 'P0002' then null;
+  end;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Exclusão de usuário: FKs de autoria não podem impedir (LGPD, art. 18).
+-- ---------------------------------------------------------------------------
+do $$
+declare n int;
+begin
+  delete from auth.users where id = 'b2b2b2b2-0000-4000-8000-000000000002';
+
+  select count(*) into n from public.profiles where id = 'b2b2b2b2-0000-4000-8000-000000000002';
+  if n <> 0 then raise exception 'FALHA exclusão: profile do bob sobreviveu'; end if;
+
+  select count(*) into n from public.companies
+  where id = 'c2c2c2c2-0000-4000-8000-000000000002' and created_by is null;
+  if n <> 1 then raise exception 'FALHA exclusão: companies.created_by não virou NULL'; end if;
+
+  select count(*) into n from public.audit_logs
+  where company_id = 'c2c2c2c2-0000-4000-8000-000000000002' and user_id is not null;
+  if n <> 0 then raise exception 'FALHA exclusão: auditoria manteve o user_id do bob'; end if;
+end $$;
+
 rollback;
 
 \echo 'RLS OK: todos os testes de isolamento multi-tenant passaram.'

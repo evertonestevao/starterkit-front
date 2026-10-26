@@ -54,6 +54,8 @@ export interface TenantRepository {
   removeMember(memberId: string, companyId: string): Promise<void>;
   /** RPC leave_company (sair da empresa sem precisar de UPDATE direto). */
   leaveCompany(companyId: string): Promise<void>;
+  /** RPC transfer_company_ownership: alvo vira owner e o owner atual vira admin, atômico. */
+  transferOwnership(companyId: string, newOwnerMemberId: string): Promise<void>;
 }
 
 const companyNameSchema = z.string().trim().min(2, "Nome muito curto").max(80);
@@ -176,6 +178,27 @@ export function createTenantService(repo: TenantRepository) {
     await repo.leaveCompany(companyId);
   }
 
+  /** Passa a empresa para outro membro ativo; o owner atual vira admin. */
+  async function transferOwnership(
+    companyId: string,
+    newOwnerMemberId: string,
+  ): Promise<{ targetUserId: string }> {
+    const role = await requireMembership(companyId);
+    if (role !== "owner") {
+      throw new AppError("forbidden", "Só o owner pode transferir a empresa");
+    }
+    // getMember filtra por companyId: membro de outro tenant resulta em not_found.
+    const target = await repo.getMember(newOwnerMemberId, companyId);
+    if (!target) {
+      throw new AppError("not_found", "Membro não encontrado");
+    }
+    if (target.role === "owner") {
+      throw new AppError("validation_error", "Este membro já é o owner");
+    }
+    await repo.transferOwnership(companyId, newOwnerMemberId);
+    return { targetUserId: target.user_id };
+  }
+
   return {
     listMyCompanies,
     createCompany,
@@ -185,6 +208,7 @@ export function createTenantService(repo: TenantRepository) {
     changeMemberRole,
     removeMember,
     leaveCompany,
+    transferOwnership,
   };
 }
 

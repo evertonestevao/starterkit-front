@@ -150,5 +150,24 @@ export function createSupabaseTenantRepository(client: SupabaseClient): TenantRe
         throw new AppError("internal_error", "Falha ao sair da empresa", error);
       }
     },
+
+    async transferOwnership(companyId, newOwnerMemberId) {
+      const { error } = await client.rpc("transfer_company_ownership", {
+        p_company_id: companyId,
+        p_new_owner_member_id: newOwnerMemberId,
+      });
+      if (!error) return;
+      // errcodes levantados pela RPC (ver migration de ownership).
+      if (error.code === "42501") {
+        throw new AppError("forbidden", "Só o owner pode transferir a empresa", error);
+      }
+      if (error.code === "P0002") {
+        throw new AppError("not_found", "Membro não encontrado", error);
+      }
+      if (error.code === "22023") {
+        throw new AppError("validation_error", "Você já é o owner", error);
+      }
+      throw new AppError("internal_error", "Falha ao transferir a empresa", error);
+    },
   };
 }

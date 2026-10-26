@@ -47,6 +47,7 @@ function makeRepo(overrides: Partial<TenantRepository> = {}): TenantRepository {
     async updateMemberRole() {},
     async removeMember() {},
     async leaveCompany() {},
+    async transferOwnership() {},
     ...overrides,
   };
 }
@@ -174,5 +175,62 @@ describe("tenantService autorização", () => {
     await expect(service.removeMember(COMPANY_ID, "m1")).rejects.toMatchObject({
       code: "forbidden",
     });
+  });
+});
+
+describe("transferOwnership", () => {
+  it("owner transfere para membro ativo da mesma empresa", async () => {
+    const calls: Array<[string, string]> = [];
+    const service = createTenantService(
+      makeRepo({
+        async getMember() {
+          return makeMember({ id: "m2", user_id: "u2", role: "admin" });
+        },
+        async transferOwnership(companyId, memberId) {
+          calls.push([companyId, memberId]);
+        },
+      }),
+    );
+    await expect(service.transferOwnership(COMPANY_ID, "m2")).resolves.toEqual({
+      targetUserId: "u2",
+    });
+    expect(calls).toEqual([[COMPANY_ID, "m2"]]);
+  });
+
+  it("admin não pode transferir", async () => {
+    const service = createTenantService(
+      makeRepo({
+        async getMyRole() {
+          return "admin";
+        },
+      }),
+    );
+    await expect(service.transferOwnership(COMPANY_ID, "m2")).rejects.toMatchObject({
+      code: "forbidden",
+    });
+  });
+
+  it("membro de outra empresa resulta em not_found", async () => {
+    const service = createTenantService(
+      makeRepo({
+        async getMember() {
+          return null;
+        },
+      }),
+    );
+    await expect(service.transferOwnership(COMPANY_ID, "outro")).rejects.toMatchObject({
+      code: "not_found",
+    });
+  });
+
+  it("recusa transferir para quem já é owner", async () => {
+    const service = createTenantService(
+      makeRepo({
+        async getMember() {
+          return makeMember({ role: "owner" });
+        },
+      }),
+    );
+    await expect(service.transferOwnership(COMPANY_ID, "m1")).rejects.toBeInstanceOf(AppError);
   });
 });
