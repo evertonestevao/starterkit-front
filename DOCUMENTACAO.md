@@ -499,6 +499,9 @@ Publicar força reaceite automático de todos os usuários.
 
 O kit foi desenhado para isto: **a fundação não se reescreve; você troca identidade e adiciona domínio.**
 
+> Vai usar um agente de código (Claude Code)? Comece pelo [NOVO-PRODUTO.md](NOVO-PRODUTO.md):
+> tem o prompt modelo, o que preencher e as fases recomendadas.
+
 **Dia 1 — identidade (≈1h)**
 1. Clone com histórico novo:
    ```bash
