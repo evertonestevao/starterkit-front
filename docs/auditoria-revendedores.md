@@ -9,6 +9,7 @@ Confronto de `docs/plano-modulo-revendedores.md`, seções 3 a 10, com o código
 | Item | Evidência | Status |
 |---|---|---|
 | Tipo percentual ou valor fixo | `mig/20261030120000_resellers.sql`; `m/schemas.test.ts` | Feito |
+| Uma comissão por pagamento; fixo sem multiplicar no anual | `mig/20261030200000_reseller_fixed_commission_per_payment.sql`; `resellers_test.sql` ("Anual à vista", "12 cobranças") | Feito |
 | Por vendedor, por plano e padrão global | `resolve_commission`; `resellers_test.sql` ("Qual regra vale") | Feito |
 | Por produto | Sem catálogo de produtos no repo, decisão aprovada em 30/10/2026. Cada deploy é um sistema, e o plano registra a diferença na seção 10 | Feito (sem produto) |
 | Faixas por nº da venda, campo opcional | `m/admin/rules-page.tsx`; `resellers_test.sql` ("faixas", "Nº da venda") | Feito |

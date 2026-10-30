@@ -19,7 +19,7 @@ Permitir que outras pessoas vendam os sistemas da EverApps por comissão, com o 
 
 ## 3. Regras de comissão
 
-- Tipo: **percentual** ou **valor fixo**.
+- Tipo: **percentual** ou **valor fixo**. O vendedor recebe como a plataforma recebe: uma comissão por pagamento, e o fixo não é multiplicado no plano anual (decisão de 30/10/2026).
 - Configurável por **vendedor**, por **produto** ou por **plano**, além de um padrão global.
 - **Faixas por nº da venda (opcional, configurável por sistema):** exemplo, 30% nas 3 primeiras vendas e 40% da 4ª em diante. É um campo opcional "a partir da venda nº" no formulário da regra. Se não for usado, a regra vale sempre. A contagem é por produto, dentro do sistema (cada sistema tem suas próprias regras e contagem).
 - **Duração (opcional por regra e por cliente):**

@@ -293,7 +293,7 @@ Depois do login, quem é só vendedor vai para `/vendedor`; quem também é clie
 **Comissão** (gateway Asaas; Stripe não gera comissão):
 
 - **Contratação:** se a empresa nunca pagou, o checkout grava a indicação do cookie e cria o vínculo, só para plano liberado e sem auto-indicação. O nº da venda e a faixa de comissão são definidos no primeiro pagamento confirmado; checkout abandonado não conta.
-- **Pagamento confirmado:** gera um lançamento sobre o valor bruto, com meses cobertos pelo ciclo do plano (mensal 1, anual 12). Continua gerando com o módulo desligado.
+- **Pagamento confirmado:** gera um lançamento por pagamento recebido, sobre o valor bruto: anual à vista gera 1, e 12 cobranças geram 12. O valor fixo vale por pagamento, sem multiplicar. A duração conta os meses cobertos pelo ciclo do plano (mensal 1, anual 12), e o valor é proporcional quando resta menos do que o pagamento cobre. Continua gerando com o módulo desligado.
 - **Estorno:** reverte ou recalcula o lançamento pendente; o já pago não muda e fica sinalizado.
 - **Assinatura cancelada:** encerra o vínculo.
 - **Falha:** nunca afeta o pagamento. Fica em `reseller_commission_failures`, com reprocesso manual idempotente pela action `reprocessCommissionFailureAction`, só para o super admin.

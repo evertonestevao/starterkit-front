@@ -177,11 +177,17 @@ begin
     raise exception 'FALHA vínculo: gerou sem cliente vinculado';
   end if;
 
-  -- Anual: percentual sobre o pago; fixo vezes os 12 meses.
+  -- Anual à vista: percentual sobre o pago; fixo uma vez, porque houve um pagamento.
   perform public.register_commission(pg_temp.c(5), 'asaas', 'pay-anual-pct', 120000, 12);
   if pg_temp.amount('pay-anual-pct') <> 60000 then raise exception 'FALHA anual percentual: %', pg_temp.amount('pay-anual-pct'); end if;
   perform public.register_commission(pg_temp.c(6), 'asaas', 'pay-anual-fixo', 120000, 12);
-  if pg_temp.amount('pay-anual-fixo') <> 12000 then raise exception 'FALHA anual fixo: %', pg_temp.amount('pay-anual-fixo'); end if;
+  if pg_temp.amount('pay-anual-fixo') <> 1000 then raise exception 'FALHA anual fixo: %', pg_temp.amount('pay-anual-fixo'); end if;
+
+  -- 12 cobranças de 1 mês: 12 comissões de valor cheio.
+  for n in 1..12 loop
+    perform public.register_commission(pg_temp.c(6), 'asaas', 'doze-' || n, 10000);
+    if pg_temp.amount('doze-' || n) <> 1000 then raise exception 'FALHA 12 cobranças, nº %: %', n, pg_temp.amount('doze-' || n); end if;
+  end loop;
 
   -- Duração de 3 meses, já com 1 pago: o 3º daqui não gera; reverter um libera a vaga.
   update public.reseller_clients set duration_months = 3 where company_id = pg_temp.c(2);
@@ -212,13 +218,13 @@ begin
     raise exception 'FALHA proporcional: gerou depois de esgotar';
   end if;
 
-  -- Anual com duração 6, fixo de 1000 por mês: 6 meses, não 12.
+  -- Anual com duração 6, fixo de 1000 por pagamento: cobre 6 dos 12 meses, metade do valor.
   perform public.link_company_to_reseller(pg_temp.c(13), pg_temp.a(), pg_temp.plan('pro'), 'sub-13');
   update public.reseller_clients
   set commission_type = 'fixed', commission_percent = null, commission_fixed_cents = 1000, duration_months = 6, is_override = true
   where company_id = pg_temp.c(13);
   perform public.register_commission(pg_temp.c(13), 'asaas', 'prop-fixo', 120000, 12);
-  if pg_temp.amount('prop-fixo') <> 6000 then raise exception 'FALHA proporcional fixo: %', pg_temp.amount('prop-fixo'); end if;
+  if pg_temp.amount('prop-fixo') <> 500 then raise exception 'FALHA proporcional fixo: %', pg_temp.amount('prop-fixo'); end if;
 
   -- Duração 18: primeiro ano cheio, segundo com os 6 meses restantes, terceiro nada.
   perform public.link_company_to_reseller(pg_temp.c(14), pg_temp.a(), pg_temp.plan('pro'), 'sub-14');

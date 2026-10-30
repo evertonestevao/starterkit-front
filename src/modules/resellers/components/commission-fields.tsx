@@ -28,11 +28,11 @@ export function CommissionFields({
           className={SELECT_CLASS}
         >
           <option value="percent">Percentual</option>
-          <option value="fixed">Valor fixo por mês</option>
+          <option value="fixed">Valor fixo por pagamento</option>
         </select>
       </div>
       <div className="flex flex-col gap-2">
-        <Label htmlFor={`${idPrefix}-value`}>{isPercent ? "Valor (%)" : "Valor (R$ por mês)"}</Label>
+        <Label htmlFor={`${idPrefix}-value`}>{isPercent ? "Valor (%)" : "Valor (R$ por pagamento)"}</Label>
         <Input
           id={`${idPrefix}-value`}
           name="value"

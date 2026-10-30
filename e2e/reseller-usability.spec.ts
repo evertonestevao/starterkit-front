@@ -128,7 +128,7 @@ test("plano grátis não aparece para liberar; falha usa texto claro; rótulo ac
 
   await expect(page.getByLabel("Valor (%)")).toBeVisible();
   await page.getByLabel("Tipo").selectOption("fixed");
-  await expect(page.getByLabel("Valor (R$ por mês)")).toBeVisible();
+  await expect(page.getByLabel("Valor (R$ por pagamento)")).toBeVisible();
 
   const external = `pay-${stamp()}`;
   await admin.rpc("record_commission_failure", {
