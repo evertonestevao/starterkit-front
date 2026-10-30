@@ -89,6 +89,31 @@ function makeRepo(state: {
   };
 }
 
+describe("applyPaymentEvent: reassinatura", () => {
+  it("arquiva a assinatura cancelada e cria a nova com outro id externo", async () => {
+    const canceled = makeSubscription({ status: "canceled", external_subscription_id: "ext-old" });
+    const state = { plans: [makePlan({})], subscriptions: [canceled] };
+    const service = createBillingService(makeRepo(state));
+
+    await service.applyPaymentEvent({
+      type: "subscription.activated",
+      gateway: "asaas",
+      externalSubscriptionId: "ext-new",
+      externalCustomerId: "cus-1",
+      companyId: "company-1",
+      planId: "plan-1",
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+    });
+
+    expect(canceled.deleted_at).not.toBeNull();
+    const active = state.subscriptions.filter((s) => !s.deleted_at);
+    expect(active).toHaveLength(1);
+    expect(active[0]).toMatchObject({ external_subscription_id: "ext-new", status: "active" });
+  });
+});
+
 describe("canAccessFeature", () => {
   const proPlan = makePlan({
     id: "plan-pro",

@@ -164,7 +164,7 @@ Os valores vêm das migrations `seed_plans` e `plans_extra_seat_price`. A landin
 | **Assinar / trocar plano** | Owner | Página de pagamento hospedada pelo gateway. No Asaas, o cliente escolhe PIX, boleto ou cartão. Com `PAYMENT_GATEWAY=fake`, ativa o plano direto, para desenvolvimento. |
 | **Cancelar assinatura** | Owner | Cancela no gateway. O acesso segue até o fim do período pago. |
 | **Cobrança por seat** | Automático | Ao convidar, revogar ou remover membros, os extras são sincronizados com o gateway: item com quantidade (Stripe) ou novo valor total da assinatura (Asaas). |
-| **Webhook de pagamento** (`POST /api/webhooks/payment`) | Gateway | Autenticidade verificada por cada provedor (HMAC no Stripe, token no Asaas). Os eventos atualizam `subscriptions` de forma idempotente e entram na auditoria. |
+| **Webhook de pagamento** (`POST /api/webhooks/payment`) | Gateway | Autenticidade verificada por cada provedor (HMAC no Stripe, token no Asaas). Os eventos atualizam `subscriptions` de forma idempotente e entram na auditoria. Em uma reassinatura, a assinatura anterior da empresa vai para o histórico e a nova assume. |
 | **Limites por plano** | Código | `canAccessFeature()` e `getFeatureLimit()` são o ponto único de checagem. |
 
 **Gateways disponíveis** (`PAYMENT_GATEWAY`):

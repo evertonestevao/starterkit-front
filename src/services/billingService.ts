@@ -95,6 +95,12 @@ export function createBillingService(repo: BillingRepository) {
       if (!event.companyId || !event.planId) {
         throw new AppError("payment_error", "Evento de ativação sem company_id/plan_id");
       }
+      // Reassinatura: a assinatura anterior (ex.: cancelada) ainda ocupa o índice
+      // único por empresa. Vai para o histórico para a nova poder entrar.
+      const previous = await repo.getActiveSubscription(event.companyId);
+      if (previous) {
+        await repo.updateSubscription(previous.id, { deleted_at: new Date().toISOString() });
+      }
       await repo.insertSubscription({
         company_id: event.companyId,
         plan_id: event.planId,
