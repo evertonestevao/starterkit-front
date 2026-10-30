@@ -4,7 +4,7 @@ import { reprocessCommissionFailureAction } from "../actions";
 import { createResellerAdminRepository } from "../adminRepository";
 import { requireSuperAdminPage } from "../areaAccess";
 import { ActionForm } from "../components/action-form";
-import { formatDateTime } from "../format";
+import { EVENT_LABEL, formatDateTime } from "../format";
 
 export default async function AlertsPage() {
   await requireSuperAdminPage();
@@ -23,7 +23,7 @@ export default async function AlertsPage() {
           <CardTitle>Vendas sem regra de comissão</CardTitle>
           <CardDescription>
             O cliente chegou por um vendedor, mas nenhuma regra se aplicava. Ele não foi vinculado e não gera
-            comissão: crie a regra para as próximas vendas.
+            comissão. Crie uma regra em Regras e planos para que isso não se repita nas próximas vendas.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2 text-sm">
@@ -50,10 +50,11 @@ export default async function AlertsPage() {
             <div key={failure.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
               <div className="min-w-0">
                 <p className="font-medium">
-                  {failure.gateway} · {failure.event_type}
+                  {EVENT_LABEL[failure.event_type] ?? failure.event_type}
                 </p>
                 <p className="break-all text-xs text-muted-foreground">
-                  {failure.external_id} · {failure.attempts} tentativa(s) · {formatDateTime(failure.updated_at)}
+                  Pagamento {failure.external_id} · {failure.gateway} · {failure.attempts}{" "}
+                  {failure.attempts === 1 ? "tentativa" : "tentativas"} · {formatDateTime(failure.updated_at)}
                 </p>
                 <p className="text-xs text-destructive">{failure.error}</p>
               </div>

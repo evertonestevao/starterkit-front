@@ -462,6 +462,9 @@ begin
      or exists (select 1 from public.reseller_my_commissions) then
     raise exception 'FALHA suspenso: manteve acesso ao painel';
   end if;
+  if public.my_reseller_status() is distinct from 'suspended' then
+    raise exception 'FALHA suspenso: status próprio não veio';
+  end if;
 end $$;
 reset role;
 do $$
@@ -876,7 +879,7 @@ begin
   where p.pronamespace = 'public'::regnamespace
     and p.proname ~ 'reseller|commission|referral|find_user|link_company'
     and has_function_privilege('authenticated', p.oid, 'execute')
-    and p.proname not in ('current_reseller_id', 'resellers_enabled', 'set_plan_available_to_resellers');
+    and p.proname not in ('current_reseller_id', 'resellers_enabled', 'set_plan_available_to_resellers', 'my_reseller_status');
   if bad is not null then raise exception 'FALHA revisão: client executa: %', bad; end if;
 
   select string_agg(p.proname, ', ') into bad

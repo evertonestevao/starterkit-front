@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireSellerPage } from "../areaAccess";
+import { StatCards } from "../components/stat-cards";
 import { formatCommission, formatDate, formatDuration } from "../format";
 import { createSellerRepository } from "../sellerRepository";
 
@@ -14,7 +15,14 @@ export default async function SellerClientsPage() {
         <h2 className="text-xl font-semibold tracking-tight">Meus clientes</h2>
         <p className="text-sm text-muted-foreground">Quem contratou pelo seu link</p>
       </div>
-      {clients.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum cliente ainda.</p> : null}
+      <StatCards
+        stats={[
+          { label: "Clientes ativos", value: String(clients.filter((client) => !client.ended_at).length) },
+          { label: "Encerrados", value: String(clients.filter((client) => client.ended_at).length) },
+          { label: "Total de vendas", value: String(clients.length) },
+        ]}
+      />
+      {clients.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum cliente ainda. Divulgue seu link em Meu link.</p> : null}
       <ul className="flex flex-col gap-3">
         {clients.map((client) => (
           <li key={client.id}>

@@ -83,7 +83,9 @@ export function createResellerAdminRepository(client: SupabaseClient) {
           .from("commission_rules")
           .select("*")
           .is("deleted_at", null)
-          .order("created_at", { ascending: false }),
+          .order("reseller_id", { ascending: true, nullsFirst: true })
+          .order("plan_id", { ascending: true, nullsFirst: true })
+          .order("from_sale_number"),
         "Falha ao listar regras",
       ) as CommissionRuleRow[];
     },

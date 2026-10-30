@@ -20,6 +20,7 @@ const PROTECTED_PREFIXES = [
   "/admin",
   "/vendedor",
   "/escolher-area",
+  "/acesso-suspenso",
 ];
 /** Rotas de auth que usuário logado não deve rever. */
 const AUTH_ONLY_ANONYMOUS = ["/login", "/signup", "/forgot-password"];

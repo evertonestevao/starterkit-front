@@ -12,9 +12,11 @@ export function Breadcrumbs({
   pathname: string;
   items?: ShellNavItem[];
 }) {
-  const current = titleForPath(pathname, items);
   const home = items[0];
   const isRoot = pathname === home.href;
+  const title = titleForPath(pathname, items);
+  // Subpágina sem item próprio no menu não repete o nome da área.
+  const current = title === home.title ? "Detalhes" : title;
 
   return (
     <ol className="flex items-center gap-1 text-sm text-muted-foreground">

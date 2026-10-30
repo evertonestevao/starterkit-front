@@ -79,7 +79,7 @@ test("cadastrar vendedor, criar regra, liberar plano, ajustar cliente e pagar", 
   await page.goto("/admin/revendedores/regras");
   await page.getByLabel("Vendedor", { exact: true }).selectOption({ label: sellerName });
   await page.getByLabel("A partir da venda nº (opcional)").fill("1");
-  await page.getByLabel("Valor", { exact: true }).fill("35");
+  await page.getByLabel("Valor (%)").fill("35");
   await page.getByRole("button", { name: "Criar regra" }).click();
   await expect(page.getByText("Regra criada")).toBeVisible();
   await expect(page.getByText(`${sellerName} · Todos os planos`)).toBeVisible();
@@ -123,8 +123,9 @@ test("cadastrar vendedor, criar regra, liberar plano, ajustar cliente e pagar", 
   // Ajuste por cliente: marca override e aparece no histórico.
   await page.goto(`/admin/revendedores/${reseller!.id}`);
   await expect(page.getByText(clientCompanyName).first()).toBeVisible();
-  await page.getByLabel("Valor", { exact: true }).fill("40");
-  await page.getByRole("button", { name: "Ajustar comissão" }).click();
+  await page.getByText("Ajustar comissão").click();
+  await page.getByLabel("Valor (%)").fill("40");
+  await page.getByRole("button", { name: "Salvar ajuste" }).click();
   await expect(page.getByText("Vale para os próximos lançamentos")).toBeVisible();
   await expect(page.getByText("Ajuste manual", { exact: true })).toBeVisible();
   await expect(page.getByText("percentual: 35 → 40")).toBeVisible();
@@ -168,6 +169,7 @@ test("cadastrar vendedor, criar regra, liberar plano, ajustar cliente e pagar", 
   const row = page.locator("div.rounded-lg", { hasText: `falha-${created!.id}` });
   await row.getByRole("button", { name: "Reprocessar" }).click();
   // Resolvida, a linha some da lista junto com o botão.
+  await expect(page.getByText("Comissão reprocessada")).toBeVisible();
   await expect(row).toHaveCount(0);
   const { data: reprocessed } = await admin
     .from("reseller_commissions")

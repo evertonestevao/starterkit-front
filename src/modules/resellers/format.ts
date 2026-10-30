@@ -15,7 +15,7 @@ export function formatDateTime(value: string): string {
 export function formatCommission(value: CommissionValue): string {
   return value.commission_type === "percent"
     ? `${Number(value.commission_percent).toLocaleString("pt-BR")}%`
-    : formatCents(value.commission_fixed_cents ?? 0);
+    : `${formatCents(value.commission_fixed_cents ?? 0)} fixo`;
 }
 
 export function formatDuration(months: number | null): string {
@@ -25,12 +25,18 @@ export function formatDuration(months: number | null): string {
 
 export const STATUS_LABEL = { pending: "Pendente", paid: "Pago", reversed: "Revertido" } as const;
 
+/** Evento técnico em português, para a tela de falhas. */
+export const EVENT_LABEL: Record<string, string> = {
+  "subscription.activated": "Pagamento confirmado",
+  "payment.refunded": "Estorno",
+  "subscription.canceled": "Assinatura cancelada",
+};
+
 const TRACKED_FIELDS: Record<string, string> = {
   commission_type: "tipo",
   commission_percent: "percentual",
   commission_fixed_cents: "valor fixo (centavos)",
   duration_months: "duração",
-  is_override: "ajuste manual",
   amount_cents: "valor (centavos)",
   status: "status",
   ended_at: "encerrado em",

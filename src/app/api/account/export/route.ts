@@ -19,7 +19,8 @@ export async function GET() {
       },
     });
   } catch (err) {
-    if (!isAppError(err)) {
+    // Erro esperado (sessão, rate limit) não vai ao monitoramento; falha interna, sim.
+    if (!isAppError(err) || err.status >= 500) {
       await reportError(err, { source: "route:/api/account/export" });
     }
     return Response.json(

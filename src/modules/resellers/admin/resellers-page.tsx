@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Users } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,23 @@ const STATUS_LABEL = { pending: "Aguardando", active: "Ativo", suspended: "Suspe
 export default async function ResellersPage() {
   await requireSuperAdminPage();
   const repo = createResellerAdminRepository(await getSupabaseServerClient());
-  const [settings, resellers] = await Promise.all([repo.getSettings(), repo.listResellers()]);
+  const [settings, resellers, rules, plans, alerts, failures] = await Promise.all([
+    repo.getSettings(),
+    repo.listResellers(),
+    repo.listRules(),
+    repo.listPlans(),
+    repo.listLinkAlerts(),
+    repo.listPendingFailures(),
+  ]);
+
+  // O que falta para uma venda gerar comissão.
+  const setupSteps = [
+    { done: rules.length > 0, label: "Crie uma regra de comissão", href: "/admin/revendedores/regras" },
+    { done: plans.some((plan) => plan.available_to_resellers), label: "Libere um plano", href: "/admin/revendedores/regras" },
+    { done: settings.resellers_enabled, label: "Ligue o módulo, nesta página", href: null },
+    { done: resellers.length > 0, label: "Cadastre um vendedor, nesta página", href: null },
+  ].filter((step) => !step.done);
+  const attention = alerts.length + failures.length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -24,6 +41,39 @@ export default async function ResellersPage() {
         <h2 className="text-xl font-semibold tracking-tight">Vendedores</h2>
         <p className="text-sm text-muted-foreground">Cadastro por convite e totais de cada vendedor</p>
       </div>
+
+      {setupSteps.length > 0 ? (
+        <Card className="border-primary/50">
+          <CardHeader>
+            <CardTitle>Para começar a vender</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc pl-5 text-sm">
+              {setupSteps.map((step) => (
+                <li key={step.label}>
+                  {step.href ? (
+                    <Link href={step.href} className="underline">
+                      {step.label}
+                    </Link>
+                  ) : (
+                    step.label
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {attention > 0 ? (
+        <Alert>
+          <AlertDescription>
+            <Link href="/admin/revendedores/falhas" className="underline">
+              {attention === 1 ? "1 item precisa" : `${attention} itens precisam`} da sua atenção em Alertas e falhas
+            </Link>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -40,6 +90,16 @@ export default async function ResellersPage() {
               action={setModuleEnabledAction}
               submitLabel={settings.resellers_enabled ? "Desligar módulo" : "Ligar módulo"}
               variant={settings.resellers_enabled ? "outline" : "default"}
+              confirm={
+                settings.resellers_enabled
+                  ? {
+                      title: "Desligar o módulo?",
+                      description:
+                        "Os links param de funcionar e ninguém novo é vinculado. Quem já vendeu continua gerando comissão.",
+                      confirmLabel: "Desligar",
+                    }
+                  : undefined
+              }
             >
               <input type="hidden" name="enabled" value={String(!settings.resellers_enabled)} />
             </ActionForm>
@@ -52,7 +112,7 @@ export default async function ResellersPage() {
             <CardDescription>O vendedor recebe um e-mail para definir a senha.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ActionForm action={createResellerAction} submitLabel="Enviar convite">
+            <ActionForm action={createResellerAction} submitLabel="Enviar convite" resetOnSuccess>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="reseller-name">Nome</Label>
                 <Input id="reseller-name" name="name" required />
@@ -62,8 +122,8 @@ export default async function ResellersPage() {
                 <Input id="reseller-email" name="email" type="email" required />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="reseller-code">Código de indicação (vazio = gerar)</Label>
-                <Input id="reseller-code" name="referralCode" placeholder="maria-silva" />
+                <Label htmlFor="reseller-code">Código de indicação</Label>
+                <Input id="reseller-code" name="referralCode" placeholder="Vazio: gerado pelo nome" />
               </div>
             </ActionForm>
           </CardContent>

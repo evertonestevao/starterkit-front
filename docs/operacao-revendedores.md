@@ -40,7 +40,7 @@ Se a pessoa já tem conta no sistema, ela continua com a mesma senha e passa a v
 
 Vale a regra mais específica: do vendedor antes da global; de plano antes da genérica; por fim, a maior faixa ("a partir da venda nº") que a venda alcança.
 
-A regra é copiada para o cliente na contratação. **Mudar uma regra não altera clientes já vinculados.** Para mudar um cliente, abra a página do vendedor e use **Ajustar comissão**, que vale só para os próximos lançamentos. Para corrigir um mês já lançado, edite o valor do lançamento em **Lançamentos**. Tudo fica no histórico.
+A regra é copiada para o cliente na contratação. **Mudar uma regra não altera clientes já vinculados.** Para mudar um cliente, abra a página do vendedor e use **Ajustar comissão**, que vale só para os próximos lançamentos. Para corrigir um mês já lançado, use **Corrigir valor** no lançamento, em **Lançamentos**. Tudo fica no histórico.
 
 ## Fechar o mês
 
@@ -48,7 +48,7 @@ A regra é copiada para o cliente na contratação. **Mudar uma regra não alter
 2. Clique em **Exportar comissões do mês (CSV)**. O arquivo traz os lançamentos e o total por vendedor, respeitando os filtros. Sem período na tela, sai o mês atual. Lançamentos revertidos aparecem na lista, mas não entram nos totais.
 3. Confira os lançamentos marcados com **Estornado depois de pago**: o sistema não desconta esses valores sozinho, e o acerto é seu.
 4. Pague os vendedores por fora (Pix, por exemplo).
-5. De volta à lista, marque os lançamentos pagos, informe a **Data do pagamento** e clique em **Marcar selecionados como pagos**. Lançamento já pago não é alterado se for selecionado de novo.
+5. De volta à lista, marque os lançamentos pagos (ou **Selecionar todos os pendentes**; o total selecionado aparece ao lado), informe a **Data do pagamento** e clique em **Marcar selecionados como pagos**. Lançamento já pago não é alterado se for selecionado de novo.
 
 A lista mostra até 200 lançamentos por vez. Se houver mais, filtre por vendedor ou período antes de marcar em lote.
 

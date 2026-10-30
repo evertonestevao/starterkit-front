@@ -95,7 +95,7 @@ test("dois vendedores: login cai em /vendedor e um não enxerga nada do outro", 
 
   await page.goto("/vendedor/comissoes");
   await expect(page.getByText(nameA)).toBeVisible();
-  await expect(page.getByText("R$ 30,00")).toBeVisible();
+  await expect(page.getByText("R$ 30,00").first()).toBeVisible();
   await expect(page.getByText(nameB)).toHaveCount(0);
 
   // Sem empresa: dashboard devolve para a área dele; painel do admin é negado.

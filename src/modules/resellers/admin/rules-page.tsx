@@ -26,8 +26,9 @@ export default async function RulesPage() {
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Regras e planos</h2>
         <p className="text-sm text-muted-foreground">
-          Vale a regra mais específica: vendedor antes da global; plano antes da genérica; por fim, a maior
-          faixa que a venda alcança. Mudar regras não altera clientes já vinculados.
+          Vale a regra mais específica: de um vendedor antes da que vale para todos; de um plano antes da que vale
+          para todos os planos; e, por fim, a maior faixa que a venda alcança. Mudar regras não altera clientes já
+          vinculados.
         </p>
       </div>
 
@@ -37,7 +38,7 @@ export default async function RulesPage() {
           <CardDescription>Esconder afeta só novas vendas: clientes antigos continuam gerando comissão.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {plans.map((plan) => (
+          {plans.filter((plan) => plan.price_cents > 0).map((plan) => (
             <div key={plan.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
               <span>
                 <span className="font-medium">{plan.name}</span>{" "}
@@ -63,7 +64,12 @@ export default async function RulesPage() {
           <CardTitle>Nova regra</CardTitle>
         </CardHeader>
         <CardContent>
-          <ActionForm action={createCommissionRuleAction} submitLabel="Criar regra" className="grid items-end gap-3 md:grid-cols-3">
+          <ActionForm
+            action={createCommissionRuleAction}
+            submitLabel="Criar regra"
+            resetOnSuccess
+            className="grid items-end gap-3 md:grid-cols-3"
+          >
             <div className="flex flex-col gap-2">
               <Label htmlFor="rule-reseller">Vendedor</Label>
               <select id="rule-reseller" name="resellerId" className={SELECT_CLASS}>
@@ -79,7 +85,7 @@ export default async function RulesPage() {
               <Label htmlFor="rule-plan">Plano</Label>
               <select id="rule-plan" name="planId" className={SELECT_CLASS}>
                 <option value="">Todos</option>
-                {plans.map((plan) => (
+                {plans.filter((plan) => plan.price_cents > 0).map((plan) => (
                   <option key={plan.id} value={plan.id}>
                     {plan.name}
                   </option>
@@ -88,7 +94,7 @@ export default async function RulesPage() {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="rule-from">A partir da venda nº (opcional)</Label>
-              <Input id="rule-from" name="fromSaleNumber" type="number" min={1} />
+              <Input id="rule-from" name="fromSaleNumber" type="number" min={1} placeholder="1" />
             </div>
             <CommissionFields idPrefix="rule" />
           </ActionForm>
@@ -111,7 +117,17 @@ export default async function RulesPage() {
                 {rule.plan_id ? planName.get(rule.plan_id) : "Todos os planos"} · a partir da venda {rule.from_sale_number} ·{" "}
                 {formatDuration(rule.duration_months)}
               </span>
-              <ActionForm action={deleteCommissionRuleAction} submitLabel="Remover" variant="outline" size="sm">
+              <ActionForm
+                action={deleteCommissionRuleAction}
+                submitLabel="Remover"
+                variant="outline"
+                size="sm"
+                confirm={{
+                  title: "Remover esta regra?",
+                  description: "Clientes já vinculados não mudam, mas as próximas vendas deixam de usá-la.",
+                  confirmLabel: "Remover",
+                }}
+              >
                 <input type="hidden" name="id" value={rule.id} />
               </ActionForm>
             </li>

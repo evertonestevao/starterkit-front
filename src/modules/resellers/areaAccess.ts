@@ -20,11 +20,16 @@ export interface AreaLink {
 
 export async function getResellerRoles() {
   const client = await getSupabaseServerClient();
-  const [{ data: isSuperAdmin }, { data: me }] = await Promise.all([
+  // Sem sessão (fim de logout ou exclusão) o client viraria anon, que não acessa nada disto.
+  const { data: session } = await client.auth.getSession();
+  if (!session.session) return { isSuperAdmin: false, isReseller: false, isSuspended: false };
+
+  const [{ data: isSuperAdmin }, { data: me }, { data: status }] = await Promise.all([
     client.rpc("is_super_admin"),
     client.from("reseller_me").select("id").maybeSingle(),
+    client.rpc("my_reseller_status"),
   ]);
-  return { isSuperAdmin: isSuperAdmin === true, isReseller: Boolean(me) };
+  return { isSuperAdmin: isSuperAdmin === true, isReseller: Boolean(me), isSuspended: status === "suspended" };
 }
 
 /** Links de troca de área no menu do usuário. */
@@ -63,7 +68,8 @@ export async function requireSuperAdminPage() {
 
 /** Portão da área do vendedor: suspenso ou sem cadastro não passa. */
 export async function requireSellerPage() {
-  const { isReseller } = await getResellerRoles();
+  const { isReseller, isSuspended } = await getResellerRoles();
+  if (isSuspended) redirect("/acesso-suspenso");
   if (!isReseller) redirect("/dashboard");
 }
 
@@ -74,7 +80,16 @@ export async function hasCompany(): Promise<boolean> {
 
 /** Destino depois do login, quando não há um destino pedido. */
 export async function resolvePostLoginPath(): Promise<string> {
-  const { isReseller } = await getResellerRoles();
+  const { isReseller, isSuspended } = await getResellerRoles();
+  const withCompany = isReseller || isSuspended ? await hasCompany() : true;
+  if (isSuspended && !withCompany) return "/acesso-suspenso";
   if (!isReseller) return "/dashboard";
-  return (await hasCompany()) ? "/escolher-area" : "/vendedor";
+  return withCompany ? "/escolher-area" : "/vendedor";
+}
+
+/** Destino de quem abre o dashboard sem empresa: outra área dele, ou criar a empresa. */
+export async function getNoCompanyDestination(areaLinks: AreaLink[]): Promise<string> {
+  if (areaLinks[0]) return areaLinks[0].href;
+  const { isSuspended } = await getResellerRoles();
+  return isSuspended ? "/acesso-suspenso" : "/onboarding";
 }

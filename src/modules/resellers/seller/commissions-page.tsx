@@ -1,20 +1,30 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireSellerPage } from "../areaAccess";
+import { StatCards } from "../components/stat-cards";
 import { formatCents, formatDate, STATUS_LABEL } from "../format";
 import { createSellerRepository } from "../sellerRepository";
 
 export default async function SellerCommissionsPage() {
   await requireSellerPage();
   const commissions = await (await createSellerRepository()).listCommissions();
+  const sumBy = (status: string) =>
+    commissions.filter((c) => c.status === status).reduce((total, c) => total + c.amount_cents, 0);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Minhas comissões</h2>
-        <p className="text-sm text-muted-foreground">Um lançamento por pagamento confirmado</p>
+        <p className="text-sm text-muted-foreground">Um lançamento por pagamento confirmado do cliente</p>
       </div>
-      {commissions.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma comissão ainda.</p> : null}
+      <StatCards
+        stats={[
+          { label: "A receber", value: formatCents(sumBy("pending")) },
+          { label: "Recebido", value: formatCents(sumBy("paid")) },
+          { label: "Lançamentos", value: String(commissions.length) },
+        ]}
+      />
+      {commissions.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma comissão ainda. Elas aparecem aqui quando um cliente seu paga.</p> : null}
       <ul className="flex flex-col gap-3">
         {commissions.map((commission) => (
           <li key={commission.id}>

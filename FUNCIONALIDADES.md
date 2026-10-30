@@ -278,7 +278,7 @@ O módulo nasce **desligado**. O super admin opera tudo em `/admin/revendedores`
 | Minhas comissões | Cliente, valor-base, comissão, status e datas |
 | Minha conta | Exportar dados (inclui a revenda) e excluir a conta, bloqueada com comissão pendente. Ao excluir, os lançamentos ficam e os dados pessoais do vendedor são anonimizados. |
 
-Depois do login, quem é só vendedor vai para `/vendedor`; quem também é cliente escolhe a área em `/escolher-area` e troca pelo menu do usuário. Suspenso perde o acesso; módulo desligado só bloqueia o Meu link.
+Depois do login, quem é só vendedor vai para `/vendedor`; quem também é cliente escolhe a área em `/escolher-area` e troca pelo menu do usuário. Suspenso perde o acesso e vê uma tela explicando o bloqueio (`/acesso-suspenso`); módulo desligado só bloqueia o Meu link.
 
 **Painel do super admin** (toda tela e ação revalida o papel no servidor):
 
