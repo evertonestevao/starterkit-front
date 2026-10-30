@@ -169,7 +169,8 @@ export default async function CommissionsPage({
                 <p>
                   <span className="font-medium">{formatCents(commission.amount_cents)}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {formatCommission(commission)} sobre {formatCents(commission.base_amount_cents)}
+                    {formatCommission(commission)}
+                    {commission.commission_type === "percent" ? ` sobre ${formatCents(commission.base_amount_cents)}` : null}
                   </span>
                 </p>
                 <div className="flex flex-wrap items-center gap-2">

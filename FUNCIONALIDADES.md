@@ -288,11 +288,11 @@ Depois do login, quem é só vendedor vai para `/vendedor`; quem também é clie
 | Página do vendedor | Editar nome e código, suspender/reativar, reenviar convite, ajustar comissão por cliente (marca override, vale para os próximos lançamentos), histórico de alterações |
 | Regras e planos | Regras por vendedor e plano ou padrão global, com tipo, valor, duração e "a partir da venda nº"; liberar e esconder planos |
 | Lançamentos | Filtros por vendedor, plano, status e período; editar valor; marcar vários como pagos, com data; exportar CSV com total por vendedor, respeitando os filtros (sem período, o mês atual) |
-| Alertas e falhas | Vendas sem regra aplicável (`LINK_NO_RULE`) e falhas de comissão com botão de reprocessar |
+| Alertas e falhas | Vendas sem regra aplicável (`LINK_NO_RULE`), com "Vincular agora" sem retroativo, e falhas de comissão com botão de reprocessar |
 
 **Comissão** (gateway Asaas; Stripe não gera comissão):
 
-- **Contratação:** se a empresa nunca pagou, o checkout grava a indicação do cookie e cria o vínculo, só para plano liberado e sem auto-indicação.
+- **Contratação:** se a empresa nunca pagou, o checkout grava a indicação do cookie e cria o vínculo, só para plano liberado e sem auto-indicação. O nº da venda e a faixa de comissão são definidos no primeiro pagamento confirmado; checkout abandonado não conta.
 - **Pagamento confirmado:** gera um lançamento sobre o valor bruto, com meses cobertos pelo ciclo do plano (mensal 1, anual 12). Continua gerando com o módulo desligado.
 - **Estorno:** reverte ou recalcula o lançamento pendente; o já pago não muda e fica sinalizado.
 - **Assinatura cancelada:** encerra o vínculo.

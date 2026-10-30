@@ -38,11 +38,17 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
 
   const [clients, commissions] = await Promise.all([
     repo.listClients(id),
-    repo.listCommissions({ reseller: id }, 10),
+    repo.listCommissions({ reseller: id }, 20),
   ]);
   const clientName = new Map(clients.map((client) => [client.id, client.client_name]));
   // A criação do vínculo não é alteração: o histórico mostra só o que mudou depois.
-  const history = (await repo.listHistory("reseller_clients", clients.map((client) => client.id)))
+  const [clientHistory, commissionHistory] = await Promise.all([
+    repo.listHistory("reseller_clients", clients.map((client) => client.id)),
+    repo.listHistory("reseller_commissions", commissions.map((commission) => commission.id)),
+  ]);
+  for (const commission of commissions) clientName.set(commission.id, `Lançamento de ${commission.client_name}`);
+  const history = [...clientHistory, ...commissionHistory]
+    .sort((a, b) => b.changed_at.localeCompare(a.changed_at))
     .map((entry) => ({ entry, changes: describeChanges(entry) }))
     .filter(({ entry, changes }) => entry.action === "UPDATE" && changes.length > 0);
 
@@ -146,7 +152,9 @@ export default async function ResellerDetailPage({ params }: { params: Promise<{
               {client.ended_at ? <Badge variant="outline">Encerrado</Badge> : null}
             </p>
             <p className="text-muted-foreground">
-              {client.plan_name ?? "—"} · venda nº {client.sale_number} · {formatCommission(client)} ·{" "}
+              {client.plan_name ?? "—"} ·{" "}
+              {client.sale_number ? `venda nº ${client.sale_number}` : "aguardando o primeiro pagamento"} ·{" "}
+              {formatCommission(client)} ·{" "}
               {formatDuration(client.duration_months)}
             </p>
             <details className="mt-2">

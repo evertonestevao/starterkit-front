@@ -26,7 +26,8 @@ export interface AdminClient extends CommissionValue {
   reseller_id: string;
   client_name: string;
   plan_name: string | null;
-  sale_number: number;
+  /** Definido no primeiro pagamento; antes disso, null. */
+  sale_number: number | null;
   duration_months: number | null;
   is_override: boolean;
   started_at: string;

@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 /** Linha de totais, no topo das telas. */
 export function StatCards({ stats }: { stats: Array<{ label: string; value: string }> }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {stats.map((stat) => (
         <Card key={stat.label}>
           <CardContent>

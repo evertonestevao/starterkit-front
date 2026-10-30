@@ -36,7 +36,7 @@ export interface MyDataExport {
     email: string;
     referralCode: string;
     status: string;
-    clients: Array<{ clientName: string; saleNumber: number; startedAt: string; endedAt: string | null }>;
+    clients: Array<{ clientName: string; saleNumber: number | null; startedAt: string; endedAt: string | null }>;
     commissions: Array<{
       clientName: string;
       baseAmountCents: number;

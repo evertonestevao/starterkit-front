@@ -40,7 +40,7 @@ Se a pessoa já tem conta no sistema, ela continua com a mesma senha e passa a v
 
 Vale a regra mais específica: do vendedor antes da global; de plano antes da genérica; por fim, a maior faixa ("a partir da venda nº") que a venda alcança.
 
-A regra é copiada para o cliente na contratação. **Mudar uma regra não altera clientes já vinculados.** Para mudar um cliente, abra a página do vendedor e use **Ajustar comissão**, que vale só para os próximos lançamentos. Para corrigir um mês já lançado, use **Corrigir valor** no lançamento, em **Lançamentos**. Tudo fica no histórico.
+A regra é copiada para o cliente no primeiro pagamento confirmado, quando ele também recebe o nº da venda. Checkout abandonado não conta como venda. **Mudar uma regra não altera clientes já vinculados.** Para mudar um cliente, abra a página do vendedor e use **Ajustar comissão**, que vale só para os próximos lançamentos. Para corrigir um mês já lançado, use **Corrigir valor** no lançamento, em **Lançamentos**. Tudo fica no histórico.
 
 ## Fechar o mês
 
@@ -62,7 +62,7 @@ Quando o registro de uma comissão falha, o pagamento do cliente segue normal e 
 
 ## Vendas sem regra
 
-Em **Alertas e falhas**, **Vendas sem regra de comissão** lista clientes que chegaram por um vendedor quando nenhuma regra se aplicava. Eles **não ficaram vinculados**. Criar a regra resolve só as próximas vendas; hoje não há botão para vincular esses clientes depois.
+Em **Alertas e falhas**, **Vendas sem regra de comissão** lista clientes que chegaram por um vendedor quando nenhuma regra se aplicava. Eles **não ficaram vinculados**. Crie a regra em **Regras e planos** e clique em **Vincular agora**: vale só para os próximos pagamentos, e o que já foi pago não gera comissão.
 
 ## Desligar o módulo
 

@@ -83,6 +83,11 @@ declare
 begin
   foreach n in array array[1, 2, 3, 4] loop
     perform public.link_company_to_reseller(pg_temp.c(n), pg_temp.a(), pg_temp.plan('pro'), 'sub-' || n);
+    -- A faixa e o número só valem a partir do primeiro pagamento.
+    if (select sale_number from public.reseller_clients where company_id = pg_temp.c(n)) is not null then
+      raise exception 'FALHA faixas: número antes do pagamento em %', n;
+    end if;
+    perform public.register_commission(pg_temp.c(n), 'asaas', 'faixa-' || n, 10000);
     select commission_percent into v from public.reseller_clients where company_id = pg_temp.c(n);
     if v is distinct from (case when n < 4 then 30 else 40 end)::numeric then
       raise exception 'FALHA faixas: venda % ficou com %', n, v;
@@ -178,8 +183,8 @@ begin
   perform public.register_commission(pg_temp.c(6), 'asaas', 'pay-anual-fixo', 120000, 12);
   if pg_temp.amount('pay-anual-fixo') <> 12000 then raise exception 'FALHA anual fixo: %', pg_temp.amount('pay-anual-fixo'); end if;
 
-  -- Duração de 2 meses: o 3º não gera; reverter um libera a vaga.
-  update public.reseller_clients set duration_months = 2 where company_id = pg_temp.c(2);
+  -- Duração de 3 meses, já com 1 pago: o 3º daqui não gera; reverter um libera a vaga.
+  update public.reseller_clients set duration_months = 3 where company_id = pg_temp.c(2);
   perform public.register_commission(pg_temp.c(2), 'asaas', 'dur-1', 10000);
   perform public.register_commission(pg_temp.c(2), 'asaas', 'dur-2', 10000);
   if public.register_commission(pg_temp.c(2), 'asaas', 'dur-3', 10000) is not null then
@@ -200,7 +205,7 @@ begin
   -- Duração x plano anual: proporcional ao que resta, nunca o valor cheio.
   -- Anual com duração 6, percentual (venda com 40%): 48000 x 6/12.
   perform public.link_company_to_reseller(pg_temp.c(12), pg_temp.a(), pg_temp.plan('pro'), 'sub-12');
-  update public.reseller_clients set duration_months = 6 where company_id = pg_temp.c(12);
+  update public.reseller_clients set duration_months = 6, is_override = true where company_id = pg_temp.c(12);
   perform public.register_commission(pg_temp.c(12), 'asaas', 'prop-pct', 120000, 12);
   if pg_temp.amount('prop-pct') <> 24000 then raise exception 'FALHA proporcional percentual: %', pg_temp.amount('prop-pct'); end if;
   if public.register_commission(pg_temp.c(12), 'asaas', 'prop-pct-2', 120000, 12) is not null then
@@ -210,14 +215,14 @@ begin
   -- Anual com duração 6, fixo de 1000 por mês: 6 meses, não 12.
   perform public.link_company_to_reseller(pg_temp.c(13), pg_temp.a(), pg_temp.plan('pro'), 'sub-13');
   update public.reseller_clients
-  set commission_type = 'fixed', commission_percent = null, commission_fixed_cents = 1000, duration_months = 6
+  set commission_type = 'fixed', commission_percent = null, commission_fixed_cents = 1000, duration_months = 6, is_override = true
   where company_id = pg_temp.c(13);
   perform public.register_commission(pg_temp.c(13), 'asaas', 'prop-fixo', 120000, 12);
   if pg_temp.amount('prop-fixo') <> 6000 then raise exception 'FALHA proporcional fixo: %', pg_temp.amount('prop-fixo'); end if;
 
   -- Duração 18: primeiro ano cheio, segundo com os 6 meses restantes, terceiro nada.
   perform public.link_company_to_reseller(pg_temp.c(14), pg_temp.a(), pg_temp.plan('pro'), 'sub-14');
-  update public.reseller_clients set duration_months = 18 where company_id = pg_temp.c(14);
+  update public.reseller_clients set duration_months = 18, is_override = true where company_id = pg_temp.c(14);
   perform public.register_commission(pg_temp.c(14), 'asaas', 'prop-18-1', 120000, 12);
   perform public.register_commission(pg_temp.c(14), 'asaas', 'prop-18-2', 120000, 12);
   if pg_temp.amount('prop-18-1') <> 48000 or pg_temp.amount('prop-18-2') <> 24000 then
@@ -732,6 +737,150 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Nº da venda: checkout abandonado não conta; faixa definida no primeiro pagamento.
+-- ---------------------------------------------------------------------------
+insert into public.companies (id, name, slug)
+select ('c0000000-0000-4000-8000-0000000000' || n)::uuid, 'Numeração ' || n, 'reseller-numeracao-' || n
+from generate_series(30, 45) n;
+
+insert into public.resellers (id, name, email, referral_code) values
+  ('b0000000-0000-4000-8000-00000000000d', 'Vendedor D', 'vendedor-d@test.local', 'vendedor-d');
+insert into public.commission_rules (reseller_id, from_sale_number, commission_type, commission_percent) values
+  ('b0000000-0000-4000-8000-00000000000d', 1, 'percent', 30),
+  ('b0000000-0000-4000-8000-00000000000d', 4, 'percent', 40);
+
+create function pg_temp.d() returns uuid language sql as $$ select 'b0000000-0000-4000-8000-00000000000d'::uuid $$;
+create function pg_temp.sale(n int) returns int language sql as
+  $$ select sale_number from public.reseller_clients where company_id = pg_temp.c(n) $$;
+create function pg_temp.pct(n int) returns numeric language sql as
+  $$ select commission_percent from public.reseller_clients where company_id = pg_temp.c(n) $$;
+
+do $$
+declare
+  n int;
+begin
+  -- 3 checkouts abandonados.
+  foreach n in array array[30, 31, 32] loop
+    perform public.link_company_to_reseller(pg_temp.c(n), pg_temp.d(), pg_temp.plan('enterprise'), null);
+  end loop;
+
+  -- O 4º checkout, pago, continua sendo a venda nº 1, com 30%.
+  perform public.link_company_to_reseller(pg_temp.c(33), pg_temp.d(), pg_temp.plan('enterprise'), null);
+  perform public.register_commission(pg_temp.c(33), 'asaas', 'num-33', 10000);
+  if pg_temp.sale(33) <> 1 or pg_temp.pct(33) <> 30 then
+    raise exception 'FALHA numeração: esperado venda 1 a 30%%, veio % a %', pg_temp.sale(33), pg_temp.pct(33);
+  end if;
+  if pg_temp.amount('num-33') <> 3000 then raise exception 'FALHA numeração: valor %', pg_temp.amount('num-33'); end if;
+
+  -- Abandonados seguem sem número.
+  if pg_temp.sale(30) is not null then raise exception 'FALHA numeração: abandonado ganhou número'; end if;
+
+  -- Vendas pagas 2 e 3 a 30%; a 4ª paga pega a faixa de 40%.
+  foreach n in array array[34, 35, 36] loop
+    perform public.link_company_to_reseller(pg_temp.c(n), pg_temp.d(), pg_temp.plan('enterprise'), null);
+    perform public.register_commission(pg_temp.c(n), 'asaas', 'num-' || n, 10000);
+  end loop;
+  if pg_temp.sale(35) <> 3 or pg_temp.pct(35) <> 30 then raise exception 'FALHA numeração: 3ª venda'; end if;
+  if pg_temp.sale(36) <> 4 or pg_temp.pct(36) <> 40 then
+    raise exception 'FALHA numeração: esperado venda 4 a 40%%, veio % a %', pg_temp.sale(36), pg_temp.pct(36);
+  end if;
+  if pg_temp.amount('num-36') <> 4000 then raise exception 'FALHA numeração: valor da 4ª %', pg_temp.amount('num-36'); end if;
+
+  -- Abandonado que paga depois entra na ordem do pagamento, não do checkout.
+  perform public.register_commission(pg_temp.c(30), 'asaas', 'num-30', 10000);
+  if pg_temp.sale(30) <> 5 or pg_temp.pct(30) <> 40 then raise exception 'FALHA numeração: pagamento tardio'; end if;
+
+  -- Webhook repetido não troca número nem faixa.
+  perform public.register_commission(pg_temp.c(33), 'asaas', 'num-33', 10000);
+  if pg_temp.sale(33) <> 1 then raise exception 'FALHA numeração: repetido mudou o número'; end if;
+
+  -- Ajuste manual antes do primeiro pagamento é mantido.
+  update public.reseller_clients set commission_percent = 15, is_override = true where company_id = pg_temp.c(31);
+  perform public.register_commission(pg_temp.c(31), 'asaas', 'num-31', 10000);
+  if pg_temp.pct(31) <> 15 or pg_temp.sale(31) <> 6 then raise exception 'FALHA numeração: perdeu o ajuste manual'; end if;
+
+  -- Sem regra: alerta, e nada de vínculo. Pagamento feito nesse meio-tempo não gera nada.
+  update public.commission_rules set active = false;
+  insert into public.subscriptions (company_id, plan_id, status, external_subscription_id)
+  values (pg_temp.c(40), pg_temp.plan('enterprise'), 'active', 'sub-alerta');
+  if public.link_company_to_reseller(pg_temp.c(40), pg_temp.d(), pg_temp.plan('enterprise'), 'sub-alerta') is not null then
+    raise exception 'FALHA alerta: vinculou sem regra';
+  end if;
+  if public.register_commission(pg_temp.c(40), 'asaas', 'alerta-antes', 10000) is not null then
+    raise exception 'FALHA alerta: gerou sem vínculo';
+  end if;
+
+  -- Quem só tem assinatura arquivada de antes continua fora, mesmo pelo alerta.
+  insert into public.subscriptions (company_id, plan_id, status, external_subscription_id, deleted_at)
+  values (pg_temp.c(41), pg_temp.plan('enterprise'), 'canceled', 'sub-velha', now());
+  insert into public.reseller_audit_log (table_name, record_id, action, new_values)
+  values ('reseller_clients', pg_temp.c(41), 'LINK_NO_RULE',
+    jsonb_build_object('reseller_id', pg_temp.d(), 'plan_id', pg_temp.plan('enterprise')));
+  update public.commission_rules set active = true where reseller_id = pg_temp.d();
+end $$;
+
+-- "Vincular agora": só o super admin, e sem retroativo.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+do $$
+declare
+  v_alert bigint;
+begin
+  begin
+    perform public.link_company_from_alert(1);
+    raise exception 'FALHA alerta: cliente comum vinculou';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+do $$
+declare
+  v_alert bigint;
+begin
+  select id into v_alert from public.reseller_audit_log
+  where action = 'LINK_NO_RULE' and record_id = 'c0000000-0000-4000-8000-000000000040';
+  if public.link_company_from_alert(v_alert) is null then raise exception 'FALHA alerta: não vinculou depois da regra'; end if;
+  if exists (select 1 from public.reseller_admin_link_alerts where client_name = 'Numeração 40') then
+    raise exception 'FALHA alerta: alerta continuou depois de vincular';
+  end if;
+
+  select id into v_alert from public.reseller_audit_log
+  where action = 'LINK_NO_RULE' and record_id = 'c0000000-0000-4000-8000-000000000041';
+  if public.link_company_from_alert(v_alert) is not null then raise exception 'FALHA alerta: vinculou quem já pagou antes'; end if;
+  if public.link_company_from_alert(999999999) is not null then raise exception 'FALHA alerta: id inexistente'; end if;
+end $$;
+reset role;
+
+do $$
+begin
+  if pg_temp.sale(40) is not null then raise exception 'FALHA alerta: número antes do pagamento'; end if;
+  if (select count(*) from public.reseller_commissions where company_id = pg_temp.c(40)) <> 0 then
+    raise exception 'FALHA alerta: lançamento retroativo';
+  end if;
+  perform public.register_commission(pg_temp.c(40), 'asaas', 'alerta-depois', 10000);
+  if pg_temp.sale(40) <> 7 or pg_temp.amount('alerta-depois') <> 4000 then
+    raise exception 'FALHA alerta: próximo pagamento errado, venda %', pg_temp.sale(40);
+  end if;
+end $$;
+
+-- Vendedor não vê checkout abandonado como cliente (a empresa 32 nunca pagou).
+update public.resellers set user_id = 'a0000000-0000-4000-8000-000000000004'
+where id = 'b0000000-0000-4000-8000-00000000000d';
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+do $$
+begin
+  if exists (select 1 from public.reseller_my_clients where client_name = 'Numeração 32') then
+    raise exception 'FALHA numeração: abandonado apareceu para o vendedor';
+  end if;
+  if not exists (select 1 from public.reseller_my_clients where client_name = 'Numeração 33') then
+    raise exception 'FALHA numeração: cliente pago sumiu';
+  end if;
+end $$;
+reset role;
+update public.resellers set user_id = null where id = 'b0000000-0000-4000-8000-00000000000d';
+
+-- ---------------------------------------------------------------------------
 -- Qual regra vale, nas combinações que disputam entre si.
 -- ---------------------------------------------------------------------------
 do $$
@@ -741,6 +890,7 @@ begin
   delete from public.reseller_commissions where reseller_id = pg_temp.a();
   delete from public.reseller_clients where reseller_id = pg_temp.a();
   update public.commission_rules set active = false;
+  update public.commission_rules set deleted_at = now();
 
   insert into public.commission_rules (reseller_id, plan_id, from_sale_number, commission_type, commission_percent)
   values
@@ -879,7 +1029,7 @@ begin
   where p.pronamespace = 'public'::regnamespace
     and p.proname ~ 'reseller|commission|referral|find_user|link_company'
     and has_function_privilege('authenticated', p.oid, 'execute')
-    and p.proname not in ('current_reseller_id', 'resellers_enabled', 'set_plan_available_to_resellers', 'my_reseller_status');
+    and p.proname not in ('current_reseller_id', 'resellers_enabled', 'set_plan_available_to_resellers', 'my_reseller_status', 'link_company_from_alert');
   if bad is not null then raise exception 'FALHA revisão: client executa: %', bad; end if;
 
   select string_agg(p.proname, ', ') into bad

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSupabaseServerClient } from "@/server/supabase-server";
-import { reprocessCommissionFailureAction } from "../actions";
+import { linkFromAlertAction, reprocessCommissionFailureAction } from "../actions";
 import { createResellerAdminRepository } from "../adminRepository";
 import { requireSuperAdminPage } from "../areaAccess";
 import { ActionForm } from "../components/action-form";
@@ -22,17 +22,24 @@ export default async function AlertsPage() {
         <CardHeader>
           <CardTitle>Vendas sem regra de comissão</CardTitle>
           <CardDescription>
-            O cliente chegou por um vendedor, mas nenhuma regra se aplicava. Ele não foi vinculado e não gera
-            comissão. Crie uma regra em Regras e planos para que isso não se repita nas próximas vendas.
+            O cliente chegou por um vendedor, mas nenhuma regra se aplicava, e ele ficou sem vínculo. Crie a regra em
+            Regras e planos e clique em Vincular agora. Vale só para os próximos pagamentos: o que já foi pago não gera
+            comissão.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2 text-sm">
           {alerts.length === 0 ? <p className="text-muted-foreground">Nenhum alerta.</p> : null}
           {alerts.map((alert) => (
-            <p key={alert.id} className="rounded-lg border p-3">
-              <span className="font-medium">{alert.client_name}</span> · {alert.reseller_name ?? "—"} ·{" "}
-              {alert.plan_name ?? "—"} · <span className="text-muted-foreground">{formatDateTime(alert.changed_at)}</span>
-            </p>
+            <div key={alert.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+              <p className="min-w-0">
+                <span className="font-medium">{alert.client_name}</span> · {alert.reseller_name ?? "—"} ·{" "}
+                {alert.plan_name ?? "—"} ·{" "}
+                <span className="text-muted-foreground">{formatDateTime(alert.changed_at)}</span>
+              </p>
+              <ActionForm action={linkFromAlertAction} submitLabel="Vincular agora" variant="outline" size="sm">
+                <input type="hidden" name="id" value={alert.id} />
+              </ActionForm>
+            </div>
           ))}
         </CardContent>
       </Card>

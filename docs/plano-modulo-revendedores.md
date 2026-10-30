@@ -98,7 +98,8 @@ Todos implementados, com as diferenças abaixo do texto original:
 
 - **Sem produtos:** o repo não tem catálogo de produtos e cada deploy é um sistema, então regras e filtros usam vendedor e plano, e a contagem de vendas é por vendedor.
 - **Pasta:** `src/modules/resellers`, porque o alias e os testes só cobrem `src`.
-- **Vínculo:** nasce no checkout, antes do primeiro pagamento.
+- **Vínculo:** nasce no checkout, antes do primeiro pagamento, ainda sem nº da venda. O número e a faixa são definidos no primeiro pagamento confirmado, então checkout abandonado não consome venda. Ajuste manual feito antes é mantido.
+- **Venda sem regra:** fica em alerta, com botão "Vincular agora" depois de criar a regra. Sem retroativo.
 - **Rota do webhook:** `/api/webhooks/[gateway]`, com `/api/webhooks/payment` mantida para webhooks já cadastrados.
 
 1. [x] **Adaptar o schema** `reseller_schema.sql`:

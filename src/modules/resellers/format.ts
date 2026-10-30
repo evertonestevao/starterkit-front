@@ -15,7 +15,7 @@ export function formatDateTime(value: string): string {
 export function formatCommission(value: CommissionValue): string {
   return value.commission_type === "percent"
     ? `${Number(value.commission_percent).toLocaleString("pt-BR")}%`
-    : `${formatCents(value.commission_fixed_cents ?? 0)} fixo`;
+    : `${formatCents(value.commission_fixed_cents ?? 0)} fixo por pagamento`;
 }
 
 export function formatDuration(months: number | null): string {

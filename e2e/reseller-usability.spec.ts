@@ -198,3 +198,75 @@ test("no celular, nenhuma tela do painel tem rolagem horizontal", async ({ page 
     expect(overflow, path).toBeLessThanOrEqual(0);
   }
 });
+
+test("comissão fixa aparece como valor por pagamento, sem base", async ({ page }) => {
+  const { seller } = await sellerWithPendingCommissions([]);
+  await admin
+    .from("commission_rules")
+    .update({ commission_type: "fixed", commission_percent: null, commission_fixed_cents: 15000 })
+    .eq("reseller_id", seller.id);
+  const name = `Cliente Fixo ${stamp()}`;
+  const { data: company } = await admin.from("companies").insert({ name, slug: `usa-${stamp()}` }).select("id").single();
+  const { data: plan } = await admin.from("plans").select("id").eq("code", "pro").single();
+  await admin.rpc("link_company_to_reseller", {
+    p_company_id: company!.id,
+    p_reseller_id: seller.id,
+    p_plan_id: plan!.id,
+    p_external_subscription_id: null,
+  });
+  await admin.rpc("register_commission", {
+    p_company_id: company!.id,
+    p_gateway: "fake",
+    p_external_payment_id: `fixo-${company!.id}`,
+    p_base_amount_cents: 49900,
+    p_months_covered: 1,
+  });
+  await page.goto(`/admin/revendedores/lancamentos?reseller=${seller.id}`);
+  const row = page.locator("li", { hasText: name });
+  await expect(row.getByText("R$ 150,00 fixo por pagamento")).toBeVisible();
+  await expect(row.getByText("sobre")).toHaveCount(0);
+  await page.goto(`/admin/revendedores/${seller.id}`);
+  await expect(page.getByText("R$ 150,00 fixo por pagamento")).toBeVisible();
+});
+
+test("Vincular agora no alerta: vale só para os próximos pagamentos", async ({ page }) => {
+  const code = `alerta-${stamp()}`;
+  const { data: seller } = await admin
+    .from("resellers")
+    .insert({ name: `Alerta ${code}`, email: `${code}@e2e.local`, referral_code: code })
+    .select("id")
+    .single();
+  const { data: plan } = await admin.from("plans").select("id").eq("code", "pro").single();
+  const name = `Cliente Sem Regra ${stamp()}`;
+  const { data: company } = await admin.from("companies").insert({ name, slug: `usa-${stamp()}` }).select("id").single();
+  await admin.from("reseller_audit_log").insert({
+    table_name: "reseller_clients",
+    record_id: company!.id,
+    action: "LINK_NO_RULE",
+    new_values: { reseller_id: seller!.id, plan_id: plan!.id, sale_number: 1 },
+  });
+  await admin
+    .from("commission_rules")
+    .insert({ reseller_id: seller!.id, commission_type: "percent", commission_percent: 25 });
+
+  await page.goto("/admin/revendedores/falhas");
+  const row = page.locator("div.rounded-lg", { hasText: name });
+  await row.getByRole("button", { name: "Vincular agora" }).click();
+  await expect(page.getByText("Vale a partir do próximo pagamento")).toBeVisible();
+  await expect(row).toHaveCount(0);
+
+  const { data: client } = await admin.from("reseller_clients").select("sale_number").eq("company_id", company!.id).single();
+  expect(client!.sale_number).toBeNull();
+  const { data: none } = await admin.from("reseller_commissions").select("id").eq("company_id", company!.id);
+  expect(none).toHaveLength(0);
+
+  await admin.rpc("register_commission", {
+    p_company_id: company!.id,
+    p_gateway: "fake",
+    p_external_payment_id: `alerta-${company!.id}`,
+    p_base_amount_cents: 10000,
+    p_months_covered: 1,
+  });
+  const { data: after } = await admin.from("reseller_commissions").select("amount_cents").eq("company_id", company!.id);
+  expect(after).toEqual([{ amount_cents: 2500 }]);
+});

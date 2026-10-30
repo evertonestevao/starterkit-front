@@ -156,6 +156,24 @@ test("dois vendedores: login cai em /vendedor e um não enxerga nada do outro", 
   expect(stillPending!.status).toBe("pending");
 });
 
+test("no celular, as telas do vendedor não têm corte nem rolagem horizontal", async ({ page }) => {
+  const seller = await createSeller();
+  await createClientFor(seller.id, `Cliente Com Um Nome Bem Comprido Para Testar ${unique()}`);
+  await page.setViewportSize({ width: 390, height: 800 });
+  await login(page, seller.email);
+  await expect(page).toHaveURL(/\/vendedor$/);
+  for (const path of ["/vendedor", "/vendedor/clientes", "/vendedor/comissoes", "/vendedor/conta"]) {
+    await page.goto(path);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow, path).toBeLessThanOrEqual(0);
+    // Nada fora da tela: todo elemento visível termina dentro dos 390 px.
+    const cut = await page.evaluate(() =>
+      [...document.querySelectorAll("main *")].filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1).length,
+    );
+    expect(cut, path).toBe(0);
+  }
+});
+
 test("módulo desligado bloqueia só o Meu link; suspensão tira o acesso", async ({ page }) => {
   const seller = await createSeller();
   const name = `Cliente Pausa ${unique()}`;

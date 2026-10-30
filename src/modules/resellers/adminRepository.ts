@@ -194,6 +194,12 @@ export function createResellerAdminRepository(client: SupabaseClient) {
       ) as AdminLinkAlert[];
     },
 
+    async linkFromAlert(alertId: number) {
+      const { data, error } = await client.rpc("link_company_from_alert", { p_alert_id: alertId });
+      if (error) throw new AppError("internal_error", "Falha ao vincular o cliente", error);
+      return (data as string | null) ?? null;
+    },
+
     async listPendingFailures() {
       return ensure(
         await client

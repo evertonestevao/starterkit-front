@@ -196,3 +196,13 @@ export async function reprocessCommissionFailureAction(_prev: ActionState | unde
     return resolved ? { success: "Comissão reprocessada" } : { error: "A comissão falhou de novo" };
   });
 }
+
+export async function linkFromAlertAction(_prev: ActionState | undefined, formData: FormData): Promise<ActionState> {
+  return asSuperAdmin(async ({ repo }) => {
+    const alertId = z.coerce.number().int().positive().parse(formData.get("id"));
+    const linked = await repo.linkFromAlert(alertId);
+    return linked
+      ? { success: "Cliente vinculado. Vale a partir do próximo pagamento." }
+      : { error: "Não foi possível vincular. Confira se há regra aplicável, plano liberado, vendedor ativo e módulo ligado." };
+  });
+}
