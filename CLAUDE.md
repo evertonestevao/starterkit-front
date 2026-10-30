@@ -35,6 +35,7 @@ src/
   app/            # rotas (App Router)
   components/     # UI genérica, sem lógica de negócio
   features/       # módulos por domínio (auth, companies, billing...)
+  modules/        # módulos opcionais em pasta única (resellers); server.ts interno com server-only pode usar service_role
   services/       # authService, tenantService, billingService, emailService...
   repositories/   # implementação concreta (supabase, rest)
   adapters/       # paymentGateway, emailProvider, storageProvider
@@ -80,6 +81,12 @@ Ao criar um arquivo novo, pergunte: "isso é lógica de negócio (service), esta
 - Não duplicar componente de navegação para mobile e desktop
 - Tabelas devem ter modo alternativo em cards para telas pequenas
 - Tema dark/light via CSS variables; cor primária configurável em um único arquivo de tokens
+
+## Documentação de funcionalidades
+
+- `FUNCIONALIDADES.md` (raiz) descreve todas as funções do sistema: o que fazem, quem pode usar e quais regras se aplicam
+- Toda mudança que cria, altera ou remove uma funcionalidade, permissão, limite, rota ou integração **atualiza a seção correspondente de `FUNCIONALIDADES.md` no mesmo commit**, junto com a data de "Última atualização"
+- Mudança só interna (refatoração, teste, estilo) que não altera comportamento não precisa atualizar
 
 ## Testes
 

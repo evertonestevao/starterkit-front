@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getServerEnv } from "@/config/env";
+import { resolvePostLoginPath } from "@/modules/resellers/areaAccess";
 import { createSupabaseAuthRepository } from "@/repositories/supabase/authRepository";
 import { createRateLimiter } from "@/server/rateLimit";
 import { getSupabaseServerClient } from "@/server/supabase-server";
@@ -55,21 +56,22 @@ export async function signInAction(
   formData: FormData,
 ): Promise<ActionState> {
   const next = formData.get("next");
+  let destination: string;
   try {
     const auth = await getAuthService();
     await auth.signIn({
       email: formData.get("email"),
       password: formData.get("password"),
     });
+    // Só aceita caminho relativo interno — nunca URL absoluta (open redirect).
+    destination =
+      typeof next === "string" && next.startsWith("/") && !next.startsWith("//")
+        ? next
+        : await resolvePostLoginPath();
   } catch (err) {
     return toActionError(err);
   }
-  // Só aceita caminho relativo interno — nunca URL absoluta (open redirect).
-  const safeNext =
-    typeof next === "string" && next.startsWith("/") && !next.startsWith("//")
-      ? next
-      : "/dashboard";
-  redirect(safeNext);
+  redirect(destination);
 }
 
 export async function signOutAction(): Promise<void> {

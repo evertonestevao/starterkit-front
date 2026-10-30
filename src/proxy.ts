@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientEnv } from "@/config/env";
+import { buildRefRewrite } from "@/modules/resellers/referralCookie";
 
 /**
  * Proxy (o "middleware" do Next 16): mantém a sessão Supabase renovada nos
@@ -16,11 +17,21 @@ const PROTECTED_PREFIXES = [
   "/invites",
   "/reset-password",
   "/accept-terms",
+  "/admin",
+  "/vendedor",
+  "/escolher-area",
+  "/acesso-suspenso",
 ];
 /** Rotas de auth que usuário logado não deve rever. */
 const AUTH_ONLY_ANONYMOUS = ["/login", "/signup", "/forgot-password"];
 
 export async function proxy(request: NextRequest) {
+  // Link de afiliado por ?ref=: vai para /r/[codigo], que grava o cookie e limpa a URL.
+  const refRewrite = buildRefRewrite(request.nextUrl.pathname, request.nextUrl.searchParams);
+  if (refRewrite) {
+    return NextResponse.redirect(new URL(refRewrite, request.url));
+  }
+
   let response = NextResponse.next({ request });
 
   const env = getClientEnv();
@@ -68,6 +79,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Tudo, exceto estáticos e o webhook de pagamento (autenticado por assinatura).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  // Tudo, exceto estáticos, o webhook de pagamento (autenticado por assinatura) e o
+  // link de afiliado (público e de alto tráfego: não precisa de sessão).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks|r/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };

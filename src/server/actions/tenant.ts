@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { getServerEnv } from "@/config/env";
 import { getEmailProvider } from "@/adapters/email";
 import { AppError } from "@/lib/errors";
+import { recordCompanyReferralFromCookie } from "@/modules/resellers/server";
 import { recordAudit } from "@/server/audit";
 import { syncCompanySeats } from "@/server/billing";
 import { getRequestEvidence, getTermsService } from "@/server/terms";
@@ -64,6 +65,7 @@ export async function createCompanyAction(
     const company = await tenant.createCompany({ name: formData.get("name") });
     companyId = company.id;
     await setActiveCompanyCookie(companyId);
+    await recordCompanyReferralFromCookie(companyId);
   } catch (err) {
     return toActionError(err);
   }
@@ -224,6 +226,27 @@ export async function removeMemberAction(
     });
     await syncCompanySeats(companyId);
     revalidatePath("/dashboard/members");
+  } catch (err) {
+    return toActionError(err);
+  }
+}
+
+export async function transferOwnershipAction(
+  companyId: string,
+  memberId: string,
+): Promise<ActionState | void> {
+  try {
+    const tenant = await getTenantService();
+    const { targetUserId } = await tenant.transferOwnership(companyId, memberId);
+    // Depois da troca o ator é admin — continua podendo gravar auditoria.
+    await recordAudit({
+      companyId,
+      action: "company.ownership_transferred",
+      entityType: "company_member",
+      entityId: memberId,
+      metadata: { new_owner_user_id: targetUserId },
+    });
+    revalidatePath("/dashboard", "layout");
   } catch (err) {
     return toActionError(err);
   }

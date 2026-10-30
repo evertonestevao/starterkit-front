@@ -28,7 +28,8 @@ export interface Company {
   id: string;
   name: string;
   slug: string;
-  created_by: string;
+  /** NULL se quem criou excluiu a conta. */
+  created_by: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -50,7 +51,8 @@ export interface CompanyInvite {
   company_id: string;
   email: string;
   role: RoleCode;
-  invited_by: string;
+  /** NULL se quem convidou excluiu a conta. */
+  invited_by: string | null;
   token: string;
   status: InviteStatus;
   expires_at: string;

@@ -83,7 +83,8 @@ export function createBillingService(repo: BillingRepository) {
    * não tem sessão de usuário.
    */
   async function applyPaymentEvent(event: NormalizedPaymentEvent): Promise<void> {
-    if (event.type === "ignored") return;
+    // Estorno não muda a assinatura: quem trata é a comissão.
+    if (event.type === "ignored" || event.type === "payment.refunded") return;
     if (!event.externalSubscriptionId) {
       throw new AppError("payment_error", "Evento de pagamento sem id de assinatura");
     }
@@ -94,6 +95,12 @@ export function createBillingService(repo: BillingRepository) {
       if (event.type !== "subscription.activated") return; // evento órfão: nada a atualizar
       if (!event.companyId || !event.planId) {
         throw new AppError("payment_error", "Evento de ativação sem company_id/plan_id");
+      }
+      // Reassinatura: a assinatura anterior (ex.: cancelada) ainda ocupa o índice
+      // único por empresa. Vai para o histórico para a nova poder entrar.
+      const previous = await repo.getActiveSubscription(event.companyId);
+      if (previous) {
+        await repo.updateSubscription(previous.id, { deleted_at: new Date().toISOString() });
       }
       await repo.insertSubscription({
         company_id: event.companyId,
@@ -158,10 +165,13 @@ export function createBillingService(repo: BillingRepository) {
   async function syncSeatsWithGateway(
     companyId: string,
     gateway: PaymentGateway,
-    extraSeatPriceId: string,
+    extraSeatExternalPriceId: string | null,
   ): Promise<SeatUsage> {
     const usage = await getSeatUsage(companyId);
-    const subscription = await repo.getActiveSubscription(companyId);
+    const [subscription, plan] = await Promise.all([
+      repo.getActiveSubscription(companyId),
+      getEffectivePlan(companyId),
+    ]);
     if (
       subscription &&
       ACCESS_STATUSES.has(subscription.status) &&
@@ -169,8 +179,10 @@ export function createBillingService(repo: BillingRepository) {
     ) {
       await gateway.syncExtraSeats({
         externalSubscriptionId: subscription.external_subscription_id,
-        extraSeatPriceId,
         quantity: usage.extraSeats,
+        unitPriceCents: plan?.extra_seat_price_cents ?? 0,
+        basePriceCents: plan?.price_cents ?? 0,
+        externalPriceId: extraSeatExternalPriceId,
       });
     }
     return usage;

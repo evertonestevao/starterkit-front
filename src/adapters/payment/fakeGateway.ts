@@ -3,13 +3,14 @@ import type {
   CheckoutSession,
   CreateCheckoutParams,
   NormalizedPaymentEvent,
+  WebhookRequest,
 } from "@/types/billing";
 import type { PaymentGateway } from "./PaymentGateway";
 
 /**
  * Gateway fake para desenvolvimento local e testes: não fala com provedor
  * nenhum e aceita webhooks já no formato normalizado (JSON de
- * NormalizedPaymentEvent) com assinatura fixa "fake-signature".
+ * NormalizedPaymentEvent) com o header x-webhook-signature: fake-signature.
  */
 export function createFakeGateway(): PaymentGateway {
   return {
@@ -17,8 +18,8 @@ export function createFakeGateway(): PaymentGateway {
 
     async createCheckout(params: CreateCheckoutParams): Promise<CheckoutSession> {
       return {
-        id: `fake_checkout_${params.planId}`,
-        url: `${params.successUrl}?fake_checkout=1&plan_id=${params.planId}`,
+        id: `fake_checkout_${params.plan.id}`,
+        url: `${params.successUrl}?fake_checkout=1&plan_id=${params.plan.id}`,
       };
     },
 
@@ -26,12 +27,12 @@ export function createFakeGateway(): PaymentGateway {
       // Nada a cancelar num gateway fake.
     },
 
-    async getPortalUrl(_customerId: string, returnUrl: string): Promise<string> {
-      return returnUrl;
+    async getPortalUrl(): Promise<string | null> {
+      return null;
     },
 
-    async handleWebhook(payload: string, signature: string): Promise<NormalizedPaymentEvent> {
-      if (signature !== "fake-signature") {
+    async handleWebhook({ payload, headers }: WebhookRequest): Promise<NormalizedPaymentEvent> {
+      if (headers.get("x-webhook-signature") !== "fake-signature") {
         throw new AppError("payment_error", "Assinatura de webhook inválida");
       }
       return JSON.parse(payload) as NormalizedPaymentEvent;

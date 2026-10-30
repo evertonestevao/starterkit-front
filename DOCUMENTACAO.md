@@ -8,20 +8,26 @@
 
 ## ⚠️ ANTES DE IR PARA PRODUÇÃO — leia isto primeiro
 
-Três **placeholders deliberados** precisam ser trocados antes de qualquer cliente real:
+Quatro **placeholders deliberados** precisam ser trocados antes de qualquer cliente real:
 
 - [ ] **Texto dos Termos de Uso** — a versão em `terms_versions` é EXEMPLO SEM VALOR JURÍDICO
       (o próprio texto avisa). Contrate revisão jurídica e publique a versão final via migration
       (ou `scripts/publish-terms.sh` em dev). Publicar já força reaceite de todos.
-- [ ] **Stripe em modo LIVE** — o fluxo foi validado em modo TEST (2026-07-07). Para produção:
-      criar os produtos/prices live, preencher `STRIPE_PRICE_PRO/ENTERPRISE/EXTRA_SEAT` +
+- [ ] **Gateway de pagamento em produção** — Asaas (Passo 4A) ou Stripe (Passo 4B). O Stripe foi
+      validado em modo TEST (2026-07-07); o Asaas tem testes unitários com a API simulada, mas
+      **ainda não foi validado contra o sandbox real**. No Stripe:
+      criar os produtos/prices live, preencher `PAYMENT_PRICE_PRO/ENTERPRISE/EXTRA_SEAT` +
       `STRIPE_SECRET_KEY/WEBHOOK_SECRET` live, registrar o webhook no painel (não via CLI) e
       testar cancelamento/portal (não exercitados nem em test).
 - [ ] **Cor de marca e nome** — o indigo e o nome "StarterKit" são identidade neutra do template.
       Troque em `src/config/brand.ts` (nome/tagline) e `src/app/globals.css` (`--primary` e
       `--chart-*`; ao mudar os `--chart-*`, revalide com o validador de paleta — daltonismo/contraste).
+- [ ] **Dados legais e políticas** — `brand.legal` (razão social, CNPJ, endereço, emails de suporte e
+      do encarregado) em `src/config/brand.ts`, e os textos de `/privacy` e `/refund` (esqueletos sem
+      valor jurídico, com aviso na própria página).
 
-E ainda: `RATE_LIMIT_STORE=redis` (Upstash) em produção multi-instância, SMTP/Resend para os
+E ainda: `ERROR_REPORTER=sentry` + `SENTRY_DSN` + `APP_ENV=production` para monitorar erros,
+`/api/health` no monitor de uptime, `RATE_LIMIT_STORE=redis` (Upstash) em produção multi-instância, SMTP/Resend para os
 emails, allow-list de redirect no painel do Supabase e as demais pendências da seção 7.
 
 ---
@@ -447,7 +453,23 @@ o CI verde. **Não avance com CI vermelho.**
 2. Crie uma API key com "Sending access".
 3. Envs: `EMAIL_PROVIDER=resend`, `RESEND_API_KEY=re_...`, `EMAIL_FROM=convites@seu-dominio.com`.
 
-**Passo 4 — Stripe em modo LIVE**
+**Passo 4A — Asaas (recomendado para cobrança no Brasil: PIX, boleto e cartão)**
+1. Crie a conta e valide em **sandbox** primeiro (`ASAAS_ENVIRONMENT=sandbox`, chave do sandbox).
+2. Em Minha Conta → Informações comerciais, cadastre o domínio do app: o Asaas só aceita
+   `successUrl` de domínio cadastrado no link de pagamento.
+3. Integrações → Webhooks → novo webhook para `https://seu-dominio.com/api/webhooks/asaas`,
+   com um **token de autenticação** forte e os eventos de cobrança (`PAYMENT_CONFIRMED`,
+   `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_REFUNDED`, `PAYMENT_PARTIALLY_REFUNDED`) e de assinatura (`SUBSCRIPTION_DELETED`,
+   `SUBSCRIPTION_INACTIVATED`). Envio sequencial.
+4. Envs: `PAYMENT_GATEWAY=asaas`, `ASAAS_API_KEY=$aact_...`, `ASAAS_WEBHOOK_TOKEN=<o token do passo 3>`,
+   `ASAAS_ENVIRONMENT=production` (só depois de validar no sandbox).
+5. O valor cobrado é o `price_cents` do plano no banco; seats extras atualizam o valor total da
+   assinatura. Não há `PAYMENT_PRICE_*` nem portal do cliente (o botão some).
+6. Smoke test no sandbox: assinar → pagar a cobrança pelo painel do sandbox → webhook 200 →
+   plano ativo; convidar acima da franquia → valor da assinatura sobe; cancelar → assinatura
+   removida no Asaas.
+
+**Passo 4B — Stripe em modo LIVE**
 1. Ative a conta (dados bancários) e **desligue o Test mode**.
 2. Crie os produtos com preço recorrente mensal: plano Pro, plano Enterprise e "Usuário Extra"
    (o seat adicional). Anote os 3 `price_...`.
@@ -455,7 +477,8 @@ o CI verde. **Não avance com CI vermelho.**
    `customer.subscription.*` e `invoice.payment_failed`. Anote o `whsec_...` (é POR endpoint —
    o do Stripe CLI local não vale aqui).
 4. Envs: `PAYMENT_GATEWAY=stripe`, `STRIPE_SECRET_KEY=sk_live_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`,
-   `STRIPE_PRICE_PRO`, `STRIPE_PRICE_ENTERPRISE`, `STRIPE_PRICE_EXTRA_SEAT`.
+   `PAYMENT_PRICE_PRO`, `PAYMENT_PRICE_ENTERPRISE`, `PAYMENT_PRICE_EXTRA_SEAT` (os nomes antigos
+   `STRIPE_PRICE_*` continuam aceitos).
 5. Alinhe os valores exibidos na UI (seed de `plans` em `supabase/migrations/*seed_plans*` +
    `*extra_seat_price*`) com os preços live — a UI mostra o que está no banco.
 
@@ -485,10 +508,18 @@ Publicar força reaceite automático de todos os usuários.
 - [ ] Convidar acima da franquia → item "Usuário Extra" aparece na assinatura no painel do Stripe
 - [ ] 11 logins errados seguidos → "Muitas tentativas" (prova que o Upstash está ativo)
 - [ ] Cancelar assinatura e conferir no painel do Stripe (fluxo **nunca testado** — primeira vez será aqui)
+- [ ] `GET /api/health` responde 200 com `{"status":"ok"}`
+- [ ] Forçar um erro (ex.: action com env quebrada em staging) → evento aparece no Sentry, sem senha/token
+- [ ] Configurações → "Baixar meus dados" → JSON com perfil, empresas, aceites e consentimentos
+- [ ] Transferir a propriedade de uma empresa → novo owner vê o papel; o antigo vira admin
+- [ ] Excluir uma conta de teste → login com ela falha; empresas com outros membros continuam intactas
 
 ### 6.2 Criando um NOVO SaaS a partir deste kit
 
 O kit foi desenhado para isto: **a fundação não se reescreve; você troca identidade e adiciona domínio.**
+
+> Vai usar um agente de código (Claude Code)? Comece pelo [NOVO-PRODUTO.md](NOVO-PRODUTO.md):
+> tem o prompt modelo, o que preencher e as fases recomendadas.
 
 **Dia 1 — identidade (≈1h)**
 1. Clone com histórico novo:
@@ -535,8 +566,10 @@ Repita o roteiro por módulo. **Não mexa sem motivo em:** `src/lib/errors`, `sr
 - **Papel novo** (ex.: "recepcionista") → INSERT em `roles` (migration) + `defineRole()` no
   `permissionService`; se o papel precisar de poder de admin em RLS, ajuste as policies (`is_company_admin`).
 - **WhatsApp/SMS** → implemente `NotificationProvider` (passo a passo no próprio arquivo da interface).
-- **Outro gateway** (Mercado Pago, Asaas) → implemente `PaymentGateway` + case na factory; webhooks
-  normalizados para os mesmos eventos internos.
+- **Outro gateway** (Mercado Pago, Pagar.me, Iugu) → siga o passo a passo no topo de
+  `src/adapters/payment/PaymentGateway.ts` e use `asaasGateway.ts` (cobra por valor) ou
+  `stripeGateway.ts` (cobra por catálogo de preços) como modelo. Nada fora do adapter e do
+  `env.ts` muda.
 - **Upload de arquivos do domínio** → novo bucket + policies (copie a migration do `avatars`) +
   use o `StorageProvider` existente.
 
@@ -563,7 +596,7 @@ Antes do primeiro cliente real: seção "⚠️ ANTES DE IR PARA PRODUÇÃO" (to
 
 Em ordem de importância — **revisar antes de expor a clientes reais**:
 
-1. **Stripe validado em modo TEST (2026-07-07); modo LIVE ainda pendente.** Checkout, webhook HMAC, idempotência e seats sobe/desce funcionaram contra a API real de teste. Para produção: chaves live, webhook registrado no painel (não via CLI) e teste do cancelamento/portal (não exercitados). Prices agora vêm de env (`STRIPE_PRICE_*`); sem elas o código loga warn e usa placeholder que falha. O sync de seats segue *best-effort* (sem job de reconciliação). **Descoberta importante desta validação:** `service_role` também precisa de GRANT (migration `20260707100000` corrigiu com default privileges) e mudanças de GRANT exigem reload do cache do PostgREST (`NOTIFY pgrst, 'reload schema'`) — sem isso o webhook falhava com 42501 mesmo após a migration.
+1. **Stripe validado em modo TEST (2026-07-07); modo LIVE ainda pendente.** Checkout, webhook HMAC, idempotência e seats sobe/desce funcionaram contra a API real de teste. Para produção: chaves live, webhook registrado no painel (não via CLI) e teste do cancelamento/portal (não exercitados). Prices vêm de env (`PAYMENT_PRICE_*`, aceitando `STRIPE_PRICE_*`); sem elas o checkout Stripe recusa com erro claro. O sync de seats segue *best-effort* (sem job de reconciliação). **Descoberta importante desta validação:** `service_role` também precisa de GRANT (migration `20260707100000` corrigiu com default privileges) e mudanças de GRANT exigem reload do cache do PostgREST (`NOTIFY pgrst, 'reload schema'`) — sem isso o webhook falhava com 42501 mesmo após a migration.
 
 2. **Recuperação de senha sem teste ponta a ponta.** O fluxo do link de email → `/auth/confirm` → `/reset-password` nunca foi clicado de verdade. Teste manual obrigatório.
 

@@ -7,7 +7,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <Link href="/" className="mb-8 text-2xl font-semibold tracking-tight">
         {brand.name}
       </Link>
-      <div className="w-full max-w-sm">{children}</div>
+      <main id="conteudo" tabIndex={-1} className="w-full max-w-sm outline-none">
+        {children}
+      </main>
     </div>
   );
 }

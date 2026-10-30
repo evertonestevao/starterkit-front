@@ -1,12 +1,21 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { MoreHorizontal, ShieldCheck, UserMinus } from "lucide-react";
+import { Crown, MoreHorizontal, ShieldCheck, UserMinus } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +31,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useTenant } from "@/providers/tenant-provider";
-import { changeMemberRoleAction, removeMemberAction } from "@/server/actions/tenant";
+import {
+  changeMemberRoleAction,
+  removeMemberAction,
+  transferOwnershipAction,
+} from "@/server/actions/tenant";
 import { permissionService } from "@/services/permissionService";
 import type { MemberWithProfile } from "@/types/tenant";
 
@@ -111,15 +124,14 @@ function MemberIdentity({ member }: { member: MemberWithProfile }) {
 function MemberActions({ member }: { member: MemberWithProfile }) {
   const { active } = useTenant();
   const [pending, startTransition] = useTransition();
+  const [confirmTransfer, setConfirmTransfer] = useState(false);
 
   const canChange = permissionService.canChangeRole(active.role, member.role);
   const canRemove = permissionService.canRemoveMember(active.role, member.role);
-  if (!canChange && !canRemove) return null;
+  const canTransfer = active.role === "owner" && member.role !== "owner";
+  if (!canChange && !canRemove && !canTransfer) return null;
 
-  function run(
-    action: () => Promise<{ error?: string } | void>,
-    successMessage: string,
-  ) {
+  function run(action: () => Promise<{ error?: string } | void>, successMessage: string) {
     startTransition(async () => {
       try {
         const result = await action();
@@ -136,42 +148,81 @@ function MemberActions({ member }: { member: MemberWithProfile }) {
   }
 
   const nextRole = member.role === "admin" ? "member" : "admin";
+  const memberName = member.profile?.full_name ?? "este membro";
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" size="icon-sm" disabled={pending} aria-label="Ações do membro" />
-        }
-      >
-        <MoreHorizontal className="size-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {canChange ? (
-          <DropdownMenuItem
-            onClick={() =>
-              run(
-                () => changeMemberRoleAction(active.id, member.id, nextRole),
-                `Papel alterado para ${roleLabel[nextRole]}`,
-              )
-            }
-          >
-            <ShieldCheck className="size-4" />
-            Tornar {roleLabel[nextRole]}
-          </DropdownMenuItem>
-        ) : null}
-        {canRemove ? (
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() =>
-              run(() => removeMemberAction(active.id, member.id), "Membro removido")
-            }
-          >
-            <UserMinus className="size-4" />
-            Remover da empresa
-          </DropdownMenuItem>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={pending}
+              aria-label="Ações do membro"
+            />
+          }
+        >
+          <MoreHorizontal className="size-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {canChange ? (
+            <DropdownMenuItem
+              onClick={() =>
+                run(
+                  () => changeMemberRoleAction(active.id, member.id, nextRole),
+                  `Papel alterado para ${roleLabel[nextRole]}`,
+                )
+              }
+            >
+              <ShieldCheck className="size-4" />
+              Tornar {roleLabel[nextRole]}
+            </DropdownMenuItem>
+          ) : null}
+          {canRemove ? (
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => run(() => removeMemberAction(active.id, member.id), "Membro removido")}
+            >
+              <UserMinus className="size-4" />
+              Remover da empresa
+            </DropdownMenuItem>
+          ) : null}
+          {canTransfer ? (
+            <DropdownMenuItem onClick={() => setConfirmTransfer(true)}>
+              <Crown className="size-4" />
+              Transferir propriedade
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={confirmTransfer} onOpenChange={setConfirmTransfer}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transferir {active.name}?</DialogTitle>
+            <DialogDescription>
+              {memberName} vira owner da empresa e você passa a ser admin. Só o novo owner poderá
+              desfazer essa troca.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+            <Button
+              disabled={pending}
+              onClick={() => {
+                setConfirmTransfer(false);
+                run(
+                  () => transferOwnershipAction(active.id, member.id),
+                  `${memberName} agora é owner`,
+                );
+              }}
+            >
+              Transferir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

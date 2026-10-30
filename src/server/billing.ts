@@ -6,36 +6,16 @@ import { createBillingService, type BillingService } from "@/services/billingSer
 import { getSupabaseServerClient } from "./supabase-server";
 
 /**
- * Mapeamento plano -> price do gateway, via env (STRIPE_PRICE_PRO etc.).
- * Sem a env configurada cai num placeholder que NÃO funciona no Stripe real
- * (o gateway fake ignora) — e loga um aviso para não passar despercebido.
+ * Id do preço no catálogo do gateway, por plano (PAYMENT_PRICE_<CODE>, com
+ * STRIPE_PRICE_<CODE> como nome antigo). null quando não configurado: gateway
+ * que precisa de catálogo (Stripe) recusa com erro claro; gateway que cobra
+ * por valor (Asaas) não usa.
  */
-export function getGatewayPriceIdForPlan(planCode: string): string {
-  const env = getServerEnv();
-  const byCode: Record<string, string | undefined> = {
-    pro: env.STRIPE_PRICE_PRO,
-    enterprise: env.STRIPE_PRICE_ENTERPRISE,
-  };
-  const configured = byCode[planCode];
-  if (configured) return configured;
-  if (env.PAYMENT_GATEWAY !== "fake") {
-    console.warn(
-      `[billing] STRIPE_PRICE_${planCode.toUpperCase()} não configurada — usando placeholder que falhará no Stripe real`,
-    );
-  }
-  return `price_${planCode}`;
-}
-
-/** Price do seat extra (mesmo racional acima). */
-export function getExtraSeatPriceId(): string {
-  const env = getServerEnv();
-  if (env.STRIPE_PRICE_EXTRA_SEAT) return env.STRIPE_PRICE_EXTRA_SEAT;
-  if (env.PAYMENT_GATEWAY !== "fake") {
-    console.warn(
-      "[billing] STRIPE_PRICE_EXTRA_SEAT não configurada — usando placeholder que falhará no Stripe real",
-    );
-  }
-  return "price_extra_seat";
+export function getExternalPriceId(key: "pro" | "enterprise" | "extra_seat" | string): string | null {
+  const env = getServerEnv() as Record<string, unknown>;
+  const suffix = key.toUpperCase();
+  const value = env[`PAYMENT_PRICE_${suffix}`] ?? env[`STRIPE_PRICE_${suffix}`];
+  return typeof value === "string" && value ? value : null;
 }
 
 export async function getServerBillingService(): Promise<BillingService> {
@@ -51,7 +31,11 @@ export async function getServerBillingService(): Promise<BillingService> {
 export async function syncCompanySeats(companyId: string): Promise<void> {
   try {
     const billing = await getServerBillingService();
-    await billing.syncSeatsWithGateway(companyId, getPaymentGateway(), getExtraSeatPriceId());
+    await billing.syncSeatsWithGateway(
+      companyId,
+      getPaymentGateway(),
+      getExternalPriceId("extra_seat"),
+    );
   } catch (err) {
     console.error("[billing] falha ao sincronizar seats:", err);
   }

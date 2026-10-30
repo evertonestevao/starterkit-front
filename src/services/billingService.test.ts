@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { NormalizedPaymentEvent } from "@/types/billing";
+import type { ExtraSeatsUpdate, NormalizedPaymentEvent } from "@/types/billing";
 import type { Plan, Subscription } from "@/types/database";
 import {
   createBillingService,
@@ -89,6 +89,31 @@ function makeRepo(state: {
   };
 }
 
+describe("applyPaymentEvent: reassinatura", () => {
+  it("arquiva a assinatura cancelada e cria a nova com outro id externo", async () => {
+    const canceled = makeSubscription({ status: "canceled", external_subscription_id: "ext-old" });
+    const state = { plans: [makePlan({})], subscriptions: [canceled] };
+    const service = createBillingService(makeRepo(state));
+
+    await service.applyPaymentEvent({
+      type: "subscription.activated",
+      gateway: "asaas",
+      externalSubscriptionId: "ext-new",
+      externalCustomerId: "cus-1",
+      companyId: "company-1",
+      planId: "plan-1",
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+    });
+
+    expect(canceled.deleted_at).not.toBeNull();
+    const active = state.subscriptions.filter((s) => !s.deleted_at);
+    expect(active).toHaveLength(1);
+    expect(active[0]).toMatchObject({ external_subscription_id: "ext-new", status: "active" });
+  });
+});
+
 describe("canAccessFeature", () => {
   const proPlan = makePlan({
     id: "plan-pro",
@@ -171,7 +196,7 @@ describe("getSeatUsage / syncSeatsWithGateway (billing por seat)", () => {
   });
 
   function makeGatewaySpy() {
-    const calls: Array<{ externalSubscriptionId: string; extraSeatPriceId: string; quantity: number }> = [];
+    const calls: ExtraSeatsUpdate[] = [];
     return {
       calls,
       gateway: {
@@ -181,7 +206,7 @@ describe("getSeatUsage / syncSeatsWithGateway (billing por seat)", () => {
         },
         async cancelSubscription() {},
         async getPortalUrl() {
-          return "";
+          return null;
         },
         async handleWebhook() {
           throw new Error("não usado");
@@ -254,7 +279,13 @@ describe("getSeatUsage / syncSeatsWithGateway (billing por seat)", () => {
     const usage = await service.syncSeatsWithGateway("company-1", gateway, "price_seat");
     expect(usage.extraSeats).toBe(2);
     expect(calls).toEqual([
-      { externalSubscriptionId: "ext-sub", extraSeatPriceId: "price_seat", quantity: 2 },
+      {
+        externalSubscriptionId: "ext-sub",
+        quantity: 2,
+        unitPriceCents: 1990,
+        basePriceCents: threeSeatPlan.price_cents,
+        externalPriceId: "price_seat",
+      },
     ]);
   });
 

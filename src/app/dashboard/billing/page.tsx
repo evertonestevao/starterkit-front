@@ -88,7 +88,8 @@ export default async function BillingPage() {
       {isFakeGateway ? (
         <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
           Gateway <strong>fake</strong> ativo (dev): assinar um plano simula o webhook do provedor.
-          Configure PAYMENT_GATEWAY=stripe e as chaves para usar checkout real.
+          Configure PAYMENT_GATEWAY (asaas ou stripe) e as chaves do provedor para usar checkout
+          real.
         </p>
       ) : null}
 

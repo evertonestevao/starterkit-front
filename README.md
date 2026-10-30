@@ -71,6 +71,7 @@ Regras que o template já cumpre e que você deve manter:
 - Erros para o usuário via `toPublicError` ([src/lib/errors](src/lib/errors/index.ts)): nunca stack trace; detalhe fica no log do servidor.
 - Logs jamais contêm senha, token ou payload de pagamento (auditoria sanitiza metadata automaticamente).
 - Schema só muda por migration versionada — nunca pelo painel do Supabase.
+- Tabela ou função nova nasce fechada para o client: declare o `GRANT` mínimo na mesma migration e inclua na matriz de [supabase/tests/rls_test.sql](supabase/tests/rls_test.sql).
 
 ## Estrutura
 

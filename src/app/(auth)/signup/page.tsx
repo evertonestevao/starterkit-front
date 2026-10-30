@@ -43,6 +43,25 @@ export default async function SignUpPage({
             />
           </div>
         </AuthForm>
+        <p className="text-center text-xs text-muted-foreground">
+          Ao criar sua conta você concorda com os{" "}
+          <Link
+            href="/terms"
+            target="_blank"
+            className="text-foreground underline underline-offset-4"
+          >
+            Termos de Uso
+          </Link>{" "}
+          e com a{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            className="text-foreground underline underline-offset-4"
+          >
+            Política de Privacidade
+          </Link>
+          .
+        </p>
         <p className="text-center text-sm text-muted-foreground">
           Já tem conta?{" "}
           <Link href="/login" className="text-foreground underline underline-offset-4">
