@@ -364,14 +364,17 @@ begin
     select 'authenticated', t, 'SELECT' from unnest(array[
       'roles', 'plans', 'terms_versions', 'platform_admins', 'profiles', 'companies',
       'audit_logs', 'terms_acceptances', 'user_consents', 'company_members',
-      'company_invites', 'subscriptions', 'settings']) t
+      'company_invites', 'subscriptions', 'settings', 'reseller_settings', 'resellers',
+      'commission_rules', 'reseller_clients', 'reseller_commissions', 'reseller_audit_log',
+      'reseller_me', 'reseller_available_plans', 'reseller_my_clients', 'reseller_my_commissions']) t
     union all
     select 'authenticated', t, 'UPDATE' from unnest(array[
-      'profiles', 'companies', 'company_members', 'company_invites', 'subscriptions', 'settings']) t
+      'profiles', 'companies', 'company_members', 'company_invites', 'subscriptions', 'settings',
+      'reseller_settings', 'resellers', 'commission_rules', 'reseller_clients', 'reseller_commissions']) t
     union all
     select 'authenticated', t, 'INSERT' from unnest(array[
       'audit_logs', 'terms_acceptances', 'user_consents', 'company_members',
-      'company_invites', 'subscriptions', 'settings']) t
+      'company_invites', 'subscriptions', 'settings', 'resellers', 'commission_rules']) t
   ),
   actual as (
     select grantee::text, table_name::text, privilege_type::text

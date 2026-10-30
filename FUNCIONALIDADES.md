@@ -24,6 +24,7 @@ arquitetura e deploy, veja [DOCUMENTACAO.md](DOCUMENTACAO.md).
 12. [Páginas públicas](#12-páginas-públicas)
 13. [Operação: health check, erros e rate limit](#13-operação-health-check-erros-e-rate-limit)
 14. [Integrações e provedores trocáveis](#14-integrações-e-provedores-trocáveis)
+15. [Revendedores (em construção)](#15-revendedores-em-construção)
 
 ---
 
@@ -263,3 +264,18 @@ significa escrever um adapter novo, sem mexer em regra de negócio.
 
 Os emails de autenticação (confirmação e recuperação de senha) saem pelo Supabase Auth. O
 `EmailProvider` cobre os emails transacionais do app, como convites.
+
+## 15. Revendedores (em construção)
+
+Só a base de dados existe; ainda não há telas, link de afiliado nem integração com o webhook.
+O módulo nasce **desligado** e, por enquanto, nenhum vendedor é vinculado pela aplicação.
+
+| Quem | O que pode, no banco |
+|---|---|
+| Super admin | Administra vendedores, regras, vínculos e lançamentos; toda mudança fica em `reseller_audit_log` |
+| Vendedor ativo | Lê só os próprios dados, pelas views `reseller_me`, `reseller_my_clients`, `reseller_my_commissions` e `reseller_available_plans` |
+| Backend | Vincula clientes e gera ou estorna lançamentos, pelas funções restritas ao `service_role` |
+
+Regras já aplicadas: faixas por nº da venda, duração em meses cobertos, ajuste por cliente válido
+só para os próximos lançamentos, um lançamento por pagamento e estorno que reverte o pendente e só
+sinaliza o já pago. Plano completo em `docs/plano-modulo-revendedores.md`.
