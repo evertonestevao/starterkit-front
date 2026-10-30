@@ -197,6 +197,45 @@ begin
     raise exception 'FALHA duração anual: contou lançamentos, não meses';
   end if;
 
+  -- Duração x plano anual: proporcional ao que resta, nunca o valor cheio.
+  -- Anual com duração 6, percentual (venda com 40%): 48000 x 6/12.
+  perform public.link_company_to_reseller(pg_temp.c(12), pg_temp.a(), pg_temp.plan('pro'), 'sub-12');
+  update public.reseller_clients set duration_months = 6 where company_id = pg_temp.c(12);
+  perform public.register_commission(pg_temp.c(12), 'asaas', 'prop-pct', 120000, 12);
+  if pg_temp.amount('prop-pct') <> 24000 then raise exception 'FALHA proporcional percentual: %', pg_temp.amount('prop-pct'); end if;
+  if public.register_commission(pg_temp.c(12), 'asaas', 'prop-pct-2', 120000, 12) is not null then
+    raise exception 'FALHA proporcional: gerou depois de esgotar';
+  end if;
+
+  -- Anual com duração 6, fixo de 1000 por mês: 6 meses, não 12.
+  perform public.link_company_to_reseller(pg_temp.c(13), pg_temp.a(), pg_temp.plan('pro'), 'sub-13');
+  update public.reseller_clients
+  set commission_type = 'fixed', commission_percent = null, commission_fixed_cents = 1000, duration_months = 6
+  where company_id = pg_temp.c(13);
+  perform public.register_commission(pg_temp.c(13), 'asaas', 'prop-fixo', 120000, 12);
+  if pg_temp.amount('prop-fixo') <> 6000 then raise exception 'FALHA proporcional fixo: %', pg_temp.amount('prop-fixo'); end if;
+
+  -- Duração 18: primeiro ano cheio, segundo com os 6 meses restantes, terceiro nada.
+  perform public.link_company_to_reseller(pg_temp.c(14), pg_temp.a(), pg_temp.plan('pro'), 'sub-14');
+  update public.reseller_clients set duration_months = 18 where company_id = pg_temp.c(14);
+  perform public.register_commission(pg_temp.c(14), 'asaas', 'prop-18-1', 120000, 12);
+  perform public.register_commission(pg_temp.c(14), 'asaas', 'prop-18-2', 120000, 12);
+  if pg_temp.amount('prop-18-1') <> 48000 or pg_temp.amount('prop-18-2') <> 24000 then
+    raise exception 'FALHA duração 18: % e %', pg_temp.amount('prop-18-1'), pg_temp.amount('prop-18-2');
+  end if;
+  if public.register_commission(pg_temp.c(14), 'asaas', 'prop-18-3', 120000, 12) is not null then
+    raise exception 'FALHA duração 18: gerou depois de esgotar';
+  end if;
+
+  -- Anual sem duração: sempre cheio.
+  perform public.register_commission(pg_temp.c(5), 'asaas', 'pay-anual-pct-2', 120000, 12);
+  if pg_temp.amount('pay-anual-pct-2') <> 60000 then raise exception 'FALHA anual sem duração: %', pg_temp.amount('pay-anual-pct-2'); end if;
+
+  -- Mensal com duração: cada mês cheio.
+  if pg_temp.amount('dur-1') <> 3000 or pg_temp.amount('dur-4') <> 3000 then
+    raise exception 'FALHA mensal com duração: % e %', pg_temp.amount('dur-1'), pg_temp.amount('dur-4');
+  end if;
+
   -- Override: só os próximos mudam.
   perform public.register_commission(pg_temp.c(3), 'asaas', 'ovr-1', 10000);
   update public.reseller_clients set commission_percent = 50, is_override = true where company_id = pg_temp.c(3);
@@ -267,6 +306,20 @@ begin
     raise exception 'FALHA volta: reabriu depois de 90 dias';
   end if;
   update public.reseller_clients set ended_at = null where company_id = pg_temp.c(1);
+
+  -- O prazo é configurável.
+  if (select client_return_window_days from public.reseller_settings) <> 90 then
+    raise exception 'FALHA prazo: padrão deveria ser 90 dias';
+  end if;
+  update public.reseller_settings set client_return_window_days = 30;
+  update public.reseller_clients set ended_at = now() - interval '31 days' where company_id = pg_temp.c(1);
+  if public.register_commission(pg_temp.c(1), 'asaas', 'prazo-1', 10000) is not null then
+    raise exception 'FALHA prazo: reabriu fora dos 30 dias';
+  end if;
+  update public.reseller_clients set ended_at = now() - interval '29 days' where company_id = pg_temp.c(1);
+  if public.register_commission(pg_temp.c(1), 'asaas', 'prazo-2', 10000) is null then
+    raise exception 'FALHA prazo: não reabriu dentro dos 30 dias';
+  end if;
 
   update public.reseller_settings set resellers_enabled = false;
   if public.register_commission(pg_temp.c(1), 'asaas', 'desligado-1', 10000) is null then
@@ -433,6 +486,14 @@ begin
     raise exception 'FALHA anon: leu tabela';
   exception when sqlstate '42501' then null;
   end;
+  begin
+    perform available_to_resellers from public.plans;
+    raise exception 'FALHA anon: leu available_to_resellers';
+  exception when sqlstate '42501' then null;
+  end;
+  if not exists (select name from public.plans where code = 'pro') then
+    raise exception 'FALHA anon: página de preços perdeu os planos';
+  end if;
 end $$;
 reset role;
 

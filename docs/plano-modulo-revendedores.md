@@ -109,6 +109,10 @@ A flag `resellers_enabled` controla só as **novas vendas**:
 5. **Painel do vendedor** em `/vendedor` (área separada dos tenants, protegida pelo cadastro em `resellers`): meu link, meus clientes, minhas comissões.
 6. **Exportar comissões do mês (CSV).**
 7. **Testes** das regras de comissão (faixas, duração, override, estorno), do link de afiliado e das policies de RLS.
+8. **Pendências para as próximas fases:**
+   - bloquear a exclusão de conta de vendedor com comissão pendente
+   - incluir os dados de revenda na exportação LGPD
+   - exibir o alerta `LINK_NO_RULE` no painel do super_admin
 
 ## 11. Preparação para o hub futuro
 

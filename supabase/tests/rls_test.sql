@@ -359,7 +359,7 @@ declare
   diff text;
 begin
   with expected (grantee, table_name, privilege_type) as (
-    select 'anon', t, p from unnest(array['plans', 'terms_versions']) t, unnest(array['SELECT']) p
+    select 'anon', t, p from unnest(array['terms_versions']) t, unnest(array['SELECT']) p
     union all
     select 'authenticated', t, 'SELECT' from unnest(array[
       'roles', 'plans', 'terms_versions', 'platform_admins', 'profiles', 'companies',
@@ -390,6 +390,14 @@ begin
   )
   select string_agg(line, '; ') into diff from differences;
   if diff is not null then raise exception 'FALHA grants de tabela: %', diff; end if;
+
+  -- anon lê plans só por colunas nomeadas, sem a flag de revenda.
+  select string_agg(column_name, ', ' order by column_name) into diff
+  from information_schema.column_privileges
+  where table_schema = 'public' and table_name = 'plans' and grantee = 'anon' and privilege_type = 'SELECT';
+  if diff is distinct from 'billing_interval, code, created_at, currency, deleted_at, extra_seat_price_cents, features, id, is_active, name, price_cents, updated_at' then
+    raise exception 'FALHA grants de coluna: anon em plans: %', diff;
+  end if;
 
   -- anon não executa nenhuma função própria do schema public.
   select string_agg(p.oid::regprocedure::text, ', ') into diff
