@@ -12,14 +12,16 @@ import { cn } from "@/lib/utils";
 import { useTenant } from "@/providers/tenant-provider";
 import { Breadcrumbs } from "./breadcrumbs";
 import { CompanySwitcher } from "./company-switcher";
-import { navItems, titleForPath } from "./nav-items";
+import { navItems, titleForPath, type ShellNavItem } from "./nav-items";
 import { UserMenu, type UserMenuProps } from "./user-menu";
 
 /** Cookie lido pelo layout server para SSR sem "flash" do estado colapsado. */
 export const SIDEBAR_COOKIE = "sidebar-collapsed";
 
-interface AppShellProps extends UserMenuProps {
+export interface AppShellProps extends UserMenuProps {
   initialCollapsed: boolean;
+  /** Área fora dos tenants (painel, vendedor): sem seletor de empresa, com menu próprio. */
+  area?: { home: ShellNavItem; items: ShellNavItem[] };
   /** Convites pendentes PARA o usuário — badge de atenção em Configurações. */
   pendingInvitesCount?: number;
   children: React.ReactNode;
@@ -33,10 +35,24 @@ interface AppShellProps extends UserMenuProps {
  */
 export function AppShell({
   initialCollapsed,
+  area,
   pendingInvitesCount = 0,
   children,
   ...user
 }: AppShellProps) {
+  const homeHref = area?.home.href ?? "/dashboard";
+  const nav = (collapsed: boolean, onNavigate?: () => void) =>
+    area ? (
+      <SidebarNav collapsed={collapsed} pathname={pathname} items={area.items} onNavigate={onNavigate} />
+    ) : (
+      <TenantSidebarNav
+        collapsed={collapsed}
+        pathname={pathname}
+        pendingInvitesCount={pendingInvitesCount}
+        onNavigate={onNavigate}
+      />
+    );
+
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
@@ -59,15 +75,11 @@ export function AppShell({
         )}
       >
         <div className={cn("flex h-14 items-center border-b px-4", collapsed && "px-2 justify-center")}>
-          <Link href="/dashboard" className="truncate font-semibold tracking-tight">
+          <Link href={homeHref} className="truncate font-semibold tracking-tight">
             {collapsed ? brand.name.slice(0, 1) : brand.name}
           </Link>
         </div>
-        <SidebarNav
-          collapsed={collapsed}
-          pathname={pathname}
-          pendingInvitesCount={pendingInvitesCount}
-        />
+        {nav(collapsed)}
         <div className="mt-auto border-t p-2">
           <Button
             variant="ghost"
@@ -88,12 +100,7 @@ export function AppShell({
           <SheetHeader className="h-14 justify-center border-b px-4">
             <SheetTitle className="text-left font-semibold">{brand.name}</SheetTitle>
           </SheetHeader>
-          <SidebarNav
-            collapsed={false}
-            pathname={pathname}
-            pendingInvitesCount={pendingInvitesCount}
-            onNavigate={() => setDrawerOpen(false)}
-          />
+          {nav(false, () => setDrawerOpen(false))}
         </SheetContent>
       </Sheet>
 
@@ -110,11 +117,11 @@ export function AppShell({
           </Button>
           {/* Desktop: breadcrumbs; mobile: título da página atual. */}
           <div className="hidden min-w-0 lg:block">
-            <Breadcrumbs pathname={pathname} />
+            <Breadcrumbs pathname={pathname} items={area?.items} />
           </div>
-          <h1 className="truncate text-sm font-medium lg:hidden">{titleForPath(pathname)}</h1>
+          <h1 className="truncate text-sm font-medium lg:hidden">{titleForPath(pathname, area?.items)}</h1>
           <div className="ml-auto flex items-center gap-2">
-            <CompanySwitcher />
+            {area ? null : <CompanySwitcher />}
             <UserMenu {...user} />
           </div>
         </header>
@@ -124,23 +131,41 @@ export function AppShell({
   );
 }
 
+function TenantSidebarNav({
+  pendingInvitesCount,
+  ...props
+}: {
+  collapsed: boolean;
+  pathname: string;
+  pendingInvitesCount: number;
+  onNavigate?: () => void;
+}) {
+  const { active } = useTenant();
+  return (
+    <SidebarNav
+      {...props}
+      pendingInvitesCount={pendingInvitesCount}
+      items={navItems.filter((item) => item.roles.includes(active.role))}
+    />
+  );
+}
+
 function SidebarNav({
   collapsed,
   pathname,
+  items,
   pendingInvitesCount = 0,
   onNavigate,
 }: {
   collapsed: boolean;
   pathname: string;
+  items: ShellNavItem[];
   pendingInvitesCount?: number;
   onNavigate?: () => void;
 }) {
-  const { active } = useTenant();
-  const visible = navItems.filter((item) => item.roles.includes(active.role));
-
   return (
     <nav className="flex flex-col gap-1 p-2">
-      {visible.map((item) => {
+      {items.map((item) => {
         const isActive = pathname === item.href;
         // Badge de atenção: convites pendentes para o usuário, em Configurações.
         const badgeCount = item.href === "/dashboard/settings" ? pendingInvitesCount : 0;

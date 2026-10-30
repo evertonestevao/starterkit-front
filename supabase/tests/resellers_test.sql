@@ -507,7 +507,7 @@ do $$
 declare
   n int;
 begin
-  select count(*) into n from public.resellers where referral_code like 'vendedor-%';
+  select count(*) into n from public.resellers where referral_code in ('vendedor-a', 'vendedor-b');
   if n <> 2 then raise exception 'FALHA super: esperado 2 vendedores, veio %', n; end if;
 
   update public.reseller_commissions set amount_cents = 2500 where external_payment_id = 'pay-2';
@@ -723,6 +723,94 @@ begin
   begin
     update public.reseller_commission_failures set status = 'resolved';
     raise exception 'FALHA pendência: client alterou';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Qual regra vale, nas combinações que disputam entre si.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v numeric;
+begin
+  delete from public.reseller_commissions where reseller_id = pg_temp.a();
+  delete from public.reseller_clients where reseller_id = pg_temp.a();
+  update public.commission_rules set active = false;
+
+  insert into public.commission_rules (reseller_id, plan_id, from_sale_number, commission_type, commission_percent)
+  values
+    (null, null, 1, 'percent', 10),
+    (null, pg_temp.plan('pro'), 1, 'percent', 20),
+    (pg_temp.a(), null, 1, 'percent', 30),
+    (pg_temp.a(), null, 3, 'percent', 35),
+    (pg_temp.a(), pg_temp.plan('pro'), 2, 'percent', 40);
+
+  -- Global genérica é o último recurso (vendedor B, plano sem regra de plano).
+  select commission_percent into v from public.resolve_commission(pg_temp.b(), pg_temp.plan('enterprise'), 1);
+  if v <> 10 then raise exception 'FALHA regra: global genérica, veio %', v; end if;
+  -- Global de plano vence a global genérica.
+  select commission_percent into v from public.resolve_commission(pg_temp.b(), pg_temp.plan('pro'), 1);
+  if v <> 20 then raise exception 'FALHA regra: global de plano, veio %', v; end if;
+  -- Vendedor genérica vence global de plano.
+  select commission_percent into v from public.resolve_commission(pg_temp.a(), pg_temp.plan('enterprise'), 1);
+  if v <> 30 then raise exception 'FALHA regra: vendedor > global, veio %', v; end if;
+  -- Faixa do vendedor: a maior alcançada.
+  select commission_percent into v from public.resolve_commission(pg_temp.a(), pg_temp.plan('enterprise'), 3);
+  if v <> 35 then raise exception 'FALHA regra: faixa, veio %', v; end if;
+  -- Regra de plano do vendedor ainda não alcançada cai para a genérica dele.
+  select commission_percent into v from public.resolve_commission(pg_temp.a(), pg_temp.plan('pro'), 1);
+  if v <> 30 then raise exception 'FALHA regra: faixa não alcançada, veio %', v; end if;
+  -- Alcançada, a de plano vence até uma faixa genérica maior.
+  select commission_percent into v from public.resolve_commission(pg_temp.a(), pg_temp.plan('pro'), 5);
+  if v <> 40 then raise exception 'FALHA regra: plano > faixa, veio %', v; end if;
+  -- Regra removida deixa de valer.
+  update public.commission_rules set deleted_at = now() where reseller_id = pg_temp.a() and plan_id = pg_temp.plan('pro');
+  select commission_percent into v from public.resolve_commission(pg_temp.a(), pg_temp.plan('pro'), 5);
+  if v <> 35 then raise exception 'FALHA regra: removida valeu, veio %', v; end if;
+
+  -- Dados para as views do painel.
+  perform public.link_company_to_reseller(pg_temp.c(1), pg_temp.a(), pg_temp.plan('enterprise'), 'sub-painel');
+  perform public.register_commission(pg_temp.c(1), 'asaas', 'painel-1', 10000);
+end $$;
+
+-- Views do painel: dono de empresa e vendedor veem zero linhas; super admin vê.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$
+begin
+  if exists (select 1 from public.reseller_admin_totals) or exists (select 1 from public.reseller_admin_clients)
+     or exists (select 1 from public.reseller_admin_commissions) or exists (select 1 from public.reseller_admin_link_alerts) then
+    raise exception 'FALHA painel: vendedor leu view do admin';
+  end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+do $$
+begin
+  if exists (select 1 from public.reseller_admin_totals) or exists (select 1 from public.reseller_admin_commissions) then
+    raise exception 'FALHA painel: cliente leu view do admin';
+  end if;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+do $$
+begin
+  if (select pending_cents from public.reseller_admin_totals where referral_code = 'vendedor-a') <> 3000 then
+    raise exception 'FALHA painel: total pendente errado';
+  end if;
+  if (select client_name from public.reseller_admin_commissions where reseller_name = 'Vendedor A' limit 1) <> 'Cliente 1' then
+    raise exception 'FALHA painel: nome do cliente não veio';
+  end if;
+  if not exists (select 1 from public.reseller_admin_link_alerts where client_name = 'Cliente 9') then
+    raise exception 'FALHA painel: alerta LINK_NO_RULE não apareceu';
+  end if;
+  -- O admin vê o nome pelas views, sem abrir a tabela de empresas.
+  if exists (select 1 from public.companies where name = 'Cliente 1') then
+    raise exception 'FALHA painel: super admin leu companies direto';
+  end if;
+  begin
+    perform public.find_user_id_by_email('vendedor-a@test.local');
+    raise exception 'FALHA painel: client procurou conta por e-mail';
   exception when sqlstate '42501' then null;
   end;
 end $$;

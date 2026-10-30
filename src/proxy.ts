@@ -17,6 +17,9 @@ const PROTECTED_PREFIXES = [
   "/invites",
   "/reset-password",
   "/accept-terms",
+  "/admin",
+  "/vendedor",
+  "/escolher-area",
 ];
 /** Rotas de auth que usuário logado não deve rever. */
 const AUTH_ONLY_ANONYMOUS = ["/login", "/signup", "/forgot-password"];

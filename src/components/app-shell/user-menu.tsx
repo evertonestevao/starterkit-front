@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { useTheme } from "next-themes";
 import { LogOut, Moon, Sun } from "lucide-react";
@@ -20,9 +21,12 @@ export interface UserMenuProps {
   userName: string;
   userEmail: string;
   avatarUrl?: string | null;
+  /** Outras áreas que o usuário pode abrir (cliente, vendedor, painel). */
+  areaLinks?: Array<{ href: string; label: string }>;
 }
 
-export function UserMenu({ userName, userEmail, avatarUrl }: UserMenuProps) {
+export function UserMenu({ userName, userEmail, avatarUrl, areaLinks = [] }: UserMenuProps) {
+  const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const [, startTransition] = useTransition();
   const initials = userName
@@ -50,6 +54,12 @@ export function UserMenu({ userName, userEmail, avatarUrl }: UserMenuProps) {
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        {areaLinks.map((link) => (
+          <DropdownMenuItem key={link.href} onClick={() => router.push(link.href)}>
+            {link.label}
+          </DropdownMenuItem>
+        ))}
+        {areaLinks.length > 0 ? <DropdownMenuSeparator /> : null}
         <DropdownMenuItem
           onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
         >

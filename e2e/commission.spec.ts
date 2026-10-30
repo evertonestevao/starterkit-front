@@ -106,31 +106,31 @@ test("link, contratação, pagamento e lançamento, com repetição, estorno e m
   const { company_id: companyId, plan_id: planId } = client!;
 
   // Webhook repetido não duplica.
-  await sendWebhook(request, paymentEvent(companyId, planId, "pay-e2e-a"));
-  await sendWebhook(request, paymentEvent(companyId, planId, "pay-e2e-a"));
+  await sendWebhook(request, paymentEvent(companyId, planId, `pay-e2e-a-${companyId}`));
+  await sendWebhook(request, paymentEvent(companyId, planId, `pay-e2e-a-${companyId}`));
   expect(await commissionsOf(reseller.id)).toHaveLength(2);
 
   // Estorno de pendente reverte; de pago não muda e só sinaliza.
   await sendWebhook(request, {
-    ...paymentEvent(companyId, planId, "pay-e2e-a"),
+    ...paymentEvent(companyId, planId, `pay-e2e-a-${companyId}`),
     type: "payment.refunded",
     payment: undefined,
-    refund: { externalPaymentId: "pay-e2e-a", refundedCents: null },
+    refund: { externalPaymentId: `pay-e2e-a-${companyId}`, refundedCents: null },
   });
-  await sendWebhook(request, paymentEvent(companyId, planId, "pay-e2e-b"));
+  await sendWebhook(request, paymentEvent(companyId, planId, `pay-e2e-b-${companyId}`));
   await admin
     .from("reseller_commissions")
     .update({ status: "paid", paid_at: new Date().toISOString() })
-    .eq("external_payment_id", "pay-e2e-b");
+    .eq("external_payment_id", `pay-e2e-b-${companyId}`);
   await sendWebhook(request, {
-    ...paymentEvent(companyId, planId, "pay-e2e-b"),
+    ...paymentEvent(companyId, planId, `pay-e2e-b-${companyId}`),
     type: "payment.refunded",
     payment: undefined,
-    refund: { externalPaymentId: "pay-e2e-b", refundedCents: null },
+    refund: { externalPaymentId: `pay-e2e-b-${companyId}`, refundedCents: null },
   });
   const afterRefunds = await commissionsOf(reseller.id);
-  expect(afterRefunds.find((c) => c.external_payment_id === "pay-e2e-a")?.status).toBe("reversed");
-  const paid = afterRefunds.find((c) => c.external_payment_id === "pay-e2e-b");
+  expect(afterRefunds.find((c) => c.external_payment_id === `pay-e2e-a-${companyId}`)?.status).toBe("reversed");
+  const paid = afterRefunds.find((c) => c.external_payment_id === `pay-e2e-b-${companyId}`);
   expect(paid?.status).toBe("paid");
   expect(paid?.amount_cents).toBe(3000);
   expect(paid?.refund_flagged_at).not.toBeNull();
@@ -157,8 +157,8 @@ test("link, contratação, pagamento e lançamento, com repetição, estorno e m
 
   // Módulo desligado com vínculo existente: continua gerando.
   await setModuleEnabled(false);
-  await sendWebhook(request, paymentEvent(companyId, planId, "pay-e2e-c"));
-  expect((await commissionsOf(reseller.id)).some((c) => c.external_payment_id === "pay-e2e-c")).toBe(true);
+  await sendWebhook(request, paymentEvent(companyId, planId, `pay-e2e-c-${companyId}`));
+  expect((await commissionsOf(reseller.id)).some((c) => c.external_payment_id === `pay-e2e-c-${companyId}`)).toBe(true);
 
   // Assinatura cancelada encerra o vínculo.
   await sendWebhook(request, {

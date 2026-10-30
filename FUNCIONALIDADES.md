@@ -267,8 +267,17 @@ Os emails de autenticação (confirmação e recuperação de senha) saem pelo S
 
 ## 15. Revendedores (em construção)
 
-A base de dados, o link de afiliado e a geração de comissão existem; ainda não há telas.
-O módulo nasce **desligado**.
+O módulo nasce **desligado**. O super admin opera tudo em `/admin/revendedores`.
+
+**Painel do super admin** (toda tela e ação revalida o papel no servidor):
+
+| Tela | Funções |
+|---|---|
+| Vendedores | Ligar/desligar o módulo, cadastrar por convite (código gerado ou informado), totais por vendedor |
+| Página do vendedor | Editar nome e código, suspender/reativar, reenviar convite, ajustar comissão por cliente (marca override, vale para os próximos lançamentos), histórico de alterações |
+| Regras e planos | Regras por vendedor e plano ou padrão global, com tipo, valor, duração e "a partir da venda nº"; liberar e esconder planos |
+| Lançamentos | Filtros por vendedor, plano, status e período; editar valor; marcar vários como pagos, com data |
+| Alertas e falhas | Vendas sem regra aplicável (`LINK_NO_RULE`) e falhas de comissão com botão de reprocessar |
 
 **Comissão** (gateway Asaas; Stripe não gera comissão):
 

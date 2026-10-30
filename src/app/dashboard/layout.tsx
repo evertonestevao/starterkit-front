@@ -9,6 +9,7 @@ import { getSupabaseServerClient } from "@/server/supabase-server";
 import { getActiveTenant } from "@/server/tenant";
 import { getTermsService } from "@/server/terms";
 import { createUserService } from "@/services/userService";
+import { getAreaLinks } from "@/modules/resellers/areaAccess";
 import { TenantProvider } from "@/providers/tenant-provider";
 
 /**
@@ -32,8 +33,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const { companies, active } = await getActiveTenant();
+  const areaLinks = await getAreaLinks();
   if (!active) {
-    redirect("/onboarding");
+    // Quem só tem outra área não precisa de empresa.
+    redirect(areaLinks[0]?.href ?? "/onboarding");
   }
 
   const [profile, myInvites] = await Promise.all([
@@ -55,6 +58,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         userEmail={userData.user.email ?? ""}
         avatarUrl={profile?.avatar_url ?? null}
         pendingInvitesCount={myInvites.length}
+        areaLinks={areaLinks}
       >
         {children}
       </AppShell>

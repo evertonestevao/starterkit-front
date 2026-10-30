@@ -10,10 +10,14 @@ import type { RoleCode } from "@/types/database";
 
 /** Navegação da sidebar — editar aqui ao adicionar módulos do seu produto. */
 
-export interface NavItem {
+/** Item de navegação de qualquer área do shell. */
+export interface ShellNavItem {
   title: string;
   href: string;
   icon: LucideIcon;
+}
+
+export interface NavItem extends ShellNavItem {
   /** Papéis que veem o item (autorização real fica no server/RLS). */
   roles: RoleCode[];
 }
@@ -37,9 +41,9 @@ export const navItems: NavItem[] = [
 ];
 
 /** Título da página atual a partir do pathname (breadcrumb/header mobile). */
-export function titleForPath(pathname: string): string {
-  const match = [...navItems]
+export function titleForPath(pathname: string, items: ShellNavItem[] = navItems): string {
+  const match = [...items]
     .sort((a, b) => b.href.length - a.href.length)
     .find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
-  return match?.title ?? "Dashboard";
+  return match?.title ?? items[0]?.title ?? "Dashboard";
 }
