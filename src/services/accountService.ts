@@ -32,6 +32,10 @@ interface AccountServiceDeps {
   audit: AccountAuditor;
   rateLimiter: RateLimiter;
   now?: () => Date;
+  /** Módulos opcionais: motivos próprios para impedir a exclusão (mensagens ao usuário). */
+  extraDeletionBlockers?: (userId: string) => Promise<string[]>;
+  /** Módulos opcionais: dados pessoais a mais na exportação. */
+  extraExportData?: (userId: string) => Promise<Partial<MyDataExport>>;
 }
 
 /** Assinatura que ainda gera ou pode gerar cobrança. */
@@ -79,6 +83,8 @@ export function createAccountService({
   audit,
   rateLimiter,
   now = () => new Date(),
+  extraDeletionBlockers,
+  extraExportData,
 }: AccountServiceDeps) {
   async function requireUser() {
     const user = await repo.getCurrentUser();
@@ -88,9 +94,15 @@ export function createAccountService({
     return user;
   }
 
+  async function buildDeletionPlan(userId: string): Promise<AccountDeletionPlan> {
+    const plan = planAccountDeletion(await repo.listMyMemberships());
+    const extra = extraDeletionBlockers ? await extraDeletionBlockers(userId) : [];
+    return { ...plan, blockers: [...plan.blockers, ...extra] };
+  }
+
   async function getDeletionPlan(): Promise<AccountDeletionPlan> {
-    await requireUser();
-    return planAccountDeletion(await repo.listMyMemberships());
+    const user = await requireUser();
+    return buildDeletionPlan(user.id);
   }
 
   /** Exclui a conta. `confirmation` precisa ser o email do próprio usuário. */
@@ -104,7 +116,7 @@ export function createAccountService({
       throw new AppError("validation_error", "Digite seu email para confirmar a exclusão");
     }
 
-    const plan = planAccountDeletion(await repo.listMyMemberships());
+    const plan = await buildDeletionPlan(user.id);
     if (plan.blockers.length > 0) {
       throw new AppError("validation_error", plan.blockers.join(" "));
     }
@@ -134,7 +146,8 @@ export function createAccountService({
     const user = await requireUser();
     await rateLimiter.consume(`account-export:${user.id}`);
     const data = await repo.collectMyData();
-    return { exportedAt: now().toISOString(), account: user, ...data };
+    const extra = extraExportData ? await extraExportData(user.id) : {};
+    return { exportedAt: now().toISOString(), account: user, ...data, ...extra };
   }
 
   return { getDeletionPlan, deleteMyAccount, exportMyData };

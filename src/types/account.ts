@@ -30,4 +30,20 @@ export interface MyDataExport {
     ipAddress: string | null;
     userAgent: string | null;
   }>;
+  /** Só para quem é ou foi vendedor. */
+  reseller?: {
+    name: string;
+    email: string;
+    referralCode: string;
+    status: string;
+    clients: Array<{ clientName: string; saleNumber: number; startedAt: string; endedAt: string | null }>;
+    commissions: Array<{
+      clientName: string;
+      baseAmountCents: number;
+      amountCents: number;
+      status: string;
+      createdAt: string;
+      paidAt: string | null;
+    }>;
+  };
 }

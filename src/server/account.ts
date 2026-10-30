@@ -4,6 +4,7 @@ import {
   createSupabaseAccountRepository,
 } from "@/repositories/supabase/accountRepository";
 import { createSupabaseAuditRepository } from "@/repositories/supabase/auditRepository";
+import { getResellerDeletionBlockers, getResellerExportData } from "@/modules/resellers/server";
 import { createAccountService, type AccountService } from "@/services/accountService";
 import { createAuditService } from "@/services/auditService";
 import { createRateLimiter } from "./rateLimit";
@@ -39,5 +40,7 @@ export async function getAccountService(): Promise<AccountService> {
         }),
     },
     rateLimiter: accountLimiter,
+    extraDeletionBlockers: getResellerDeletionBlockers,
+    extraExportData: getResellerExportData,
   });
 }

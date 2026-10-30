@@ -269,6 +269,17 @@ Os emails de autenticação (confirmação e recuperação de senha) saem pelo S
 
 O módulo nasce **desligado**. O super admin opera tudo em `/admin/revendedores`.
 
+**Área do vendedor** (`/vendedor`; acesso definido só pelo cadastro em `resellers`):
+
+| Tela | Funções |
+|---|---|
+| Meu link | Link geral e por plano liberado, com botão de copiar. Bloqueado com o módulo desligado. |
+| Meus clientes | Nome, plano, nº da venda, comissão e duração |
+| Minhas comissões | Cliente, valor-base, comissão, status e datas |
+| Minha conta | Exportar dados (inclui a revenda) e excluir a conta, bloqueada com comissão pendente. Ao excluir, os lançamentos ficam e os dados pessoais do vendedor são anonimizados. |
+
+Depois do login, quem é só vendedor vai para `/vendedor`; quem também é cliente escolhe a área em `/escolher-area` e troca pelo menu do usuário. Suspenso perde o acesso; módulo desligado só bloqueia o Meu link.
+
 **Painel do super admin** (toda tela e ação revalida o papel no servidor):
 
 | Tela | Funções |

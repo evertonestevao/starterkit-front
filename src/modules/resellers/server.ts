@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import { reportError } from "@/adapters/errorReporting";
 import { getServerEnv } from "@/config/env";
+import { AppError } from "@/lib/errors";
+import type { MyDataExport } from "@/types/account";
 import { getSupabaseAdminClient } from "@/server/supabase-admin";
 import { getSupabaseServerClient } from "@/server/supabase-server";
 import {
@@ -114,4 +116,75 @@ export async function recordCompanyReferralFromCookie(companyId: string): Promis
   } catch (err) {
     await reportError(err, { source: "resellers:recordCompanyReferral" });
   }
+}
+
+/**
+ * Por user_id e com service_role, não pelas views: vendedor suspenso não enxerga nada
+ * nelas, e ainda assim tem direito de exportar os dados e não pode excluir com pendência.
+ */
+async function findResellerByUser(userId: string) {
+  const { data, error } = await getSupabaseAdminClient()
+    .from("resellers")
+    .select("id, name, email, referral_code, status")
+    .eq("user_id", userId)
+    .maybeSingle<{ id: string; name: string; email: string; referral_code: string; status: string }>();
+  if (error) throw new AppError("internal_error", "Falha ao consultar o cadastro de vendedor", error);
+  return data;
+}
+
+export async function getResellerDeletionBlockers(userId: string): Promise<string[]> {
+  const reseller = await findResellerByUser(userId);
+  if (!reseller) return [];
+  const { count, error } = await getSupabaseAdminClient()
+    .from("reseller_commissions")
+    .select("id", { count: "exact", head: true })
+    .eq("reseller_id", reseller.id)
+    .eq("status", "pending")
+    .is("deleted_at", null);
+  if (error) throw new AppError("internal_error", "Falha ao consultar comissões", error);
+  return count
+    ? ["Você tem comissões pendentes de recebimento. Fale com o administrador para quitá-las antes de excluir a conta."]
+    : [];
+}
+
+export async function getResellerExportData(userId: string): Promise<Partial<MyDataExport>> {
+  const reseller = await findResellerByUser(userId);
+  if (!reseller) return {};
+  const admin = getSupabaseAdminClient();
+  const [clients, commissions] = await Promise.all([
+    admin
+      .from("reseller_clients")
+      .select("sale_number, started_at, ended_at, company:companies!inner(name)")
+      .eq("reseller_id", reseller.id),
+    admin
+      .from("reseller_commissions")
+      .select("base_amount_cents, amount_cents, status, created_at, paid_at, company:companies!inner(name)")
+      .eq("reseller_id", reseller.id),
+  ]);
+  if (clients.error || commissions.error) {
+    throw new AppError("internal_error", "Falha ao exportar dados de revenda", clients.error ?? commissions.error);
+  }
+  const companyName = (company: unknown) => (company as { name: string }).name;
+  return {
+    reseller: {
+      name: reseller.name,
+      email: reseller.email,
+      referralCode: reseller.referral_code,
+      status: reseller.status,
+      clients: clients.data.map((client) => ({
+        clientName: companyName(client.company),
+        saleNumber: client.sale_number,
+        startedAt: client.started_at,
+        endedAt: client.ended_at,
+      })),
+      commissions: commissions.data.map((commission) => ({
+        clientName: companyName(commission.company),
+        baseAmountCents: commission.base_amount_cents,
+        amountCents: commission.amount_cents,
+        status: commission.status,
+        createdAt: commission.created_at,
+        paidAt: commission.paid_at,
+      })),
+    },
+  };
 }

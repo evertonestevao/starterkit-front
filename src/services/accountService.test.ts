@@ -143,3 +143,53 @@ describe("exportMyData", () => {
     expect(data.exportedAt).toBe("2026-10-26T12:00:00.000Z");
   });
 });
+
+describe("módulos opcionais", () => {
+  function makeWithExtras(blockers: string[]) {
+    const deleted: string[] = [];
+    const service = createAccountService({
+      repo: {
+        async getCurrentUser() {
+          return { id: "user-1", email: "ana@example.com", createdAt: "2026-01-01" };
+        },
+        async listMyMemberships() {
+          return [];
+        },
+        async closeCompany() {},
+        async collectMyData() {
+          return { profile: null, memberships: [], termsAcceptances: [], consents: [] };
+        },
+      },
+      remover: {
+        async deleteUser(userId) {
+          deleted.push(userId);
+        },
+      },
+      audit: { async record() {} },
+      rateLimiter: { async consume() {} },
+      extraDeletionBlockers: async () => blockers,
+      extraExportData: async () => ({
+        reseller: { name: "Ana", email: "ana@example.com", referralCode: "ana", status: "active", clients: [], commissions: [] },
+      }),
+    });
+    return { service, deleted };
+  }
+
+  it("bloqueio do módulo impede a exclusão, com a mensagem dele", async () => {
+    const { service, deleted } = makeWithExtras(["Há comissões pendentes."]);
+    await expect(service.getDeletionPlan()).resolves.toMatchObject({ blockers: ["Há comissões pendentes."] });
+    await expect(service.deleteMyAccount({ confirmation: "ana@example.com" })).rejects.toThrow("Há comissões pendentes.");
+    expect(deleted).toEqual([]);
+  });
+
+  it("sem bloqueio, exclui", async () => {
+    const { service, deleted } = makeWithExtras([]);
+    await service.deleteMyAccount({ confirmation: "ana@example.com" });
+    expect(deleted).toEqual(["user-1"]);
+  });
+
+  it("exportação inclui os dados do módulo", async () => {
+    const { service } = makeWithExtras([]);
+    await expect(service.exportMyData()).resolves.toMatchObject({ reseller: { referralCode: "ana" } });
+  });
+});

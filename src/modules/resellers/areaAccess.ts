@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { SIDEBAR_COOKIE } from "@/components/app-shell/app-shell";
 import { createSupabaseUserRepository } from "@/repositories/supabase/userRepository";
 import { getSupabaseServerClient } from "@/server/supabase-server";
+import { getTenantService } from "@/server/tenant";
 import { getTermsService } from "@/server/terms";
 import { createUserService } from "@/services/userService";
 
@@ -58,4 +59,22 @@ export async function getAreaShellProps() {
 export async function requireSuperAdminPage() {
   const { isSuperAdmin } = await getResellerRoles();
   if (!isSuperAdmin) redirect("/dashboard");
+}
+
+/** Portão da área do vendedor: suspenso ou sem cadastro não passa. */
+export async function requireSellerPage() {
+  const { isReseller } = await getResellerRoles();
+  if (!isReseller) redirect("/dashboard");
+}
+
+export async function hasCompany(): Promise<boolean> {
+  const tenant = await getTenantService();
+  return (await tenant.listMyCompanies()).length > 0;
+}
+
+/** Destino depois do login, quando não há um destino pedido. */
+export async function resolvePostLoginPath(): Promise<string> {
+  const { isReseller } = await getResellerRoles();
+  if (!isReseller) return "/dashboard";
+  return (await hasCompany()) ? "/escolher-area" : "/vendedor";
 }

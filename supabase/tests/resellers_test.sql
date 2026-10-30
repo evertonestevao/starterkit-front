@@ -826,6 +826,18 @@ begin
   if (select count(*) from public.reseller_commissions where reseller_id = 'b0000000-0000-4000-8000-00000000000b') = 0 then
     raise exception 'FALHA exclusão: lançamentos sumiram';
   end if;
+  if (select name <> 'Vendedor excluído' or email like '%vendedor-b%' or status <> 'suspended'
+      from public.resellers where id = 'b0000000-0000-4000-8000-00000000000b') then
+    raise exception 'FALHA exclusão: dados pessoais do vendedor ficaram';
+  end if;
+  if exists (
+    select 1 from public.reseller_audit_log
+    where table_name = 'resellers'
+      and record_id = 'b0000000-0000-4000-8000-00000000000b'
+      and (old_values::text like '%vendedor-b@%' or new_values::text like '%vendedor-b@%')
+  ) then
+    raise exception 'FALHA exclusão: e-mail ficou no histórico';
+  end if;
 end $$;
 
 rollback;
