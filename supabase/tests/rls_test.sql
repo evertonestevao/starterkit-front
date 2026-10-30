@@ -351,6 +351,128 @@ end $$;
 reset role;
 
 -- ---------------------------------------------------------------------------
+-- Privilégio mínimo: a matriz de GRANTs do client é exatamente esta. Tabela nova
+-- exposta ao client precisa entrar aqui de propósito.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  diff text;
+begin
+  with expected (grantee, table_name, privilege_type) as (
+    select 'anon', t, p from unnest(array['plans', 'terms_versions']) t, unnest(array['SELECT']) p
+    union all
+    select 'authenticated', t, 'SELECT' from unnest(array[
+      'roles', 'plans', 'terms_versions', 'platform_admins', 'profiles', 'companies',
+      'audit_logs', 'terms_acceptances', 'user_consents', 'company_members',
+      'company_invites', 'subscriptions', 'settings']) t
+    union all
+    select 'authenticated', t, 'UPDATE' from unnest(array[
+      'profiles', 'companies', 'company_members', 'company_invites', 'subscriptions', 'settings']) t
+    union all
+    select 'authenticated', t, 'INSERT' from unnest(array[
+      'audit_logs', 'terms_acceptances', 'user_consents', 'company_members',
+      'company_invites', 'subscriptions', 'settings']) t
+  ),
+  actual as (
+    select grantee::text, table_name::text, privilege_type::text
+    from information_schema.role_table_grants
+    where table_schema = 'public' and grantee in ('anon', 'authenticated')
+  ),
+  differences as (
+    (select 'sobrando: ' || a.grantee || ' ' || a.privilege_type || ' ' || a.table_name as line
+     from actual a except select 'sobrando: ' || e.grantee || ' ' || e.privilege_type || ' ' || e.table_name from expected e)
+    union all
+    (select 'faltando: ' || e.grantee || ' ' || e.privilege_type || ' ' || e.table_name
+     from expected e except select 'faltando: ' || a.grantee || ' ' || a.privilege_type || ' ' || a.table_name from actual a)
+  )
+  select string_agg(line, '; ') into diff from differences;
+  if diff is not null then raise exception 'FALHA grants de tabela: %', diff; end if;
+
+  -- anon não executa nenhuma função própria do schema public.
+  select string_agg(p.oid::regprocedure::text, ', ') into diff
+  from pg_proc p
+  where p.pronamespace = 'public'::regnamespace
+    and has_function_privilege('anon', p.oid, 'execute')
+    and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e');
+  if diff is not null then raise exception 'FALHA grants de função: anon executa %', diff; end if;
+
+  -- Trigger não é RPC: authenticated não chama diretamente.
+  if has_function_privilege('authenticated', 'public.handle_new_user()', 'execute') then
+    raise exception 'FALHA grants de função: authenticated executa handle_new_user';
+  end if;
+end $$;
+
+-- Objeto futuro nasce fechado para o client e aberto só ao service_role.
+create table public.rls_test_default_acl (id int);
+create function public.rls_test_default_fn() returns int language sql as 'select 1';
+do $$
+begin
+  if has_table_privilege('anon', 'public.rls_test_default_acl', 'select')
+    or has_table_privilege('authenticated', 'public.rls_test_default_acl', 'select') then
+    raise exception 'FALHA default privileges: tabela nova nasce aberta ao client';
+  end if;
+  if has_table_privilege('service_role', 'public.rls_test_default_acl', 'truncate')
+    or not has_table_privilege('service_role', 'public.rls_test_default_acl', 'select') then
+    raise exception 'FALHA default privileges: service_role fora do esperado';
+  end if;
+  if has_function_privilege('anon', 'public.rls_test_default_fn()', 'execute')
+    or has_function_privilege('authenticated', 'public.rls_test_default_fn()', 'execute') then
+    raise exception 'FALHA default privileges: função nova nasce aberta ao client';
+  end if;
+end $$;
+drop function public.rls_test_default_fn();
+drop table public.rls_test_default_acl;
+
+-- Reassinatura: o índice único barra a segunda assinatura até a anterior ir para o
+-- histórico, que é o que billingService.applyPaymentEvent faz.
+do $$
+declare v_plan uuid;
+begin
+  select id into v_plan from public.plans where code = 'pro';
+  begin
+    insert into public.subscriptions (company_id, plan_id) values ('c2c2c2c2-0000-4000-8000-000000000002', v_plan);
+    raise exception 'FALHA subscriptions: duas assinaturas ativas na mesma empresa';
+  exception when unique_violation then null; -- esperado
+  end;
+  update public.subscriptions set deleted_at = now() where company_id = 'c2c2c2c2-0000-4000-8000-000000000002';
+  insert into public.subscriptions (company_id, plan_id, status) values ('c2c2c2c2-0000-4000-8000-000000000002', v_plan, 'active');
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- platform_admins: ninguém se promove; cada um só enxerga a própria linha.
+-- ---------------------------------------------------------------------------
+insert into public.platform_admins (user_id) values ('b2b2b2b2-0000-4000-8000-000000000002');
+
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"a1a1a1a1-0000-4000-8000-000000000001","email":"rls-alice@test.local","role":"authenticated"}', true);
+
+do $$
+declare n int;
+begin
+  if public.is_super_admin() then raise exception 'FALHA platform_admins: alice virou super admin'; end if;
+
+  select count(*) into n from public.platform_admins;
+  if n <> 0 then raise exception 'FALHA platform_admins: alice viu a linha de outro usuário'; end if;
+
+  begin
+    insert into public.platform_admins (user_id) values ('a1a1a1a1-0000-4000-8000-000000000001');
+    raise exception 'FALHA platform_admins: auto-promoção foi aceita';
+  exception when sqlstate '42501' then null; -- esperado
+  end;
+end $$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"b2b2b2b2-0000-4000-8000-000000000002","email":"rls-bob@test.local","role":"authenticated"}', true);
+
+do $$
+begin
+  if not public.is_super_admin() then raise exception 'FALHA platform_admins: bob não é super admin'; end if;
+end $$;
+
+reset role;
+
+-- ---------------------------------------------------------------------------
 -- Exclusão de usuário: FKs de autoria não podem impedir (LGPD, art. 18).
 -- ---------------------------------------------------------------------------
 do $$

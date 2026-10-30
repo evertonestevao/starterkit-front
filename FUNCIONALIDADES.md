@@ -6,7 +6,7 @@ arquitetura e deploy, veja [DOCUMENTACAO.md](DOCUMENTACAO.md).
 > **Mantenha este arquivo atualizado.** Toda mudança que cria, altera ou remove uma
 > funcionalidade atualiza a seção correspondente no mesmo commit.
 
-**Última atualização:** 2026-10-26
+**Última atualização:** 2026-10-30
 
 ## Sumário
 
@@ -50,6 +50,9 @@ mas não outros admins nem o owner.
   só conveniência.
 - Novos papéis são criados por migration (`public.roles`) mais `defineRole()` em
   `src/services/permissionService.ts`.
+- **Super admin** é um papel global da plataforma, separado dos papéis por empresa: fica em
+  `public.platform_admins`, que a aplicação só lê. A concessão é feita direto no banco, com
+  `insert into public.platform_admins (user_id) select id from auth.users where email = '...';`.
 
 ## 2. Conta e autenticação
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { createSupabaseTenantRepository } from "@/repositories/supabase/tenantRepository";
 import { createTenantService, type TenantService } from "@/services/tenantService";
 import type { CompanyWithRole } from "@/types/tenant";
@@ -25,6 +26,15 @@ export interface ActiveTenant {
 
 /** Empresas do usuário + a ativa (cookie válido, senão a primeira). */
 export async function getActiveTenant(): Promise<ActiveTenant> {
+  // Sem sessão (fim de logout/exclusão, com páginas renderizando em paralelo) o client
+  // viraria anon, que não lê company_members. getSession só decide o redirect; quem
+  // autoriza os dados continua sendo a RLS.
+  const client = await getSupabaseServerClient();
+  const { data } = await client.auth.getSession();
+  if (!data.session) {
+    redirect("/login");
+  }
+
   const tenant = await getTenantService();
   const companies = await tenant.listMyCompanies();
   if (companies.length === 0) {
