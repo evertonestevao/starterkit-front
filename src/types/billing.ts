@@ -59,6 +59,7 @@ export type PaymentEventType =
   | "subscription.updated"
   | "subscription.canceled"
   | "payment.failed"
+  | "payment.refunded"
   | "ignored";
 
 export interface NormalizedPaymentEvent {
@@ -72,4 +73,8 @@ export interface NormalizedPaymentEvent {
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  /** Pagamento confirmado que gerou o evento. Sem isto, não há comissão (ex.: Stripe). */
+  payment?: { externalId: string; grossAmountCents: number };
+  /** Estorno: total estornado até agora; null = integral. */
+  refund?: { externalPaymentId: string; refundedCents: number | null };
 }

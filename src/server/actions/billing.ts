@@ -1,10 +1,12 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getPaymentGateway } from "@/adapters/payment";
 import { getServerEnv } from "@/config/env";
 import { AppError } from "@/lib/errors";
+import { endCompanyResellerLink, getCommissionService, linkCompanyAtCheckout } from "@/modules/resellers/server";
 import { createSupabaseBillingRepository } from "@/repositories/supabase/billingRepository";
 import { createSupabaseUserRepository } from "@/repositories/supabase/userRepository";
 import { recordAudit } from "@/server/audit";
@@ -15,6 +17,7 @@ import { getTenantService } from "@/server/tenant";
 import { createBillingService } from "@/services/billingService";
 import { permissionService } from "@/services/permissionService";
 import { createUserService } from "@/services/userService";
+import type { NormalizedPaymentEvent } from "@/types/billing";
 import { toActionError, type ActionState } from "./action-state";
 
 /** Server actions de billing — toda ação revalida que o ator é owner. */
@@ -50,6 +53,9 @@ export async function checkoutAction(
     if (!plan) {
       throw new AppError("not_found", "Plano não encontrado");
     }
+
+    // Antes de cobrar: o primeiro pagamento já precisa encontrar o vínculo.
+    await linkCompanyAtCheckout(companyId, plan.id);
 
     const appUrl = getServerEnv().APP_URL;
     const gateway = getPaymentGateway();
@@ -101,10 +107,14 @@ export async function activateFakePlanAction(
     }
 
     // service_role: mesma via que o webhook real usaria (sem sessão de usuário).
-    const billing = createBillingService(
-      createSupabaseBillingRepository(getSupabaseAdminClient()),
-    );
-    await billing.applyPaymentEvent({
+    const repo = createSupabaseBillingRepository(getSupabaseAdminClient());
+    const billing = createBillingService(repo);
+    const plan = await repo.getPlanById(planId);
+    if (!plan) {
+      throw new AppError("not_found", "Plano não encontrado");
+    }
+    await linkCompanyAtCheckout(companyId, planId);
+    const event: NormalizedPaymentEvent = {
       type: "subscription.activated",
       gateway: "fake",
       externalSubscriptionId: `fake_${companyId}`,
@@ -114,7 +124,10 @@ export async function activateFakePlanAction(
       currentPeriodStart: new Date().toISOString(),
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       cancelAtPeriodEnd: false,
-    });
+      payment: { externalId: `fake_pay_${randomUUID()}`, grossAmountCents: plan.price_cents },
+    };
+    await billing.applyPaymentEvent(event);
+    await getCommissionService().processEvent(event);
     await recordAudit({
       companyId,
       action: "subscription.activated",
@@ -150,6 +163,8 @@ export async function cancelSubscriptionAction(
       status: "canceled",
       cancel_at_period_end: true,
     });
+    // O webhook também encerra; aqui cobre gateway sem webhook de cancelamento. Idempotente.
+    await endCompanyResellerLink(companyId);
     await recordAudit({
       companyId,
       action: "subscription.canceled",

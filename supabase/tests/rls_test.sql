@@ -365,7 +365,7 @@ begin
       'roles', 'plans', 'terms_versions', 'platform_admins', 'profiles', 'companies',
       'audit_logs', 'terms_acceptances', 'user_consents', 'company_members',
       'company_invites', 'subscriptions', 'settings', 'reseller_settings', 'resellers',
-      'commission_rules', 'reseller_clients', 'reseller_commissions', 'reseller_audit_log', 'reseller_referrals',
+      'commission_rules', 'reseller_clients', 'reseller_commissions', 'reseller_audit_log', 'reseller_referrals', 'reseller_commission_failures',
       'reseller_me', 'reseller_available_plans', 'reseller_my_clients', 'reseller_my_commissions']) t
     union all
     select 'authenticated', t, 'UPDATE' from unnest(array[

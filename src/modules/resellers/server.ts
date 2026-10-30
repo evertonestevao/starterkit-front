@@ -8,9 +8,12 @@ import { getSupabaseServerClient } from "@/server/supabase-server";
 import {
   buildReferralCookie,
   buildReferralRedirect,
+  normalizeReferralCode,
   REFERRAL_COOKIE,
 } from "./referralCookie";
+import { createCommissionService, type CommissionService } from "./commissionService";
 import { createReferralService, type ReferralService } from "./referralService";
+import { createSupabaseCommissionRepository } from "./supabaseCommissionRepository";
 import { createSupabaseReferralRepository } from "./supabaseReferralRepository";
 
 /**
@@ -51,6 +54,45 @@ export async function handleReferralClick(
   }
 
   return new Response(null, { status: 307, headers });
+}
+
+export function getCommissionService(): CommissionService {
+  return createCommissionService(createSupabaseCommissionRepository(getSupabaseAdminClient()));
+}
+
+/**
+ * Vínculo na contratação: grava a indicação do cookie, se ainda não houver, e vincula
+ * se a empresa nunca pagou e o plano está liberado. Falha aqui nunca impede a compra.
+ */
+export async function linkCompanyAtCheckout(companyId: string, planId: string): Promise<void> {
+  try {
+    const cookieStore = await cookies();
+    const client = await getSupabaseServerClient();
+    const { data } = await client.auth.getUser();
+    if (!data.user) return;
+
+    const { error } = await getSupabaseAdminClient().rpc("link_company_at_checkout", {
+      p_company_id: companyId,
+      p_referral_code: normalizeReferralCode(cookieStore.get(REFERRAL_COOKIE)?.value),
+      p_user_id: data.user.id,
+      p_plan_id: planId,
+    });
+    if (error) throw error;
+  } catch (err) {
+    await reportError(err, { source: "resellers:linkCompanyAtCheckout" });
+  }
+}
+
+/** Encerra o vínculo quando a própria empresa cancela. Nunca impede o cancelamento. */
+export async function endCompanyResellerLink(companyId: string): Promise<void> {
+  try {
+    const { error } = await getSupabaseAdminClient().rpc("end_reseller_client", {
+      p_company_id: companyId,
+    });
+    if (error) throw error;
+  } catch (err) {
+    await reportError(err, { source: "resellers:endCompanyResellerLink" });
+  }
 }
 
 /** Grava a indicação na empresa recém-criada. Falha aqui nunca impede o cadastro. */

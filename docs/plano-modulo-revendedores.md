@@ -152,3 +152,28 @@ Valem para toda esta feature:
 - Não alterar o código de Stripe existente além do necessário: o Asaas entra como adaptador novo.
 - Código do módulo isolado em uma pasta única.
 - Dúvida de produto: seguir o que o plano diz e listar a suposição no resumo.
+
+## 15. Asaas: referência confirmada na documentação oficial
+
+Consultada em 30/10/2026.
+
+**Autenticação:** com `authToken` configurado no webhook, o valor chega no header `asaas-access-token`. O token deve ter entre 32 e 255 caracteres e não pode ser uma API Key. ([Receba eventos](https://docs.asaas.com/docs/receba-eventos-do-asaas-no-seu-endpoint-de-webhook))
+
+**Entrega:** "at least once", então o mesmo evento pode repetir. Responder 200 rápido; depois de 15 falhas consecutivas a fila é pausada, e eventos com mais de 14 dias são apagados. ([Idempotência](https://docs.asaas.com/docs/como-implementar-idempotencia-em-webhooks), [Fila pausada](https://docs.asaas.com/docs/fila-pausada))
+
+**Formato:** topo com `id`, `event`, `dateCreated` e `account`, mais o objeto `payment` ou `subscription`. Campos novos podem surgir e devem ser ignorados. ([Eventos para cobranças](https://docs.asaas.com/docs/webhook-para-cobrancas), [Eventos para assinaturas](https://docs.asaas.com/docs/eventos-para-assinaturas))
+
+**Valores:** `value` é o valor da cobrança (bruto, o que usamos); `netValue` é o líquido após a tarifa. ([Recuperar cobrança](https://docs.asaas.com/reference/recuperar-uma-unica-cobranca))
+
+| Evento do Asaas | Significado na documentação | Evento padrão |
+|---|---|---|
+| `PAYMENT_CONFIRMED` | Pago, saldo ainda não disponível | `subscription.activated` + pagamento |
+| `PAYMENT_RECEIVED` | Recebido, saldo disponível | `subscription.activated` + pagamento |
+| `PAYMENT_REFUNDED` | Estornado integralmente | `payment.refunded` |
+| `PAYMENT_PARTIALLY_REFUNDED` | Estornado parcialmente | `payment.refunded`, com a soma de `GET /payments/{id}/refunds` em status `DONE` ([Listar estornos](https://docs.asaas.com/reference/listar-estornos-de-uma-cobranca)) |
+| `PAYMENT_OVERDUE` | Vencida | `payment.failed` |
+| `SUBSCRIPTION_DELETED`, `SUBSCRIPTION_INACTIVATED` | Removida, inativada | `subscription.canceled` |
+
+Chargeback não tem evento próprio aqui: pela documentação, a perda termina em `PAYMENT_REFUNDED`.
+
+No cartão, `PAYMENT_RECEIVED` chega cerca de 32 dias depois de `PAYMENT_CONFIRMED`. O lançamento nasce no primeiro dos dois, e o par `gateway + external_payment_id` impede a duplicata.

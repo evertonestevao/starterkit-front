@@ -83,7 +83,8 @@ export function createBillingService(repo: BillingRepository) {
    * não tem sessão de usuário.
    */
   async function applyPaymentEvent(event: NormalizedPaymentEvent): Promise<void> {
-    if (event.type === "ignored") return;
+    // Estorno não muda a assinatura: quem trata é a comissão.
+    if (event.type === "ignored" || event.type === "payment.refunded") return;
     if (!event.externalSubscriptionId) {
       throw new AppError("payment_error", "Evento de pagamento sem id de assinatura");
     }

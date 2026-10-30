@@ -19,7 +19,8 @@ import type { PaymentGateway } from "./PaymentGateway";
  *    "<companyId>:<planId>" para o webhook achar a empresa.
  *  - Webhook: autenticado pelo header `asaas-access-token` (token definido
  *    ao cadastrar o webhook no painel). Pagamento confirmado de uma
- *    assinatura ativa ou renova o plano; vencido vira past_due.
+ *    assinatura ativa ou renova o plano; vencido vira past_due; estorno vira
+ *    payment.refunded. Referência: docs/plano-modulo-revendedores.md §15.
  *  - Seats extras: Asaas cobra por valor, então o adapter atualiza o valor
  *    total da assinatura (plano + extras × preço unitário).
  *  - Portal: o Asaas não tem portal de autogestão — getPortalUrl devolve null.
@@ -68,12 +69,16 @@ const ASAAS_EVENT_MAP: Record<string, PaymentEventType> = {
   PAYMENT_OVERDUE: "payment.failed",
   SUBSCRIPTION_DELETED: "subscription.canceled",
   SUBSCRIPTION_INACTIVATED: "subscription.canceled",
+  PAYMENT_REFUNDED: "payment.refunded",
+  PAYMENT_PARTIALLY_REFUNDED: "payment.refunded",
 };
 
 interface AsaasWebhookEvent {
   event?: string;
   payment?: {
     id?: string;
+    /** Valor bruto da cobrança, em reais. O líquido é netValue, que não usamos. */
+    value?: number;
     customer?: string;
     subscription?: string | null;
     paymentLink?: string | null;
@@ -93,6 +98,16 @@ interface AsaasSubscription {
   customer?: string;
   externalReference?: string | null;
   nextDueDate?: string;
+}
+
+interface AsaasRefund {
+  status?: string;
+  value?: number;
+}
+
+/** Reais -> centavos, sem erro de ponto flutuante. */
+function toCents(reais: number): number {
+  return Math.round(reais * 100);
 }
 
 /** "2026-10-26" -> ISO em UTC; null se ausente. */
@@ -173,6 +188,31 @@ export function createAsaasGateway(config: AsaasGatewayConfig): PaymentGateway {
       };
     }
 
+    if (type === "payment.refunded") {
+      const paymentId = event.payment?.id;
+      if (!paymentId) return base;
+      // Integral: total null. Parcial: soma dos estornos concluídos (status DONE), que
+      // é o que a documentação manda considerar. Sem consultar a assinatura, que pode
+      // já estar cancelada.
+      let refundedCents: number | null = null;
+      if (event.event === "PAYMENT_PARTIALLY_REFUNDED") {
+        const refunds = await asaasRequest<{ data?: AsaasRefund[] }>(
+          `/payments/${paymentId}/refunds`,
+          "GET",
+        );
+        refundedCents = (refunds.data ?? [])
+          .filter((refund) => refund.status === "DONE")
+          .reduce((total, refund) => total + toCents(refund.value ?? 0), 0);
+      }
+      return {
+        ...base,
+        type,
+        externalSubscriptionId: event.payment?.subscription ?? null,
+        externalCustomerId: event.payment?.customer ?? null,
+        refund: { externalPaymentId: paymentId, refundedCents },
+      };
+    }
+
     // Eventos de pagamento: só interessam os de assinatura (avulsos são ignorados).
     const payment = event.payment;
     if (!payment?.subscription) return base;
@@ -190,6 +230,12 @@ export function createAsaasGateway(config: AsaasGatewayConfig): PaymentGateway {
       planId: reference?.planId ?? null,
       currentPeriodStart: dateToIso(payment.dueDate),
       currentPeriodEnd: dateToIso(subscription.nextDueDate),
+      // Só pagamento confirmado gera comissão. CONFIRMED e RECEIVED da mesma cobrança
+      // têm o mesmo id, e o par único no banco evita o lançamento duplicado.
+      payment:
+        type === "subscription.activated" && payment.id && payment.value
+          ? { externalId: payment.id, grossAmountCents: toCents(payment.value) }
+          : undefined,
     };
   }
 

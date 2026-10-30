@@ -457,9 +457,9 @@ o CI verde. **Não avance com CI vermelho.**
 1. Crie a conta e valide em **sandbox** primeiro (`ASAAS_ENVIRONMENT=sandbox`, chave do sandbox).
 2. Em Minha Conta → Informações comerciais, cadastre o domínio do app: o Asaas só aceita
    `successUrl` de domínio cadastrado no link de pagamento.
-3. Integrações → Webhooks → novo webhook para `https://seu-dominio.com/api/webhooks/payment`,
+3. Integrações → Webhooks → novo webhook para `https://seu-dominio.com/api/webhooks/asaas`,
    com um **token de autenticação** forte e os eventos de cobrança (`PAYMENT_CONFIRMED`,
-   `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`) e de assinatura (`SUBSCRIPTION_DELETED`,
+   `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_REFUNDED`, `PAYMENT_PARTIALLY_REFUNDED`) e de assinatura (`SUBSCRIPTION_DELETED`,
    `SUBSCRIPTION_INACTIVATED`). Envio sequencial.
 4. Envs: `PAYMENT_GATEWAY=asaas`, `ASAAS_API_KEY=$aact_...`, `ASAAS_WEBHOOK_TOKEN=<o token do passo 3>`,
    `ASAAS_ENVIRONMENT=production` (só depois de validar no sandbox).

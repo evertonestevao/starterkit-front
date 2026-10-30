@@ -165,7 +165,7 @@ Os valores vêm das migrations `seed_plans` e `plans_extra_seat_price`. A landin
 | **Assinar / trocar plano** | Owner | Página de pagamento hospedada pelo gateway. No Asaas, o cliente escolhe PIX, boleto ou cartão. Com `PAYMENT_GATEWAY=fake`, ativa o plano direto, para desenvolvimento. |
 | **Cancelar assinatura** | Owner | Cancela no gateway. O acesso segue até o fim do período pago. |
 | **Cobrança por seat** | Automático | Ao convidar, revogar ou remover membros, os extras são sincronizados com o gateway: item com quantidade (Stripe) ou novo valor total da assinatura (Asaas). |
-| **Webhook de pagamento** (`POST /api/webhooks/payment`) | Gateway | Autenticidade verificada por cada provedor (HMAC no Stripe, token no Asaas). Os eventos atualizam `subscriptions` de forma idempotente e entram na auditoria. Em uma reassinatura, a assinatura anterior da empresa vai para o histórico e a nova assume. |
+| **Webhook de pagamento** (`POST /api/webhooks/[gateway]`, com `/payment` mantida para webhooks já cadastrados) | Gateway | Autenticidade verificada por cada provedor (HMAC no Stripe, token no Asaas). Os eventos atualizam `subscriptions` de forma idempotente e entram na auditoria. Em uma reassinatura, a assinatura anterior da empresa vai para o histórico e a nova assume. |
 | **Limites por plano** | Código | `canAccessFeature()` e `getFeatureLimit()` são o ponto único de checagem. |
 
 **Gateways disponíveis** (`PAYMENT_GATEWAY`):
@@ -267,8 +267,16 @@ Os emails de autenticação (confirmação e recuperação de senha) saem pelo S
 
 ## 15. Revendedores (em construção)
 
-A base de dados e o link de afiliado existem; ainda não há telas nem integração com o webhook.
-O módulo nasce **desligado** e, por enquanto, nenhum vendedor é vinculado pela aplicação.
+A base de dados, o link de afiliado e a geração de comissão existem; ainda não há telas.
+O módulo nasce **desligado**.
+
+**Comissão** (gateway Asaas; Stripe não gera comissão):
+
+- **Contratação:** se a empresa nunca pagou, o checkout grava a indicação do cookie e cria o vínculo, só para plano liberado e sem auto-indicação.
+- **Pagamento confirmado:** gera um lançamento sobre o valor bruto, com meses cobertos pelo ciclo do plano (mensal 1, anual 12). Continua gerando com o módulo desligado.
+- **Estorno:** reverte ou recalcula o lançamento pendente; o já pago não muda e fica sinalizado.
+- **Assinatura cancelada:** encerra o vínculo.
+- **Falha:** nunca afeta o pagamento. Fica em `reseller_commission_failures`, com reprocesso manual idempotente pela action `reprocessCommissionFailureAction`, só para o super admin.
 
 **Link de afiliado** (`/r/CODIGO`, ou `?ref=CODIGO` em `/` e `/signup`):
 

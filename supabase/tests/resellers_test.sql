@@ -646,6 +646,88 @@ begin
 end $$;
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- Vínculo na contratação e pendências de comissão.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_client uuid;
+  v_failure uuid;
+begin
+  -- Cookie válido + plano liberado: grava indicação e vincula antes do pagamento.
+  v_client := public.link_company_at_checkout(pg_temp.c(17), 'vendedor-a', 'a0000000-0000-4000-8000-000000000004', pg_temp.plan('enterprise'));
+  if v_client is null then raise exception 'FALHA checkout: não vinculou'; end if;
+  if not exists (select 1 from public.reseller_referrals where company_id = pg_temp.c(17)) then
+    raise exception 'FALHA checkout: não gravou indicação';
+  end if;
+  if public.link_company_at_checkout(pg_temp.c(17), 'vendedor-c', 'a0000000-0000-4000-8000-000000000004', pg_temp.plan('enterprise')) <> v_client then
+    raise exception 'FALHA checkout: trocou de vendedor';
+  end if;
+
+  -- Sem cookie, vale a indicação gravada no cadastro (empresa 15, do vendedor A).
+  if public.link_company_at_checkout(pg_temp.c(15), null, 'a0000000-0000-4000-8000-000000000004', pg_temp.plan('enterprise')) is null then
+    raise exception 'FALHA checkout: ignorou indicação do cadastro';
+  end if;
+
+  -- Plano não liberado: guarda a indicação, sem vínculo.
+  if public.link_company_at_checkout(pg_temp.c(18), 'vendedor-a', 'a0000000-0000-4000-8000-000000000004', pg_temp.plan('free')) is not null then
+    raise exception 'FALHA checkout: vinculou plano não liberado';
+  end if;
+
+  -- Quem já pagou não é venda nova.
+  insert into public.subscriptions (company_id, plan_id, status, external_subscription_id)
+  values (pg_temp.c(19), pg_temp.plan('pro'), 'active', 'sub-ja-pagou');
+  if public.link_company_at_checkout(pg_temp.c(19), 'vendedor-a', 'a0000000-0000-4000-8000-000000000004', pg_temp.plan('enterprise')) is not null then
+    raise exception 'FALHA checkout: vinculou quem já pagou';
+  end if;
+  if exists (select 1 from public.reseller_referrals where company_id = pg_temp.c(19)) then
+    raise exception 'FALHA checkout: gravou indicação de quem já pagou';
+  end if;
+
+  -- Auto-indicação continua bloqueada (vendedor A é membro da empresa 20).
+  if public.link_company_at_checkout(pg_temp.c(20), 'vendedor-a', 'a0000000-0000-4000-8000-000000000001', pg_temp.plan('enterprise')) is not null then
+    raise exception 'FALHA checkout: auto-indicação vinculou';
+  end if;
+
+  -- Pendência: mesmo evento soma tentativa, sem duplicar.
+  v_failure := public.record_commission_failure('asaas', 'subscription.activated', 'pay-falha', 'erro 1', '{"a":1}');
+  if public.record_commission_failure('asaas', 'subscription.activated', 'pay-falha', 'erro 2', '{"a":1}') <> v_failure then
+    raise exception 'FALHA pendência: duplicou';
+  end if;
+  if (select attempts <> 2 or error <> 'erro 2' from public.reseller_commission_failures where id = v_failure) then
+    raise exception 'FALHA pendência: tentativa não contada';
+  end if;
+end $$;
+
+-- Pendências fechadas: vendedor não lê nem grava; super admin só lê.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+do $$
+begin
+  if exists (select 1 from public.reseller_commission_failures) then raise exception 'FALHA pendência: vendedor leu'; end if;
+  begin
+    perform public.link_company_at_checkout('c0000000-0000-4000-8000-000000000018', 'vendedor-a', null, null);
+    raise exception 'FALHA checkout: client chamou a função';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.record_commission_failure('x', 'y', 'z', 'e', '{}');
+    raise exception 'FALHA pendência: client chamou a função';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+do $$
+begin
+  if not exists (select 1 from public.reseller_commission_failures) then raise exception 'FALHA pendência: super admin não leu'; end if;
+  begin
+    update public.reseller_commission_failures set status = 'resolved';
+    raise exception 'FALHA pendência: client alterou';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+reset role;
+
 -- Conta do vendedor excluída: user_id vira NULL e os lançamentos ficam.
 do $$
 begin
