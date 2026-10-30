@@ -287,7 +287,7 @@ Depois do login, quem é só vendedor vai para `/vendedor`; quem também é clie
 | Vendedores | Ligar/desligar o módulo, cadastrar por convite (código gerado ou informado), totais por vendedor |
 | Página do vendedor | Editar nome e código, suspender/reativar, reenviar convite, ajustar comissão por cliente (marca override, vale para os próximos lançamentos), histórico de alterações |
 | Regras e planos | Regras por vendedor e plano ou padrão global, com tipo, valor, duração e "a partir da venda nº"; liberar e esconder planos |
-| Lançamentos | Filtros por vendedor, plano, status e período; editar valor; marcar vários como pagos, com data |
+| Lançamentos | Filtros por vendedor, plano, status e período; editar valor; marcar vários como pagos, com data; exportar CSV com total por vendedor, respeitando os filtros (sem período, o mês atual) |
 | Alertas e falhas | Vendas sem regra aplicável (`LINK_NO_RULE`) e falhas de comissão com botão de reprocessar |
 
 **Comissão** (gateway Asaas; Stripe não gera comissão):
@@ -303,6 +303,7 @@ Depois do login, quem é só vendedor vai para `/vendedor`; quem também é clie
 - Grava o cookie `reseller_ref` no servidor (HttpOnly, SameSite=Lax, Secure em HTTPS, 30 dias) e redireciona para a página limpa, preservando os demais parâmetros, como `utm_*`.
 - Vale o primeiro vendedor: cookie com código válido não é sobrescrito.
 - Código inválido, vendedor suspenso ou módulo desligado são ignorados em silêncio: mesmo redirecionamento, sem cookie.
+- Limite de 120 cliques por minuto por IP e instância: acima disso, o código é ignorado em silêncio.
 - A validação fica em cache por 60 s por instância, então suspender um vendedor ou desligar o módulo pode levar esse tempo para valer nos cliques.
 - Ao criar uma empresa, o código do cookie é gravado em `reseller_referrals`, salvo auto-indicação (mesmo usuário ou mesmo e-mail).
 

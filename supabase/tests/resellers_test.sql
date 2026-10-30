@@ -840,6 +840,59 @@ begin
   end if;
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- Revisão de segurança como teste: objeto novo do módulo que fuja do padrão quebra aqui.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  bad text;
+begin
+  -- Toda tabela do módulo tem RLS, e nenhuma policy vale para outro papel que não o super admin.
+  select string_agg(c.relname, ', ') into bad
+  from pg_class c
+  where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
+    and (c.relname like 'reseller%' or c.relname like 'commission%')
+    and not c.relrowsecurity;
+  if bad is not null then raise exception 'FALHA revisão: tabela sem RLS: %', bad; end if;
+
+  select string_agg(p.polname, ', ') into bad
+  from pg_policy p
+  join pg_class c on c.oid = p.polrelid
+  where (c.relname like 'reseller%' or c.relname like 'commission%')
+    and pg_get_expr(p.polqual, p.polrelid) <> 'is_super_admin()';
+  if bad is not null then raise exception 'FALHA revisão: policy fora do padrão: %', bad; end if;
+
+  -- Toda view do módulo filtra por quem consulta.
+  select string_agg(v.viewname, ', ') into bad
+  from pg_views v
+  where v.schemaname = 'public' and v.viewname like 'reseller%'
+    and v.definition not like '%current_reseller_id()%'
+    and v.definition not like '%is_super_admin()%';
+  if bad is not null then raise exception 'FALHA revisão: view sem filtro de acesso: %', bad; end if;
+
+  -- O client só executa estas funções do módulo; todas fixam o search_path.
+  select string_agg(p.proname, ', ') into bad
+  from pg_proc p
+  where p.pronamespace = 'public'::regnamespace
+    and p.proname ~ 'reseller|commission|referral|find_user|link_company'
+    and has_function_privilege('authenticated', p.oid, 'execute')
+    and p.proname not in ('current_reseller_id', 'resellers_enabled', 'set_plan_available_to_resellers');
+  if bad is not null then raise exception 'FALHA revisão: client executa: %', bad; end if;
+
+  select string_agg(p.proname, ', ') into bad
+  from pg_proc p
+  where p.pronamespace = 'public'::regnamespace and p.prosecdef
+    and p.proname ~ 'reseller|commission|referral|find_user|link_company'
+    and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) cfg where cfg like 'search_path=%');
+  if bad is not null then raise exception 'FALHA revisão: security definer sem search_path: %', bad; end if;
+
+  -- Campos de gateway neutros (plano §11).
+  select string_agg(c.table_name || '.' || c.column_name, ', ') into bad
+  from information_schema.columns c
+  where c.table_schema = 'public' and c.column_name ~ 'stripe|asaas';
+  if bad is not null then raise exception 'FALHA revisão: coluna presa a um gateway: %', bad; end if;
+end $$;
+
 rollback;
 
 \echo 'RESELLERS OK: regras de comissão e isolamento entre vendedores passaram.'

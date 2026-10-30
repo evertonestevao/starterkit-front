@@ -1,5 +1,6 @@
+import { Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,14 +30,25 @@ export default async function CommissionsPage({
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
+  const exportParams = new URLSearchParams(
+    Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1])),
+  );
+  const exportHref = `/admin/revendedores/lancamentos/exportar?${exportParams.toString()}`;
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">Lançamentos</h2>
-        <p className="text-sm text-muted-foreground">
-          Vendas e comissões de todos os vendedores. Mostrando até {LIST_LIMIT}, dos mais recentes.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Lançamentos</h2>
+          <p className="text-sm text-muted-foreground">
+            Vendas e comissões de todos os vendedores. Mostrando até {LIST_LIMIT}, dos mais recentes.
+          </p>
+        </div>
+        {/* <a>, não Link: é download, não navegação. */}
+        <a href={exportHref} download className={buttonVariants({ variant: "outline" })}>
+          <Download className="size-4" />
+          Exportar comissões do mês (CSV)
+        </a>
       </div>
 
       <Card>

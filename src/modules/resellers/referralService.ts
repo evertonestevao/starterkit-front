@@ -12,6 +12,9 @@ interface ReferralServiceDeps {
   /** Suspender vendedor ou desligar o módulo leva até este tempo para valer nos cliques. */
   cacheTtlMs?: number;
   maxCacheEntries?: number;
+  /** Cliques por IP na janela. Além disso o código é ignorado, sem consultar o banco. */
+  clicksPerWindow?: number;
+  clickWindowMs?: number;
 }
 
 /** Regras do clique e da gravação. O cache protege o banco em tráfego de anúncio. */
@@ -20,8 +23,23 @@ export function createReferralService({
   now = Date.now,
   cacheTtlMs = 60_000,
   maxCacheEntries = 5_000,
+  clicksPerWindow = 120,
+  clickWindowMs = 60_000,
 }: ReferralServiceDeps) {
   const cache = new Map<string, { valid: boolean; expiresAt: number }>();
+  const clicks = new Map<string, { count: number; resetAt: number }>();
+
+  /** Janela fixa em memória, por instância: freia varredura de códigos sem custo no clique. */
+  function allowClick(clientKey: string): boolean {
+    const current = clicks.get(clientKey);
+    if (!current || current.resetAt <= now()) {
+      if (clicks.size >= maxCacheEntries) clicks.clear();
+      clicks.set(clientKey, { count: 1, resetAt: now() + clickWindowMs });
+      return true;
+    }
+    current.count += 1;
+    return current.count <= clicksPerWindow;
+  }
 
   async function isValid(code: string): Promise<boolean> {
     const cached = cache.get(code);
@@ -49,7 +67,10 @@ export function createReferralService({
   async function resolveClick(input: {
     code: string | null | undefined;
     existingCookie: string | null | undefined;
+    clientKey?: string;
   }): Promise<string | null> {
+    if (input.clientKey && !allowClick(input.clientKey)) return null;
+
     const code = normalizeReferralCode(input.code);
     if (!code || !(await isValid(code))) return null;
 

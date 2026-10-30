@@ -49,6 +49,10 @@ export async function handleReferralClick(
   const cookieCode = await getReferralService().resolveClick({
     code,
     existingCookie: request.cookies.get(REFERRAL_COOKIE)?.value,
+    clientKey:
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "desconhecido",
   });
   if (cookieCode) {
     const secure = new URL(getServerEnv().APP_URL).protocol === "https:";

@@ -1,6 +1,6 @@
 # Plano: módulo de revendedores no Starter Kit
 
-Status: **versão 2, para confirmação**
+Status: **implementado (Fases 1 a 6) na branch `feat/resellers`, sem merge nem produção.** Falta validar no sandbox do Asaas. Operação: `docs/operacao-revendedores.md`.
 Data: 30/10/2026
 
 ## 1. Objetivo
@@ -92,24 +92,31 @@ A flag `resellers_enabled` controla só as **novas vendas**:
 - O painel do super_admin tem o botão **"exportar comissões do mês (CSV)"**, com total por vendedor, para fechar em planilha.
 - Ao pagar, você marca os lançamentos como "pago" (com a data).
 
-## 10. Entregáveis (a fazer na sessão do starter, no mini PC)
+## 10. Entregáveis
 
-1. **Adaptar o schema** `reseller_schema.sql`:
+Todos implementados, com as diferenças abaixo do texto original:
+
+- **Sem produtos:** o repo não tem catálogo de produtos e cada deploy é um sistema, então regras e filtros usam vendedor e plano, e a contagem de vendas é por vendedor.
+- **Pasta:** `src/modules/resellers`, porque o alias e os testes só cobrem `src`.
+- **Vínculo:** nasce no checkout, antes do primeiro pagamento.
+- **Rota do webhook:** `/api/webhooks/[gateway]`, com `/api/webhooks/payment` mantida para webhooks já cadastrados.
+
+1. [x] **Adaptar o schema** `reseller_schema.sql`:
    - trocar `stripe_invoice_id` por `gateway` + `external_payment_id` (par único)
    - `register_commission` e as views do vendedor deixam de depender da flag de liga/desliga; só o vínculo de novos clientes e o link continuam dependendo dela
    - incluir o status `pending` em `resellers` e a flag `reseller_self_signup` (desligada)
    - ajustar `is_super_admin()` e os nomes das colunas de `plans`, `products` e `tenants`
-2. **Link de afiliado:** rota `/r/[codigo]`, cookie no servidor, redirecionamento para a página limpa, bloqueio de auto-indicação.
-3. **Adaptador Asaas** e rota de webhook (pagamento recebido e estorno para os eventos padrão).
-4. **Painel do super_admin:** ligar/desligar o módulo, cadastrar vendedores por convite (e-mail), suspender vendedores, definir regras, liberar planos, editar por cliente, marcar comissões como pagas. Inclui:
+2. [x] **Link de afiliado:** rota `/r/[codigo]`, cookie no servidor, redirecionamento para a página limpa, bloqueio de auto-indicação.
+3. [x] **Adaptador Asaas** e rota de webhook (pagamento recebido e estorno para os eventos padrão).
+4. [x] **Painel do super_admin:** ligar/desligar o módulo, cadastrar vendedores por convite (e-mail), suspender vendedores, definir regras, liberar planos, editar por cliente, marcar comissões como pagas. Inclui:
    - **lista de vendedores** com totais (clientes ativos, comissão pendente, comissão paga)
    - **página de cada vendedor** com seus clientes e lançamentos
    - **vendas e lançamentos de todos os vendedores** com filtros por vendedor, produto, plano, status (pendente/pago/revertido) e período
    - ações em lote, como marcar vários lançamentos como pagos
-5. **Painel do vendedor** em `/vendedor` (área separada dos tenants, protegida pelo cadastro em `resellers`): meu link, meus clientes, minhas comissões.
-6. **Exportar comissões do mês (CSV).**
-7. **Testes** das regras de comissão (faixas, duração, override, estorno), do link de afiliado e das policies de RLS.
-8. **Pendências para as próximas fases:**
+5. [x] **Painel do vendedor** em `/vendedor` (área separada dos tenants, protegida pelo cadastro em `resellers`): meu link, meus clientes, minhas comissões.
+6. [x] **Exportar comissões do mês (CSV).**
+7. [x] **Testes** das regras de comissão (faixas, duração, override, estorno), do link de afiliado e das policies de RLS.
+8. [x] **Pendências das fases seguintes, todas feitas:**
    - bloquear a exclusão de conta de vendedor com comissão pendente
    - incluir os dados de revenda na exportação LGPD
    - exibir o alerta `LINK_NO_RULE` no painel do super_admin
@@ -119,7 +126,7 @@ A flag `resellers_enabled` controla só as **novas vendas**:
 - **Mesmo código de indicação e mesmo e-mail** do vendedor em todos os sistemas. É o elo para juntar tudo depois.
 - **Módulo idêntico** em todo sistema (mesmas tabelas e nomes, vindos do starter).
 - **Campos neutros de gateway** e valor calculado gravado em cada lançamento.
-- **Código isolado** em uma pasta só (`modules/resellers`).
+- **Código isolado** em uma pasta só (`src/modules/resellers`). Fora dela, só rotas finas em `src/app` e pontos de contato explícitos: `proxy.ts`, layout do dashboard, login, criação de empresa, checkout, webhook e conta.
 
 **Quando criar o hub:** mais de uns 4 sistemas com revendedor, vendedores reclamando dos vários logins, ou o fechamento mensal começando a tomar tempo.
 **Como seria:** projeto separado com as tabelas de revendedores e comissões, e um conector fino em cada sistema (guarda o `ref`, avisa o hub e encaminha pagamentos), com fila de reenvio para o hub nunca derrubar o pagamento.
@@ -134,10 +141,10 @@ A flag `resellers_enabled` controla só as **novas vendas**:
 
 ## 13. Para você confirmar
 
-- [ ] Com o módulo desligado, o vendedor que já vendeu continua **acessando o painel** para ver clientes e comissões (só o "Meu link" e as novas vendas ficam bloqueados)
-- [ ] As faixas por nº da venda entram como **um campo opcional** no formulário da regra
-- [ ] O vendedor entra pelo **mesmo login** do sistema e cai na área `/vendedor`, e só você cadastra vendedores (por convite)
-- [ ] Ordem de entrega: schema → link de afiliado → adaptador Asaas → painel do super_admin → painel do vendedor → exportar CSV
+- [x] Com o módulo desligado, o vendedor que já vendeu continua **acessando o painel** para ver clientes e comissões (só o "Meu link" e as novas vendas ficam bloqueados)
+- [x] As faixas por nº da venda entram como **um campo opcional** no formulário da regra
+- [x] O vendedor entra pelo **mesmo login** do sistema e cai na área `/vendedor`, e só você cadastra vendedores (por convite)
+- [x] Ordem de entrega: schema → link de afiliado → adaptador Asaas → painel do super_admin → painel do vendedor → exportar CSV
 
 ## 14. Regras de trabalho
 

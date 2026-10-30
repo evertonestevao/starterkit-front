@@ -172,3 +172,53 @@ describe("recordForCompany", () => {
     expect(repo.recordCompanyReferral).not.toHaveBeenCalled();
   });
 });
+
+describe("rate limit do link", () => {
+  function makeLimited() {
+    let time = 0;
+    const repo = makeRepo(["maria"]);
+    const service = createReferralService({
+      repo,
+      now: () => time,
+      clicksPerWindow: 2,
+      clickWindowMs: 1000,
+      maxCacheEntries: 3,
+    });
+    const click = (clientKey: string) => service.resolveClick({ code: "maria", existingCookie: null, clientKey });
+    return { click, repo, advance: (ms: number) => (time += ms) };
+  }
+
+  it("além do limite, ignora em silêncio", async () => {
+    const { click } = makeLimited();
+    await expect(click("ip-1")).resolves.toBe("maria");
+    await expect(click("ip-1")).resolves.toBe("maria");
+    await expect(click("ip-1")).resolves.toBeNull();
+  });
+
+  it("um IP não afeta outro, e a janela reinicia", async () => {
+    const { click, advance } = makeLimited();
+    await click("ip-1");
+    await click("ip-1");
+    await click("ip-1");
+    await expect(click("ip-2")).resolves.toBe("maria");
+    advance(1000);
+    await expect(click("ip-1")).resolves.toBe("maria");
+  });
+
+  it("não consulta o banco quando bloqueado", async () => {
+    const { click, repo, advance } = makeLimited();
+    await click("ip-1");
+    await click("ip-1");
+    advance(0);
+    repo.isValidCode.mockClear();
+    await click("ip-1");
+    expect(repo.isValidCode).not.toHaveBeenCalled();
+  });
+
+  it("não cresce sem limite com IPs novos", async () => {
+    const { click } = makeLimited();
+    for (const ip of ["a", "b", "c", "d", "e"]) {
+      await expect(click(ip)).resolves.toBe("maria");
+    }
+  });
+});
