@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { getServerEnv } from "@/config/env";
 import { getEmailProvider } from "@/adapters/email";
 import { AppError } from "@/lib/errors";
+import { recordCompanyReferralFromCookie } from "@/modules/resellers/server";
 import { recordAudit } from "@/server/audit";
 import { syncCompanySeats } from "@/server/billing";
 import { getRequestEvidence, getTermsService } from "@/server/terms";
@@ -64,6 +65,7 @@ export async function createCompanyAction(
     const company = await tenant.createCompany({ name: formData.get("name") });
     companyId = company.id;
     await setActiveCompanyCookie(companyId);
+    await recordCompanyReferralFromCookie(companyId);
   } catch (err) {
     return toActionError(err);
   }

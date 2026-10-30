@@ -35,6 +35,7 @@ src/
   app/            # rotas (App Router)
   components/     # UI genérica, sem lógica de negócio
   features/       # módulos por domínio (auth, companies, billing...)
+  modules/        # módulos opcionais em pasta única (resellers); server.ts interno com server-only pode usar service_role
   services/       # authService, tenantService, billingService, emailService...
   repositories/   # implementação concreta (supabase, rest)
   adapters/       # paymentGateway, emailProvider, storageProvider

@@ -267,8 +267,16 @@ Os emails de autenticação (confirmação e recuperação de senha) saem pelo S
 
 ## 15. Revendedores (em construção)
 
-Só a base de dados existe; ainda não há telas, link de afiliado nem integração com o webhook.
+A base de dados e o link de afiliado existem; ainda não há telas nem integração com o webhook.
 O módulo nasce **desligado** e, por enquanto, nenhum vendedor é vinculado pela aplicação.
+
+**Link de afiliado** (`/r/CODIGO`, ou `?ref=CODIGO` em `/` e `/signup`):
+
+- Grava o cookie `reseller_ref` no servidor (HttpOnly, SameSite=Lax, Secure em HTTPS, 30 dias) e redireciona para a página limpa, preservando os demais parâmetros, como `utm_*`.
+- Vale o primeiro vendedor: cookie com código válido não é sobrescrito.
+- Código inválido, vendedor suspenso ou módulo desligado são ignorados em silêncio: mesmo redirecionamento, sem cookie.
+- A validação fica em cache por 60 s por instância, então suspender um vendedor ou desligar o módulo pode levar esse tempo para valer nos cliques.
+- Ao criar uma empresa, o código do cookie é gravado em `reseller_referrals`, salvo auto-indicação (mesmo usuário ou mesmo e-mail).
 
 | Quem | O que pode, no banco |
 |---|---|

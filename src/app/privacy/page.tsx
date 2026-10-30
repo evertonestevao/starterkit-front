@@ -25,7 +25,7 @@ const sections: LegalSection[] = [
   },
   {
     title: "5. Cookies",
-    body: "Usamos apenas cookies essenciais para manter sua sessão autenticada. Não usamos cookies de análise ou publicidade.",
+    body: "Usamos cookies essenciais para manter sua sessão autenticada e, se você chegar por um link de indicação, um cookie de até 30 dias que registra qual parceiro fez a indicação. Não usamos cookies de análise ou publicidade.",
   },
   {
     title: "6. Retenção",

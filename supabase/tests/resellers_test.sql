@@ -507,7 +507,7 @@ do $$
 declare
   n int;
 begin
-  select count(*) into n from public.resellers;
+  select count(*) into n from public.resellers where referral_code like 'vendedor-%';
   if n <> 2 then raise exception 'FALHA super: esperado 2 vendedores, veio %', n; end if;
 
   update public.reseller_commissions set amount_cents = 2500 where external_payment_id = 'pay-2';
@@ -560,6 +560,89 @@ begin
   if public.register_commission('c0000000-0000-4000-8000-000000000003', 'asaas', 'backend-1', 10000) is null then
     raise exception 'FALHA backend: service_role não gerou lançamento';
   end if;
+end $$;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- Link de afiliado: validação do código e gravação no cadastro da empresa.
+-- ---------------------------------------------------------------------------
+insert into public.resellers (id, name, email, referral_code) values
+  ('b0000000-0000-4000-8000-00000000000c', 'Vendedor C', 'dono@test.local', 'vendedor-c');
+
+do $$
+declare
+  v_first uuid;
+begin
+  if not public.is_valid_referral_code('vendedor-a') then raise exception 'FALHA link: código ativo recusado'; end if;
+  if public.is_valid_referral_code('vendedor-b') then raise exception 'FALHA link: código suspenso aceito'; end if;
+  if public.is_valid_referral_code('nao-existe') then raise exception 'FALHA link: código inexistente aceito'; end if;
+
+  -- Vale o primeiro vendedor.
+  v_first := public.record_company_referral(pg_temp.c(15), 'vendedor-a', 'a0000000-0000-4000-8000-000000000004');
+  if v_first is null then raise exception 'FALHA link: não gravou'; end if;
+  update public.resellers set status = 'active' where id = pg_temp.b();
+  if public.record_company_referral(pg_temp.c(15), 'vendedor-b', 'a0000000-0000-4000-8000-000000000004') is not null then
+    raise exception 'FALHA link: segundo vendedor sobrescreveu';
+  end if;
+  if (select reseller_id from public.reseller_referrals where company_id = pg_temp.c(15)) <> pg_temp.a() then
+    raise exception 'FALHA link: vendedor trocado';
+  end if;
+  update public.resellers set status = 'suspended' where id = pg_temp.b();
+
+  -- Código suspenso não grava.
+  if public.record_company_referral(pg_temp.c(16), 'vendedor-b', 'a0000000-0000-4000-8000-000000000004') is not null then
+    raise exception 'FALHA link: gravou suspenso';
+  end if;
+
+  -- Auto-indicação pelo mesmo usuário.
+  if public.record_company_referral(pg_temp.c(16), 'vendedor-a', 'a0000000-0000-4000-8000-000000000001') is not null then
+    raise exception 'FALHA auto-indicação: mesmo usuário gravou';
+  end if;
+
+  -- Auto-indicação pelo mesmo e-mail: vendedor C, sem conta, tem o e-mail do dono.
+  if public.record_company_referral(pg_temp.c(16), 'vendedor-c', 'a0000000-0000-4000-8000-000000000004') is not null then
+    raise exception 'FALHA auto-indicação: mesmo e-mail gravou';
+  end if;
+  if public.link_company_to_reseller(pg_temp.c(16), 'b0000000-0000-4000-8000-00000000000c', pg_temp.plan('enterprise'), 'sub-16') is not null then
+    raise exception 'FALHA auto-indicação: mesmo e-mail vinculou';
+  end if;
+
+  -- Módulo desligado: código deixa de valer.
+  update public.reseller_settings set resellers_enabled = false;
+  if public.is_valid_referral_code('vendedor-a') then raise exception 'FALHA link: módulo desligado aceitou'; end if;
+  if public.record_company_referral(pg_temp.c(17), 'vendedor-a', 'a0000000-0000-4000-8000-000000000004') is not null then
+    raise exception 'FALHA link: gravou com módulo desligado';
+  end if;
+  update public.reseller_settings set resellers_enabled = true;
+end $$;
+
+-- Cliente e vendedor não leem nem gravam a atribuição; só o super admin lê.
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+do $$
+begin
+  if exists (select 1 from public.reseller_referrals) then raise exception 'FALHA link: cliente leu a atribuição'; end if;
+  begin
+    insert into public.reseller_referrals (company_id, reseller_id, referral_code)
+    values ('c0000000-0000-4000-8000-000000000018', 'b0000000-0000-4000-8000-00000000000a', 'vendedor-a');
+    raise exception 'FALHA link: cliente gravou a atribuição';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.record_company_referral('c0000000-0000-4000-8000-000000000018', 'vendedor-a', null);
+    raise exception 'FALHA link: cliente chamou a função de gravação';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    perform public.is_valid_referral_code('vendedor-a');
+    raise exception 'FALHA link: cliente testou código';
+  exception when sqlstate '42501' then null;
+  end;
+end $$;
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+do $$
+begin
+  if not exists (select 1 from public.reseller_referrals) then raise exception 'FALHA link: super admin não leu'; end if;
 end $$;
 reset role;
 
